@@ -1,0 +1,12 @@
+[submodule "imbolc-core"]
+	path = imbolc-core
+	url = git@github.com:mohsenil85/imbolc-core.git
+[submodule "imbolc-types"]
+	path = imbolc-types
+	url = https://github.com/mohsenil85/imbolc-types.git
+[submodule "imbolc-ui"]
+	path = imbolc-ui
+	url = https://github.com/mohsenil85/imbolc.git
+[submodule "imbolc-net"]
+	path = imbolc-net
+	url = https://github.com/mohsenil85/imbolc-net.git
