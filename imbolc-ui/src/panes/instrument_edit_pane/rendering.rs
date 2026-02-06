@@ -13,7 +13,18 @@ impl InstrumentEditPane {
         let inner = buf.draw_block(rect, &title, border_style, border_style);
 
         let content_x = inner.x + 1;
-        let mut y = inner.y + 1;
+        let base_y = inner.y + 1;
+
+        // Calculate visible content area (reserve 2 lines for help text at bottom)
+        let visible_height = inner.height.saturating_sub(2) as usize;
+        let total_rows = self.total_rows();
+        self.scroll_offset = Self::calc_scroll_offset(self.selected_row, total_rows, visible_height);
+
+        // Max Y we can render to (leave room for help text)
+        let max_y = inner.y + inner.height.saturating_sub(2);
+
+        // Track visual Y position for rendering
+        let mut visual_y = base_y;
 
         // Mode indicators in header
         let mode_x = rect.x + rect.width - 18;
@@ -44,161 +55,233 @@ impl InstrumentEditPane {
 
         let mut global_row = 0;
 
-        // === SOURCE SECTION ===
-        let source_header = if self.source.is_sample() {
-            format!("SOURCE: {}  (o: load)", self.source.name())
-        } else {
-            format!("SOURCE: {}", self.source.name())
+        // Helper to check if a row is in the visible range
+        let is_visible = |row: usize| -> bool {
+            row >= self.scroll_offset && row < self.scroll_offset + visible_height
         };
-        buf.draw_line(Rect::new(content_x, y, inner.width.saturating_sub(2), 1),
-            &[(&source_header, Style::new().fg(Color::CYAN).bold())]);
-        y += 1;
+
+        // === SOURCE SECTION ===
+        // Calculate source section row range
+        let source_row_count = if self.source.is_sample() { 1 } else { 0 }
+            + if self.source_params.is_empty() { 1 } else { self.source_params.len() };
+        let source_start = global_row;
+        let source_end = source_start + source_row_count;
+
+        // Render source section if any rows visible
+        if (source_start..source_end).any(|r| is_visible(r)) && visual_y < max_y {
+            let source_header = if self.source.is_sample() {
+                format!("SOURCE: {}  (o: load)", self.source.name())
+            } else {
+                format!("SOURCE: {}", self.source.name())
+            };
+            buf.draw_line(Rect::new(content_x, visual_y, inner.width.saturating_sub(2), 1),
+                &[(&source_header, Style::new().fg(Color::CYAN).bold())]);
+            visual_y += 1;
+        }
 
         // Sample name row for sampler instruments
         if self.source.is_sample() {
-            let is_sel = self.selected_row == global_row;
-            let display_name = self.sample_name.as_deref().unwrap_or("(no sample)");
-            render_label_value_row_buf(buf, content_x, y, "Sample", display_name, Color::CYAN, is_sel);
-            y += 1;
+            if is_visible(global_row) && visual_y < max_y {
+                let is_sel = self.selected_row == global_row;
+                let display_name = self.sample_name.as_deref().unwrap_or("(no sample)");
+                render_label_value_row_buf(buf, content_x, visual_y, "Sample", display_name, Color::CYAN, is_sel);
+                visual_y += 1;
+            }
             global_row += 1;
         }
 
         if self.source_params.is_empty() {
-            let is_sel = self.selected_row == global_row;
-            let style = if is_sel {
-                Style::new().fg(Color::DARK_GRAY).bg(Color::SELECTION_BG)
-            } else {
-                Style::new().fg(Color::DARK_GRAY)
-            };
-            buf.draw_line(Rect::new(content_x + 2, y, inner.width.saturating_sub(4), 1), &[("(no parameters)", style)]);
+            if is_visible(global_row) && visual_y < max_y {
+                let is_sel = self.selected_row == global_row;
+                let style = if is_sel {
+                    Style::new().fg(Color::DARK_GRAY).bg(Color::SELECTION_BG)
+                } else {
+                    Style::new().fg(Color::DARK_GRAY)
+                };
+                buf.draw_line(Rect::new(content_x + 2, visual_y, inner.width.saturating_sub(4), 1), &[("(no parameters)", style)]);
+                visual_y += 1;
+            }
             global_row += 1;
         } else {
             for param in &self.source_params {
-                let is_sel = self.selected_row == global_row;
-                render_param_row_buf(buf, content_x, y, param, is_sel, self.editing && is_sel, &mut self.edit_input);
-                y += 1;
+                if is_visible(global_row) && visual_y < max_y {
+                    let is_sel = self.selected_row == global_row;
+                    render_param_row_buf(buf, content_x, visual_y, param, is_sel, self.editing && is_sel, &mut self.edit_input);
+                    visual_y += 1;
+                }
                 global_row += 1;
             }
         }
-        y += 1;
+
+        // Blank line after source section (only if we rendered something and have room)
+        if visual_y > base_y && visual_y < max_y {
+            visual_y += 1;
+        }
 
         // === FILTER SECTION ===
-        let filter_label = if let Some(ref f) = self.filter {
-            format!("FILTER: {}  (f: off, t: cycle)", f.filter_type.name())
+        let filter_row_count = if self.filter.is_some() {
+            3 + self.filter.as_ref().map_or(0, |f| f.extra_params.len())
         } else {
-            "FILTER: OFF  (f: enable)".to_string()
+            1
         };
-        buf.draw_line(Rect::new(content_x, y, inner.width.saturating_sub(2), 1),
-            &[(&filter_label, Style::new().fg(Color::FILTER_COLOR).bold())]);
-        y += 1;
+        let filter_start = global_row;
+        let filter_end = filter_start + filter_row_count;
+
+        if (filter_start..filter_end).any(|r| is_visible(r)) && visual_y < max_y {
+            let filter_label = if let Some(ref f) = self.filter {
+                format!("FILTER: {}  (f: off, t: cycle)", f.filter_type.name())
+            } else {
+                "FILTER: OFF  (f: enable)".to_string()
+            };
+            buf.draw_line(Rect::new(content_x, visual_y, inner.width.saturating_sub(2), 1),
+                &[(&filter_label, Style::new().fg(Color::FILTER_COLOR).bold())]);
+            visual_y += 1;
+        }
 
         if let Some(ref f) = self.filter {
             // Type row
-            {
+            if is_visible(global_row) && visual_y < max_y {
                 let is_sel = self.selected_row == global_row;
-                render_label_value_row_buf(buf, content_x, y, "Type", &f.filter_type.name(), Color::FILTER_COLOR, is_sel);
-                y += 1;
-                global_row += 1;
+                render_label_value_row_buf(buf, content_x, visual_y, "Type", &f.filter_type.name(), Color::FILTER_COLOR, is_sel);
+                visual_y += 1;
             }
+            global_row += 1;
+
             // Cutoff row
-            {
+            if is_visible(global_row) && visual_y < max_y {
                 let is_sel = self.selected_row == global_row;
-                render_value_row_buf(buf, content_x, y, "Cutoff", f.cutoff.value, f.cutoff.min, f.cutoff.max, is_sel, self.editing && is_sel, &mut self.edit_input);
-                y += 1;
-                global_row += 1;
+                render_value_row_buf(buf, content_x, visual_y, "Cutoff", f.cutoff.value, f.cutoff.min, f.cutoff.max, is_sel, self.editing && is_sel, &mut self.edit_input);
+                visual_y += 1;
             }
+            global_row += 1;
+
             // Resonance row
-            {
+            if is_visible(global_row) && visual_y < max_y {
                 let is_sel = self.selected_row == global_row;
-                render_value_row_buf(buf, content_x, y, "Resonance", f.resonance.value, f.resonance.min, f.resonance.max, is_sel, self.editing && is_sel, &mut self.edit_input);
-                y += 1;
-                global_row += 1;
+                render_value_row_buf(buf, content_x, visual_y, "Resonance", f.resonance.value, f.resonance.min, f.resonance.max, is_sel, self.editing && is_sel, &mut self.edit_input);
+                visual_y += 1;
             }
-            // Extra filter params (e.g. shape for Vowel, drive for ResDrive)
+            global_row += 1;
+
+            // Extra filter params
             for param in &f.extra_params {
-                let is_sel = self.selected_row == global_row;
-                render_param_row_buf(buf, content_x, y, param, is_sel, self.editing && is_sel, &mut self.edit_input);
-                y += 1;
+                if is_visible(global_row) && visual_y < max_y {
+                    let is_sel = self.selected_row == global_row;
+                    render_param_row_buf(buf, content_x, visual_y, param, is_sel, self.editing && is_sel, &mut self.edit_input);
+                    visual_y += 1;
+                }
                 global_row += 1;
             }
         } else {
-            let is_sel = self.selected_row == global_row;
-            let style = if is_sel {
-                Style::new().fg(Color::DARK_GRAY).bg(Color::SELECTION_BG)
-            } else {
-                Style::new().fg(Color::DARK_GRAY)
-            };
-            buf.draw_line(Rect::new(content_x + 2, y, inner.width.saturating_sub(4), 1), &[("(disabled)", style)]);
-            y += 1;
+            if is_visible(global_row) && visual_y < max_y {
+                let is_sel = self.selected_row == global_row;
+                let style = if is_sel {
+                    Style::new().fg(Color::DARK_GRAY).bg(Color::SELECTION_BG)
+                } else {
+                    Style::new().fg(Color::DARK_GRAY)
+                };
+                buf.draw_line(Rect::new(content_x + 2, visual_y, inner.width.saturating_sub(4), 1), &[("(disabled)", style)]);
+                visual_y += 1;
+            }
             global_row += 1;
         }
-        y += 1;
+
+        // Blank line after filter section
+        if visual_y < max_y {
+            visual_y += 1;
+        }
 
         // === EFFECTS SECTION ===
-        buf.draw_line(Rect::new(content_x, y, inner.width.saturating_sub(2), 1),
-            &[("EFFECTS  (a: add effect, d: remove)", Style::new().fg(Color::FX_COLOR).bold())]);
-        y += 1;
+        let effects_row_count = if self.effects.is_empty() {
+            1
+        } else {
+            self.effects.iter().map(|e| 1 + e.params.len()).sum()
+        };
+        let effects_start = global_row;
+        let effects_end = effects_start + effects_row_count;
+
+        if (effects_start..effects_end).any(|r| is_visible(r)) && visual_y < max_y {
+            buf.draw_line(Rect::new(content_x, visual_y, inner.width.saturating_sub(2), 1),
+                &[("EFFECTS  (a: add effect, d: remove)", Style::new().fg(Color::FX_COLOR).bold())]);
+            visual_y += 1;
+        }
 
         if self.effects.is_empty() {
-            let is_sel = self.selected_row == global_row;
-            let style = if is_sel {
-                Style::new().fg(Color::DARK_GRAY).bg(Color::SELECTION_BG)
-            } else {
-                Style::new().fg(Color::DARK_GRAY)
-            };
-            buf.draw_line(Rect::new(content_x + 2, y, inner.width.saturating_sub(4), 1), &[("(no effects)", style)]);
+            if is_visible(global_row) && visual_y < max_y {
+                let is_sel = self.selected_row == global_row;
+                let style = if is_sel {
+                    Style::new().fg(Color::DARK_GRAY).bg(Color::SELECTION_BG)
+                } else {
+                    Style::new().fg(Color::DARK_GRAY)
+                };
+                buf.draw_line(Rect::new(content_x + 2, visual_y, inner.width.saturating_sub(4), 1), &[("(no effects)", style)]);
+                visual_y += 1;
+            }
             global_row += 1;
         } else {
             for effect in &self.effects {
                 // Header row: effect name + enabled badge
-                let is_sel = self.selected_row == global_row;
-                if is_sel {
-                    buf.set_cell(content_x, y, '>', Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG).bold());
+                if is_visible(global_row) && visual_y < max_y {
+                    let is_sel = self.selected_row == global_row;
+                    if is_sel {
+                        buf.set_cell(content_x, visual_y, '>', Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG).bold());
+                    }
+
+                    let enabled_str = if effect.enabled { "ON " } else { "OFF" };
+                    let effect_text = format!("{:10} [{}]", effect.effect_type.name(), enabled_str);
+                    let effect_style = if is_sel {
+                        Style::new().fg(Color::FX_COLOR).bg(Color::SELECTION_BG)
+                    } else {
+                        Style::new().fg(Color::FX_COLOR)
+                    };
+                    buf.draw_line(Rect::new(content_x + 2, visual_y, 18, 1), &[(&effect_text, effect_style)]);
+                    visual_y += 1;
                 }
-
-                let enabled_str = if effect.enabled { "ON " } else { "OFF" };
-                let effect_text = format!("{:10} [{}]", effect.effect_type.name(), enabled_str);
-                let effect_style = if is_sel {
-                    Style::new().fg(Color::FX_COLOR).bg(Color::SELECTION_BG)
-                } else {
-                    Style::new().fg(Color::FX_COLOR)
-                };
-                buf.draw_line(Rect::new(content_x + 2, y, 18, 1), &[(&effect_text, effect_style)]);
-
-                y += 1;
                 global_row += 1;
 
                 // Per-param rows with sliders
                 for param in &effect.params {
-                    let is_sel = self.selected_row == global_row;
-                    render_param_row_buf(buf, content_x, y, param, is_sel, self.editing && is_sel, &mut self.edit_input);
-                    y += 1;
+                    if is_visible(global_row) && visual_y < max_y {
+                        let is_sel = self.selected_row == global_row;
+                        render_param_row_buf(buf, content_x, visual_y, param, is_sel, self.editing && is_sel, &mut self.edit_input);
+                        visual_y += 1;
+                    }
                     global_row += 1;
                 }
             }
         }
-        y += 1;
 
-        // === LFO SECTION ===
-        let lfo_status = if self.lfo.enabled { "ON" } else { "OFF" };
-        let lfo_header = format!("LFO [{}]  (l: toggle, s: shape, m: target)", lfo_status);
-        buf.draw_line(Rect::new(content_x, y, inner.width.saturating_sub(2), 1),
-            &[(&lfo_header, Style::new().fg(Color::PINK).bold())]);
-        y += 1;
-
-        // Row 0: Enabled
-        {
-            let is_sel = self.selected_row == global_row;
-            let enabled_val = if self.lfo.enabled { "ON" } else { "OFF" };
-            render_label_value_row_buf(buf, content_x, y, "Enabled", enabled_val, Color::PINK, is_sel);
-            y += 1;
-            global_row += 1;
+        // Blank line after effects section
+        if visual_y < max_y {
+            visual_y += 1;
         }
 
-        // Row 1: Rate
-        {
+        // === LFO SECTION ===
+        let lfo_row_count = 4;
+        let lfo_start = global_row;
+        let lfo_end = lfo_start + lfo_row_count;
+
+        if (lfo_start..lfo_end).any(|r| is_visible(r)) && visual_y < max_y {
+            let lfo_status = if self.lfo.enabled { "ON" } else { "OFF" };
+            let lfo_header = format!("LFO [{}]  (l: toggle, s: shape, m: target)", lfo_status);
+            buf.draw_line(Rect::new(content_x, visual_y, inner.width.saturating_sub(2), 1),
+                &[(&lfo_header, Style::new().fg(Color::PINK).bold())]);
+            visual_y += 1;
+        }
+
+        // Row 0: Enabled
+        if is_visible(global_row) && visual_y < max_y {
             let is_sel = self.selected_row == global_row;
-            render_value_row_buf(buf, content_x, y, "Rate", self.lfo.rate, 0.1, 32.0, is_sel, self.editing && is_sel, &mut self.edit_input);
+            let enabled_val = if self.lfo.enabled { "ON" } else { "OFF" };
+            render_label_value_row_buf(buf, content_x, visual_y, "Enabled", enabled_val, Color::PINK, is_sel);
+            visual_y += 1;
+        }
+        global_row += 1;
+
+        // Row 1: Rate
+        if is_visible(global_row) && visual_y < max_y {
+            let is_sel = self.selected_row == global_row;
+            render_value_row_buf(buf, content_x, visual_y, "Rate", self.lfo.rate, 0.1, 32.0, is_sel, self.editing && is_sel, &mut self.edit_input);
             // Hz label
             let hz_style = if is_sel {
                 Style::new().fg(Color::DARK_GRAY).bg(Color::SELECTION_BG)
@@ -206,35 +289,45 @@ impl InstrumentEditPane {
                 Style::new().fg(Color::DARK_GRAY)
             };
             for (j, ch) in "Hz".chars().enumerate() {
-                buf.set_cell(content_x + 44 + j as u16, y, ch, hz_style);
+                buf.set_cell(content_x + 44 + j as u16, visual_y, ch, hz_style);
             }
-            y += 1;
-            global_row += 1;
+            visual_y += 1;
         }
+        global_row += 1;
 
         // Row 2: Depth
-        {
+        if is_visible(global_row) && visual_y < max_y {
             let is_sel = self.selected_row == global_row;
-            render_value_row_buf(buf, content_x, y, "Depth", self.lfo.depth, 0.0, 1.0, is_sel, self.editing && is_sel, &mut self.edit_input);
-            y += 1;
-            global_row += 1;
+            render_value_row_buf(buf, content_x, visual_y, "Depth", self.lfo.depth, 0.0, 1.0, is_sel, self.editing && is_sel, &mut self.edit_input);
+            visual_y += 1;
         }
+        global_row += 1;
 
         // Row 3: Shape and Target
-        {
+        if is_visible(global_row) && visual_y < max_y {
             let is_sel = self.selected_row == global_row;
             let shape_val = format!("{} → {}", self.lfo.shape.name(), self.lfo.target.name());
-            render_label_value_row_buf(buf, content_x, y, "Shape/Dest", &shape_val, Color::PINK, is_sel);
-            y += 1;
-            global_row += 1;
+            render_label_value_row_buf(buf, content_x, visual_y, "Shape/Dest", &shape_val, Color::PINK, is_sel);
+            visual_y += 1;
         }
-        y += 1;
+        global_row += 1;
+
+        // Blank line after LFO section
+        if visual_y < max_y {
+            visual_y += 1;
+        }
 
         // === ENVELOPE SECTION === (hidden for VSTi — plugin has own envelope)
         if !self.source.is_vst() {
-            buf.draw_line(Rect::new(content_x, y, inner.width.saturating_sub(2), 1),
-                &[("ENVELOPE (ADSR)  (p: poly, r: track)", Style::new().fg(Color::ENV_COLOR).bold())]);
-            y += 1;
+            let env_row_count = 4;
+            let env_start = global_row;
+            let env_end = env_start + env_row_count;
+
+            if (env_start..env_end).any(|r| is_visible(r)) && visual_y < max_y {
+                buf.draw_line(Rect::new(content_x, visual_y, inner.width.saturating_sub(2), 1),
+                    &[("ENVELOPE (ADSR)  (p: poly, r: track)", Style::new().fg(Color::ENV_COLOR).bold())]);
+                visual_y += 1;
+            }
 
             let env_labels = ["Attack", "Decay", "Sustain", "Release"];
             let env_values = [
@@ -246,15 +339,18 @@ impl InstrumentEditPane {
             let env_maxes = [5.0, 5.0, 1.0, 5.0];
 
             for (label, (val, max)) in env_labels.iter().zip(env_values.iter().zip(env_maxes.iter())) {
-                let is_sel = self.selected_row == global_row;
-                render_value_row_buf(buf, content_x, y, label, *val, 0.0, *max, is_sel, self.editing && is_sel, &mut self.edit_input);
-                y += 1;
+                if is_visible(global_row) && visual_y < max_y {
+                    let is_sel = self.selected_row == global_row;
+                    render_value_row_buf(buf, content_x, visual_y, label, *val, 0.0, *max, is_sel, self.editing && is_sel, &mut self.edit_input);
+                    visual_y += 1;
+                }
                 global_row += 1;
             }
         }
 
         // Suppress unused variable warning
         let _ = global_row;
+        let _ = visual_y;
 
         // Help text
         let help_y = rect.y + rect.height - 2;

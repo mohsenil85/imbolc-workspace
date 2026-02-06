@@ -32,6 +32,7 @@ pub struct InstrumentEditPane {
     polyphonic: bool,
     active: bool,
     pub(crate) selected_row: usize,
+    pub(crate) scroll_offset: usize,
     editing: bool,
     edit_input: TextInput,
     edit_backup_value: Option<String>,
@@ -56,6 +57,7 @@ impl InstrumentEditPane {
             polyphonic: true,
             active: true,
             selected_row: 0,
+            scroll_offset: 0,
             editing: false,
             edit_input: TextInput::new(""),
             edit_backup_value: None,
@@ -78,6 +80,7 @@ impl InstrumentEditPane {
         self.polyphonic = instrument.polyphonic;
         self.active = instrument.active;
         self.selected_row = 0;
+        self.scroll_offset = 0;
     }
 
     /// Re-sync data from an instrument without resetting cursor position.
@@ -151,6 +154,17 @@ impl InstrumentEditPane {
     /// Total number of selectable rows across all sections
     fn total_rows(&self) -> usize {
         instrument_row_count(self.source, &self.source_params, &self.filter, &self.effects)
+    }
+
+    /// Calculate scroll offset to keep selected_row visible
+    fn calc_scroll_offset(selected: usize, total: usize, visible: usize) -> usize {
+        if visible == 0 || total <= visible {
+            0
+        } else if selected >= visible {
+            (selected - visible + 1).min(total.saturating_sub(visible))
+        } else {
+            0
+        }
     }
 
     /// Which section does a given row belong to?
