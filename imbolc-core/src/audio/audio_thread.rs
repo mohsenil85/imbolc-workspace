@@ -178,9 +178,14 @@ impl AudioThread {
     }
 
     /// Drain priority commands first (voice spawn, param changes)
+    /// Uses adaptive batching: drains more when queue is backed up
     fn drain_priority_commands(&mut self) -> bool {
-        const MAX_DRAIN_PER_TICK: usize = 64;
-        for _ in 0..MAX_DRAIN_PER_TICK {
+        // Base limit increased from 64 to 256 for reduced latency
+        // Adaptive: if queue still has items after base drain, continue up to 1024
+        const BASE_DRAIN: usize = 256;
+        const MAX_DRAIN: usize = 1024;
+
+        for i in 0..MAX_DRAIN {
             match self.priority_rx.try_recv() {
                 Ok(cmd) => {
                     if self.handle_cmd(cmd) {
@@ -190,14 +195,22 @@ impl AudioThread {
                 Err(TryRecvError::Empty) => return false,
                 Err(TryRecvError::Disconnected) => return true,
             }
+            // After base drain, check if we should continue (adaptive batching)
+            if i == BASE_DRAIN - 1 && self.priority_rx.is_empty() {
+                return false;
+            }
         }
         false
     }
 
     /// Drain normal commands (state sync, routing)
+    /// Uses adaptive batching: drains more when queue is backed up
     fn drain_normal_commands(&mut self) -> bool {
-        const MAX_DRAIN_PER_TICK: usize = 32;
-        for _ in 0..MAX_DRAIN_PER_TICK {
+        // Base limit increased from 32 to 128 for reduced latency
+        const BASE_DRAIN: usize = 128;
+        const MAX_DRAIN: usize = 512;
+
+        for i in 0..MAX_DRAIN {
             match self.normal_rx.try_recv() {
                 Ok(cmd) => {
                     if self.handle_cmd(cmd) {
@@ -206,6 +219,10 @@ impl AudioThread {
                 }
                 Err(TryRecvError::Empty) => return false,
                 Err(TryRecvError::Disconnected) => return true,
+            }
+            // After base drain, check if we should continue (adaptive batching)
+            if i == BASE_DRAIN - 1 && self.normal_rx.is_empty() {
+                return false;
             }
         }
         false
@@ -632,8 +649,14 @@ impl AudioThread {
     }
 
     fn apply_state_update(&mut self, mut instruments: InstrumentSnapshot, session: SessionSnapshot) {
+        // Build a HashMap of old instruments for O(1) lookup instead of O(n) per instrument
+        let old_instruments: HashMap<u32, &_> = self.instruments.instruments
+            .iter()
+            .map(|i| (i.id, i))
+            .collect();
+
         for new_inst in instruments.instruments.iter_mut() {
-            if let Some(old_inst) = self.instruments.instruments.iter().find(|i| i.id == new_inst.id) {
+            if let Some(old_inst) = old_instruments.get(&new_inst.id) {
                 if let (Some(old_seq), Some(new_seq)) = (&old_inst.drum_sequencer, &mut new_inst.drum_sequencer) {
                     if new_seq.playing {
                         new_seq.current_step = old_seq.current_step;

@@ -1,13 +1,15 @@
 use crate::action::{Action, AutomationAction, InstrumentAction};
-use crate::midi::MidiEvent;
+use crate::midi::{MidiEvent, MidiEventKind};
 use crate::state::AppState;
 
 /// Process a MIDI event and return an Action if one should be dispatched.
+/// The timestamp in MidiEvent can be used for sample-accurate scheduling
+/// (passed through InstrumentAction::PlayNoteWithOffset if needed).
 pub fn process_midi_event(event: &MidiEvent, state: &AppState) -> Option<Action> {
     let midi_rec = &state.session.midi_recording;
 
-    match event {
-        MidiEvent::ControlChange { channel, controller, value } => {
+    match &event.kind {
+        MidiEventKind::ControlChange { channel, controller, value } => {
             // Check channel filter
             if !midi_rec.should_process_channel(*channel) {
                 return None;
@@ -23,7 +25,7 @@ pub fn process_midi_event(event: &MidiEvent, state: &AppState) -> Option<Action>
             Some(Action::Automation(AutomationAction::RecordValue(target, normalized)))
         }
 
-        MidiEvent::NoteOn { channel, note, velocity } => {
+        MidiEventKind::NoteOn { channel, note, velocity } => {
             if !midi_rec.should_process_channel(*channel) {
                 return None;
             }
@@ -36,7 +38,7 @@ pub fn process_midi_event(event: &MidiEvent, state: &AppState) -> Option<Action>
             Some(Action::Instrument(InstrumentAction::PlayNote(*note, *velocity)))
         }
 
-        MidiEvent::NoteOff { channel, .. } => {
+        MidiEventKind::NoteOff { channel, .. } => {
             // Note release is handled by voice duration in the audio engine
             if !midi_rec.should_process_channel(*channel) {
                 return None;
@@ -44,7 +46,7 @@ pub fn process_midi_event(event: &MidiEvent, state: &AppState) -> Option<Action>
             None
         }
 
-        MidiEvent::PitchBend { channel, value } => {
+        MidiEventKind::PitchBend { channel, value } => {
             if !midi_rec.should_process_channel(*channel) {
                 return None;
             }
@@ -83,7 +85,7 @@ mod tests {
     #[test]
     fn test_cc_mapped_returns_action() {
         let state = test_state();
-        let event = MidiEvent::ControlChange { channel: 0, controller: 1, value: 64 };
+        let event = MidiEvent::new(0, MidiEventKind::ControlChange { channel: 0, controller: 1, value: 64 });
         let action = process_midi_event(&event, &state);
         assert!(action.is_some());
     }
@@ -91,7 +93,7 @@ mod tests {
     #[test]
     fn test_cc_unmapped_returns_none() {
         let state = test_state();
-        let event = MidiEvent::ControlChange { channel: 0, controller: 99, value: 64 };
+        let event = MidiEvent::new(0, MidiEventKind::ControlChange { channel: 0, controller: 99, value: 64 });
         let action = process_midi_event(&event, &state);
         assert!(action.is_none());
     }
@@ -100,7 +102,7 @@ mod tests {
     fn test_channel_filter_blocks() {
         let mut state = test_state();
         state.session.midi_recording.channel_filter = Some(1); // Only channel 1
-        let event = MidiEvent::ControlChange { channel: 0, controller: 1, value: 64 };
+        let event = MidiEvent::new(0, MidiEventKind::ControlChange { channel: 0, controller: 1, value: 64 });
         let action = process_midi_event(&event, &state);
         assert!(action.is_none());
     }
@@ -109,7 +111,7 @@ mod tests {
     fn test_note_passthrough_no_instrument() {
         let state = test_state();
         // No instrument selected, so note passthrough should return action anyway (PlayNote)
-        let event = MidiEvent::NoteOn { channel: 0, note: 60, velocity: 100 };
+        let event = MidiEvent::new(0, MidiEventKind::NoteOn { channel: 0, note: 60, velocity: 100 });
         let action = process_midi_event(&event, &state);
         // PlayNote dispatches to selected instrument, which will be a no-op if none
         assert!(action.is_some());
@@ -119,7 +121,7 @@ mod tests {
     fn test_note_passthrough_disabled() {
         let mut state = test_state();
         state.session.midi_recording.note_passthrough = false;
-        let event = MidiEvent::NoteOn { channel: 0, note: 60, velocity: 100 };
+        let event = MidiEvent::new(0, MidiEventKind::NoteOn { channel: 0, note: 60, velocity: 100 });
         let action = process_midi_event(&event, &state);
         assert!(action.is_none());
     }

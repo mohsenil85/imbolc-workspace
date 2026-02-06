@@ -1,7 +1,7 @@
 use std::collections::{HashMap, VecDeque};
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
-use std::sync::{Arc, LazyLock, RwLock};
+use std::sync::{Arc, LazyLock};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use rosc::{OscBundle, OscMessage, OscPacket, OscTime, OscType};
@@ -20,6 +20,32 @@ fn unpack_f32_pair(packed: u64) -> (f32, f32) {
     let a = f32::from_bits((packed >> 32) as u32);
     let b = f32::from_bits(packed as u32);
     (a, b)
+}
+
+/// Static anchor for encoding Instant as u64 (nanoseconds since program start)
+static INSTANT_ANCHOR: LazyLock<Instant> = LazyLock::new(Instant::now);
+
+/// Encode an Instant as u64 (nanoseconds since program start anchor)
+/// Returns 0 for None, otherwise nanos + 1 to distinguish from unset
+fn encode_instant(instant: Option<Instant>) -> u64 {
+    match instant {
+        None => 0,
+        Some(i) => {
+            let elapsed = i.duration_since(*INSTANT_ANCHOR);
+            elapsed.as_nanos() as u64 + 1
+        }
+    }
+}
+
+/// Decode a u64 back to Option<Instant>
+/// 0 means None, otherwise subtract 1 and add to anchor
+fn decode_instant(encoded: u64) -> Option<Instant> {
+    if encoded == 0 {
+        None
+    } else {
+        let nanos = encoded - 1;
+        Some(*INSTANT_ANCHOR + Duration::from_nanos(nanos))
+    }
 }
 
 /// Maximum number of waveform samples to keep per audio input instrument
@@ -59,7 +85,8 @@ pub struct AudioMonitor {
     /// Audio buffer latency in milliseconds (calculated from buffer_size / sample_rate)
     audio_latency_ms: Arc<AtomicU32>,
     /// Timestamp when /status was last sent (for latency measurement)
-    status_sent_at: Arc<RwLock<Option<Instant>>>,
+    /// Encoded as nanos since INSTANT_ANCHOR; 0 = not set
+    status_sent_at: Arc<AtomicU64>,
     /// VST param query replies: nodeID → Vec<VstParamReply> (lock-free triple buffer)
     vst_params: TripleBufferHandle<HashMap<i32, Vec<VstParamReply>>>,
 }
@@ -83,7 +110,7 @@ impl AudioMonitor {
             sc_cpu: Arc::new(AtomicU32::new(0.0_f32.to_bits())),
             osc_latency_ms: Arc::new(AtomicU32::new(0.0_f32.to_bits())),
             audio_latency_ms: Arc::new(AtomicU32::new(0.0_f32.to_bits())),
-            status_sent_at: Arc::new(RwLock::new(None)),
+            status_sent_at: Arc::new(AtomicU64::new(0)),
             vst_params: TripleBufferHandle::new(),
         }
     }
@@ -139,11 +166,9 @@ impl AudioMonitor {
         self.audio_latency_ms.store(latency.to_bits(), Ordering::Relaxed);
     }
 
-    /// Mark the time /status was sent, for latency measurement
+    /// Mark the time /status was sent, for latency measurement (lock-free atomic write)
     pub fn mark_status_sent(&self) {
-        if let Ok(mut ts) = self.status_sent_at.write() {
-            *ts = Some(Instant::now());
-        }
+        self.status_sent_at.store(encode_instant(Some(Instant::now())), Ordering::Release);
     }
 
     /// Take accumulated VST param replies for a node (clears the entry)
@@ -191,7 +216,7 @@ pub struct OscClient {
     sc_cpu: Arc<AtomicU32>,
     osc_latency_ms: Arc<AtomicU32>,
     audio_latency_ms: Arc<AtomicU32>,
-    status_sent_at: Arc<RwLock<Option<Instant>>>,
+    status_sent_at: Arc<AtomicU64>,
     vst_params: TripleBufferHandle<HashMap<i32, Vec<VstParamReply>>>,
     _recv_thread: Option<JoinHandle<()>>,
 }
@@ -205,7 +230,7 @@ struct OscRefs {
     scope: TripleBufferHandle<VecDeque<f32>>,
     sc_cpu: Arc<AtomicU32>,
     osc_latency_ms: Arc<AtomicU32>,
-    status_sent_at: Arc<RwLock<Option<Instant>>>,
+    status_sent_at: Arc<AtomicU64>,
     vst_params: TripleBufferHandle<HashMap<i32, Vec<VstParamReply>>>,
 }
 
@@ -288,12 +313,11 @@ fn handle_osc_packet(packet: &OscPacket, refs: &OscRefs) {
                     _ => 0.0,
                 };
                 refs.sc_cpu.store(avg_cpu.to_bits(), Ordering::Relaxed);
-                // Calculate round-trip latency from when /status was sent
-                if let Ok(mut ts) = refs.status_sent_at.write() {
-                    if let Some(sent) = ts.take() {
-                        let latency = sent.elapsed().as_secs_f32() * 1000.0;
-                        refs.osc_latency_ms.store(latency.to_bits(), Ordering::Relaxed);
-                    }
+                // Calculate round-trip latency from when /status was sent (lock-free atomic swap)
+                let encoded = refs.status_sent_at.swap(0, Ordering::AcqRel);
+                if let Some(sent) = decode_instant(encoded) {
+                    let latency = sent.elapsed().as_secs_f32() * 1000.0;
+                    refs.osc_latency_ms.store(latency.to_bits(), Ordering::Relaxed);
                 }
             } else if msg.addr == "/vst_param" && msg.args.len() >= 5 {
                 // VSTPlugin SendNodeReply: /vst_param nodeID replyID index value display_len char0 char1 ...

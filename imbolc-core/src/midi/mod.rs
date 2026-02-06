@@ -3,9 +3,19 @@
 use std::sync::mpsc::{self, Receiver, Sender};
 use midir::{MidiInput, MidiInputConnection};
 
-/// MIDI event types
+/// MIDI event types with optional timestamp for sample-accurate scheduling.
+/// Timestamp is in microseconds from a driver-specific epoch.
 #[derive(Debug, Clone, Copy)]
-pub enum MidiEvent {
+pub struct MidiEvent {
+    /// Event timestamp in microseconds (driver-specific epoch)
+    pub timestamp_us: u64,
+    /// The actual MIDI event data
+    pub kind: MidiEventKind,
+}
+
+/// The specific type of MIDI event
+#[derive(Debug, Clone, Copy)]
+pub enum MidiEventKind {
     NoteOn {
         channel: u8,
         note: u8,
@@ -38,6 +48,26 @@ pub enum MidiEvent {
         note: u8,
         pressure: u8,
     },
+}
+
+impl MidiEvent {
+    /// Create a new MidiEvent with timestamp
+    pub fn new(timestamp_us: u64, kind: MidiEventKind) -> Self {
+        Self { timestamp_us, kind }
+    }
+
+    /// Get the relative offset in seconds from when the event was captured to now.
+    /// Returns 0.0 if the event is in the past (most common case).
+    /// This uses the difference between event timestamp and a reference time.
+    pub fn offset_secs_from(&self, reference_us: u64) -> f64 {
+        if self.timestamp_us > reference_us {
+            // Event is scheduled slightly in the future (rare but possible with some drivers)
+            (self.timestamp_us - reference_us) as f64 / 1_000_000.0
+        } else {
+            // Event is in the past - use 0 offset for immediate playback
+            0.0
+        }
+    }
 }
 
 /// Information about an available MIDI port
@@ -123,9 +153,9 @@ impl MidiInputManager {
             .connect(
                 port,
                 "imbolc-input",
-                move |_timestamp, message, _| {
-                    if let Some(event) = parse_midi_message(message) {
-                        let _ = tx.send(event);
+                move |timestamp, message, _| {
+                    if let Some(kind) = parse_midi_message(message) {
+                        let _ = tx.send(MidiEvent::new(timestamp, kind));
                     }
                 },
                 (),
@@ -180,8 +210,8 @@ impl Drop for MidiInputManager {
     }
 }
 
-/// Parse a raw MIDI message into a MidiEvent
-fn parse_midi_message(data: &[u8]) -> Option<MidiEvent> {
+/// Parse a raw MIDI message into a MidiEventKind
+fn parse_midi_message(data: &[u8]) -> Option<MidiEventKind> {
     if data.is_empty() {
         return None;
     }
@@ -194,7 +224,7 @@ fn parse_midi_message(data: &[u8]) -> Option<MidiEvent> {
         0x80 => {
             // Note Off
             if data.len() >= 3 {
-                Some(MidiEvent::NoteOff {
+                Some(MidiEventKind::NoteOff {
                     channel,
                     note: data[1],
                 })
@@ -207,12 +237,12 @@ fn parse_midi_message(data: &[u8]) -> Option<MidiEvent> {
             if data.len() >= 3 {
                 let velocity = data[2];
                 if velocity == 0 {
-                    Some(MidiEvent::NoteOff {
+                    Some(MidiEventKind::NoteOff {
                         channel,
                         note: data[1],
                     })
                 } else {
-                    Some(MidiEvent::NoteOn {
+                    Some(MidiEventKind::NoteOn {
                         channel,
                         note: data[1],
                         velocity,
@@ -225,7 +255,7 @@ fn parse_midi_message(data: &[u8]) -> Option<MidiEvent> {
         0xA0 => {
             // Polyphonic Aftertouch
             if data.len() >= 3 {
-                Some(MidiEvent::PolyAftertouch {
+                Some(MidiEventKind::PolyAftertouch {
                     channel,
                     note: data[1],
                     pressure: data[2],
@@ -237,7 +267,7 @@ fn parse_midi_message(data: &[u8]) -> Option<MidiEvent> {
         0xB0 => {
             // Control Change
             if data.len() >= 3 {
-                Some(MidiEvent::ControlChange {
+                Some(MidiEventKind::ControlChange {
                     channel,
                     controller: data[1],
                     value: data[2],
@@ -249,7 +279,7 @@ fn parse_midi_message(data: &[u8]) -> Option<MidiEvent> {
         0xC0 => {
             // Program Change
             if data.len() >= 2 {
-                Some(MidiEvent::ProgramChange {
+                Some(MidiEventKind::ProgramChange {
                     channel,
                     program: data[1],
                 })
@@ -260,7 +290,7 @@ fn parse_midi_message(data: &[u8]) -> Option<MidiEvent> {
         0xD0 => {
             // Channel Aftertouch
             if data.len() >= 2 {
-                Some(MidiEvent::Aftertouch {
+                Some(MidiEventKind::Aftertouch {
                     channel,
                     pressure: data[1],
                 })
@@ -274,7 +304,7 @@ fn parse_midi_message(data: &[u8]) -> Option<MidiEvent> {
                 let lsb = data[1] as i16;
                 let msb = data[2] as i16;
                 let value = ((msb << 7) | lsb) - 8192; // Center at 0
-                Some(MidiEvent::PitchBend { channel, value })
+                Some(MidiEventKind::PitchBend { channel, value })
             } else {
                 None
             }
@@ -292,7 +322,7 @@ mod tests {
         let data = [0x90, 60, 100]; // Note On, channel 0, note 60, velocity 100
         let event = parse_midi_message(&data).unwrap();
         match event {
-            MidiEvent::NoteOn { channel, note, velocity } => {
+            MidiEventKind::NoteOn { channel, note, velocity } => {
                 assert_eq!(channel, 0);
                 assert_eq!(note, 60);
                 assert_eq!(velocity, 100);
@@ -306,7 +336,7 @@ mod tests {
         let data = [0x80, 60, 0]; // Note Off, channel 0, note 60
         let event = parse_midi_message(&data).unwrap();
         match event {
-            MidiEvent::NoteOff { channel, note } => {
+            MidiEventKind::NoteOff { channel, note } => {
                 assert_eq!(channel, 0);
                 assert_eq!(note, 60);
             }
@@ -318,7 +348,7 @@ mod tests {
     fn test_parse_note_on_velocity_zero() {
         let data = [0x90, 60, 0]; // Note On with velocity 0 = Note Off
         let event = parse_midi_message(&data).unwrap();
-        assert!(matches!(event, MidiEvent::NoteOff { .. }));
+        assert!(matches!(event, MidiEventKind::NoteOff { .. }));
     }
 
     #[test]
@@ -327,7 +357,7 @@ mod tests {
         let data = [0xE0, 0x00, 0x40]; // LSB=0, MSB=64 = 8192 = center
         let event = parse_midi_message(&data).unwrap();
         match event {
-            MidiEvent::PitchBend { channel, value } => {
+            MidiEventKind::PitchBend { channel, value } => {
                 assert_eq!(channel, 0);
                 assert_eq!(value, 0);
             }
@@ -338,7 +368,7 @@ mod tests {
         let data = [0xE0, 0x7F, 0x7F]; // LSB=127, MSB=127 = 16383 - 8192 = 8191
         let event = parse_midi_message(&data).unwrap();
         match event {
-            MidiEvent::PitchBend { value, .. } => {
+            MidiEventKind::PitchBend { value, .. } => {
                 assert_eq!(value, 8191);
             }
             _ => panic!("Expected PitchBend"),
@@ -348,7 +378,7 @@ mod tests {
         let data = [0xE0, 0x00, 0x00]; // LSB=0, MSB=0 = 0 - 8192 = -8192
         let event = parse_midi_message(&data).unwrap();
         match event {
-            MidiEvent::PitchBend { value, .. } => {
+            MidiEventKind::PitchBend { value, .. } => {
                 assert_eq!(value, -8192);
             }
             _ => panic!("Expected PitchBend"),
@@ -360,7 +390,7 @@ mod tests {
         let data = [0xB0, 1, 64]; // CC, channel 0, controller 1 (mod wheel), value 64
         let event = parse_midi_message(&data).unwrap();
         match event {
-            MidiEvent::ControlChange { channel, controller, value } => {
+            MidiEventKind::ControlChange { channel, controller, value } => {
                 assert_eq!(channel, 0);
                 assert_eq!(controller, 1);
                 assert_eq!(value, 64);

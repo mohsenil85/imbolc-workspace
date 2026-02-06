@@ -3,6 +3,7 @@
 //! Owns the command/feedback channels and shared monitor state. The
 //! AudioEngine and playback ticking live on the audio thread.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver};
 use std::thread::{self, JoinHandle};
@@ -15,8 +16,9 @@ use super::osc_client::AudioMonitor;
 use super::snapshot::{AutomationSnapshot, InstrumentSnapshot, PianoRollSnapshot, SessionSnapshot};
 use super::ServerStatus;
 use crate::action::AudioDirty;
-use crate::state::arrangement::PlayMode;
-use crate::state::automation::AutomationTarget;
+use crate::state::arrangement::{ArrangementState, PlayMode};
+use crate::state::automation::{AutomationLane, AutomationTarget};
+use crate::state::piano_roll::Note;
 use crate::state::{AppState, BufferId, EffectId, InstrumentId};
 
 /// Audio-owned read state: values that the audio thread is the authority on.
@@ -44,6 +46,88 @@ impl Default for AudioReadState {
     }
 }
 
+/// Cache for flattened arrangement data to avoid recomputation on every dirty flush.
+/// Uses a simple version hash to detect when recomputation is needed.
+struct ArrangementFlattenCache {
+    /// Hash of arrangement state for cache invalidation
+    version_hash: u64,
+    /// Cached flattened notes by instrument ID
+    flattened_notes: HashMap<InstrumentId, Vec<Note>>,
+    /// Cached arrangement length in ticks
+    arrangement_length: u32,
+    /// Cached flattened automation lanes
+    flattened_automation: Vec<AutomationLane>,
+}
+
+impl ArrangementFlattenCache {
+    fn new() -> Self {
+        Self {
+            version_hash: 0,
+            flattened_notes: HashMap::new(),
+            arrangement_length: 0,
+            flattened_automation: Vec::new(),
+        }
+    }
+
+    /// Compute a simple hash of the arrangement structure for cache invalidation.
+    /// Includes: clip count, placement count, clip lengths, placement positions, notes count per clip.
+    fn compute_version_hash(arr: &ArrangementState) -> u64 {
+        use std::hash::{Hash, Hasher};
+        use std::collections::hash_map::DefaultHasher;
+        let mut hasher = DefaultHasher::new();
+
+        // Hash structural elements that affect flatten output
+        arr.clips.len().hash(&mut hasher);
+        arr.placements.len().hash(&mut hasher);
+
+        for clip in &arr.clips {
+            clip.id.hash(&mut hasher);
+            clip.length_ticks.hash(&mut hasher);
+            clip.notes.len().hash(&mut hasher);
+            clip.automation_lanes.len().hash(&mut hasher);
+            // Hash note positions for detecting edits
+            for note in &clip.notes {
+                note.tick.hash(&mut hasher);
+                note.pitch.hash(&mut hasher);
+                note.duration.hash(&mut hasher);
+            }
+            // Hash automation points
+            for lane in &clip.automation_lanes {
+                lane.points.len().hash(&mut hasher);
+                for point in &lane.points {
+                    point.tick.hash(&mut hasher);
+                    // Hash value as bits for deterministic hashing
+                    point.value.to_bits().hash(&mut hasher);
+                }
+            }
+        }
+
+        for placement in &arr.placements {
+            placement.id.hash(&mut hasher);
+            placement.clip_id.hash(&mut hasher);
+            placement.start_tick.hash(&mut hasher);
+            placement.length_override.hash(&mut hasher);
+        }
+
+        hasher.finish()
+    }
+
+    /// Update cache if arrangement has changed, returning cached values.
+    fn get_or_compute(&mut self, arr: &ArrangementState) -> (&HashMap<InstrumentId, Vec<Note>>, u32, &Vec<AutomationLane>) {
+        let current_hash = Self::compute_version_hash(arr);
+
+        if current_hash != self.version_hash {
+            // Cache miss - recompute
+            self.flattened_notes = arr.flatten_to_notes();
+            self.arrangement_length = arr.arrangement_length();
+            self.flattened_automation = arr.flatten_automation();
+            self.version_hash = current_hash;
+        }
+
+        (&self.flattened_notes, self.arrangement_length, &self.flattened_automation)
+    }
+}
+
 /// Main-thread handle to the audio subsystem.
 ///
 /// Phase 3: communicates with a dedicated audio thread via MPSC channels.
@@ -58,6 +142,8 @@ pub struct AudioHandle {
     audio_state: AudioReadState,
     is_running: bool,
     join_handle: Option<JoinHandle<()>>,
+    /// Cache for flattened arrangement data (Song mode optimization)
+    arrangement_cache: ArrangementFlattenCache,
 }
 
 impl AudioHandle {
@@ -88,6 +174,7 @@ impl AudioHandle {
             audio_state: AudioReadState::default(),
             is_running: false,
             join_handle: Some(join_handle),
+            arrangement_cache: ArrangementFlattenCache::new(),
         }
     }
 
@@ -174,11 +261,11 @@ impl AudioHandle {
                 && state.session.arrangement.editing_clip.is_none()
             {
                 let mut flat_pr = state.session.piano_roll.clone();
-                let flattened = state.session.arrangement.flatten_to_notes();
+                // Use cached flattened notes (avoids O(n) recomputation if arrangement unchanged)
+                let (flattened, arr_len, _) = self.arrangement_cache.get_or_compute(&state.session.arrangement);
                 for (&instrument_id, track) in &mut flat_pr.tracks {
                     track.notes = flattened.get(&instrument_id).cloned().unwrap_or_default();
                 }
-                let arr_len = state.session.arrangement.arrangement_length();
                 if arr_len > 0 {
                     flat_pr.loop_end = arr_len;
                     flat_pr.looping = false;
@@ -192,8 +279,10 @@ impl AudioHandle {
             if state.session.arrangement.play_mode == PlayMode::Song
                 && state.session.arrangement.editing_clip.is_none()
             {
+                // Use cached flattened automation (avoids O(n) recomputation if arrangement unchanged)
+                let (_, _, flattened_auto) = self.arrangement_cache.get_or_compute(&state.session.arrangement);
                 let mut merged = state.session.automation.lanes.clone();
-                merged.extend(state.session.arrangement.flatten_automation());
+                merged.extend(flattened_auto.iter().cloned());
                 self.update_automation_lanes(&merged);
             } else {
                 self.update_automation_lanes(&state.session.automation.lanes);
