@@ -6,14 +6,14 @@ imbolc is a terminal-based digital audio workstation (DAW) written in Rust. The 
 ## Quick start
 
 - Install Rust (edition 2021) and SuperCollider (scsynth on PATH; sclang needed for synthdef compilation).
-- Compile synthdefs: `bin/compile-synthdefs`
-- Run: `cargo run --release` (or use `bin/imbolc`)
+- Compile synthdefs: `imbolc-core/bin/compile-synthdefs`
+- Run: `cargo run -p imbolc-ui --release`
 - Use number keys `1`-`5` to switch panes, `F5` for server controls, and `?` for context help.
 
 Developer mode (UI only):
 
 ```bash
-IMBOLC_NO_AUDIO=1 cargo run
+IMBOLC_NO_AUDIO=1 cargo run -p imbolc-ui
 ```
 
 ## Features
@@ -47,7 +47,7 @@ IMBOLC_NO_AUDIO=1 cargo run
 - `u` / `Ctrl+r` Undo / Redo.
 - `` ` `` / `~` Navigate back/forward through pane history.
 
-The canonical keybinding list lives in `keybindings.toml` and is surfaced in-app via `?`.
+The canonical keybinding list lives in `imbolc-ui/keybindings.toml` and is surfaced in-app via `?`.
 
 ## VST support (experimental)
 
@@ -66,11 +66,11 @@ Current gaps:
 
 Setup notes:
 - Install the [VSTPlugin](https://git.iem.at/pd/vstplugin) extension in SuperCollider.
-- Generate the wrapper synthdefs by running `sclang synthdefs/compile_vst.scd`, then load synthdefs from the Server pane.
+- Generate the wrapper synthdefs by running `sclang imbolc-core/synthdefs/compile_vst.scd`, then load synthdefs from the Server pane.
 
 ## Configuration & files
 
-- Defaults: `config.toml` and `keybindings.toml` (embedded at build time).
+- Defaults: `imbolc-core/config.toml` and `imbolc-ui/keybindings.toml` (embedded at build time).
 - Overrides: `~/.config/imbolc/config.toml`, `~/.config/imbolc/keybindings.toml`.
 - Project file: `~/.config/imbolc/default.sqlite`.
 - Custom synthdefs: `~/.config/imbolc/synthdefs/`.
@@ -78,21 +78,28 @@ Setup notes:
 - scsynth log: `~/.config/imbolc/scsynth.log`.
 - Recordings: `master_<timestamp>.wav` in the current working directory.
 
-## Repo map
+## Workspace structure
 
-- `src/` - TUI app, panes, input layers, render loop.
-- `imbolc-core/` - state model, dispatch, audio engine, persistence.
-- `synthdefs/` - SuperCollider synth definitions (compiled `.scsyndef`).
-- `docs/` - architecture, audio routing, persistence, and roadmaps.
+This is a Cargo workspace with multiple crates:
+
+```
+imbolc/
+├── imbolc-ui/       Terminal UI binary (ratatui + crossterm)
+├── imbolc-core/     Core engine (state, dispatch, audio, persistence)
+│   └── synthdefs/   SuperCollider synth definitions (.scsyndef)
+├── imbolc-types/    Shared type definitions
+├── imbolc-net/      (future) Network/collaboration layer
+└── docs/            Architecture, audio routing, persistence docs
+```
 
 ## Build & test
 
 ```bash
-cargo build
-cargo test --bin imbolc
-cargo test
-# tmux-based E2E tests are ignored by default
-cargo test -- --ignored
+cargo build                 # Build all crates
+cargo build -p imbolc-ui    # Build UI only
+cargo run -p imbolc-ui      # Run the DAW
+cargo test                  # Run all tests
+cargo test -- --ignored     # Include tmux-based E2E tests
 ```
 
 ## License

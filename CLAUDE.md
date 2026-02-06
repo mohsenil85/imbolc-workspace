@@ -76,10 +76,16 @@ Each crate has its own `CLAUDE.md` with detailed guidance:
 
 All docs live at workspace root in `./docs/`:
 - [docs/architecture.md](docs/architecture.md) — state ownership, instrument model, action dispatch
+- [docs/architecture-deep-dive.md](docs/architecture-deep-dive.md) — threading model, latency, OSC timetags, voice allocation
 - [docs/audio-routing.md](docs/audio-routing.md) — bus model, insert vs send, node ordering
 - [docs/keybindings.md](docs/keybindings.md) — keybinding philosophy and conventions
 - [docs/sqlite-persistence.md](docs/sqlite-persistence.md) — persistence schema
 - [docs/custom-synthdef-plan.md](docs/custom-synthdef-plan.md) — custom SynthDef system
+
+## Task Tracking
+
+- [TASKS.md](TASKS.md) — current bugs, features, and refactors
+- [TASKS_DONE.md](TASKS_DONE.md) — completed work history
 
 ## Plans
 

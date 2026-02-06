@@ -4,7 +4,7 @@ Guide for AI agents working on imbolc-core.
 
 ## What This Is
 
-The core library for imbolc, a terminal-based DAW (Digital Audio Workstation) in Rust. Contains all application state, action dispatch, audio engine (SuperCollider via OSC), persistence, and domain logic. The TUI binary lives in sibling crate `../imbolc-ui/`. Types are in `../imbolc-types/`. See the workspace root [../CLAUDE.md](../CLAUDE.md) for overview.
+The core library for imbolc, a terminal-based DAW (Digital Audio Workstation) in Rust. Contains all application state, action dispatch, audio engine (SuperCollider via OSC), persistence, and domain logic. The TUI binary lives in `../imbolc-ui/`. Types are in `../imbolc-types/`. See the workspace root [../CLAUDE.md](../CLAUDE.md) for overview.
 
 ## Directory Structure
 

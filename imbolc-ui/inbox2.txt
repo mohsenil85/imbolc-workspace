@@ -1,4 +1,0 @@
-in sequencer, after I load a sample to be chopped, I expect to be taken directly to the chopper screen
-I expect to be able to use < and > to scroll thru the instruments, and on the 2 pane, it should scroll between midi, audio, and sequencer windows (currently working for midi, not for seq)
-2 history registers.  backtick pops back 1.  once popped back, the back tick pops you forward.  the tilda is for "2 back", and also in the "2 back" pane, ~ pops you forward 2.  on the back 2 pane, the backtick pops you "forward 1".  so the end result is a 2 step history.
-ahead of time music compile, NTP?

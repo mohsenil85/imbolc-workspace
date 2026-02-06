@@ -16,7 +16,7 @@ src/
   setup.rs         — Auto-startup for SuperCollider
 ```
 
-Core library lives in sibling crate `../imbolc-core/`. Types are in `../imbolc-types/`. See the workspace root [../CLAUDE.md](../CLAUDE.md) for overview.
+Core library lives in `../imbolc-core/`. Types are in `../imbolc-types/`. See the workspace root [../CLAUDE.md](../CLAUDE.md) for overview.
 
 ## Key Types
 
@@ -93,7 +93,7 @@ cargo build               # compile
 cargo test                # all tests (binary + integration)
 ```
 
-Core library tests run separately in the sibling repo: `cd ../imbolc-core && cargo test`
+All workspace tests: `cargo test` from workspace root, or `cargo test -p imbolc-core` for core only
 
 ## Configuration
 
@@ -131,7 +131,7 @@ Implementation plans live at workspace root: `../plans/`
 
 ## Comment Box
 
-Log difficulties, friction points, or things that gave you trouble in `COMMENTBOX.md` at the project root. This helps identify recurring pain points and areas where the codebase or documentation could be improved.
+Log difficulties, friction points, or things that gave you trouble in `../COMMENTBOX.md` at the workspace root. This helps identify recurring pain points and areas where the codebase or documentation could be improved.
 
 ## SuperCollider Notes
 
