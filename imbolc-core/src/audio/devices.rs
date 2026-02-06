@@ -1,5 +1,43 @@
 use std::path::PathBuf;
 use std::process::Command;
+use serde::{Deserialize, Serialize};
+
+/// Audio buffer size options for scsynth
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BufferSize {
+    B64 = 64,
+    B128 = 128,
+    B256 = 256,
+    B512 = 512,
+    B1024 = 1024,
+    B2048 = 2048,
+}
+
+impl Default for BufferSize {
+    fn default() -> Self {
+        BufferSize::B512
+    }
+}
+
+impl BufferSize {
+    pub const ALL: [BufferSize; 6] = [
+        BufferSize::B64,
+        BufferSize::B128,
+        BufferSize::B256,
+        BufferSize::B512,
+        BufferSize::B1024,
+        BufferSize::B2048,
+    ];
+
+    pub fn as_samples(&self) -> u32 {
+        *self as u32
+    }
+
+    /// Calculate latency in milliseconds for a given sample rate
+    pub fn latency_ms(&self, sample_rate: u32) -> f32 {
+        (self.as_samples() as f32 / sample_rate as f32) * 1000.0
+    }
+}
 
 /// An audio device discovered on the system
 #[derive(Debug, Clone)]
@@ -15,10 +53,23 @@ pub struct AudioDevice {
 }
 
 /// User-selected device configuration
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct AudioDeviceConfig {
     pub input_device: Option<String>,  // None = system default
     pub output_device: Option<String>, // None = system default
+    pub buffer_size: BufferSize,       // default 512
+    pub sample_rate: u32,              // default 44100
+}
+
+impl Default for AudioDeviceConfig {
+    fn default() -> Self {
+        Self {
+            input_device: None,
+            output_device: None,
+            buffer_size: BufferSize::default(),
+            sample_rate: 44100,
+        }
+    }
 }
 
 /// Enumerate audio devices via system_profiler (macOS)
@@ -180,6 +231,28 @@ pub fn load_device_config() -> AudioDeviceConfig {
         Ok(v) => v,
         Err(_) => return AudioDeviceConfig::default(),
     };
+
+    // Parse buffer size with backward compatibility
+    let buffer_size = parsed
+        .get("buffer_size")
+        .and_then(|v| v.as_u64())
+        .and_then(|bs| match bs {
+            64 => Some(BufferSize::B64),
+            128 => Some(BufferSize::B128),
+            256 => Some(BufferSize::B256),
+            512 => Some(BufferSize::B512),
+            1024 => Some(BufferSize::B1024),
+            2048 => Some(BufferSize::B2048),
+            _ => None,
+        })
+        .unwrap_or_default();
+
+    let sample_rate = parsed
+        .get("sample_rate")
+        .and_then(|v| v.as_u64())
+        .map(|sr| sr as u32)
+        .unwrap_or(44100);
+
     AudioDeviceConfig {
         input_device: parsed
             .get("input_device")
@@ -189,6 +262,8 @@ pub fn load_device_config() -> AudioDeviceConfig {
             .get("output_device")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string()),
+        buffer_size,
+        sample_rate,
     }
 }
 
@@ -201,6 +276,8 @@ pub fn save_device_config(config: &AudioDeviceConfig) {
     let obj = serde_json::json!({
         "input_device": config.input_device,
         "output_device": config.output_device,
+        "buffer_size": config.buffer_size.as_samples(),
+        "sample_rate": config.sample_rate,
     });
     let _ = std::fs::write(&path, serde_json::to_string_pretty(&obj).unwrap_or_default());
 }

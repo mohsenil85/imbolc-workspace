@@ -56,6 +56,8 @@ pub struct AudioMonitor {
     sc_cpu: Arc<AtomicU32>,
     /// OSC round-trip latency in milliseconds (atomic f32 as u32 bits)
     osc_latency_ms: Arc<AtomicU32>,
+    /// Audio buffer latency in milliseconds (calculated from buffer_size / sample_rate)
+    audio_latency_ms: Arc<AtomicU32>,
     /// Timestamp when /status was last sent (for latency measurement)
     status_sent_at: Arc<RwLock<Option<Instant>>>,
     /// VST param query replies: nodeID → Vec<VstParamReply> (lock-free triple buffer)
@@ -80,6 +82,7 @@ impl AudioMonitor {
             scope_buffer: TripleBufferHandle::new_with(scope),
             sc_cpu: Arc::new(AtomicU32::new(0.0_f32.to_bits())),
             osc_latency_ms: Arc::new(AtomicU32::new(0.0_f32.to_bits())),
+            audio_latency_ms: Arc::new(AtomicU32::new(0.0_f32.to_bits())),
             status_sent_at: Arc::new(RwLock::new(None)),
             vst_params: TripleBufferHandle::new(),
         }
@@ -123,6 +126,17 @@ impl AudioMonitor {
     /// Get OSC round-trip latency in ms (lock-free atomic read)
     pub fn osc_latency_ms(&self) -> f32 {
         f32::from_bits(self.osc_latency_ms.load(Ordering::Relaxed))
+    }
+
+    /// Get audio buffer latency in ms (lock-free atomic read)
+    pub fn audio_latency_ms(&self) -> f32 {
+        f32::from_bits(self.audio_latency_ms.load(Ordering::Relaxed))
+    }
+
+    /// Set audio buffer latency based on buffer_size and sample_rate
+    pub fn set_audio_latency(&self, buffer_size: u32, sample_rate: u32) {
+        let latency = (buffer_size as f32 / sample_rate as f32) * 1000.0;
+        self.audio_latency_ms.store(latency.to_bits(), Ordering::Relaxed);
     }
 
     /// Mark the time /status was sent, for latency measurement
@@ -176,6 +190,7 @@ pub struct OscClient {
     scope_buffer: TripleBufferHandle<VecDeque<f32>>,
     sc_cpu: Arc<AtomicU32>,
     osc_latency_ms: Arc<AtomicU32>,
+    audio_latency_ms: Arc<AtomicU32>,
     status_sent_at: Arc<RwLock<Option<Instant>>>,
     vst_params: TripleBufferHandle<HashMap<i32, Vec<VstParamReply>>>,
     _recv_thread: Option<JoinHandle<()>>,
@@ -344,6 +359,7 @@ impl OscClient {
         let scope_buffer = monitor.scope_buffer.clone();
         let sc_cpu = Arc::clone(&monitor.sc_cpu);
         let osc_latency_ms = Arc::clone(&monitor.osc_latency_ms);
+        let audio_latency_ms = Arc::clone(&monitor.audio_latency_ms);
         let status_sent_at = Arc::clone(&monitor.status_sent_at);
         let vst_params = monitor.vst_params.clone();
 
@@ -387,6 +403,7 @@ impl OscClient {
             scope_buffer,
             sc_cpu,
             osc_latency_ms,
+            audio_latency_ms,
             status_sent_at,
             vst_params,
             _recv_thread: Some(handle),
@@ -403,6 +420,7 @@ impl OscClient {
             scope_buffer: self.scope_buffer.clone(),
             sc_cpu: Arc::clone(&self.sc_cpu),
             osc_latency_ms: Arc::clone(&self.osc_latency_ms),
+            audio_latency_ms: Arc::clone(&self.audio_latency_ms),
             status_sent_at: Arc::clone(&self.status_sent_at),
             vst_params: self.vst_params.clone(),
         }

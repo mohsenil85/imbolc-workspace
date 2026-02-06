@@ -5,7 +5,7 @@ use std::any::Any;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::audio::devices::{self, AudioDevice};
+use crate::audio::devices::{self, AudioDevice, BufferSize};
 use crate::audio::ServerStatus;
 use crate::state::AppState;
 use crate::ui::action_id::ActionId;
@@ -21,6 +21,7 @@ enum ServerPaneFocus {
     Controls,
     OutputDevice,
     InputDevice,
+    BufferSize,
 }
 
 pub struct ServerPane {
@@ -31,6 +32,8 @@ pub struct ServerPane {
     devices: Vec<AudioDevice>,
     selected_output: usize,
     selected_input: usize,
+    selected_buffer_size: usize, // index into BufferSize::ALL
+    sample_rate: u32,
     focus: ServerPaneFocus,
     device_config_dirty: bool,
     log_lines: Vec<String>,
@@ -66,6 +69,12 @@ impl ServerPane {
             None => 0,
         };
 
+        // Find index of buffer size in ALL array
+        let selected_buffer_size = BufferSize::ALL
+            .iter()
+            .position(|&bs| bs == config.buffer_size)
+            .unwrap_or(3); // default to B512 (index 3)
+
         let log_path = dirs::config_dir()
             .unwrap_or_else(|| PathBuf::from("."))
             .join("imbolc")
@@ -79,6 +88,8 @@ impl ServerPane {
             devices,
             selected_output,
             selected_input,
+            selected_buffer_size,
+            sample_rate: config.sample_rate,
             focus: ServerPaneFocus::Controls,
             device_config_dirty: false,
             log_lines: Vec::new(),
@@ -131,6 +142,16 @@ impl ServerPane {
             return None;
         }
         self.input_devices().get(self.selected_input - 1).map(|d| d.name.clone())
+    }
+
+    pub fn selected_buffer_size(&self) -> BufferSize {
+        BufferSize::ALL.get(self.selected_buffer_size)
+            .copied()
+            .unwrap_or_default()
+    }
+
+    pub fn sample_rate(&self) -> u32 {
+        self.sample_rate
     }
 
     fn output_devices(&self) -> Vec<&AudioDevice> {
@@ -278,7 +299,8 @@ impl ServerPane {
         self.focus = match self.focus {
             ServerPaneFocus::Controls => ServerPaneFocus::OutputDevice,
             ServerPaneFocus::OutputDevice => ServerPaneFocus::InputDevice,
-            ServerPaneFocus::InputDevice => ServerPaneFocus::Controls,
+            ServerPaneFocus::InputDevice => ServerPaneFocus::BufferSize,
+            ServerPaneFocus::BufferSize => ServerPaneFocus::Controls,
         };
     }
 
@@ -286,6 +308,8 @@ impl ServerPane {
         let config = devices::AudioDeviceConfig {
             input_device: self.selected_input_device(),
             output_device: self.selected_output_device(),
+            buffer_size: self.selected_buffer_size(),
+            sample_rate: self.sample_rate,
         };
         devices::save_device_config(&config);
     }

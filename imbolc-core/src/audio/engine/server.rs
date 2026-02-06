@@ -14,19 +14,23 @@ use regex::Regex;
 impl AudioEngine {
     #[allow(dead_code)]
     pub fn start_server(&mut self) -> Result<(), String> {
-        self.start_server_with_devices(None, None)
+        self.start_server_with_devices(None, None, 512, 44100)
     }
 
     pub fn start_server_with_devices(
         &mut self,
         input_device: Option<&str>,
         output_device: Option<&str>,
+        buffer_size: u32,
+        sample_rate: u32,
     ) -> Result<(), String> {
         if self.scsynth_process.is_some() {
             return Err("Server already running".to_string());
         }
 
         self.server_status = ServerStatus::Starting;
+        // Store for latency calculation
+        let _ = sample_rate; // sample_rate is used for latency calculation in AudioMonitor
 
         let scsynth_paths = [
             "scsynth",
@@ -35,8 +39,11 @@ impl AudioEngine {
             "/usr/bin/scsynth",
         ];
 
-        // Build args: base port + optional device flags
-        let mut args: Vec<String> = vec!["-u".to_string(), "57110".to_string()];
+        // Build args: base port + buffer size + optional device flags
+        let mut args: Vec<String> = vec![
+            "-u".to_string(), "57110".to_string(),
+            "-Z".to_string(), buffer_size.to_string(),
+        ];
 
         // Resolve "System Default" to actual device names so we always
         // pass -H to scsynth. Without -H, scsynth probes all devices

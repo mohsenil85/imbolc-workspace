@@ -341,6 +341,10 @@ impl AudioHandle {
         self.monitor.osc_latency_ms()
     }
 
+    pub fn audio_latency_ms(&self) -> f32 {
+        self.monitor.audio_latency_ms()
+    }
+
     pub fn is_recording(&self) -> bool {
         self.audio_state.is_recording
     }
@@ -367,11 +371,15 @@ impl AudioHandle {
         &mut self,
         input_device: Option<&str>,
         output_device: Option<&str>,
+        buffer_size: u32,
+        sample_rate: u32,
     ) -> Result<(), String> {
         let (reply_tx, _reply_rx) = mpsc::channel();
         self.send_cmd(AudioCmd::StartServer {
             input_device: input_device.map(|s| s.to_string()),
             output_device: output_device.map(|s| s.to_string()),
+            buffer_size,
+            sample_rate,
             reply: reply_tx,
         })
     }
@@ -385,11 +393,15 @@ impl AudioHandle {
         input_device: Option<&str>,
         output_device: Option<&str>,
         server_addr: &str,
+        buffer_size: u32,
+        sample_rate: u32,
     ) -> Result<(), String> {
         self.send_cmd(AudioCmd::RestartServer {
             input_device: input_device.map(|s| s.to_string()),
             output_device: output_device.map(|s| s.to_string()),
             server_addr: server_addr.to_string(),
+            buffer_size,
+            sample_rate,
         })
     }
 
@@ -430,11 +442,15 @@ impl AudioHandle {
         &mut self,
         input_device: Option<&str>,
         output_device: Option<&str>,
+        buffer_size: u32,
+        sample_rate: u32,
     ) -> Result<(), String> {
         let (reply_tx, reply_rx) = mpsc::channel();
         self.send_cmd(AudioCmd::StartServer {
             input_device: input_device.map(|s| s.to_string()),
             output_device: output_device.map(|s| s.to_string()),
+            buffer_size,
+            sample_rate,
             reply: reply_tx,
         })?;
         match reply_rx.recv() {

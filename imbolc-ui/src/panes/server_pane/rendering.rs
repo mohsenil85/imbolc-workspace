@@ -1,4 +1,4 @@
-use super::{ServerPane, ServerPaneFocus};
+use super::{ServerPane, ServerPaneFocus, BufferSize};
 use crate::audio::devices::AudioDevice;
 use crate::audio::ServerStatus;
 use crate::state::AppState;
@@ -91,6 +91,18 @@ impl ServerPane {
         y += 1;
 
         y = self.render_device_list(buf, x, y, w, &input_devs, self.selected_input, input_focused);
+        y += 1;
+
+        // Buffer Size section
+        let buffer_focused = self.focus == ServerPaneFocus::BufferSize;
+        let section_color = if buffer_focused { Color::GOLD } else { Color::DARK_GRAY };
+        buf.draw_line(
+            Rect::new(x, y, w, 1),
+            &[("── Buffer Size ──", Style::new().fg(section_color))],
+        );
+        y += 1;
+
+        y = self.render_buffer_size_list(buf, x, y, w, buffer_focused);
         y += 1;
 
         // Restart hint if config is dirty and server is running
@@ -218,6 +230,47 @@ impl ServerPane {
             buf.draw_line(
                 Rect::new(x, y, w, 1),
                 &[(marker, marker_style), (&device.name, style), (&suffix, info_style)],
+            );
+            y += 1;
+        }
+
+        y
+    }
+
+    fn render_buffer_size_list(
+        &self,
+        buf: &mut RenderBuf,
+        x: u16,
+        mut y: u16,
+        w: u16,
+        focused: bool,
+    ) -> u16 {
+        let normal_style = Style::new().fg(Color::WHITE);
+        let selected_style = if focused {
+            Style::new().fg(Color::GOLD).bold()
+        } else {
+            Style::new().fg(Color::WHITE).bold()
+        };
+        let marker_style = if focused {
+            Style::new().fg(Color::GOLD)
+        } else {
+            Style::new().fg(Color::WHITE)
+        };
+        let info_style = Style::new().fg(Color::DARK_GRAY);
+
+        for (i, &bs) in BufferSize::ALL.iter().enumerate() {
+            let is_selected = self.selected_buffer_size == i;
+            let marker = if is_selected { "> " } else { "  " };
+            let style = if is_selected { selected_style } else { normal_style };
+
+            let samples = bs.as_samples();
+            let latency = bs.latency_ms(self.sample_rate);
+            let label = format!("{} samples", samples);
+            let suffix = format!("  (~{:.1}ms)", latency);
+
+            buf.draw_line(
+                Rect::new(x, y, w, 1),
+                &[(marker, marker_style), (&label, style), (&suffix, info_style)],
             );
             y += 1;
         }

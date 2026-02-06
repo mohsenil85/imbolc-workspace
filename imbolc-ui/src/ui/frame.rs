@@ -33,6 +33,8 @@ pub struct Frame {
     sc_cpu: f32,
     /// OSC round-trip latency (ms)
     osc_latency_ms: f32,
+    /// Audio buffer latency (ms), calculated from buffer_size / sample_rate
+    audio_latency_ms: f32,
 }
 
 impl Frame {
@@ -48,6 +50,7 @@ impl Frame {
             recording_secs: 0,
             sc_cpu: 0.0,
             osc_latency_ms: 0.0,
+            audio_latency_ms: 0.0,
         }
     }
 
@@ -64,9 +67,10 @@ impl Frame {
     }
 
     /// Update SC CPU and latency metrics (call each frame from main loop)
-    pub fn set_sc_metrics(&mut self, cpu: f32, latency_ms: f32) {
+    pub fn set_sc_metrics(&mut self, cpu: f32, osc_latency_ms: f32, audio_latency_ms: f32) {
         self.sc_cpu = cpu;
-        self.osc_latency_ms = latency_ms;
+        self.osc_latency_ms = osc_latency_ms;
+        self.audio_latency_ms = audio_latency_ms;
     }
 
     /// Get meter color for a given row position (0=bottom, height-1=top)
@@ -169,10 +173,11 @@ impl Frame {
         self.render_master_meter_buf(buf, area.width, area.height, meter_bottom_y);
 
         // SC CPU and latency indicators on the bottom border
-        if self.sc_cpu > 0.0 || self.osc_latency_ms > 0.0 {
+        if self.sc_cpu > 0.0 || self.osc_latency_ms > 0.0 || self.audio_latency_ms > 0.0 {
             let bottom_y = area.y + area.height.saturating_sub(1);
             let cpu_text = format!(" CPU: {:.1}%", self.sc_cpu);
-            let lat_text = format!("  Lat: {:.1}ms ", self.osc_latency_ms);
+            let audio_lat_text = format!("  Audio: {:.1}ms", self.audio_latency_ms);
+            let osc_lat_text = format!("  OSC: {:.1}ms ", self.osc_latency_ms);
 
             let cpu_color = if self.sc_cpu > 80.0 {
                 Color::RED
@@ -181,7 +186,16 @@ impl Frame {
             } else {
                 Color::GREEN
             };
-            let lat_color = if self.osc_latency_ms > 20.0 {
+            // Audio latency thresholds: Green <12ms, Yellow <23ms, Red >=23ms
+            let audio_lat_color = if self.audio_latency_ms >= 23.0 {
+                Color::RED
+            } else if self.audio_latency_ms >= 12.0 {
+                Color::YELLOW
+            } else {
+                Color::GREEN
+            };
+            // OSC latency thresholds: Green <5ms, Yellow <20ms, Red >=20ms
+            let osc_lat_color = if self.osc_latency_ms > 20.0 {
                 Color::RED
             } else if self.osc_latency_ms > 5.0 {
                 Color::YELLOW
@@ -191,7 +205,10 @@ impl Frame {
 
             let x = area.x + 1;
             buf.draw_str(x, bottom_y, &cpu_text, Style::new().fg(cpu_color));
-            buf.draw_str(x + cpu_text.len() as u16, bottom_y, &lat_text, Style::new().fg(lat_color));
+            let x = x + cpu_text.len() as u16;
+            buf.draw_str(x, bottom_y, &audio_lat_text, Style::new().fg(audio_lat_color));
+            let x = x + audio_lat_text.len() as u16;
+            buf.draw_str(x, bottom_y, &osc_lat_text, Style::new().fg(osc_lat_color));
         }
 
         // Right-aligned SC and MIDI status indicators on bottom border

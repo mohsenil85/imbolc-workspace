@@ -19,6 +19,8 @@ pub fn auto_start_sc(
     match audio.start_server_with_devices(
         config.input_device.as_deref(),
         config.output_device.as_deref(),
+        config.buffer_size.as_samples(),
+        config.sample_rate,
     ) {
         Ok(()) => {
             events.push(StatusEvent {

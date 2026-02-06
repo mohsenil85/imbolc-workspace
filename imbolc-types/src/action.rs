@@ -89,12 +89,22 @@ pub enum VstTarget {
 pub enum ServerAction {
     Connect,
     Disconnect,
-    Start { input_device: Option<String>, output_device: Option<String> },
+    Start {
+        input_device: Option<String>,
+        output_device: Option<String>,
+        buffer_size: u32,
+        sample_rate: u32,
+    },
     Stop,
     CompileSynthDefs,
     CompileVstSynthDefs,
     LoadSynthDefs,
-    Restart { input_device: Option<String>, output_device: Option<String> },
+    Restart {
+        input_device: Option<String>,
+        output_device: Option<String>,
+        buffer_size: u32,
+        sample_rate: u32,
+    },
     RecordMaster,
     RecordInput,
 }

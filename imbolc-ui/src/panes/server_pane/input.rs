@@ -1,4 +1,4 @@
-use super::{ServerPane, ServerPaneFocus};
+use super::{ServerPane, ServerPaneFocus, BufferSize};
 use crate::state::AppState;
 use crate::ui::action_id::{ActionId, ServerActionId};
 use crate::ui::{Action, InputEvent, KeyCode, ServerAction};
@@ -9,6 +9,8 @@ impl ServerPane {
             ActionId::Server(ServerActionId::Start) => Action::Server(ServerAction::Start {
                 input_device: self.selected_input_device(),
                 output_device: self.selected_output_device(),
+                buffer_size: self.selected_buffer_size().as_samples(),
+                sample_rate: self.sample_rate(),
             }),
             ActionId::Server(ServerActionId::Stop) => Action::Server(ServerAction::Stop),
             ActionId::Server(ServerActionId::Connect) => Action::Server(ServerAction::Connect),
@@ -25,6 +27,8 @@ impl ServerPane {
                     Action::Server(ServerAction::Restart {
                         input_device: self.selected_input_device(),
                         output_device: self.selected_output_device(),
+                        buffer_size: self.selected_buffer_size().as_samples(),
+                        sample_rate: self.sample_rate(),
                     })
                 } else {
                     Action::None
@@ -62,6 +66,8 @@ impl ServerPane {
                             return Action::Server(ServerAction::Restart {
                                 input_device: self.selected_input_device(),
                                 output_device: self.selected_output_device(),
+                                buffer_size: self.selected_buffer_size().as_samples(),
+                                sample_rate: self.sample_rate(),
                             });
                         } else {
                             self.device_config_dirty = true;
@@ -93,6 +99,41 @@ impl ServerPane {
                             return Action::Server(ServerAction::Restart {
                                 input_device: self.selected_input_device(),
                                 output_device: self.selected_output_device(),
+                                buffer_size: self.selected_buffer_size().as_samples(),
+                                sample_rate: self.sample_rate(),
+                            });
+                        } else {
+                            self.device_config_dirty = true;
+                            return Action::None;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            ServerPaneFocus::BufferSize => {
+                let count = BufferSize::ALL.len();
+                match event.key {
+                    KeyCode::Up => {
+                        self.selected_buffer_size = if self.selected_buffer_size == 0 {
+                            count - 1
+                        } else {
+                            self.selected_buffer_size - 1
+                        };
+                        return Action::None;
+                    }
+                    KeyCode::Down => {
+                        self.selected_buffer_size = (self.selected_buffer_size + 1) % count;
+                        return Action::None;
+                    }
+                    KeyCode::Enter => {
+                        self.save_config();
+                        if self.server_running {
+                            self.device_config_dirty = false;
+                            return Action::Server(ServerAction::Restart {
+                                input_device: self.selected_input_device(),
+                                output_device: self.selected_output_device(),
+                                buffer_size: self.selected_buffer_size().as_samples(),
+                                sample_rate: self.sample_rate(),
                             });
                         } else {
                             self.device_config_dirty = true;

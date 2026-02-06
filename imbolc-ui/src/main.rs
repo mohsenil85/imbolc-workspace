@@ -633,8 +633,9 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
             // Update SC CPU and latency indicators
             {
                 let cpu = if audio.is_running() { audio.sc_cpu() } else { 0.0 };
-                let latency = if audio.is_running() { audio.osc_latency_ms() } else { 0.0 };
-                app_frame.set_sc_metrics(cpu, latency);
+                let osc_latency = if audio.is_running() { audio.osc_latency_ms() } else { 0.0 };
+                let audio_latency = audio.audio_latency_ms();
+                app_frame.set_sc_metrics(cpu, osc_latency, audio_latency);
             }
 
             // Update recording state

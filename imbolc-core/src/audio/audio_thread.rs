@@ -227,11 +227,16 @@ impl AudioThread {
                 self.engine.disconnect();
                 self.send_server_status(self.engine.status(), "Disconnected");
             }
-            AudioCmd::StartServer { input_device, output_device, reply } => {
+            AudioCmd::StartServer { input_device, output_device, buffer_size, sample_rate, reply } => {
                 let result = self.engine.start_server_with_devices(
                     input_device.as_deref(),
                     output_device.as_deref(),
+                    buffer_size,
+                    sample_rate,
                 );
+                if result.is_ok() {
+                    self.monitor.set_audio_latency(buffer_size, sample_rate);
+                }
                 match &result {
                     Ok(()) => self.send_server_status(ServerStatus::Running, "Server started"),
                     Err(err) => self.send_server_status(ServerStatus::Error, err),
@@ -242,7 +247,7 @@ impl AudioThread {
                 self.engine.stop_server();
                 self.send_server_status(ServerStatus::Stopped, "Server stopped");
             }
-            AudioCmd::RestartServer { input_device, output_device, server_addr } => {
+            AudioCmd::RestartServer { input_device, output_device, server_addr, buffer_size, sample_rate } => {
                 self.engine.stop_server();
                 self.pending_server_connect = None;
                 self.send_server_status(ServerStatus::Stopped, "Restarting server...");
@@ -250,9 +255,12 @@ impl AudioThread {
                 let start_result = self.engine.start_server_with_devices(
                     input_device.as_deref(),
                     output_device.as_deref(),
+                    buffer_size,
+                    sample_rate,
                 );
                 match start_result {
                     Ok(()) => {
+                        self.monitor.set_audio_latency(buffer_size, sample_rate);
                         // Defer connection: let scsynth initialize before connecting
                         self.pending_server_connect = Some(PendingServerConnect {
                             started_at: Instant::now(),

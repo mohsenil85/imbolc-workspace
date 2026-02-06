@@ -21,10 +21,12 @@ pub(super) fn dispatch_server(
             let _ = audio.disconnect_async();
             result.push_status(audio.status(), "Disconnecting...");
         }
-        ServerAction::Start { input_device, output_device } => {
+        ServerAction::Start { input_device, output_device, buffer_size, sample_rate } => {
             let _ = audio.start_server_async(
                 input_device.as_deref(),
                 output_device.as_deref(),
+                *buffer_size,
+                *sample_rate,
             );
             result.push_status(audio.status(), "Starting server...");
         }
@@ -167,12 +169,14 @@ pub(super) fn dispatch_server(
                 }
             }
         }
-        ServerAction::Restart { input_device, output_device } => {
+        ServerAction::Restart { input_device, output_device, buffer_size, sample_rate } => {
             audio.update_state(&state.instruments, &state.session);
             let _ = audio.restart_server_async(
                 input_device.as_deref(),
                 output_device.as_deref(),
                 "127.0.0.1:57110",
+                *buffer_size,
+                *sample_rate,
             );
             result.audio_dirty.instruments = true;
             result.audio_dirty.session = true;

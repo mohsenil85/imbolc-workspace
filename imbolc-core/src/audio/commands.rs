@@ -28,6 +28,8 @@ pub enum AudioCmd {
     StartServer {
         input_device: Option<String>,
         output_device: Option<String>,
+        buffer_size: u32,
+        sample_rate: u32,
         reply: Sender<Result<(), String>>,
     },
     StopServer,
@@ -35,6 +37,8 @@ pub enum AudioCmd {
         input_device: Option<String>,
         output_device: Option<String>,
         server_addr: String,
+        buffer_size: u32,
+        sample_rate: u32,
     },
     CompileSynthDefs {
         scd_path: PathBuf,
