@@ -7,12 +7,26 @@ use crate::ui::action_id::{ActionId, InstrumentListActionId, ModeActionId};
 
 fn source_color(source: SourceType) -> Color {
     match source {
+        // Oscillators and synths
         SourceType::Saw | SourceType::Sin | SourceType::Sqr | SourceType::Tri
         | SourceType::Noise | SourceType::Pulse | SourceType::SuperSaw | SourceType::Sync
         | SourceType::Ring | SourceType::FBSin | SourceType::FM | SourceType::PhaseMod
+        | SourceType::FMBell | SourceType::FMBrass
         | SourceType::Pluck | SourceType::Formant | SourceType::Gendy | SourceType::Chaos
         | SourceType::Additive | SourceType::Wavetable | SourceType::Granular
-        | SourceType::Bowed | SourceType::Blown | SourceType::Membrane => Color::OSC_COLOR,
+        | SourceType::Bowed | SourceType::Blown | SourceType::Membrane
+        // Mallet percussion
+        | SourceType::Marimba | SourceType::Vibes | SourceType::Kalimba | SourceType::SteelDrum
+        | SourceType::TubularBell | SourceType::Glockenspiel
+        // Plucked strings
+        | SourceType::Guitar | SourceType::BassGuitar | SourceType::Harp | SourceType::Koto
+        // Drums
+        | SourceType::Kick | SourceType::Snare | SourceType::HihatClosed | SourceType::HihatOpen
+        | SourceType::Clap | SourceType::Cowbell | SourceType::Rim | SourceType::Tom
+        | SourceType::Clave | SourceType::Conga
+        // Classic synths
+        | SourceType::Choir | SourceType::EPiano | SourceType::Organ | SourceType::BrassStab
+        | SourceType::Strings | SourceType::Acid => Color::OSC_COLOR,
         SourceType::AudioIn => Color::AUDIO_IN_COLOR,
         SourceType::PitchedSampler | SourceType::TimeStretch => Color::SAMPLE_COLOR,
         SourceType::Kit => Color::KIT_COLOR,

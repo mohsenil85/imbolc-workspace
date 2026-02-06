@@ -47,12 +47,23 @@ impl AddPane {
         options.push(AddOption::Source(SourceType::SuperSaw));
         options.push(AddOption::Source(SourceType::Sync));
 
-        // Modulation
+        // Modulation / FM
         options.push(AddOption::Separator("── Modulation ──"));
         options.push(AddOption::Source(SourceType::Ring));
         options.push(AddOption::Source(SourceType::FBSin));
         options.push(AddOption::Source(SourceType::FM));
         options.push(AddOption::Source(SourceType::PhaseMod));
+        options.push(AddOption::Source(SourceType::FMBell));
+        options.push(AddOption::Source(SourceType::FMBrass));
+
+        // Classic Synths
+        options.push(AddOption::Separator("── Classic ──"));
+        options.push(AddOption::Source(SourceType::Choir));
+        options.push(AddOption::Source(SourceType::EPiano));
+        options.push(AddOption::Source(SourceType::Organ));
+        options.push(AddOption::Source(SourceType::BrassStab));
+        options.push(AddOption::Source(SourceType::Strings));
+        options.push(AddOption::Source(SourceType::Acid));
 
         // Physical Modeling
         options.push(AddOption::Separator("── Physical ──"));
@@ -61,6 +72,35 @@ impl AddPane {
         options.push(AddOption::Source(SourceType::Bowed));
         options.push(AddOption::Source(SourceType::Blown));
         options.push(AddOption::Source(SourceType::Membrane));
+
+        // Mallet Percussion
+        options.push(AddOption::Separator("── Mallet ──"));
+        options.push(AddOption::Source(SourceType::Marimba));
+        options.push(AddOption::Source(SourceType::Vibes));
+        options.push(AddOption::Source(SourceType::Kalimba));
+        options.push(AddOption::Source(SourceType::SteelDrum));
+        options.push(AddOption::Source(SourceType::TubularBell));
+        options.push(AddOption::Source(SourceType::Glockenspiel));
+
+        // Plucked Strings
+        options.push(AddOption::Separator("── Plucked ──"));
+        options.push(AddOption::Source(SourceType::Guitar));
+        options.push(AddOption::Source(SourceType::BassGuitar));
+        options.push(AddOption::Source(SourceType::Harp));
+        options.push(AddOption::Source(SourceType::Koto));
+
+        // Drums
+        options.push(AddOption::Separator("── Drums ──"));
+        options.push(AddOption::Source(SourceType::Kick));
+        options.push(AddOption::Source(SourceType::Snare));
+        options.push(AddOption::Source(SourceType::HihatClosed));
+        options.push(AddOption::Source(SourceType::HihatOpen));
+        options.push(AddOption::Source(SourceType::Clap));
+        options.push(AddOption::Source(SourceType::Cowbell));
+        options.push(AddOption::Source(SourceType::Rim));
+        options.push(AddOption::Source(SourceType::Tom));
+        options.push(AddOption::Source(SourceType::Clave));
+        options.push(AddOption::Source(SourceType::Conga));
 
         // Experimental
         options.push(AddOption::Separator("── Experimental ──"));
@@ -110,12 +150,23 @@ impl AddPane {
         options.push(AddOption::Source(SourceType::SuperSaw));
         options.push(AddOption::Source(SourceType::Sync));
 
-        // Modulation
+        // Modulation / FM
         options.push(AddOption::Separator("── Modulation ──"));
         options.push(AddOption::Source(SourceType::Ring));
         options.push(AddOption::Source(SourceType::FBSin));
         options.push(AddOption::Source(SourceType::FM));
         options.push(AddOption::Source(SourceType::PhaseMod));
+        options.push(AddOption::Source(SourceType::FMBell));
+        options.push(AddOption::Source(SourceType::FMBrass));
+
+        // Classic Synths
+        options.push(AddOption::Separator("── Classic ──"));
+        options.push(AddOption::Source(SourceType::Choir));
+        options.push(AddOption::Source(SourceType::EPiano));
+        options.push(AddOption::Source(SourceType::Organ));
+        options.push(AddOption::Source(SourceType::BrassStab));
+        options.push(AddOption::Source(SourceType::Strings));
+        options.push(AddOption::Source(SourceType::Acid));
 
         // Physical Modeling
         options.push(AddOption::Separator("── Physical ──"));
@@ -124,6 +175,35 @@ impl AddPane {
         options.push(AddOption::Source(SourceType::Bowed));
         options.push(AddOption::Source(SourceType::Blown));
         options.push(AddOption::Source(SourceType::Membrane));
+
+        // Mallet Percussion
+        options.push(AddOption::Separator("── Mallet ──"));
+        options.push(AddOption::Source(SourceType::Marimba));
+        options.push(AddOption::Source(SourceType::Vibes));
+        options.push(AddOption::Source(SourceType::Kalimba));
+        options.push(AddOption::Source(SourceType::SteelDrum));
+        options.push(AddOption::Source(SourceType::TubularBell));
+        options.push(AddOption::Source(SourceType::Glockenspiel));
+
+        // Plucked Strings
+        options.push(AddOption::Separator("── Plucked ──"));
+        options.push(AddOption::Source(SourceType::Guitar));
+        options.push(AddOption::Source(SourceType::BassGuitar));
+        options.push(AddOption::Source(SourceType::Harp));
+        options.push(AddOption::Source(SourceType::Koto));
+
+        // Drums
+        options.push(AddOption::Separator("── Drums ──"));
+        options.push(AddOption::Source(SourceType::Kick));
+        options.push(AddOption::Source(SourceType::Snare));
+        options.push(AddOption::Source(SourceType::HihatClosed));
+        options.push(AddOption::Source(SourceType::HihatOpen));
+        options.push(AddOption::Source(SourceType::Clap));
+        options.push(AddOption::Source(SourceType::Cowbell));
+        options.push(AddOption::Source(SourceType::Rim));
+        options.push(AddOption::Source(SourceType::Tom));
+        options.push(AddOption::Source(SourceType::Clave));
+        options.push(AddOption::Source(SourceType::Conga));
 
         // Experimental
         options.push(AddOption::Separator("── Experimental ──"));

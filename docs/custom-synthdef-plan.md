@@ -981,12 +981,40 @@ tree-sitter-supercollider = { git = "https://github.com/madskjeldgaard/tree-sitt
 
 ---
 
+## SynthDef File Organization
+
+**Hard rule: One SynthDef per file.** Built-in SynthDefs live in `imbolc-core/synthdefs/defs/` organized by category:
+
+```
+defs/
+├── oscillators/      Basic waveforms (saw, sin, sqr, tri, pulse, noise)
+├── synthesis/        Synthesis techniques (fm, granular, additive, wavetable)
+├── physical_models/  Physical modeling (bowed, blown, guitar, marimba)
+├── drums/            Drum sounds (kick, snare, hihat, clap, tom)
+├── classic_synths/   Classic emulations (organ, epiano, brass_stab, strings)
+├── filters/          Filter effects (lpf, hpf, bpf, notch, comb, allpass)
+├── effects/          Audio effects (delay, reverb, chorus, distortion)
+├── modulation/       Modulation sources (lfo, adsr)
+├── eq/               EQ processors
+├── input/            Input sources (audio_in, bus_in)
+├── output/           Output routing (output, send, bus_out)
+├── samplers/         Sample playback
+├── analysis/         Metering and analysis
+└── midi/             MIDI output
+```
+
+Each file is named after its SynthDef (e.g., `imbolc_kick.scd` contains `\imbolc_kick`).
+
 ## Custom SynthDef Convention
 
 Users should follow this pattern for compatibility:
 
 ```supercollider
-SynthDef(\*my_custom_synth, { 
+// imbolc_my_custom_synth SynthDef
+(
+var dir = thisProcess.nowExecutingPath.dirname.dirname.dirname;
+
+SynthDef(\imbolc_my_custom_synth, {
     // Required inputs (handled by instrument system)
     |out=1024, freq_in=(-1), gate_in=(-1), vel_in=(-1),
     // Standard envelope (handled by instrument ADSR section)
@@ -1006,7 +1034,23 @@ SynthDef(\*my_custom_synth, {
     var env = EnvGen.kr(Env.adsr(attack, decay, sustain, release), gateSig);
 
     Out.ar(out, (sig * env) ! 2);
-}).writeDefFile(thisProcess.nowExecutingPath.dirname);
+}).writeDefFile(dir);
+)
 ```
 
+### Important: var Declaration Order
+
+SuperCollider requires all `var` declarations before any statements:
+
+```supercollider
+// WRONG - will fail to compile
+var sig = SinOsc.ar(freq);
+sig = sig * 0.5;           // statement
+var env = EnvGen.kr(...);  // ERROR: var after statement
+
+// CORRECT
+var sig = SinOsc.ar(freq);
+var env;                   // declare first
+sig = sig * 0.5;
+env = EnvGen.kr(...);      // assign later
 ```

@@ -67,6 +67,14 @@ Each crate has its own `CLAUDE.md` with detailed guidance:
 2. Update any dispatch handlers in `imbolc-core/`
 3. Update persistence if needed in `imbolc-core/src/state/persistence/`
 
+### Adding a new SynthDef
+**Hard rule: One SynthDef per file.**
+1. Create file in `imbolc-core/synthdefs/defs/<category>/<name>.scd`
+2. Compile: `cd imbolc-core/synthdefs && sclang compile.scd`
+3. Add `SourceType` variant in `imbolc-types/src/state/instrument/source_type.rs` if needed
+
+See [imbolc-core/synthdefs/defs/README.md](imbolc-core/synthdefs/defs/README.md) for file template and conventions.
+
 ## Configuration
 
 - Musical defaults: `~/.config/imbolc/config.toml`

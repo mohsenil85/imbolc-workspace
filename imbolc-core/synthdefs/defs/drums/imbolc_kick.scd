@@ -1,0 +1,32 @@
+// imbolc_kick SynthDef
+(
+var dir = thisProcess.nowExecutingPath.dirname.dirname.dirname;
+
+SynthDef(\imbolc_kick, { |out=1024, freq_in=(-1), gate_in=(-1), vel_in=(-1),
+    freq=55, amp=0.8, lag=0.02, punch=1.0, click=0.3, decay=0.4,
+    attack=0.001, release=0.1,
+    amp_mod_in=(-1), pitch_mod_in=(-1), decay_mod_in=(-1), punch_mod_in=(-1)|
+
+    var freqSig = Select.kr(freq_in >= 0, [freq.lag(lag), In.kr(freq_in)]);
+    var gateSig = Select.kr(gate_in >= 0, [1, In.kr(gate_in)]);
+    var velSig = Select.kr(vel_in >= 0, [1, In.kr(vel_in)]);
+    var ampMod = Select.kr(amp_mod_in >= 0, [0, In.kr(amp_mod_in)]);
+    var pitchMod = Select.kr(pitch_mod_in >= 0, [0, In.kr(pitch_mod_in)]);
+    var decayMod = Select.kr(decay_mod_in >= 0, [0, In.kr(decay_mod_in)]);
+    var punchMod = Select.kr(punch_mod_in >= 0, [0, In.kr(punch_mod_in)]);
+    var finalFreq = freqSig * (2 ** pitchMod);
+    var finalAmp = amp.lag(lag) * (1 + ampMod).max(0);
+    var finalDecay = (decay * (1 + decayMod)).max(0.01);
+    var finalPunch = (punch + punchMod).clip(0, 4);
+
+    var trig = Trig1.kr(gateSig, 0.001);
+    var pitchEnv = EnvGen.kr(Env.perc(0.001, 0.15 * finalPunch), trig) * finalPunch;
+    var ampEnv = EnvGen.kr(Env.perc(attack, finalDecay), trig);
+    var sig = SinOsc.ar(finalFreq * (1 + pitchEnv)) * ampEnv;
+    var clickEnv = EnvGen.kr(Env.perc(0.001, 0.01), trig);
+    var clickSig = HPF.ar(WhiteNoise.ar, 1000) * clickEnv * click.lag(lag);
+    sig = sig + clickSig;
+    sig = sig.tanh;
+    Out.ar(out, (sig * finalAmp * velSig) ! 2);
+}).writeDefFile(dir);
+)

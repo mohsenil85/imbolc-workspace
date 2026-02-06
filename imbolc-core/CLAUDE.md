@@ -9,6 +9,24 @@ The core library for imbolc, a terminal-based DAW (Digital Audio Workstation) in
 ## Directory Structure
 
 ```
+synthdefs/           — SuperCollider SynthDef source files
+  compile.scd          — Master compile script (loads all defs)
+  defs/                — SynthDef definitions organized by category
+    oscillators/         — Basic waveform oscillators (saw, sin, sqr, tri, etc.)
+    synthesis/           — Synthesis techniques (FM, granular, additive, etc.)
+    physical_models/     — Physical modeling (bowed, blown, guitar, etc.)
+    drums/               — Drum sounds (kick, snare, hihat, etc.)
+    classic_synths/      — Classic synth emulations (organ, epiano, etc.)
+    filters/             — Filter effects (lpf, hpf, bpf, etc.)
+    effects/             — Audio effects (delay, reverb, chorus, etc.)
+    modulation/          — Modulation sources (lfo, adsr)
+    eq/                  — EQ processors
+    input/               — Input sources (audio_in, bus_in)
+    output/              — Output and routing (output, send, bus_out)
+    samplers/            — Sample playback
+    analysis/            — Metering and analysis
+    midi/                — MIDI output
+
 src/
   lib.rs           — Crate root, re-exports
   action.rs        — Re-exports Action from imbolc-types, DispatchResult
@@ -128,6 +146,53 @@ Musical defaults (`[defaults]` section): `bpm`, `key`, `scale`, `tuning_a4`, `ti
 - Save/load: `save_project()` / `load_project()` in `src/state/persistence/mod.rs`
 - Default path: `~/.config/imbolc/default.sqlite`
 - Persists: instruments, params, effects, filters, sends, modulations, buses, mixer, piano roll, automation, sampler configs, custom synthdefs, drum sequencer, midi settings, VST plugins, VST param values, VST state paths
+
+## SynthDefs
+
+SynthDef source files live in `synthdefs/defs/` organized by category.
+
+**Hard rule: One SynthDef per file.** Each `.scd` file contains exactly one SynthDef definition. File names match the SynthDef name (e.g., `imbolc_kick.scd` contains `\imbolc_kick`).
+
+### File template
+
+```supercollider
+// imbolc_example SynthDef
+(
+var dir = thisProcess.nowExecutingPath.dirname.dirname.dirname;
+
+SynthDef(\imbolc_example, { |out=1024, freq_in=(-1), gate_in=(-1), vel_in=(-1),
+    freq=440, amp=0.5, lag=0.02, attack=0.01, decay=0.1, sustain=0.7, release=0.3,
+    amp_mod_in=(-1), pitch_mod_in=(-1)|
+    // ... synthesis code ...
+}).writeDefFile(dir);
+)
+```
+
+### Adding a new SynthDef
+
+1. Create file in appropriate subdirectory: `synthdefs/defs/<category>/<name>.scd`
+2. Follow the template above (note `dirname.dirname.dirname` for correct output path)
+3. Compile: `cd synthdefs && sclang compile.scd`
+4. Add corresponding `SourceType` variant in `imbolc-types/src/state/instrument/source_type.rs`
+
+### SuperCollider var declaration rule
+
+All `var` declarations must come before any statements in a function. This is invalid:
+
+```supercollider
+var sig = SinOsc.ar(freq);
+sig = sig * 0.5;           // statement
+var env = EnvGen.kr(...);  // ERROR: var after statement
+```
+
+Fix by declaring all variables upfront:
+
+```supercollider
+var sig = SinOsc.ar(freq);
+var env;
+sig = sig * 0.5;
+env = EnvGen.kr(...);
+```
 
 ## Plans
 
