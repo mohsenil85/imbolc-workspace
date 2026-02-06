@@ -212,6 +212,54 @@ impl AudioThread {
     }
 
     fn handle_cmd(&mut self, cmd: AudioCmd) -> bool {
+        use AudioCmd::*;
+        match cmd {
+            // Server lifecycle
+            Connect { .. } | Disconnect | StartServer { .. } | StopServer |
+            RestartServer { .. } | CompileSynthDefs { .. } | LoadSynthDefs { .. } |
+            LoadSynthDefFile { .. } => self.handle_server_cmd(cmd),
+
+            // State synchronization
+            UpdateState { .. } | UpdatePianoRollData { .. } |
+            UpdateAutomationLanes { .. } => self.handle_state_cmd(cmd),
+
+            // Playback control
+            SetPlaying { .. } | ResetPlayhead | SetBpm { .. } |
+            SetClickEnabled { .. } | SetClickVolume { .. } | SetClickMuted { .. }
+                => self.handle_playback_cmd(cmd),
+
+            // Routing & mixing parameters
+            RebuildRouting | RebuildInstrumentRouting { .. } | UpdateMixerParams |
+            SetMasterParams { .. } | SetInstrumentMixerParams { .. } |
+            SetBusMixerParams { .. } | SetSourceParam { .. } | SetEqParam { .. } |
+            SetFilterParam { .. } | SetEffectParam { .. } | SetLfoParam { .. } |
+            ApplyAutomation { .. } => self.handle_mixer_cmd(cmd),
+
+            // Voice management
+            SpawnVoice { .. } | ReleaseVoice { .. } | RegisterActiveNote { .. } |
+            ClearActiveNotes | ReleaseAllVoices | PlayDrumHit { .. }
+                => self.handle_voice_cmd(cmd),
+
+            // Sample & recording
+            LoadSample { .. } | FreeSamples { .. } | StartInstrumentRender { .. } |
+            StartRecording { .. } | StopRecording { .. } | StartMasterBounce { .. } |
+            StartStemExport { .. } | CancelExport => self.handle_recording_cmd(cmd),
+
+            // VST parameters
+            QueryVstParams { .. } | SetVstParam { .. } | SaveVstState { .. } |
+            LoadVstState { .. } => self.handle_vst_cmd(cmd),
+
+            // Shutdown (special case - returns true)
+            Shutdown => return true,
+        }
+        false
+    }
+
+    // =========================================================================
+    // Server lifecycle commands
+    // =========================================================================
+
+    fn handle_server_cmd(&mut self, cmd: AudioCmd) {
         match cmd {
             AudioCmd::Connect { server_addr, reply } => {
                 let result = self.engine.connect_with_monitor(&server_addr, self.monitor.clone());
@@ -291,6 +339,16 @@ impl AudioThread {
                 let result = self.engine.load_synthdef_file(&path);
                 let _ = reply.send(result);
             }
+            _ => {}
+        }
+    }
+
+    // =========================================================================
+    // State synchronization commands
+    // =========================================================================
+
+    fn handle_state_cmd(&mut self, cmd: AudioCmd) {
+        match cmd {
             AudioCmd::UpdateState { instruments, session } => {
                 self.apply_state_update(instruments, session);
             }
@@ -300,6 +358,16 @@ impl AudioThread {
             AudioCmd::UpdateAutomationLanes { lanes } => {
                 self.automation_lanes = lanes;
             }
+            _ => {}
+        }
+    }
+
+    // =========================================================================
+    // Playback control commands
+    // =========================================================================
+
+    fn handle_playback_cmd(&mut self, cmd: AudioCmd) {
+        match cmd {
             AudioCmd::SetPlaying { playing } => {
                 self.piano_roll.playing = playing;
                 if playing {
@@ -330,6 +398,16 @@ impl AudioThread {
             AudioCmd::SetClickMuted { muted } => {
                 self.click_state.muted = muted;
             }
+            _ => {}
+        }
+    }
+
+    // =========================================================================
+    // Routing & mixing parameter commands
+    // =========================================================================
+
+    fn handle_mixer_cmd(&mut self, cmd: AudioCmd) {
+        match cmd {
             AudioCmd::RebuildRouting => {
                 let _ = self.engine.rebuild_instrument_routing(&self.instruments, &self.session);
             }
@@ -369,6 +447,19 @@ impl AudioThread {
             AudioCmd::SetLfoParam { instrument_id, param, value } => {
                 let _ = self.engine.set_lfo_param(instrument_id, &param, value);
             }
+            AudioCmd::ApplyAutomation { target, value } => {
+                let _ = self.engine.apply_automation(&target, value, &mut self.instruments, &self.session);
+            }
+            _ => {}
+        }
+    }
+
+    // =========================================================================
+    // Voice management commands
+    // =========================================================================
+
+    fn handle_voice_cmd(&mut self, cmd: AudioCmd) {
+        match cmd {
             AudioCmd::SpawnVoice { instrument_id, pitch, velocity, offset_secs } => {
                 let _ = self.engine.spawn_voice(instrument_id, pitch, velocity, offset_secs, &self.instruments, &self.session);
             }
@@ -389,6 +480,16 @@ impl AudioThread {
                     buffer_id, amp, instrument_id, slice_start, slice_end, rate, offset_secs,
                 );
             }
+            _ => {}
+        }
+    }
+
+    // =========================================================================
+    // Sample & recording commands
+    // =========================================================================
+
+    fn handle_recording_cmd(&mut self, cmd: AudioCmd) {
+        match cmd {
             AudioCmd::LoadSample { buffer_id, path, reply } => {
                 let result = self.engine.load_sample(buffer_id, &path);
                 let _ = reply.send(result);
@@ -401,11 +502,10 @@ impl AudioThread {
             AudioCmd::StartInstrumentRender { instrument_id, path, reply } => {
                 let result = if let Some(&bus) = self.engine.instrument_final_buses.get(&instrument_id) {
                     self.engine.start_recording(bus, &path).map(|_| {
-                        let ticks_per_second = (self.piano_roll.bpm / 60.0) * self.piano_roll.ticks_per_beat as f32;
                         self.render_state = Some(RenderState {
                             instrument_id,
                             loop_end: self.piano_roll.loop_end,
-                            tail_ticks: ticks_per_second as u32,
+                            tail_ticks: self.calculate_tail_ticks(),
                         });
                     })
                 } else {
@@ -423,12 +523,10 @@ impl AudioThread {
             }
             AudioCmd::StartMasterBounce { path, reply } => {
                 let result = self.engine.start_export_master(&path).map(|_| {
-                    let ticks_per_second = (self.piano_roll.bpm / 60.0)
-                        * self.piano_roll.ticks_per_beat as f32;
                     self.export_state = Some(ExportState {
                         kind: ExportKind::MasterBounce,
                         loop_end: self.piano_roll.loop_end,
-                        tail_ticks: ticks_per_second as u32,
+                        tail_ticks: self.calculate_tail_ticks(),
                         paths: vec![path],
                     });
                     self.last_export_progress = 0.0;
@@ -452,12 +550,10 @@ impl AudioThread {
                     let paths: Vec<PathBuf> =
                         stems.iter().map(|(_, p)| p.clone()).collect();
                     let result = self.engine.start_export_stems(&instrument_buses).map(|_| {
-                        let ticks_per_second = (self.piano_roll.bpm / 60.0)
-                            * self.piano_roll.ticks_per_beat as f32;
                         self.export_state = Some(ExportState {
                             kind: ExportKind::StemExport,
                             loop_end: self.piano_roll.loop_end,
-                            tail_ticks: ticks_per_second as u32,
+                            tail_ticks: self.calculate_tail_ticks(),
                             paths,
                         });
                         self.last_export_progress = 0.0;
@@ -473,9 +569,16 @@ impl AudioThread {
                     self.engine.release_all_voices();
                 }
             }
-            AudioCmd::ApplyAutomation { target, value } => {
-                let _ = self.engine.apply_automation(&target, value, &mut self.instruments, &self.session);
-            }
+            _ => {}
+        }
+    }
+
+    // =========================================================================
+    // VST parameter commands
+    // =========================================================================
+
+    fn handle_vst_cmd(&mut self, cmd: AudioCmd) {
+        match cmd {
             AudioCmd::QueryVstParams { instrument_id, target } => {
                 let node_id = self.resolve_vst_node_id(instrument_id, target);
                 let vst_plugin_id = self.resolve_vst_plugin_id(instrument_id, target);
@@ -518,9 +621,14 @@ impl AudioThread {
                     let _ = self.engine.load_vst_state_node(node_id, &path);
                 }
             }
-            AudioCmd::Shutdown => return true,
+            _ => {}
         }
-        false
+    }
+
+    /// Calculate tail duration in ticks (1 second of tail time)
+    fn calculate_tail_ticks(&self) -> u32 {
+        let ticks_per_second = (self.piano_roll.bpm / 60.0) * self.piano_roll.ticks_per_beat as f32;
+        ticks_per_second as u32
     }
 
     fn apply_state_update(&mut self, mut instruments: InstrumentSnapshot, session: SessionSnapshot) {
