@@ -20,7 +20,7 @@ use audio::commands::AudioCmd;
 use audio::AudioHandle;
 use action::{AudioDirty, IoFeedback};
 use dispatch::LocalDispatcher;
-use panes::{AddEffectPane, AddPane, AutomationPane, CommandPalettePane, ConfirmPane, EqPane, FileBrowserPane, FrameEditPane, HelpPane, HomePane, InstrumentEditPane, InstrumentPane, InstrumentPickerPane, MidiSettingsPane, MixerPane, PianoRollPane, ProjectBrowserPane, QuitPromptPane, SaveAsPane, SampleChopperPane, SequencerPane, ServerPane, TrackPane, VstParamPane, WaveformPane};
+use panes::{AddEffectPane, AddPane, AutomationPane, CommandPalettePane, ConfirmPane, EqPane, FileBrowserPane, FrameEditPane, HelpPane, HomePane, InstrumentEditPane, InstrumentPane, InstrumentPickerPane, MidiSettingsPane, MixerPane, PaneSwitcherPane, PianoRollPane, ProjectBrowserPane, QuitPromptPane, SaveAsPane, SampleChopperPane, SequencerPane, ServerPane, TrackPane, VstParamPane, WaveformPane};
 use state::AppState;
 use ui::{
     Action, AppEvent, Frame, InputSource, KeyCode, Keymap, LayerResult,
@@ -152,6 +152,7 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
     panes.add_pane(Box::new(ProjectBrowserPane::new(pane_keymap(&mut keymaps, "project_browser"))));
     panes.add_pane(Box::new(SaveAsPane::new(pane_keymap(&mut keymaps, "save_as"))));
     panes.add_pane(Box::new(CommandPalettePane::new(pane_keymap(&mut keymaps, "command_palette"))));
+    panes.add_pane(Box::new(PaneSwitcherPane::new(pane_keymap(&mut keymaps, "pane_switcher"))));
     panes.add_pane(Box::new(MidiSettingsPane::new(pane_keymap(&mut keymaps, "midi_settings"))));
 
     // Create layer stack
@@ -391,6 +392,17 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
                     }
                 }
                 sync_pane_layer(&mut panes, &mut layer_stack);
+            }
+
+            // Auto-pop pane_switcher layer and switch to selected pane
+            if layer_stack.has_layer("pane_switcher") && panes.active().id() != "pane_switcher" {
+                layer_stack.pop("pane_switcher");
+                if let Some(switcher) = panes.get_pane_mut::<PaneSwitcherPane>("pane_switcher") {
+                    if let Some(pane_id) = switcher.take_pane() {
+                        panes.switch_to(pane_id, dispatcher.state());
+                        sync_pane_layer(&mut panes, &mut layer_stack);
+                    }
+                }
             }
 
             // Intercept MIDI port actions that need MidiInputManager

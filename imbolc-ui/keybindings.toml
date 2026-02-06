@@ -46,6 +46,7 @@ bindings = [
   { key = "Ctrl+a", action = "select_all", description = "Select all" },
   { key = "Ctrl+n", action = "add_instrument", description = "Add instrument" },
   { key = ":", action = "command_palette", description = "Command palette" },
+  { key = ";", action = "pane_switcher", description = "Pane switcher" },
   { key = "Space", action = "play_stop", description = "Play / Stop" },
   { key = "M", action = "click_track_toggle", description = "Toggle metronome" },
   { key = "Ctrl+L", action = "refresh_screen", description = "Refresh screen" },
@@ -547,6 +548,13 @@ bindings = [
 transparent = false
 bindings = [
   { key = "Enter", action = "palette:confirm", description = "Execute command" },
+  { key = "Escape", action = "palette:cancel", description = "Cancel" },
+]
+
+[layers.pane_switcher]
+transparent = false
+bindings = [
+  { key = "Enter", action = "palette:confirm", description = "Switch to pane" },
   { key = "Escape", action = "palette:cancel", description = "Cancel" },
 ]
 

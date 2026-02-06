@@ -6,7 +6,7 @@ use crate::audio::AudioHandle;
 use crate::state::{AppState, MixerSelection, ClipboardContents};
 use crate::dispatch::LocalDispatcher;
 use crate::panes::{
-    CommandPalettePane, InstrumentEditPane, PianoRollPane, SequencerPane,
+    CommandPalettePane, InstrumentEditPane, PaneSwitcherPane, PianoRollPane, SequencerPane,
     AutomationPane, ServerPane, HelpPane, FileBrowserPane, VstParamPane,
     ConfirmPane, SaveAsPane, PendingAction,
 };
@@ -463,6 +463,13 @@ pub(crate) fn handle_global_action(
                 }
                 panes.push_to("command_palette", dispatcher.state());
                 layer_stack.push("command_palette");
+            }
+            GlobalActionId::PaneSwitcher => {
+                if let Some(switcher) = panes.get_pane_mut::<PaneSwitcherPane>("pane_switcher") {
+                    switcher.open();
+                }
+                panes.push_to("pane_switcher", dispatcher.state());
+                layer_stack.push("pane_switcher");
             }
             GlobalActionId::PlayStop => {
                 // Skip during export/render

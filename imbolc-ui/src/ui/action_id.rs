@@ -77,6 +77,7 @@ pub enum GlobalActionId {
     PlayStop,
     RefreshScreen,
     ClickTrackToggle,
+    PaneSwitcher,
     SwitchPane(PaneId),
     SelectInstrument(u8), // 1-10
 }
@@ -111,6 +112,7 @@ impl GlobalActionId {
             GlobalActionId::SelectTwoDigit => "select_two_digit",
             GlobalActionId::RefreshScreen => "refresh_screen",
             GlobalActionId::ClickTrackToggle => "click_track_toggle",
+            GlobalActionId::PaneSwitcher => "pane_switcher",
             GlobalActionId::SwitchPane(pane) => match pane {
                 PaneId::InstrumentEdit => "switch:instrument",
                 PaneId::InstrumentList => "switch:instrument_list",
@@ -168,6 +170,7 @@ impl GlobalActionId {
             "select_two_digit" => Some(GlobalActionId::SelectTwoDigit),
             "refresh_screen" => Some(GlobalActionId::RefreshScreen),
             "click_track_toggle" => Some(GlobalActionId::ClickTrackToggle),
+            "pane_switcher" => Some(GlobalActionId::PaneSwitcher),
             "switch:instrument" => Some(GlobalActionId::SwitchPane(PaneId::InstrumentEdit)),
             "switch:instrument_list" => Some(GlobalActionId::SwitchPane(PaneId::InstrumentList)),
             "switch:piano_roll_or_sequencer" => {
@@ -773,7 +776,7 @@ pub fn parse_action_id(layer: &str, action: &str) -> Option<ActionId> {
         "project_browser" => {
             ProjectBrowserActionId::from_str(action).map(ActionId::ProjectBrowser)
         }
-        "piano_mode" | "pad_mode" | "text_edit" | "command_palette" => {
+        "piano_mode" | "pad_mode" | "text_edit" | "command_palette" | "pane_switcher" => {
             ModeActionId::from_str(action).map(ActionId::Mode)
         }
         "quit_prompt" | "save_as" => None, // No actions — handled via raw input
