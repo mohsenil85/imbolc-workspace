@@ -107,6 +107,36 @@ pub struct IoGeneration {
     pub import_synthdef: u64,
 }
 
+/// Ownership status for an instrument in network mode.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OwnershipDisplayStatus {
+    /// This client owns the instrument.
+    OwnedByMe,
+    /// Another client owns the instrument (includes their name).
+    OwnedByOther(String),
+    /// No one owns the instrument.
+    Unowned,
+    /// Not in network mode (don't display ownership).
+    Local,
+}
+
+impl Default for OwnershipDisplayStatus {
+    fn default() -> Self {
+        Self::Local
+    }
+}
+
+/// Network collaboration context for UI display.
+#[derive(Debug, Clone, Default)]
+pub struct NetworkDisplayContext {
+    /// Ownership status for each instrument (by ID).
+    pub ownership: std::collections::HashMap<InstrumentId, OwnershipDisplayStatus>,
+    /// Whether this client has privileged status (can control transport, save, load).
+    pub is_privileged: bool,
+    /// Name of the privileged client (if any).
+    pub privileged_client_name: Option<String>,
+}
+
 impl IoGeneration {
     pub fn next_save(&mut self) -> u64 {
         self.save = self.save.wrapping_add(1);

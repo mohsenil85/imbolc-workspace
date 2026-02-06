@@ -38,8 +38,8 @@ pub use vst_plugin::{VstParamSpec, VstPlugin, VstPluginId, VstPluginKind, VstPlu
 
 // Re-export types moved to imbolc-types
 pub use imbolc_types::{
-    IoGeneration, IoState, KeyboardLayout, PendingExport, PendingRender, ProjectMeta,
-    RecordingState, VisualizationState,
+    IoGeneration, IoState, KeyboardLayout, NetworkDisplayContext, OwnershipDisplayStatus,
+    PendingExport, PendingRender, ProjectMeta, RecordingState, VisualizationState,
 };
 
 /// Top-level application state, owned by main.rs and passed to panes by reference.
@@ -61,6 +61,8 @@ pub struct AppState {
     pub project: ProjectMeta,
     /// MIDI hardware connection state
     pub midi: MidiConnectionState,
+    /// Network collaboration context (None when running standalone)
+    pub network: Option<NetworkDisplayContext>,
 }
 
 impl AppState {
@@ -78,6 +80,7 @@ impl AppState {
             undo_history: UndoHistory::new(500),
             project: ProjectMeta::default(),
             midi: MidiConnectionState::default(),
+            network: None,
         }
     }
 
@@ -94,6 +97,15 @@ impl AppState {
             undo_history: UndoHistory::new(500),
             project: ProjectMeta::new_with_defaults(defaults),
             midi: MidiConnectionState::default(),
+            network: None,
+        }
+    }
+
+    /// Get the ownership status for an instrument (for UI display).
+    pub fn ownership_status(&self, instrument_id: InstrumentId) -> OwnershipDisplayStatus {
+        match &self.network {
+            Some(ctx) => ctx.ownership.get(&instrument_id).cloned().unwrap_or(OwnershipDisplayStatus::Unowned),
+            None => OwnershipDisplayStatus::Local,
         }
     }
 

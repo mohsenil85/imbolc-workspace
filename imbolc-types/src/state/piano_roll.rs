@@ -15,7 +15,7 @@ pub struct Note {
 
 /// A note stored with position relative to the selection anchor.
 /// anchor = (min_tick of selected notes, min_pitch of selected notes)
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ClipboardNote {
     pub tick_offset: u32,    // tick - anchor_tick
     pub pitch_offset: i16,   // pitch as i16 - anchor_pitch as i16

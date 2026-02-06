@@ -1,6 +1,6 @@
 use std::any::Any;
 
-use crate::state::{AppState, SourceType};
+use crate::state::{AppState, OwnershipDisplayStatus, SourceType};
 use crate::ui::layout_helpers::center_rect;
 use crate::ui::{Rect, RenderBuf, Action, NavAction, InstrumentAction, SessionAction, Color, InputEvent, KeyCode, Keymap, MouseEvent, MouseEventKind, MouseButton, PadKeyboard, Pane, PianoKeyboard, Style, ToggleResult, translate_key};
 use crate::ui::action_id::{ActionId, InstrumentListActionId, ModeActionId};
@@ -266,6 +266,22 @@ impl Pane for InstrumentPane {
                 None => String::new(),
             };
 
+            // Ownership indicator for network mode
+            let ownership_str = match state.ownership_status(instrument.id) {
+                OwnershipDisplayStatus::OwnedByMe => " [ME]".to_string(),
+                OwnershipDisplayStatus::OwnedByOther(ref name) => {
+                    let short = if name.len() > 6 { &name[..6] } else { name };
+                    format!(" [{}]", short)
+                }
+                OwnershipDisplayStatus::Unowned => String::new(),
+                OwnershipDisplayStatus::Local => String::new(),
+            };
+            let ownership_color = match state.ownership_status(instrument.id) {
+                OwnershipDisplayStatus::OwnedByMe => Color::LIME,
+                OwnershipDisplayStatus::OwnedByOther(_) => Color::ORANGE,
+                _ => Color::DARK_GRAY,
+            };
+
             let mut spans: Vec<(&str, Style)> = vec![
                 (&name_str, mk_style(Color::WHITE)),
                 (&source_str, mk_style(source_c)),
@@ -276,6 +292,9 @@ impl Pane for InstrumentPane {
             ];
             if !layer_str.is_empty() {
                 spans.push((&layer_str, mk_style(Color::ORANGE)));
+            }
+            if !ownership_str.is_empty() {
+                spans.push((&ownership_str, mk_style(ownership_color)));
             }
             let line_width = inner.width.saturating_sub(3);
             buf.draw_line(Rect::new(content_x + 2, y, line_width, 1), &spans);

@@ -5,6 +5,8 @@
 
 use std::path::PathBuf;
 
+use serde::{Deserialize, Serialize};
+
 use crate::{
     AutomationLaneId, AutomationTarget, ClipId, ClipboardNote, CurveType, DrumStep,
     EffectId, EffectType, EqConfig, EffectSlot, EnvConfig, FilterConfig, FilterType,
@@ -25,7 +27,7 @@ pub enum NavAction {
 }
 
 /// Result of toggling performance mode (piano/pad keyboard).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ToggleResult {
     /// Pane doesn't support performance mode
     NotSupported,
@@ -40,7 +42,7 @@ pub enum ToggleResult {
 }
 
 /// Identifies a filter parameter for targeted /n_set updates.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FilterParamKind {
     Cutoff,
     Resonance,
@@ -56,7 +58,7 @@ impl FilterParamKind {
 }
 
 /// Identifies an LFO parameter for targeted /n_set updates.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LfoParamKind {
     Rate,
     Depth,
@@ -72,7 +74,7 @@ impl LfoParamKind {
 }
 
 /// Identifies whether a VST operation targets the instrument source or an effect slot.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum VstTarget {
     Source,
     Effect(EffectId), // stable effect ID
@@ -83,7 +85,7 @@ pub enum VstTarget {
 // ============================================================================
 
 /// Audio server actions — Start/Restart carry device selections.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ServerAction {
     Connect,
     Disconnect,
@@ -98,7 +100,7 @@ pub enum ServerAction {
 }
 
 /// Bus management actions.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum BusAction {
     /// Add a new bus
     Add,
@@ -109,7 +111,7 @@ pub enum BusAction {
 }
 
 /// Sample chopper actions.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ChopperAction {
     LoadSample,
     LoadSampleResult(PathBuf),
@@ -130,7 +132,7 @@ pub enum ChopperAction {
 // ============================================================================
 
 /// Action to take when a file is selected in the file browser.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum FileSelectAction {
     ImportCustomSynthDef,
     ImportVstInstrument,
@@ -160,7 +162,7 @@ pub enum NavIntent {
 }
 
 /// Status event returned from dispatch — forwarded to the server pane by the UI layer.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StatusEvent {
     pub status: ServerStatus,
     pub message: String,
@@ -171,7 +173,7 @@ pub struct StatusEvent {
 // AudioDirty and DispatchResult
 // ============================================================================
 
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 pub struct AudioDirty {
     pub instruments: bool,
     pub session: bool,
@@ -342,7 +344,7 @@ impl DispatchResult {
 // ============================================================================
 
 /// VST parameter actions.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum VstParamAction {
     SetParam(InstrumentId, VstTarget, u32, f32),       // instrument_id, target, param_index, value
     AdjustParam(InstrumentId, VstTarget, u32, f32),    // instrument_id, target, param_index, delta
@@ -352,7 +354,7 @@ pub enum VstParamAction {
 }
 
 /// Mixer actions.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum MixerAction {
     Move(i8),
     Jump(i8),
@@ -369,7 +371,7 @@ pub enum MixerAction {
 }
 
 /// Session/file actions.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum SessionAction {
     Save,
     SaveAs(PathBuf),
@@ -387,7 +389,7 @@ pub enum SessionAction {
 }
 
 /// MIDI configuration actions.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum MidiAction {
     ConnectPort(usize),
     DisconnectPort,
@@ -399,7 +401,7 @@ pub enum MidiAction {
 }
 
 /// Automation actions.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum AutomationAction {
     AddLane(AutomationTarget),
     RemoveLane(AutomationLaneId),
@@ -424,7 +426,7 @@ pub enum AutomationAction {
 }
 
 /// Arrangement/timeline actions.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ArrangementAction {
     TogglePlayMode,
     CreateClip { instrument_id: InstrumentId, length_ticks: u32 },
@@ -448,7 +450,7 @@ pub enum ArrangementAction {
 }
 
 /// Piano roll actions — all variants carry the data they need.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum PianoRollAction {
     ToggleNote { pitch: u8, tick: u32, duration: u32, velocity: u8, track: usize },
     PlayStop,
@@ -484,8 +486,39 @@ pub enum PianoRollAction {
     CopyNotes { track: usize, start_tick: u32, end_tick: u32, start_pitch: u8, end_pitch: u8 },
 }
 
+impl PianoRollAction {
+    /// Returns the target instrument ID for ownership validation, if applicable.
+    /// Returns None for actions that don't explicitly specify an instrument ID.
+    /// Note: Actions with `track` index need state to resolve to InstrumentId.
+    pub fn target_instrument_id(&self) -> Option<InstrumentId> {
+        match self {
+            // Actions with explicit instrument_id
+            Self::PlayNote { instrument_id, .. } => Some(*instrument_id),
+            Self::PlayNotes { instrument_id, .. } => Some(*instrument_id),
+            Self::RenderToWav(id) => Some(*id),
+
+            // Actions without explicit instrument_id (use track index, need state to resolve)
+            Self::ToggleNote { .. }
+            | Self::PlayStop
+            | Self::ToggleLoop
+            | Self::SetLoopStart(_)
+            | Self::SetLoopEnd(_)
+            | Self::CycleTimeSig
+            | Self::TogglePolyMode(_)
+            | Self::PlayStopRecord
+            | Self::AdjustSwing(_)
+            | Self::DeleteNotesInRegion { .. }
+            | Self::PasteNotes { .. }
+            | Self::BounceToWav
+            | Self::ExportStems
+            | Self::CancelExport
+            | Self::CopyNotes { .. } => None,
+        }
+    }
+}
+
 /// Drum sequencer actions.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum SequencerAction {
     ToggleStep(usize, usize),         // (pad_idx, step_idx)
     AdjustVelocity(usize, usize, i8), // (pad_idx, step_idx, delta)
@@ -526,7 +559,7 @@ pub enum SequencerAction {
 }
 
 /// Data carried by InstrumentAction::Update to apply edits without dispatch reading pane state.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InstrumentUpdate {
     pub id: InstrumentId,
     pub source: SourceType,
@@ -541,7 +574,7 @@ pub struct InstrumentUpdate {
 }
 
 /// Instrument actions.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum InstrumentAction {
     Add(SourceType),
     Delete(InstrumentId),
@@ -590,6 +623,65 @@ pub enum InstrumentAction {
     SetTrackTimingOffset(InstrumentId, f32),
     AdjustTrackTimingOffset(InstrumentId, f32),
     ResetTrackGroove(InstrumentId),
+}
+
+impl InstrumentAction {
+    /// Returns the target instrument ID for ownership validation, if applicable.
+    /// Returns None for actions that don't target a specific instrument (Add, Select, PlayNote, etc).
+    pub fn target_instrument_id(&self) -> Option<InstrumentId> {
+        match self {
+            // Actions that don't target a specific instrument
+            Self::Add(_) => None,
+            Self::PlayNote(_, _) => None,
+            Self::PlayNotes(_, _) => None,
+            Self::Select(_) => None,
+            Self::SelectNext => None,
+            Self::SelectPrev => None,
+            Self::SelectFirst => None,
+            Self::SelectLast => None,
+            Self::PlayDrumPad(_) => None,
+
+            // Actions targeting a specific instrument
+            Self::Delete(id)
+            | Self::Edit(id)
+            | Self::AddEffect(id, _)
+            | Self::RemoveEffect(id, _)
+            | Self::MoveEffect(id, _, _)
+            | Self::SetFilter(id, _)
+            | Self::ToggleEffectBypass(id, _)
+            | Self::ToggleFilter(id)
+            | Self::CycleFilterType(id)
+            | Self::AdjustFilterCutoff(id, _)
+            | Self::AdjustFilterResonance(id, _)
+            | Self::AdjustEffectParam(id, _, _, _)
+            | Self::LoadSampleResult(id, _)
+            | Self::ToggleArp(id)
+            | Self::CycleArpDirection(id)
+            | Self::CycleArpRate(id)
+            | Self::AdjustArpOctaves(id, _)
+            | Self::AdjustArpGate(id, _)
+            | Self::CycleChordShape(id)
+            | Self::ClearChordShape(id)
+            | Self::LoadIRResult(id, _, _)
+            | Self::OpenVstEffectParams(id, _)
+            | Self::SetEqParam(id, _, _, _)
+            | Self::ToggleEq(id)
+            | Self::LinkLayer(id, _)
+            | Self::UnlinkLayer(id)
+            | Self::SetTrackSwing(id, _)
+            | Self::SetTrackSwingGrid(id, _)
+            | Self::AdjustTrackSwing(id, _)
+            | Self::SetTrackHumanizeVelocity(id, _)
+            | Self::AdjustTrackHumanizeVelocity(id, _)
+            | Self::SetTrackHumanizeTiming(id, _)
+            | Self::AdjustTrackHumanizeTiming(id, _)
+            | Self::SetTrackTimingOffset(id, _)
+            | Self::AdjustTrackTimingOffset(id, _)
+            | Self::ResetTrackGroove(id) => Some(*id),
+
+            Self::Update(update) => Some(update.id),
+        }
+    }
 }
 
 // ============================================================================

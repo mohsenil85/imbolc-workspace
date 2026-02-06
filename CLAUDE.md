@@ -48,6 +48,7 @@ Each crate has its own `CLAUDE.md` with detailed guidance:
 - [imbolc-ui/CLAUDE.md](imbolc-ui/CLAUDE.md) — UI architecture, pane system, keybindings
 - [imbolc-core/CLAUDE.md](imbolc-core/CLAUDE.md) — State, dispatch, audio engine
 - [imbolc-types/CLAUDE.md](imbolc-types/CLAUDE.md) — Shared type definitions
+- [imbolc-net/CLAUDE.md](imbolc-net/CLAUDE.md) — Network layer for collaboration
 
 ## Common Workflows
 
@@ -81,6 +82,7 @@ All docs live at workspace root in `./docs/`:
 - [docs/keybindings.md](docs/keybindings.md) — keybinding philosophy and conventions
 - [docs/sqlite-persistence.md](docs/sqlite-persistence.md) — persistence schema
 - [docs/custom-synthdef-plan.md](docs/custom-synthdef-plan.md) — custom SynthDef system
+- [docs/network-scenarios.md](docs/network-scenarios.md) — deployment scenarios (local, LAN, pro setup)
 
 ## Task Tracking
 

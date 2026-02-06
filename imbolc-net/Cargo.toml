@@ -1,0 +1,17 @@
+[package]
+name = "imbolc-net"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = []
+mdns = ["dep:mdns-sd", "dep:gethostname", "dep:flume"]
+
+[dependencies]
+imbolc-types = { path = "../imbolc-types" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+log = "0.4"
+mdns-sd = { version = "0.10", optional = true }
+gethostname = { version = "0.4", optional = true }
+flume = { version = "0.11", optional = true }

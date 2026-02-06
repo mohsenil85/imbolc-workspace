@@ -590,7 +590,7 @@ See [phase1-dispatcher-trait.md](phase1-dispatcher-trait.md) for details.
 avoid borrow checker conflicts. This also benefits Phase 2 since remote
 clients don't need audio.
 
-### Phase 2: Network Plumbing
+### Phase 2: Network Plumbing ✓ COMPLETE
 
 - Create `imbolc-net` crate (depends on `imbolc-types` only)
 - Implement `RemoteDispatcher`: connect, send actions, receive state
@@ -601,12 +601,43 @@ clients don't need audio.
 - Get basic round-trip working: client sends action, server
   dispatches, client sees updated state
 
-### Phase 3: Ownership
+**Implemented:**
+- `imbolc-net` crate created (depends only on `imbolc-types`)
+- `RemoteDispatcher` in `client.rs`: connect, send actions, receive state updates
+- `NetServer` in `server.rs`: listen, accept connections, broadcast state
+- Wire protocol in `protocol.rs`: `ClientMessage`, `ServerMessage`, `NetworkAction`, `NetworkState`
+- Length-prefixed JSON framing in `framing.rs`
+- Binary flags in `imbolc-ui`: `--server` and `--connect <addr>` (feature-gated under `net`)
+- Full round-trip working: action dispatch → state sync → metering at ~30Hz
+- Server mode (`run_server()`) and client mode (`run_client()`) in main.rs
+
+**Key files:**
+- `/imbolc-net/src/protocol.rs` — message types
+- `/imbolc-net/src/client.rs` — RemoteDispatcher
+- `/imbolc-net/src/server.rs` — NetServer
+- `/imbolc-net/src/framing.rs` — wire framing
+- `/imbolc-ui/src/main.rs` — server/client mode integration
+
+### Phase 3: Ownership ✓ COMPLETE
 
 - Client identifies itself on connect (name, requested instruments)
 - Server tracks ownership table
 - Server rejects actions that violate ownership
 - UI indicates which instruments are owned by whom
+
+**Implemented:**
+- `ClientMessage::Hello { client_name, requested_instruments }` for client identification
+- `NetServer.ownership: HashMap<InstrumentId, ClientId>` for tracking
+- `validate_action()` rejects unauthorized instrument/piano roll actions
+- Client-side `owns(instrument_id)` API for UI to query ownership
+
+**Key files:**
+- `/imbolc-net/src/protocol.rs` — ownership-aware message types
+- `/imbolc-net/src/server.rs` — ownership tracking and validation
+- `/imbolc-net/src/client.rs` — client-side ownership awareness
+
+**Deferred to Phase 4:**
+- UI indicator showing which instruments are owned by whom
 
 ### Phase 4: Polish
 
