@@ -288,7 +288,12 @@ pub(crate) fn handle_global_action(
                 select_all_in_active_pane(dispatcher.state_mut(), panes);
             }
             GlobalActionId::SwitchPane(PaneId::InstrumentEdit) => {
-                switch_to_pane("instrument_edit", panes, dispatcher, audio, app_frame, layer_stack);
+                let target = if dispatcher.state().instruments.instruments.is_empty() {
+                    "add"
+                } else {
+                    "instrument_edit"
+                };
+                switch_to_pane(target, panes, dispatcher, audio, app_frame, layer_stack);
             }
             GlobalActionId::SwitchPane(PaneId::InstrumentList) => {
                 switch_to_pane("instrument", panes, dispatcher, audio, app_frame, layer_stack);
