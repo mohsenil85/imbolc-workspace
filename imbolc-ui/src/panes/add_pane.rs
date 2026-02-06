@@ -26,7 +26,7 @@ impl AddPane {
     pub fn new(keymap: Keymap) -> Self {
         Self {
             keymap,
-            selected: 0,
+            selected: 1, // Start on first selectable item (skip separator)
             scroll_offset: 0,
             cached_options: Self::build_options_static(),
         }
@@ -36,10 +36,53 @@ impl AddPane {
     fn build_options_static() -> Vec<AddOption> {
         let mut options = Vec::new();
 
-        // Built-in types
-        for source in SourceType::all() {
-            options.push(AddOption::Source(source));
-        }
+        // Basic Oscillators
+        options.push(AddOption::Separator("── Oscillators ──"));
+        options.push(AddOption::Source(SourceType::Saw));
+        options.push(AddOption::Source(SourceType::Sin));
+        options.push(AddOption::Source(SourceType::Sqr));
+        options.push(AddOption::Source(SourceType::Tri));
+        options.push(AddOption::Source(SourceType::Noise));
+        options.push(AddOption::Source(SourceType::Pulse));
+        options.push(AddOption::Source(SourceType::SuperSaw));
+        options.push(AddOption::Source(SourceType::Sync));
+
+        // Modulation
+        options.push(AddOption::Separator("── Modulation ──"));
+        options.push(AddOption::Source(SourceType::Ring));
+        options.push(AddOption::Source(SourceType::FBSin));
+        options.push(AddOption::Source(SourceType::FM));
+        options.push(AddOption::Source(SourceType::PhaseMod));
+
+        // Physical Modeling
+        options.push(AddOption::Separator("── Physical ──"));
+        options.push(AddOption::Source(SourceType::Pluck));
+        options.push(AddOption::Source(SourceType::Formant));
+        options.push(AddOption::Source(SourceType::Bowed));
+        options.push(AddOption::Source(SourceType::Blown));
+        options.push(AddOption::Source(SourceType::Membrane));
+
+        // Experimental
+        options.push(AddOption::Separator("── Experimental ──"));
+        options.push(AddOption::Source(SourceType::Gendy));
+        options.push(AddOption::Source(SourceType::Chaos));
+
+        // Synthesis
+        options.push(AddOption::Separator("── Synthesis ──"));
+        options.push(AddOption::Source(SourceType::Additive));
+        options.push(AddOption::Source(SourceType::Wavetable));
+        options.push(AddOption::Source(SourceType::Granular));
+
+        // Audio / Routing
+        options.push(AddOption::Separator("── Routing ──"));
+        options.push(AddOption::Source(SourceType::AudioIn));
+        options.push(AddOption::Source(SourceType::BusIn));
+
+        // Samplers
+        options.push(AddOption::Separator("── Samplers ──"));
+        options.push(AddOption::Source(SourceType::PitchedSampler));
+        options.push(AddOption::Source(SourceType::TimeStretch));
+        options.push(AddOption::Source(SourceType::Kit));
 
         // Custom section
         options.push(AddOption::Separator("── Custom ──"));
@@ -56,10 +99,53 @@ impl AddPane {
     fn build_options(&self, custom_registry: &CustomSynthDefRegistry, vst_registry: &VstPluginRegistry) -> Vec<AddOption> {
         let mut options = Vec::new();
 
-        // Built-in types
-        for source in SourceType::all() {
-            options.push(AddOption::Source(source));
-        }
+        // Basic Oscillators
+        options.push(AddOption::Separator("── Oscillators ──"));
+        options.push(AddOption::Source(SourceType::Saw));
+        options.push(AddOption::Source(SourceType::Sin));
+        options.push(AddOption::Source(SourceType::Sqr));
+        options.push(AddOption::Source(SourceType::Tri));
+        options.push(AddOption::Source(SourceType::Noise));
+        options.push(AddOption::Source(SourceType::Pulse));
+        options.push(AddOption::Source(SourceType::SuperSaw));
+        options.push(AddOption::Source(SourceType::Sync));
+
+        // Modulation
+        options.push(AddOption::Separator("── Modulation ──"));
+        options.push(AddOption::Source(SourceType::Ring));
+        options.push(AddOption::Source(SourceType::FBSin));
+        options.push(AddOption::Source(SourceType::FM));
+        options.push(AddOption::Source(SourceType::PhaseMod));
+
+        // Physical Modeling
+        options.push(AddOption::Separator("── Physical ──"));
+        options.push(AddOption::Source(SourceType::Pluck));
+        options.push(AddOption::Source(SourceType::Formant));
+        options.push(AddOption::Source(SourceType::Bowed));
+        options.push(AddOption::Source(SourceType::Blown));
+        options.push(AddOption::Source(SourceType::Membrane));
+
+        // Experimental
+        options.push(AddOption::Separator("── Experimental ──"));
+        options.push(AddOption::Source(SourceType::Gendy));
+        options.push(AddOption::Source(SourceType::Chaos));
+
+        // Synthesis
+        options.push(AddOption::Separator("── Synthesis ──"));
+        options.push(AddOption::Source(SourceType::Additive));
+        options.push(AddOption::Source(SourceType::Wavetable));
+        options.push(AddOption::Source(SourceType::Granular));
+
+        // Audio / Routing
+        options.push(AddOption::Separator("── Routing ──"));
+        options.push(AddOption::Source(SourceType::AudioIn));
+        options.push(AddOption::Source(SourceType::BusIn));
+
+        // Samplers
+        options.push(AddOption::Separator("── Samplers ──"));
+        options.push(AddOption::Source(SourceType::PitchedSampler));
+        options.push(AddOption::Source(SourceType::TimeStretch));
+        options.push(AddOption::Source(SourceType::Kit));
 
         // Custom section
         options.push(AddOption::Separator("── Custom ──"));
@@ -90,9 +176,13 @@ impl AddPane {
     pub fn update_options(&mut self, custom_registry: &CustomSynthDefRegistry, vst_registry: &VstPluginRegistry) {
         self.cached_options = self.build_options(custom_registry, vst_registry);
         self.scroll_offset = 0;
-        // Clamp selection
+        // Clamp selection and ensure it's not on a separator
         if self.selected >= self.cached_options.len() {
             self.selected = self.cached_options.len().saturating_sub(1);
+        }
+        // Skip separator if we landed on one
+        while matches!(self.cached_options.get(self.selected), Some(AddOption::Separator(_))) {
+            self.selected = (self.selected + 1) % self.cached_options.len();
         }
     }
 
