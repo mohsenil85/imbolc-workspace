@@ -1,0 +1,12 @@
+[package]
+name = "imbolc-gui"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+imbolc-core = { path = "../imbolc-core" }
+imbolc-types = { path = "../imbolc-types" }
+dioxus = { version = "0.6", features = ["desktop"] }
+async-std = "1.12"
+log = "0.4"
+env_logger = "0.11"
