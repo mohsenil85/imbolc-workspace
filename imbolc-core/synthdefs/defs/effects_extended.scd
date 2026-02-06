@@ -193,4 +193,60 @@ SynthDef(\imbolc_denoise, { |in=1024, out=1026, threshold=0.3, hp_freq=80, smoot
     wet = Limiter.ar(wet, 0.95, 0.01);
     Out.ar(out, ((sig * (1 - mix.lag(lag))) + (wet * mix.lag(lag))) * fadein);
 }).writeDefFile(dir);
+
+// Autotune — pitch detection + correction to nearest semitone
+// speed: 0=slow/natural correction, 1=instant/robotic
+// shift: additional pitch shift in semitones
+SynthDef(\imbolc_autotune, { |in=1024, out=1026, speed=0.5, shift=0, mix=1.0, lag=0.02|
+    var sig = In.ar(in, 2);
+    var fadein = Line.kr(0, 1, 0.01);
+    var mono = (sig[0] + sig[1]) * 0.5;
+    var freq, hasFreq, midi, targetMidi, correction, ratio, corrected, wet;
+
+    // Detect pitch
+    #freq, hasFreq = Pitch.kr(mono, ampThreshold: 0.02, median: 7);
+
+    // Convert to MIDI, quantize to nearest semitone, add shift
+    midi = freq.cpsmidi;
+    targetMidi = midi.round + shift.lag(lag);
+
+    // Interpolate between detected and target based on speed
+    correction = (targetMidi - midi) * speed.lag(lag).linlin(0, 1, 0.1, 1.0);
+    ratio = (midi + correction - midi).midiratio;
+
+    // Apply pitch shift (only when pitch detected)
+    corrected = PitchShift.ar(mono, 0.2, ratio * hasFreq + (1 - hasFreq), 0, 0.004);
+    wet = corrected ! 2;
+
+    Out.ar(out, ((sig * (1 - mix.lag(lag))) + (wet * mix.lag(lag))) * fadein);
+}).writeDefFile(dir);
+
+// Wah Pedal — resonant bandpass filter with manual or auto-wah mode
+// mode: 0=manual (position controls freq), 1=auto (envelope follower)
+// position: manual pedal position (0-1)
+// resonance: filter Q (0.5-10)
+// sensitivity: envelope follower sensitivity for auto mode
+SynthDef(\imbolc_wah_pedal, { |in=1024, out=1026, position=0.5, resonance=3, mode=0, sensitivity=0.5, mix=1.0, lag=0.02|
+    var sig = In.ar(in, 2);
+    var fadein = Line.kr(0, 1, 0.01);
+    var mono = (sig[0] + sig[1]) * 0.5;
+    var env, freqCtrl, freq, rq, wet;
+
+    // Envelope follower for auto-wah
+    env = Amplitude.kr(mono, 0.01, 0.1) * sensitivity.lag(lag) * 4;
+
+    // Choose control source: manual position or envelope
+    freqCtrl = Select.kr(mode, [position.lag(lag), env.clip(0, 1)]);
+
+    // Map to classic wah frequency range (300Hz - 2500Hz)
+    freq = freqCtrl.linexp(0, 1, 300, 2500);
+
+    // Convert resonance to reciprocal Q (rq)
+    rq = resonance.lag(lag).reciprocal;
+
+    // Resonant bandpass filter
+    wet = BPF.ar(sig, freq, rq) * resonance.lag(lag).sqrt;  // Compensate gain
+
+    Out.ar(out, ((sig * (1 - mix.lag(lag))) + (wet * mix.lag(lag))) * fadein);
+}).writeDefFile(dir);
 )

@@ -52,6 +52,8 @@ pub enum EffectType {
     MidSide,
     Crossfader,
     Denoise,
+    Autotune,
+    WahPedal,
     Vst(VstPluginId),
 }
 
@@ -95,6 +97,8 @@ impl EffectType {
             EffectType::MidSide => "Mid/Side",
             EffectType::Crossfader => "Crossfader",
             EffectType::Denoise => "Denoise",
+            EffectType::Autotune => "Autotune",
+            EffectType::WahPedal => "Wah Pedal",
             EffectType::Vst(_) => "VST",
         }
     }
@@ -138,6 +142,8 @@ impl EffectType {
             EffectType::MidSide => "imbolc_midside",
             EffectType::Crossfader => "imbolc_crossfader",
             EffectType::Denoise => "imbolc_denoise",
+            EffectType::Autotune => "imbolc_autotune",
+            EffectType::WahPedal => "imbolc_wah_pedal",
             EffectType::Vst(_) => "imbolc_vst_effect",
         }
     }
@@ -172,6 +178,7 @@ impl EffectType {
             EffectType::SpectralFreeze, EffectType::Glitch, EffectType::Leslie,
             EffectType::SpringReverb, EffectType::EnvFollower, EffectType::MidSide,
             EffectType::Crossfader, EffectType::Denoise,
+            EffectType::Autotune, EffectType::WahPedal,
         ]
     }
 }
@@ -382,6 +389,18 @@ impl EffectType {
                 Param { name: "threshold".to_string(), value: ParamValue::Float(0.3), min: 0.0, max: 1.0 },
                 Param { name: "hp_freq".to_string(), value: ParamValue::Float(80.0), min: 20.0, max: 500.0 },
                 Param { name: "smoothing".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 1.0 },
+                Param { name: "mix".to_string(), value: ParamValue::Float(1.0), min: 0.0, max: 1.0 },
+            ],
+            EffectType::Autotune => vec![
+                Param { name: "speed".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 1.0 },
+                Param { name: "shift".to_string(), value: ParamValue::Float(0.0), min: -12.0, max: 12.0 },
+                Param { name: "mix".to_string(), value: ParamValue::Float(1.0), min: 0.0, max: 1.0 },
+            ],
+            EffectType::WahPedal => vec![
+                Param { name: "position".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 1.0 },
+                Param { name: "resonance".to_string(), value: ParamValue::Float(3.0), min: 0.5, max: 10.0 },
+                Param { name: "mode".to_string(), value: ParamValue::Int(0), min: 0.0, max: 1.0 },
+                Param { name: "sensitivity".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 1.0 },
                 Param { name: "mix".to_string(), value: ParamValue::Float(1.0), min: 0.0, max: 1.0 },
             ],
             EffectType::Vst(_) => vec![],
