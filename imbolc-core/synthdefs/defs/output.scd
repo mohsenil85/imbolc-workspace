@@ -11,9 +11,26 @@ SynthDef(\imbolc_output, { |in=1024, level=0.8, mute=0, pan=0, lag=0.02, pan_mod
     Out.ar(0, panned * level.lag(lag) * (1 - mute));
 }).writeDefFile(dir);
 
+// Output Mono - Reads mono signal, pans to stereo using Pan2
+SynthDef(\imbolc_output_mono, { |in=1024, level=0.8, mute=0, pan=0, lag=0.02, pan_mod_in=(-1)|
+    var sig = In.ar(in, 1);
+    var panMod = Select.kr(pan_mod_in >= 0, [0, In.kr(pan_mod_in)]);
+    var finalPan = (pan.lag(lag) + panMod).clip(-1, 1);
+    var panned = Pan2.ar(sig, finalPan);
+    Out.ar(0, panned * level.lag(lag) * (1 - mute));
+}).writeDefFile(dir);
+
 // Send - Reads from source bus, writes to a bus's audio bus at send level
 SynthDef(\imbolc_send, { |in=1024, out=1026, level=0.0, lag=0.02, level_mod_in=(-1)|
     var sig = In.ar(in, 2);
+    var levelMod = Select.kr(level_mod_in >= 0, [0, In.kr(level_mod_in)]);
+    var finalLevel = (level.lag(lag) + levelMod).clip(0, 1);
+    Out.ar(out, sig * finalLevel);
+}).writeDefFile(dir);
+
+// Send Mono - Mono version for mono instruments
+SynthDef(\imbolc_send_mono, { |in=1024, out=1026, level=0.0, lag=0.02, level_mod_in=(-1)|
+    var sig = In.ar(in, 1);
     var levelMod = Select.kr(level_mod_in >= 0, [0, In.kr(level_mod_in)]);
     var finalLevel = (level.lag(lag) + levelMod).clip(0, 1);
     Out.ar(out, sig * finalLevel);

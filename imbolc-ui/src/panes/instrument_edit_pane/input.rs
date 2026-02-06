@@ -300,6 +300,13 @@ impl InstrumentEditPane {
                     Action::None
                 }
             }
+            ActionId::InstrumentEdit(InstrumentEditActionId::ToggleChannelConfig) => {
+                if let Some(id) = self.instrument_id {
+                    self.channel_config = self.channel_config.toggle();
+                    return Action::Instrument(InstrumentAction::ToggleChannelConfig(id));
+                }
+                Action::None
+            }
             ActionId::InstrumentEdit(InstrumentEditActionId::LoadSample) => {
                 if self.source.is_sample() {
                     if let Some(id) = self.instrument_id {

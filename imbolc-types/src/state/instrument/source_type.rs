@@ -139,6 +139,33 @@ impl SourceType {
         }
     }
 
+    /// Returns true if this source type has a mono variant SynthDef.
+    pub fn has_mono_variant(&self) -> bool {
+        matches!(
+            self,
+            SourceType::Saw
+                | SourceType::Sin
+                | SourceType::Sqr
+                | SourceType::Tri
+                | SourceType::Noise
+                | SourceType::Pulse
+        )
+    }
+
+    /// Get the mono SuperCollider synthdef name (falls back to stereo if no mono variant)
+    pub fn synth_def_name_mono(&self) -> &'static str {
+        match self {
+            SourceType::Saw => "imbolc_saw_mono",
+            SourceType::Sin => "imbolc_sin_mono",
+            SourceType::Sqr => "imbolc_sqr_mono",
+            SourceType::Tri => "imbolc_tri_mono",
+            SourceType::Noise => "imbolc_noise_mono",
+            SourceType::Pulse => "imbolc_pulse_mono",
+            // No mono variants for these - fall back to stereo
+            _ => self.synth_def_name(),
+        }
+    }
+
     pub fn is_audio_input(&self) -> bool {
         matches!(self, SourceType::AudioIn)
     }

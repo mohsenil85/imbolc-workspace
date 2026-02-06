@@ -198,6 +198,7 @@ bindings = [
   { key = "x", action = "toggle_active", description = "Toggle active (AudioIn)" },
   { key = "o", action = "load_sample", description = "Load sample" },
   { key = "v", action = "vst_params", description = "VST parameters" },
+  { key = "C", action = "toggle_channel_config", description = "Toggle mono/stereo" },
 ]
 
 [layers.server]

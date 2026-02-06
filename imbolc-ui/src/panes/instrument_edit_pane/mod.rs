@@ -5,6 +5,7 @@ mod rendering;
 use std::any::Any;
 
 
+use imbolc_types::ChannelConfig;
 use crate::state::{
     AppState, EffectSlot, EnvConfig, EqConfig, FilterConfig, Instrument, InstrumentId,
     InstrumentSection, LfoConfig, Param, SourceType,
@@ -31,6 +32,7 @@ pub struct InstrumentEditPane {
     amp_envelope: EnvConfig,
     polyphonic: bool,
     active: bool,
+    channel_config: ChannelConfig,
     pub(crate) selected_row: usize,
     pub(crate) scroll_offset: usize,
     editing: bool,
@@ -56,6 +58,7 @@ impl InstrumentEditPane {
             amp_envelope: EnvConfig::default(),
             polyphonic: true,
             active: true,
+            channel_config: ChannelConfig::default(),
             selected_row: 0,
             scroll_offset: 0,
             editing: false,
@@ -79,6 +82,7 @@ impl InstrumentEditPane {
         self.amp_envelope = instrument.amp_envelope.clone();
         self.polyphonic = instrument.polyphonic;
         self.active = instrument.active;
+        self.channel_config = instrument.channel_config;
         self.selected_row = 0;
         self.scroll_offset = 0;
     }
@@ -99,6 +103,7 @@ impl InstrumentEditPane {
         self.amp_envelope = instrument.amp_envelope.clone();
         self.polyphonic = instrument.polyphonic;
         self.active = instrument.active;
+        self.channel_config = instrument.channel_config;
         // Clamp selected_row to valid range (effects count may have changed)
         let max = self.total_rows().saturating_sub(1);
         self.selected_row = self.selected_row.min(max);

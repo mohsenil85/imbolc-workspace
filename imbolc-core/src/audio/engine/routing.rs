@@ -5,16 +5,28 @@ use std::collections::HashMap;
 use crate::state::{CustomSynthDefRegistry, EffectId, EffectType, FilterType, Instrument, InstrumentId, InstrumentState, LfoTarget, ParamValue, SessionState, SourceType, SourceTypeExt};
 
 impl AudioEngine {
-    pub(super) fn source_synth_def(source: SourceType, registry: &CustomSynthDefRegistry) -> String {
-        source.synth_def_name_with_registry(registry)
+    pub(super) fn source_synth_def(source: SourceType, registry: &CustomSynthDefRegistry, mono: bool) -> String {
+        if mono && source.has_mono_variant() {
+            source.synth_def_name_mono().to_string()
+        } else {
+            source.synth_def_name_with_registry(registry)
+        }
     }
 
-    pub(super) fn filter_synth_def(ft: FilterType) -> &'static str {
-        ft.synth_def_name()
+    pub(super) fn filter_synth_def(ft: FilterType, mono: bool) -> &'static str {
+        if mono {
+            ft.synth_def_name_mono()
+        } else {
+            ft.synth_def_name()
+        }
     }
 
-    pub(super) fn effect_synth_def(et: EffectType) -> &'static str {
-        et.synth_def_name()
+    pub(super) fn effect_synth_def(et: EffectType, mono: bool) -> &'static str {
+        if mono && et.has_mono_variant() {
+            et.synth_def_name_mono()
+        } else {
+            et.synth_def_name()
+        }
     }
 
     // ── Shared helpers for per-instrument chain building ──────────
@@ -33,7 +45,13 @@ impl AudioEngine {
         let mut effect_nodes: HashMap<EffectId, i32> = HashMap::new();
         let mut effect_order: Vec<EffectId> = Vec::new();
 
-        let source_out_bus = self.bus_allocator.get_or_alloc_audio_bus(instrument.id, "source_out");
+        // Determine channel count based on channel config
+        let is_mono = instrument.channel_config.is_mono();
+        let channels = instrument.channel_config.channels();
+
+        let source_out_bus = self.bus_allocator.get_or_alloc_audio_bus_with_channels(
+            instrument.id, "source_out", channels,
+        );
         let mut current_bus = source_out_bus;
 
         // Source synth (AudioIn, BusIn, VST — oscillator voices are spawned dynamically)
@@ -136,7 +154,9 @@ impl AudioEngine {
         if let Some(ref filter) = instrument.filter {
             let node_id = self.next_node_id;
             self.next_node_id += 1;
-            let filter_out_bus = self.bus_allocator.get_or_alloc_audio_bus(instrument.id, "filter_out");
+            let filter_out_bus = self.bus_allocator.get_or_alloc_audio_bus_with_channels(
+                instrument.id, "filter_out", channels,
+            );
 
             let cutoff_mod_bus = if instrument.lfo.enabled && instrument.lfo.target == LfoTarget::FilterCutoff {
                 lfo_control_bus.map(|b| b as f32).unwrap_or(-1.0)
@@ -163,7 +183,7 @@ impl AudioEngine {
 
             let client = self.backend.as_ref().ok_or("Not connected")?;
             client.create_synth(
-                Self::filter_synth_def(filter.filter_type), node_id, GROUP_PROCESSING, &params,
+                Self::filter_synth_def(filter.filter_type, is_mono), node_id, GROUP_PROCESSING, &params,
             ).map_err(|e| e.to_string())?;
 
             filter_node = Some(node_id);
@@ -171,6 +191,7 @@ impl AudioEngine {
         }
 
         // EQ (12-band parametric, if present)
+        // Note: EQ doesn't have mono variants yet, stays stereo
         let mut eq_node: Option<i32> = None;
         if let Some(ref eq) = instrument.eq {
             let node_id = self.next_node_id;
@@ -203,9 +224,16 @@ impl AudioEngine {
             }
             let node_id = self.next_node_id;
             self.next_node_id += 1;
-            let effect_out_bus = self.bus_allocator.get_or_alloc_audio_bus(
+            // Use mono bus unless the effect doesn't have a mono variant (inherently stereo)
+            let effect_channels = if is_mono && effect.effect_type.has_mono_variant() {
+                1
+            } else {
+                2
+            };
+            let effect_out_bus = self.bus_allocator.get_or_alloc_audio_bus_with_channels(
                 instrument.id,
                 &format!("fx_{}_out", effect.id),
+                effect_channels,
             );
 
             let mut params: Vec<(String, f32)> = vec![
@@ -264,8 +292,9 @@ impl AudioEngine {
             }
 
             let client = self.backend.as_ref().ok_or("Not connected")?;
+            let use_mono_effect = is_mono && effect.effect_type.has_mono_variant();
             client.create_synth(
-                Self::effect_synth_def(effect.effect_type), node_id, GROUP_PROCESSING, &params,
+                Self::effect_synth_def(effect.effect_type, use_mono_effect), node_id, GROUP_PROCESSING, &params,
             ).map_err(|e| e.to_string())?;
 
             // For VST effects, open the plugin after creating the node
@@ -303,8 +332,10 @@ impl AudioEngine {
                 ("pan_mod_in".to_string(), pan_mod_bus),
             ];
 
+            // Use mono output synth for mono instruments (uses Pan2 instead of Balance2)
+            let output_synth_def = if is_mono { "imbolc_output_mono" } else { "imbolc_output" };
             let client = self.backend.as_ref().ok_or("Not connected")?;
-            client.create_synth("imbolc_output", node_id, GROUP_OUTPUT, &params)
+            client.create_synth(output_synth_def, node_id, GROUP_OUTPUT, &params)
                 .map_err(|e| e.to_string())?;
             node_id
         };
@@ -334,6 +365,7 @@ impl AudioEngine {
         instrument: &Instrument,
     ) -> Result<(), String> {
         let instrument_audio_bus = self.bus_allocator.get_audio_bus(instrument.id, "source_out").unwrap_or(16);
+        let is_mono = instrument.channel_config.is_mono();
 
         let send_lfo_bus = if instrument.lfo.enabled && instrument.lfo.target == LfoTarget::SendLevel {
             self.bus_allocator.get_control_bus(instrument.id, "lfo_out")
@@ -358,8 +390,9 @@ impl AudioEngine {
                 if send_lfo_bus >= 0.0 {
                     params.push(("level_mod_in".to_string(), send_lfo_bus));
                 }
+                let send_synth_def = if is_mono { "imbolc_send_mono" } else { "imbolc_send" };
                 let client = self.backend.as_ref().ok_or("Not connected")?;
-                client.create_synth("imbolc_send", node_id, GROUP_OUTPUT, &params)
+                client.create_synth(send_synth_def, node_id, GROUP_OUTPUT, &params)
                     .map_err(|e| e.to_string())?;
                 self.node_registry.register(node_id);
                 self.send_node_map.insert((instrument.id, send.bus_id), node_id);

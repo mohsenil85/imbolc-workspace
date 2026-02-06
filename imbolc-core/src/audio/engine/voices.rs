@@ -95,9 +95,10 @@ impl AudioEngine {
         // 3. Source synth
         let source_node_id = self.next_node_id;
         self.next_node_id += 1;
+        let is_mono = instrument.channel_config.is_mono();
         {
             let mut args: Vec<RawArg> = vec![
-                RawArg::Str(Self::source_synth_def(instrument.source, &session.custom_synthdefs)),
+                RawArg::Str(Self::source_synth_def(instrument.source, &session.custom_synthdefs, is_mono)),
                 RawArg::Int(source_node_id),
                 RawArg::Int(1),
                 RawArg::Int(group_id),

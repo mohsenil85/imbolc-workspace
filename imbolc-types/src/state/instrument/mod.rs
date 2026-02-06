@@ -20,6 +20,46 @@ use super::groove::GrooveConfig;
 use super::sampler::SamplerConfig;
 use crate::{EffectId, InstrumentId, Param};
 
+/// Whether an instrument's signal chain is mono or stereo.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum ChannelConfig {
+    Mono,
+    #[default]
+    Stereo,
+}
+
+impl ChannelConfig {
+    pub fn is_mono(&self) -> bool {
+        matches!(self, ChannelConfig::Mono)
+    }
+
+    pub fn is_stereo(&self) -> bool {
+        matches!(self, ChannelConfig::Stereo)
+    }
+
+    pub fn toggle(&self) -> Self {
+        match self {
+            ChannelConfig::Mono => ChannelConfig::Stereo,
+            ChannelConfig::Stereo => ChannelConfig::Mono,
+        }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ChannelConfig::Mono => "MONO",
+            ChannelConfig::Stereo => "STEREO",
+        }
+    }
+
+    /// Number of audio channels (1 for mono, 2 for stereo)
+    pub fn channels(&self) -> usize {
+        match self {
+            ChannelConfig::Mono => 1,
+            ChannelConfig::Stereo => 2,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum OutputTarget {
     Master,
@@ -236,6 +276,9 @@ pub struct Instrument {
     pub solo: bool,
     pub active: bool,
     pub output_target: OutputTarget,
+    /// Mono or stereo signal chain
+    #[serde(default)]
+    pub channel_config: ChannelConfig,
     pub sends: Vec<MixerSend>,
     // Sample configuration (only used when source is SourceType::PitchedSampler)
     pub sampler_config: Option<SamplerConfig>,
@@ -292,6 +335,7 @@ impl Instrument {
             solo: false,
             active: !source.is_audio_input(),
             output_target: OutputTarget::Master,
+            channel_config: ChannelConfig::default(),
             sends,
             sampler_config,
             drum_sequencer,

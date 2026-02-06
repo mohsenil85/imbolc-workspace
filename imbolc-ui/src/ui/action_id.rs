@@ -241,6 +241,7 @@ define_action_enum! {
         CycleLfoShape => "cycle_lfo_shape",
         CycleLfoTarget => "cycle_lfo_target",
         ToggleActive => "toggle_active",
+        ToggleChannelConfig => "toggle_channel_config",
         LoadSample => "load_sample",
         VstParams => "vst_params",
         Done => "done",

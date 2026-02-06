@@ -42,6 +42,19 @@ impl FilterType {
         }
     }
 
+    pub fn synth_def_name_mono(&self) -> &'static str {
+        match self {
+            FilterType::Lpf => "imbolc_lpf_mono",
+            FilterType::Hpf => "imbolc_hpf_mono",
+            FilterType::Bpf => "imbolc_bpf_mono",
+            FilterType::Notch => "imbolc_notch_mono",
+            FilterType::Comb => "imbolc_comb_mono",
+            FilterType::Allpass => "imbolc_allpass_mono",
+            FilterType::Vowel => "imbolc_vowel_mono",
+            FilterType::ResDrive => "imbolc_resdrive_mono",
+        }
+    }
+
     #[allow(dead_code)]
     pub fn all() -> Vec<FilterType> {
         vec![

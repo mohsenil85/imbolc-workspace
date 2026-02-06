@@ -35,13 +35,24 @@ impl BusAllocator {
     /// Get or allocate an audio bus for a module's output port.
     /// Returns stereo bus index (allocates 2 channels).
     pub fn get_or_alloc_audio_bus(&mut self, module_id: ModuleId, port_name: &str) -> i32 {
+        self.get_or_alloc_audio_bus_with_channels(module_id, port_name, 2)
+    }
+
+    /// Get or allocate an audio bus for a module's output port with specified channel count.
+    /// Returns bus index (allocates `channels` channels).
+    pub fn get_or_alloc_audio_bus_with_channels(
+        &mut self,
+        module_id: ModuleId,
+        port_name: &str,
+        channels: usize,
+    ) -> i32 {
         let key = (module_id, port_name.to_string());
         if let Some(&bus) = self.audio_buses.get(&key) {
             return bus;
         }
 
         let bus = self.next_audio_bus;
-        self.next_audio_bus += 2; // Stereo pairs
+        self.next_audio_bus += channels as i32;
         self.audio_buses.insert(key, bus);
         bus
     }
@@ -152,5 +163,26 @@ mod tests {
         // After reset, new allocations start fresh
         let bus = alloc.get_or_alloc_audio_bus(1, "out");
         assert_eq!(bus, 16);
+    }
+
+    #[test]
+    fn test_mono_bus_allocation() {
+        let mut alloc = BusAllocator::new();
+
+        // Allocate mono bus
+        let bus1 = alloc.get_or_alloc_audio_bus_with_channels(1, "out", 1);
+        assert_eq!(bus1, 16);
+
+        // Next mono bus is adjacent
+        let bus2 = alloc.get_or_alloc_audio_bus_with_channels(2, "out", 1);
+        assert_eq!(bus2, 17);
+
+        // Stereo bus follows
+        let bus3 = alloc.get_or_alloc_audio_bus(3, "out");
+        assert_eq!(bus3, 18);
+
+        // Same module/port returns same bus
+        let bus1_again = alloc.get_or_alloc_audio_bus_with_channels(1, "out", 1);
+        assert_eq!(bus1_again, 16);
     }
 }

@@ -34,6 +34,11 @@ impl InstrumentEditPane {
         let poly_str = if self.polyphonic { " POLY " } else { " MONO " };
         buf.draw_line(Rect::new(mode_x, rect.y, 6, 1), &[(poly_str, poly_style)]);
 
+        // Channel config indicator (STEREO/MONO)
+        let channel_style = Style::new().fg(if self.channel_config.is_stereo() { Color::CYAN } else { Color::YELLOW });
+        let channel_str = if self.channel_config.is_stereo() { " ST " } else { " M " };
+        buf.draw_line(Rect::new(mode_x + 6, rect.y, channel_str.len() as u16, 1), &[(channel_str, channel_style)]);
+
         // Active/Inactive indicator for AudioIn instruments
         if self.source.is_audio_input() {
             let active_style = Style::new().fg(

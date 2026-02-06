@@ -158,5 +158,27 @@ pub(super) fn dispatch_instrument(
         InstrumentAction::AdjustEnvelopeRelease(id, delta) => {
             envelope::handle_adjust_envelope_release(state, *id, *delta)
         }
+        // Channel config
+        InstrumentAction::ToggleChannelConfig(id) => {
+            handle_toggle_channel_config(state, *id)
+        }
+    }
+}
+
+fn handle_toggle_channel_config(state: &mut AppState, id: crate::state::InstrumentId) -> DispatchResult {
+    use crate::action::AudioDirty;
+
+    if let Some(inst) = state.instruments.instrument_mut(id) {
+        inst.channel_config = inst.channel_config.toggle();
+        // Mark routing dirty to rebuild signal chain with new channel config
+        DispatchResult {
+            audio_dirty: AudioDirty {
+                routing_instrument: Some(id),
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+    } else {
+        DispatchResult::default()
     }
 }

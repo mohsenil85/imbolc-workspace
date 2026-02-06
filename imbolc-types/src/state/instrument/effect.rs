@@ -148,6 +148,79 @@ impl EffectType {
         }
     }
 
+    /// Returns true if this effect has a mono variant SynthDef.
+    /// Effects that are inherently stereo (StereoWidener, granular effects, etc.) return false.
+    pub fn has_mono_variant(&self) -> bool {
+        !matches!(
+            self,
+            EffectType::StereoWidener
+                | EffectType::GranularDelay
+                | EffectType::GranularFreeze
+                | EffectType::MidSide
+                | EffectType::Autopan
+                | EffectType::Leslie
+                | EffectType::ConvolutionReverb
+                | EffectType::Vocoder
+                | EffectType::RingMod
+                | EffectType::Resonator
+                | EffectType::MultibandComp
+                | EffectType::ParaEq
+                | EffectType::SpectralFreeze
+                | EffectType::Glitch
+                | EffectType::SpringReverb
+                | EffectType::EnvFollower
+                | EffectType::Crossfader
+                | EffectType::Denoise
+                | EffectType::Vst(_)
+        )
+    }
+
+    pub fn synth_def_name_mono(&self) -> &'static str {
+        match self {
+            EffectType::Delay => "imbolc_delay_mono",
+            EffectType::Reverb => "imbolc_reverb_mono",
+            EffectType::Gate => "imbolc_gate_mono",
+            EffectType::TapeComp => "imbolc_tape_comp_mono",
+            EffectType::SidechainComp => "imbolc_sc_comp_mono",
+            EffectType::Chorus => "imbolc_chorus_mono",
+            EffectType::Flanger => "imbolc_flanger_mono",
+            EffectType::Phaser => "imbolc_phaser_mono",
+            EffectType::Tremolo => "imbolc_tremolo_mono",
+            EffectType::Distortion => "imbolc_distortion_mono",
+            EffectType::Bitcrusher => "imbolc_bitcrusher_mono",
+            EffectType::Wavefolder => "imbolc_wavefolder_mono",
+            EffectType::Saturator => "imbolc_saturator_mono",
+            EffectType::TiltEq => "imbolc_tilt_eq_mono",
+            EffectType::FreqShifter => "imbolc_freq_shifter_mono",
+            EffectType::Limiter => "imbolc_limiter_mono",
+            EffectType::PitchShifter => "imbolc_pitch_shifter_mono",
+            EffectType::Vinyl => "imbolc_vinyl_mono",
+            EffectType::Cabinet => "imbolc_cabinet_mono",
+            // Inherently stereo effects - fallback to stereo
+            EffectType::StereoWidener => "imbolc_stereo_widener",
+            EffectType::GranularDelay => "imbolc_granular_delay",
+            EffectType::GranularFreeze => "imbolc_granular_freeze",
+            EffectType::ConvolutionReverb => "imbolc_convolution_reverb",
+            EffectType::Vocoder => "imbolc_vocoder",
+            EffectType::RingMod => "imbolc_ringmod",
+            EffectType::Autopan => "imbolc_autopan",
+            EffectType::Resonator => "imbolc_resonator",
+            EffectType::MultibandComp => "imbolc_multiband_comp",
+            EffectType::ParaEq => "imbolc_para_eq",
+            EffectType::SpectralFreeze => "imbolc_spectral_freeze",
+            EffectType::Glitch => "imbolc_glitch",
+            EffectType::Leslie => "imbolc_leslie",
+            EffectType::SpringReverb => "imbolc_spring_reverb",
+            EffectType::EnvFollower => "imbolc_env_follower",
+            EffectType::MidSide => "imbolc_midside",
+            EffectType::Crossfader => "imbolc_crossfader",
+            EffectType::Denoise => "imbolc_denoise",
+            EffectType::Autotune => "imbolc_autotune",
+            EffectType::WahPedal => "imbolc_wah_pedal",
+            EffectType::Vst(_) => "imbolc_vst_effect",
+        }
+    }
+
     pub fn is_vst(&self) -> bool {
         matches!(self, EffectType::Vst(_))
     }

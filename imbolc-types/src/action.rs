@@ -647,6 +647,8 @@ pub enum InstrumentAction {
     AdjustEnvelopeDecay(InstrumentId, f32),
     AdjustEnvelopeSustain(InstrumentId, f32),
     AdjustEnvelopeRelease(InstrumentId, f32),
+    // Channel config
+    ToggleChannelConfig(InstrumentId),
 }
 
 impl InstrumentAction {
@@ -712,7 +714,8 @@ impl InstrumentAction {
             | Self::AdjustEnvelopeAttack(id, _)
             | Self::AdjustEnvelopeDecay(id, _)
             | Self::AdjustEnvelopeSustain(id, _)
-            | Self::AdjustEnvelopeRelease(id, _) => Some(*id),
+            | Self::AdjustEnvelopeRelease(id, _)
+            | Self::ToggleChannelConfig(id) => Some(*id),
 
             Self::Update(update) => Some(update.id),
         }
