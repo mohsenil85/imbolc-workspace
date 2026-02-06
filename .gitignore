@@ -1,2 +1,4 @@
 /target/
 /imbolc-worktrees/
+*.wav
+*.vst

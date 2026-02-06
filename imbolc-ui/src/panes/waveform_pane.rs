@@ -5,8 +5,27 @@ use crate::ui::action_id::{ActionId, WaveformActionId};
 use crate::ui::layout_helpers::center_rect;
 use crate::ui::{Rect, RenderBuf, Action, Color, InputEvent, Keymap, Pane, Style};
 
-/// Waveform display characters (8 levels)
+/// Waveform display characters (8 levels) - used for spectrum/meters
 const WAVEFORM_CHARS: [char; 8] = ['\u{2581}', '\u{2582}', '\u{2583}', '\u{2584}', '\u{2585}', '\u{2586}', '\u{2587}', '\u{2588}'];
+
+/// Braille dot pattern offsets (2 columns x 4 rows)
+/// Column 0: bits 0,1,2,6  Column 1: bits 3,4,5,7
+const BRAILLE_DOT_OFFSETS: [[u8; 4]; 2] = [
+    [0, 1, 2, 6],  // left column (x=0): rows 0,1,2,3
+    [3, 4, 5, 7],  // right column (x=1): rows 0,1,2,3
+];
+
+/// Convert a set of dot coordinates to a braille character
+/// Each dot is (x, y) where x is 0-1 and y is 0-3
+fn dots_to_braille(dots: &[(u8, u8)]) -> char {
+    let mut pattern: u8 = 0;
+    for &(x, y) in dots {
+        if x < 2 && y < 4 {
+            pattern |= 1 << BRAILLE_DOT_OFFSETS[x as usize][y as usize];
+        }
+    }
+    char::from_u32(0x2800 + pattern as u32).unwrap_or(' ')
+}
 
 /// Spectrum band labels
 const SPECTRUM_LABELS: [&str; 7] = ["60", "150", "400", "1k", "2.5k", "6k", "15k"];
@@ -108,46 +127,80 @@ impl WaveformPane {
         self.render_border(rect, buf, &title, Color::AUDIO_IN_COLOR);
         self.render_header(rect, buf, state, "Waveform");
 
-        // Center line
-        let center_y = grid_y + grid_height / 2;
-        let half_height = (grid_height / 2) as f32;
+        // Braille grid dimensions (2 dots per char width, 4 dots per char height)
+        let dot_width = grid_width as usize * 2;
+        let dot_height = grid_height as usize * 4;
+        let center_dot_y = dot_height / 2;
+
+        // Center line (using braille dots on center row)
         let dark_gray = Style::new().fg(Color::DARK_GRAY);
+        let center_char_row = grid_y + (grid_height / 2);
         for x in 0..grid_width {
-            buf.set_cell(grid_x + x, center_y, '\u{2500}', dark_gray);
+            buf.set_cell(grid_x + x, center_char_row, '\u{2500}', dark_gray);
         }
 
-        // Draw waveform
+        // Draw waveform using braille
         let waveform_len = waveform.len();
-        let max_half = (grid_height / 2).max(1);
-        for col in 0..grid_width as usize {
-            let sample_idx = if waveform_len > 0 {
-                (col * waveform_len / grid_width as usize).min(waveform_len - 1)
-            } else {
-                0
-            };
-            let amplitude = if sample_idx < waveform_len {
-                waveform[sample_idx].abs().min(1.0)
-            } else {
-                0.0
-            };
-            let bar_height = (amplitude * half_height) as u16;
+        if waveform_len == 0 {
+            let status_y = grid_y + grid_height;
+            let status = "Samples: 0  [Tab: cycle mode]";
+            buf.draw_line(Rect::new(rect.x + 1, status_y, rect.width.saturating_sub(2), 1),
+                &[(status, Style::new().fg(Color::GRAY))]);
+            return;
+        }
 
-            for dy in 0..bar_height.min(max_half) {
-                let y = center_y.saturating_sub(dy + 1);
-                let frac = (dy + 1) as f32 / max_half as f32;
-                let color = waveform_color(frac);
-                let style = Style::new().fg(color);
-                let char_idx = if dy + 1 == bar_height { ((amplitude * 7.0) as usize).min(7) } else { 7 };
-                buf.set_cell(grid_x + col as u16, y, WAVEFORM_CHARS[char_idx], style);
+        // Build a 2D grid of dots
+        let mut dot_grid: Vec<Vec<bool>> = vec![vec![false; dot_height]; dot_width];
+
+        // Map samples to dots - for waveform, we show amplitude mirrored around center
+        for dot_x in 0..dot_width {
+            let sample_idx = (dot_x * waveform_len / dot_width).min(waveform_len - 1);
+            let amplitude = waveform[sample_idx].abs().min(1.0);
+
+            // Calculate how many dots above/below center to fill
+            let half_dot_height = center_dot_y;
+            let bar_dots = (amplitude * half_dot_height as f32) as usize;
+
+            // Fill dots above center
+            for dy in 0..bar_dots {
+                let y = center_dot_y.saturating_sub(dy + 1);
+                if y < dot_height {
+                    dot_grid[dot_x][y] = true;
+                }
             }
-            for dy in 0..bar_height.min(max_half) {
-                let y = center_y + dy + 1;
-                if y < grid_y + grid_height {
-                    let frac = (dy + 1) as f32 / max_half as f32;
+            // Fill dots below center (mirror)
+            for dy in 0..bar_dots {
+                let y = center_dot_y + dy;
+                if y < dot_height {
+                    dot_grid[dot_x][y] = true;
+                }
+            }
+        }
+
+        // Convert dot grid to braille characters
+        for char_col in 0..grid_width as usize {
+            for char_row in 0..grid_height as usize {
+                let mut dots: Vec<(u8, u8)> = Vec::new();
+
+                // Each braille char covers 2 dot columns and 4 dot rows
+                for dx in 0..2 {
+                    for dy in 0..4 {
+                        let dot_x = char_col * 2 + dx;
+                        let dot_y = char_row * 4 + dy;
+                        if dot_x < dot_width && dot_y < dot_height && dot_grid[dot_x][dot_y] {
+                            dots.push((dx as u8, dy as u8));
+                        }
+                    }
+                }
+
+                if !dots.is_empty() {
+                    let braille = dots_to_braille(&dots);
+                    // Color based on distance from center
+                    let char_center_dist = (char_row as f32 - (grid_height as f32 / 2.0)).abs();
+                    let frac = char_center_dist / (grid_height as f32 / 2.0);
                     let color = waveform_color(frac);
                     let style = Style::new().fg(color);
-                    let char_idx = if dy + 1 == bar_height { ((amplitude * 7.0) as usize).min(7) } else { 7 };
-                    buf.set_cell(grid_x + col as u16, y, WAVEFORM_CHARS[char_idx], style);
+                    buf.set_cell(grid_x + char_col as u16, grid_y + char_row as u16, braille, style);
                 }
             }
         }
@@ -229,47 +282,82 @@ impl WaveformPane {
         self.render_header(rect, buf, state, "Oscilloscope");
 
         let scope = &state.audio.visualization.scope_buffer;
-        let center_y = grid_y + grid_height / 2;
-        let half_height = (grid_height / 2) as f32;
+        let scope_len = scope.len();
+
+        // Braille grid dimensions
+        let dot_width = grid_width as usize * 2;
+        let dot_height = grid_height as usize * 4;
 
         // Draw center line
         let dark_gray = Style::new().fg(Color::DARK_GRAY);
+        let center_char_row = grid_y + grid_height / 2;
         for x in 0..grid_width {
-            buf.set_cell(grid_x + x, center_y, '\u{2500}', dark_gray);
-        }
-
-        // Draw scope trace
-        let scope_len = scope.len();
-        let green = Style::new().fg(Color::new(60, 200, 80));
-        for col in 0..grid_width as usize {
-            let sample_idx = if scope_len > 0 {
-                (col * scope_len / grid_width as usize).min(scope_len - 1)
-            } else {
-                continue;
-            };
-            let sample = scope[sample_idx].clamp(-1.0, 1.0);
-            let pixel_y = center_y as f32 - (sample * half_height);
-            let y = (pixel_y as u16).clamp(grid_y, grid_y + grid_height - 1);
-            buf.set_cell(grid_x + col as u16, y, '\u{2588}', green);
-
-            // Draw a connecting line between consecutive samples
-            if col > 0 && scope_len > 1 {
-                let prev_idx = ((col - 1) * scope_len / grid_width as usize).min(scope_len - 1);
-                let prev_sample = scope[prev_idx].clamp(-1.0, 1.0);
-                let prev_pixel_y = center_y as f32 - (prev_sample * half_height);
-                let prev_y = (prev_pixel_y as u16).clamp(grid_y, grid_y + grid_height - 1);
-                let (y_min, y_max) = if y < prev_y { (y, prev_y) } else { (prev_y, y) };
-                for fill_y in y_min..=y_max {
-                    if fill_y >= grid_y && fill_y < grid_y + grid_height {
-                        buf.set_cell(grid_x + col as u16, fill_y, '\u{2588}', green);
-                    }
-                }
-            }
+            buf.set_cell(grid_x + x, center_char_row, '\u{2500}', dark_gray);
         }
 
         // +1/-1 labels
         buf.draw_line(Rect::new(grid_x, grid_y, 2, 1), &[("+1", dark_gray)]);
         buf.draw_line(Rect::new(grid_x, grid_y + grid_height - 1, 2, 1), &[("-1", dark_gray)]);
+
+        if scope_len == 0 {
+            let status_y = grid_y + grid_height;
+            let status = "Samples: 0  [Tab: cycle mode]";
+            buf.draw_line(Rect::new(rect.x + 1, status_y, rect.width.saturating_sub(2), 1),
+                &[(status, Style::new().fg(Color::GRAY))]);
+            return;
+        }
+
+        // Build a 2D grid of dots for the oscilloscope trace
+        let mut dot_grid: Vec<Vec<bool>> = vec![vec![false; dot_height]; dot_width];
+
+        // Map samples to dots - oscilloscope shows actual waveform (not mirrored)
+        let mut prev_dot_y: Option<usize> = None;
+        for dot_x in 0..dot_width {
+            let sample_idx = (dot_x * scope_len / dot_width).min(scope_len - 1);
+            let sample = scope[sample_idx].clamp(-1.0, 1.0);
+
+            // Map sample (-1 to 1) to dot y coordinate (0 to dot_height-1)
+            // -1 -> bottom (dot_height-1), +1 -> top (0)
+            let normalized = (1.0 - sample) / 2.0; // 0 to 1
+            let dot_y = ((normalized * (dot_height - 1) as f32) as usize).min(dot_height - 1);
+
+            dot_grid[dot_x][dot_y] = true;
+
+            // Connect to previous point for smooth lines
+            if let Some(prev_y) = prev_dot_y {
+                let (y_min, y_max) = if dot_y < prev_y { (dot_y, prev_y) } else { (prev_y, dot_y) };
+                for fill_y in y_min..=y_max {
+                    if fill_y < dot_height {
+                        dot_grid[dot_x][fill_y] = true;
+                    }
+                }
+            }
+            prev_dot_y = Some(dot_y);
+        }
+
+        // Convert dot grid to braille characters
+        let green = Style::new().fg(Color::new(60, 200, 80));
+        for char_col in 0..grid_width as usize {
+            for char_row in 0..grid_height as usize {
+                let mut dots: Vec<(u8, u8)> = Vec::new();
+
+                // Each braille char covers 2 dot columns and 4 dot rows
+                for dx in 0..2 {
+                    for dy in 0..4 {
+                        let dot_x = char_col * 2 + dx;
+                        let dot_y = char_row * 4 + dy;
+                        if dot_x < dot_width && dot_y < dot_height && dot_grid[dot_x][dot_y] {
+                            dots.push((dx as u8, dy as u8));
+                        }
+                    }
+                }
+
+                if !dots.is_empty() {
+                    let braille = dots_to_braille(&dots);
+                    buf.set_cell(grid_x + char_col as u16, grid_y + char_row as u16, braille, green);
+                }
+            }
+        }
 
         let status_y = grid_y + grid_height;
         let status = format!("Samples: {}  [Tab: cycle mode]", scope_len);
