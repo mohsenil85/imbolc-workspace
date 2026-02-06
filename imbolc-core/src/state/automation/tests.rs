@@ -241,8 +241,8 @@ mod tests {
         let inst = Instrument::new(1, SourceType::Saw);
         let vst_registry = VstPluginRegistry::new();
         let targets = AutomationTarget::targets_for_instrument_context(&inst, &vst_registry);
-        // Plain oscillator: 14 static targets (10 original + 4 groove)
-        assert_eq!(targets.len(), 14);
+        // Plain oscillator: 16 static targets (10 original + 4 groove + 2 discrete: TrackTimeSignature, FilterBypass)
+        assert_eq!(targets.len(), 16);
     }
 
     #[test]
@@ -255,8 +255,8 @@ mod tests {
         inst.add_effect(EffectType::Reverb); // 3 params: room, damp, mix
         let vst_registry = VstPluginRegistry::new();
         let targets = AutomationTarget::targets_for_instrument_context(&inst, &vst_registry);
-        // 14 static + 3 (Delay params) + 3 (Reverb params) = 20
-        assert_eq!(targets.len(), 20);
+        // 16 static + 3 (Delay params) + 3 (Reverb params) = 22
+        assert_eq!(targets.len(), 22);
         // Verify some EffectParam targets exist
         assert!(targets.iter().any(|t| matches!(t, AutomationTarget::EffectParam(1, _, 0))));
     }
@@ -269,8 +269,8 @@ mod tests {
         let inst = Instrument::new(1, SourceType::PitchedSampler);
         let vst_registry = VstPluginRegistry::new();
         let targets = AutomationTarget::targets_for_instrument_context(&inst, &vst_registry);
-        // 14 static + SampleRate + SampleAmp = 16
-        assert_eq!(targets.len(), 16);
+        // 16 static + SampleRate + SampleAmp = 18
+        assert_eq!(targets.len(), 18);
         assert!(targets.iter().any(|t| matches!(t, AutomationTarget::SampleRate(1))));
         assert!(targets.iter().any(|t| matches!(t, AutomationTarget::SampleAmp(1))));
     }
@@ -284,8 +284,8 @@ mod tests {
         inst.eq = Some(EqConfig::default());
         let vst_registry = VstPluginRegistry::new();
         let targets = AutomationTarget::targets_for_instrument_context(&inst, &vst_registry);
-        // 14 static + 36 EQ band params (12 bands x 3 params) = 50
-        assert_eq!(targets.len(), 50);
+        // 16 static + 36 EQ band params (12 bands x 3 params) = 52
+        assert_eq!(targets.len(), 52);
         assert!(targets.iter().any(|t| matches!(t, AutomationTarget::EqBandParam(1, 0, 0))));
         assert!(targets.iter().any(|t| matches!(t, AutomationTarget::EqBandParam(1, 11, 2))));
     }

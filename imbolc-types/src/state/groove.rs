@@ -55,6 +55,8 @@ pub struct GrooveConfig {
     pub humanize_timing: Option<f32>,
     /// Timing offset in ms (-50.0 to +50.0). Negative = rush, Positive = drag.
     pub timing_offset_ms: f32,
+    /// Time signature override (numerator, denominator). None = use global.
+    pub time_signature: Option<(u8, u8)>,
 }
 
 impl GrooveConfig {
@@ -70,6 +72,7 @@ impl GrooveConfig {
             || self.humanize_velocity.is_some()
             || self.humanize_timing.is_some()
             || self.timing_offset_ms != 0.0
+            || self.time_signature.is_some()
     }
 
     /// Reset all overrides to use global settings.
@@ -95,6 +98,11 @@ impl GrooveConfig {
     /// Get effective timing humanization, falling back to global.
     pub fn effective_humanize_timing(&self, global_humanize: f32) -> f32 {
         self.humanize_timing.unwrap_or(global_humanize)
+    }
+
+    /// Get effective time signature, falling back to global.
+    pub fn effective_time_signature(&self, global_ts: (u8, u8)) -> (u8, u8) {
+        self.time_signature.unwrap_or(global_ts)
     }
 }
 
@@ -126,12 +134,14 @@ mod tests {
             humanize_velocity: Some(0.4),
             humanize_timing: Some(0.1),
             timing_offset_ms: 5.0,
+            time_signature: Some((3, 4)),
         };
         assert!(config.has_overrides());
         assert_eq!(config.effective_swing(0.5), 0.7);
         assert_eq!(config.effective_swing_grid(SwingGrid::Eighths), SwingGrid::Both);
         assert_eq!(config.effective_humanize_velocity(0.3), 0.4);
         assert_eq!(config.effective_humanize_timing(0.2), 0.1);
+        assert_eq!(config.effective_time_signature((4, 4)), (3, 4));
     }
 
     #[test]

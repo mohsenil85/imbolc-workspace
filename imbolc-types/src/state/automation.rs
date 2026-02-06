@@ -4,6 +4,37 @@ use serde::{Deserialize, Serialize};
 
 use crate::{EffectId, InstrumentId};
 
+/// Whether target uses continuous interpolation or discrete steps.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ValueKind {
+    /// 0.0-1.0 with interpolation
+    Continuous,
+    /// Step behavior, no interpolation
+    Discrete,
+}
+
+impl Default for ValueKind {
+    fn default() -> Self {
+        Self::Continuous
+    }
+}
+
+/// Discrete value representation for non-continuous automation.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum DiscreteValue {
+    Bool(bool),
+    EnumIndex(u8),
+    TimeSignature(u8, u8),
+}
+
+/// Kind of discrete value (for UI display).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DiscreteValueKind {
+    Bool,
+    EnumIndex,
+    TimeSignature,
+}
+
 /// Unique identifier for an automation lane.
 pub type AutomationLaneId = u32;
 
@@ -102,6 +133,14 @@ pub enum AutomationTarget {
     TrackHumanizeTiming(InstrumentId),
     /// Per-track timing offset (-50.0 to +50.0 ms)
     TrackTimingOffset(InstrumentId),
+    /// Global time signature (discrete)
+    TimeSignature,
+    /// Per-track time signature override (discrete)
+    TrackTimeSignature(InstrumentId),
+    /// Effect bypass toggle (discrete)
+    EffectBypass(InstrumentId, EffectId),
+    /// Filter bypass toggle (discrete)
+    FilterBypass(InstrumentId),
 }
 
 impl AutomationTarget {
@@ -127,8 +166,11 @@ impl AutomationTarget {
             AutomationTarget::TrackSwing(id)
             | AutomationTarget::TrackHumanizeVelocity(id)
             | AutomationTarget::TrackHumanizeTiming(id)
-            | AutomationTarget::TrackTimingOffset(id) => Some(*id),
-            AutomationTarget::BusLevel(_) | AutomationTarget::Bpm => None,
+            | AutomationTarget::TrackTimingOffset(id)
+            | AutomationTarget::TrackTimeSignature(id)
+            | AutomationTarget::EffectBypass(id, _)
+            | AutomationTarget::FilterBypass(id) => Some(*id),
+            AutomationTarget::BusLevel(_) | AutomationTarget::Bpm | AutomationTarget::TimeSignature => None,
         }
     }
 
@@ -166,6 +208,10 @@ impl AutomationTarget {
             AutomationTarget::TrackHumanizeVelocity(_) => "Track Humanize Vel".to_string(),
             AutomationTarget::TrackHumanizeTiming(_) => "Track Humanize Time".to_string(),
             AutomationTarget::TrackTimingOffset(_) => "Track Timing Offset".to_string(),
+            AutomationTarget::TimeSignature => "Time Signature".to_string(),
+            AutomationTarget::TrackTimeSignature(_) => "Track Time Sig".to_string(),
+            AutomationTarget::EffectBypass(_, effect_id) => format!("FX{} Bypass", effect_id + 1),
+            AutomationTarget::FilterBypass(_) => "Filter Bypass".to_string(),
         }
     }
 
@@ -194,6 +240,10 @@ impl AutomationTarget {
             AutomationTarget::TrackHumanizeVelocity(_) => "TkHVl",
             AutomationTarget::TrackHumanizeTiming(_) => "TkHTm",
             AutomationTarget::TrackTimingOffset(_) => "TkOfs",
+            AutomationTarget::TimeSignature => "TSig",
+            AutomationTarget::TrackTimeSignature(_) => "TkTS",
+            AutomationTarget::EffectBypass(_, _) => "FXByp",
+            AutomationTarget::FilterBypass(_) => "FltBp",
         }
     }
 
@@ -214,6 +264,8 @@ impl AutomationTarget {
             AutomationTarget::TrackHumanizeVelocity(id),
             AutomationTarget::TrackHumanizeTiming(id),
             AutomationTarget::TrackTimingOffset(id),
+            AutomationTarget::TrackTimeSignature(id),
+            AutomationTarget::FilterBypass(id),
         ]
     }
 
@@ -256,6 +308,92 @@ impl AutomationTarget {
             AutomationTarget::TrackHumanizeVelocity(_) => (0.0, 1.0),
             AutomationTarget::TrackHumanizeTiming(_) => (0.0, 1.0),
             AutomationTarget::TrackTimingOffset(_) => (-50.0, 50.0),
+            // Discrete targets use 0.0-1.0 normalized to map to enum indices
+            AutomationTarget::TimeSignature => (0.0, 1.0),
+            AutomationTarget::TrackTimeSignature(_) => (0.0, 1.0),
+            AutomationTarget::EffectBypass(_, _) => (0.0, 1.0),
+            AutomationTarget::FilterBypass(_) => (0.0, 1.0),
+        }
+    }
+
+    /// Get the value kind for this target (continuous or discrete).
+    pub fn value_kind(&self) -> ValueKind {
+        match self {
+            AutomationTarget::TimeSignature
+            | AutomationTarget::TrackTimeSignature(_)
+            | AutomationTarget::EffectBypass(_, _)
+            | AutomationTarget::FilterBypass(_) => ValueKind::Discrete,
+            _ => ValueKind::Continuous,
+        }
+    }
+
+    /// Get the discrete value kind for this target (if discrete).
+    pub fn discrete_value_kind(&self) -> Option<DiscreteValueKind> {
+        match self {
+            AutomationTarget::TimeSignature | AutomationTarget::TrackTimeSignature(_) => {
+                Some(DiscreteValueKind::TimeSignature)
+            }
+            AutomationTarget::EffectBypass(_, _) | AutomationTarget::FilterBypass(_) => {
+                Some(DiscreteValueKind::Bool)
+            }
+            _ => None,
+        }
+    }
+
+    /// Get the available options for discrete targets.
+    /// Returns None for continuous targets.
+    pub fn discrete_options(&self) -> Option<Vec<String>> {
+        match self {
+            AutomationTarget::EffectBypass(_, _) | AutomationTarget::FilterBypass(_) => {
+                Some(vec!["Off".to_string(), "On".to_string()])
+            }
+            AutomationTarget::TimeSignature | AutomationTarget::TrackTimeSignature(_) => {
+                Some(vec![
+                    "4/4".to_string(),
+                    "3/4".to_string(),
+                    "5/4".to_string(),
+                    "6/8".to_string(),
+                    "7/8".to_string(),
+                    "12/8".to_string(),
+                ])
+            }
+            _ => None,
+        }
+    }
+
+    /// Convert a normalized 0.0-1.0 value to a discrete value.
+    pub fn normalized_to_discrete(&self, normalized: f32) -> Option<DiscreteValue> {
+        match self.discrete_value_kind()? {
+            DiscreteValueKind::Bool => Some(DiscreteValue::Bool(normalized >= 0.5)),
+            DiscreteValueKind::EnumIndex => {
+                let options = self.discrete_options()?;
+                let index = ((normalized * options.len() as f32) as usize).min(options.len() - 1);
+                Some(DiscreteValue::EnumIndex(index as u8))
+            }
+            DiscreteValueKind::TimeSignature => {
+                // Map normalized value to time signature options
+                let signatures: [(u8, u8); 6] = [(4, 4), (3, 4), (5, 4), (6, 8), (7, 8), (12, 8)];
+                let index = ((normalized * signatures.len() as f32) as usize).min(signatures.len() - 1);
+                let (num, denom) = signatures[index];
+                Some(DiscreteValue::TimeSignature(num, denom))
+            }
+        }
+    }
+
+    /// Convert a discrete value to normalized 0.0-1.0.
+    pub fn discrete_to_normalized(&self, discrete: &DiscreteValue) -> Option<f32> {
+        match (self.discrete_value_kind()?, discrete) {
+            (DiscreteValueKind::Bool, DiscreteValue::Bool(b)) => Some(if *b { 1.0 } else { 0.0 }),
+            (DiscreteValueKind::EnumIndex, DiscreteValue::EnumIndex(idx)) => {
+                let options = self.discrete_options()?;
+                Some(*idx as f32 / (options.len() - 1).max(1) as f32)
+            }
+            (DiscreteValueKind::TimeSignature, DiscreteValue::TimeSignature(num, denom)) => {
+                let signatures: [(u8, u8); 6] = [(4, 4), (3, 4), (5, 4), (6, 8), (7, 8), (12, 8)];
+                let index = signatures.iter().position(|&(n, d)| n == *num && d == *denom)?;
+                Some(index as f32 / (signatures.len() - 1).max(1) as f32)
+            }
+            _ => None,
         }
     }
 }
@@ -323,14 +461,22 @@ impl AutomationLane {
             }
         }
 
+        // Force step behavior for discrete targets
+        let force_step = self.target.value_kind() == ValueKind::Discrete;
+
         let normalized = match (prev, next) {
             (Some(p), None) => p.value,
             (None, Some(n)) => n.value,
             (Some(p), Some(_n)) if p.tick == tick => p.value,
             (Some(p), Some(n)) => {
-                // Interpolate between p and n
-                let t = (tick - p.tick) as f32 / (n.tick - p.tick) as f32;
-                Self::interpolate(p.value, n.value, t, p.curve)
+                if force_step || p.curve == CurveType::Step {
+                    // Discrete targets or step curve: hold until next point
+                    p.value
+                } else {
+                    // Interpolate between p and n
+                    let t = (tick - p.tick) as f32 / (n.tick - p.tick) as f32;
+                    Self::interpolate(p.value, n.value, t, p.curve)
+                }
             }
             (None, None) => return None,
         };

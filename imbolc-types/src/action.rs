@@ -633,6 +633,9 @@ pub enum InstrumentAction {
     SetTrackTimingOffset(InstrumentId, f32),
     AdjustTrackTimingOffset(InstrumentId, f32),
     ResetTrackGroove(InstrumentId),
+    // Per-track time signature
+    SetTrackTimeSignature(InstrumentId, Option<(u8, u8)>),
+    CycleTrackTimeSignature(InstrumentId),
     // LFO actions
     ToggleLfo(InstrumentId),
     AdjustLfoRate(InstrumentId, f32),
@@ -699,6 +702,8 @@ impl InstrumentAction {
             | Self::SetTrackTimingOffset(id, _)
             | Self::AdjustTrackTimingOffset(id, _)
             | Self::ResetTrackGroove(id)
+            | Self::SetTrackTimeSignature(id, _)
+            | Self::CycleTrackTimeSignature(id)
             | Self::ToggleLfo(id)
             | Self::AdjustLfoRate(id, _)
             | Self::AdjustLfoDepth(id, _)

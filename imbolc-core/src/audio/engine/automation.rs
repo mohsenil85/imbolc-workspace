@@ -197,6 +197,39 @@ impl AudioEngine {
                     inst.groove.timing_offset_ms = value;
                 }
             }
+            // Discrete targets
+            AutomationTarget::TimeSignature => {
+                // Global time signature changes are handled via session state sync
+                // No direct OSC action needed here
+            }
+            AutomationTarget::TrackTimeSignature(instrument_id) => {
+                // Decode time signature from normalized value and update state
+                if let Some(discrete) = target.normalized_to_discrete(value) {
+                    if let imbolc_types::DiscreteValue::TimeSignature(num, denom) = discrete {
+                        if let Some(inst) = state.instrument_mut(*instrument_id) {
+                            inst.groove.time_signature = Some((num, denom));
+                        }
+                    }
+                }
+            }
+            AutomationTarget::EffectBypass(instrument_id, effect_id) => {
+                // Toggle effect bypass based on value (>= 0.5 = bypassed)
+                let bypassed = value >= 0.5;
+                if let Some(inst) = state.instrument_mut(*instrument_id) {
+                    if let Some(effect) = inst.effect_by_id_mut(*effect_id) {
+                        effect.enabled = !bypassed;
+                    }
+                }
+            }
+            AutomationTarget::FilterBypass(instrument_id) => {
+                // Toggle filter bypass based on value (>= 0.5 = bypassed)
+                let bypassed = value >= 0.5;
+                if let Some(inst) = state.instrument_mut(*instrument_id) {
+                    if let Some(ref mut filter) = inst.filter {
+                        filter.enabled = !bypassed;
+                    }
+                }
+            }
         }
 
         Ok(())
@@ -385,6 +418,35 @@ impl AudioEngine {
             AutomationTarget::TrackTimingOffset(instrument_id) => {
                 if let Some(inst) = state.instrument_mut(*instrument_id) {
                     inst.groove.timing_offset_ms = value;
+                }
+            }
+            // Discrete targets: state-only updates for collect_automation_messages
+            AutomationTarget::TimeSignature => {
+                // Global time signature handled via session state sync
+            }
+            AutomationTarget::TrackTimeSignature(instrument_id) => {
+                if let Some(discrete) = target.normalized_to_discrete(value) {
+                    if let imbolc_types::DiscreteValue::TimeSignature(num, denom) = discrete {
+                        if let Some(inst) = state.instrument_mut(*instrument_id) {
+                            inst.groove.time_signature = Some((num, denom));
+                        }
+                    }
+                }
+            }
+            AutomationTarget::EffectBypass(instrument_id, effect_id) => {
+                let bypassed = value >= 0.5;
+                if let Some(inst) = state.instrument_mut(*instrument_id) {
+                    if let Some(effect) = inst.effect_by_id_mut(*effect_id) {
+                        effect.enabled = !bypassed;
+                    }
+                }
+            }
+            AutomationTarget::FilterBypass(instrument_id) => {
+                let bypassed = value >= 0.5;
+                if let Some(inst) = state.instrument_mut(*instrument_id) {
+                    if let Some(ref mut filter) = inst.filter {
+                        filter.enabled = !bypassed;
+                    }
                 }
             }
         }

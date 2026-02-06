@@ -124,6 +124,13 @@ pub(super) fn dispatch_instrument(
         InstrumentAction::ResetTrackGroove(id) => {
             groove::handle_reset_track_groove(state, *id)
         }
+        // Per-track time signature
+        InstrumentAction::SetTrackTimeSignature(id, ts) => {
+            groove::handle_set_track_time_signature(state, *id, *ts)
+        }
+        InstrumentAction::CycleTrackTimeSignature(id) => {
+            groove::handle_cycle_track_time_signature(state, *id)
+        }
         // LFO actions
         InstrumentAction::ToggleLfo(id) => lfo::handle_toggle_lfo(state, *id),
         InstrumentAction::AdjustLfoRate(id, delta) => {

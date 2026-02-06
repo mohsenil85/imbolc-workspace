@@ -123,3 +123,37 @@ pub fn handle_reset_track_groove(
     }
     DispatchResult::none()
 }
+
+/// Set per-track time signature override. None = use global.
+pub fn handle_set_track_time_signature(
+    state: &mut AppState,
+    instrument_id: InstrumentId,
+    ts: Option<(u8, u8)>,
+) -> DispatchResult {
+    if let Some(inst) = state.instruments.instrument_mut(instrument_id) {
+        inst.groove.time_signature = ts;
+    }
+    DispatchResult::none()
+}
+
+/// Cycle through common time signatures: None -> 4/4 -> 3/4 -> 5/4 -> 6/8 -> 7/8 -> 12/8 -> None
+pub fn handle_cycle_track_time_signature(
+    state: &mut AppState,
+    instrument_id: InstrumentId,
+) -> DispatchResult {
+    if let Some(inst) = state.instruments.instrument_mut(instrument_id) {
+        let current = inst.groove.time_signature;
+        let next = match current {
+            None => Some((4, 4)),
+            Some((4, 4)) => Some((3, 4)),
+            Some((3, 4)) => Some((5, 4)),
+            Some((5, 4)) => Some((6, 8)),
+            Some((6, 8)) => Some((7, 8)),
+            Some((7, 8)) => Some((12, 8)),
+            Some((12, 8)) => None,
+            Some(_) => Some((4, 4)), // Unknown -> reset to 4/4
+        };
+        inst.groove.time_signature = next;
+    }
+    DispatchResult::none()
+}

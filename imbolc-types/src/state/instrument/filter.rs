@@ -70,6 +70,13 @@ pub struct FilterConfig {
     pub cutoff: ModulatedParam,
     pub resonance: ModulatedParam,
     pub extra_params: Vec<Param>,
+    /// Whether the filter is enabled (bypassed when false).
+    #[serde(default = "default_enabled")]
+    pub enabled: bool,
+}
+
+fn default_enabled() -> bool {
+    true
 }
 
 impl FilterConfig {
@@ -79,6 +86,7 @@ impl FilterConfig {
             filter_type,
             cutoff: ModulatedParam { value: 1000.0, min: 20.0, max: 20000.0, mod_source: None },
             resonance: ModulatedParam { value: 0.5, min: 0.0, max: 1.0, mod_source: None },
+            enabled: true,
         }
     }
 }
