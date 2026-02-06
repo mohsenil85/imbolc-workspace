@@ -27,6 +27,7 @@ pub async fn save_project_dialog() -> Option<PathBuf> {
 }
 
 /// Open a file dialog to import an audio sample.
+#[allow(dead_code)]
 pub async fn import_sample_dialog() -> Option<PathBuf> {
     rfd::AsyncFileDialog::new()
         .set_title("Import Audio Sample")

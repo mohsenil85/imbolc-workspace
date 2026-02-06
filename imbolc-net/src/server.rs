@@ -396,6 +396,7 @@ impl NetServer {
     }
 
     /// Remove a client and release their ownership.
+    #[allow(dead_code)]
     fn remove_client(&mut self, client_id: ClientId) {
         // Remove from pending if handshake incomplete
         self.pending.remove(&client_id);

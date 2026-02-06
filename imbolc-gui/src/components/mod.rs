@@ -14,7 +14,6 @@ pub mod common;
 
 pub use arrangement::Arrangement;
 pub use detail_view::DetailView;
-pub use effect_slot::{AddEffectButton, EffectSlotComponent};
 pub use instrument_editor::InstrumentEditor;
 pub use mixer::Mixer;
 pub use piano_roll_view::PianoRollView;

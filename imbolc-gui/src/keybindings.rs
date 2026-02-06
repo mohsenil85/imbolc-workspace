@@ -60,6 +60,7 @@ impl KeyPattern {
         self
     }
 
+    #[allow(dead_code)]
     pub fn alt(mut self) -> Self {
         self.modifiers.alt = true;
         self
