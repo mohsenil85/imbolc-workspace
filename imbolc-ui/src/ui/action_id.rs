@@ -67,6 +67,8 @@ pub enum GlobalActionId {
     NavBack,
     NavForward,
     Help,
+    OpenDocs,
+    OpenLearn,
     CommandPalette,
     TogglePianoMode,
     OpenProjectBrowser,
@@ -102,6 +104,8 @@ impl GlobalActionId {
             GlobalActionId::NavBack => "nav_back",
             GlobalActionId::NavForward => "nav_forward",
             GlobalActionId::Help => "help",
+            GlobalActionId::OpenDocs => "open_docs",
+            GlobalActionId::OpenLearn => "open_learn",
             GlobalActionId::CommandPalette => "command_palette",
             GlobalActionId::TogglePianoMode => "toggle_piano_mode",
             GlobalActionId::OpenProjectBrowser => "open_project_browser",
@@ -160,6 +164,8 @@ impl GlobalActionId {
             "nav_back" => Some(GlobalActionId::NavBack),
             "nav_forward" => Some(GlobalActionId::NavForward),
             "help" => Some(GlobalActionId::Help),
+            "open_docs" => Some(GlobalActionId::OpenDocs),
+            "open_learn" => Some(GlobalActionId::OpenLearn),
             "command_palette" => Some(GlobalActionId::CommandPalette),
             "toggle_piano_mode" => Some(GlobalActionId::TogglePianoMode),
             "open_project_browser" => Some(GlobalActionId::OpenProjectBrowser),
@@ -410,6 +416,22 @@ define_action_enum! {
         Down => "down",
         Top => "top",
         Bottom => "bottom",
+    }
+}
+
+define_action_enum! {
+    /// Docs layer actions
+    pub enum DocsActionId {
+        Close => "close",
+        ScrollUp => "scroll_up",
+        ScrollDown => "scroll_down",
+        PageUp => "page_up",
+        PageDown => "page_down",
+        Top => "top",
+        Bottom => "bottom",
+        FollowLink => "follow_link",
+        Back => "back",
+        ToggleMode => "toggle_mode",
     }
 }
 
@@ -705,6 +727,7 @@ pub enum ActionId {
     Add(AddActionId),
     Home(HomeActionId),
     Help(HelpActionId),
+    Docs(DocsActionId),
     FrameEdit(FrameEditActionId),
     FileBrowser(FileBrowserActionId),
     SampleChopper(SampleChopperActionId),
@@ -732,6 +755,7 @@ impl ActionId {
             ActionId::Add(a) => a.as_str(),
             ActionId::Home(a) => a.as_str(),
             ActionId::Help(a) => a.as_str(),
+            ActionId::Docs(a) => a.as_str(),
             ActionId::FrameEdit(a) => a.as_str(),
             ActionId::FileBrowser(a) => a.as_str(),
             ActionId::SampleChopper(a) => a.as_str(),
@@ -762,6 +786,7 @@ pub fn parse_action_id(layer: &str, action: &str) -> Option<ActionId> {
         "add" | "add_effect" => AddActionId::from_str(action).map(ActionId::Add),
         "home" => HomeActionId::from_str(action).map(ActionId::Home),
         "help" => HelpActionId::from_str(action).map(ActionId::Help),
+        "docs" => DocsActionId::from_str(action).map(ActionId::Docs),
         "frame_edit" => FrameEditActionId::from_str(action).map(ActionId::FrameEdit),
         "file_browser" => FileBrowserActionId::from_str(action).map(ActionId::FileBrowser),
         "sample_chopper" => {

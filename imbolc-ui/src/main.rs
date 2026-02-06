@@ -20,7 +20,7 @@ use audio::commands::AudioCmd;
 use audio::AudioHandle;
 use action::{AudioDirty, IoFeedback};
 use dispatch::LocalDispatcher;
-use panes::{AddEffectPane, AddPane, AutomationPane, CommandPalettePane, ConfirmPane, EqPane, FileBrowserPane, FrameEditPane, HelpPane, HomePane, InstrumentEditPane, InstrumentPane, InstrumentPickerPane, MidiSettingsPane, MixerPane, PaneSwitcherPane, PianoRollPane, ProjectBrowserPane, QuitPromptPane, SaveAsPane, SampleChopperPane, SequencerPane, ServerPane, TrackPane, VstParamPane, WaveformPane};
+use panes::{AddEffectPane, AddPane, AutomationPane, CommandPalettePane, ConfirmPane, DocsPane, EqPane, FileBrowserPane, FrameEditPane, HelpPane, HomePane, InstrumentEditPane, InstrumentPane, InstrumentPickerPane, MidiSettingsPane, MixerPane, PaneSwitcherPane, PianoRollPane, ProjectBrowserPane, QuitPromptPane, SaveAsPane, SampleChopperPane, SequencerPane, ServerPane, TrackPane, VstParamPane, WaveformPane};
 use state::AppState;
 use ui::{
     Action, AppEvent, Frame, InputSource, KeyCode, Keymap, LayerResult,
@@ -154,6 +154,7 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
     panes.add_pane(Box::new(CommandPalettePane::new(pane_keymap(&mut keymaps, "command_palette"))));
     panes.add_pane(Box::new(PaneSwitcherPane::new(pane_keymap(&mut keymaps, "pane_switcher"))));
     panes.add_pane(Box::new(MidiSettingsPane::new(pane_keymap(&mut keymaps, "midi_settings"))));
+    panes.add_pane(Box::new(DocsPane::new(pane_keymap(&mut keymaps, "docs"))));
 
     // Create layer stack
     let mut layer_stack = LayerStack::new(layers);

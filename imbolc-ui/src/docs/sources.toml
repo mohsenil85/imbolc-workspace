@@ -1,0 +1,80 @@
+# Source type to documentation path mapping
+# Maps SourceType::short_name() to documentation path with optional anchor
+
+[sources]
+# Basic Oscillators
+saw = "sources/oscillators.md#saw"
+sin = "sources/oscillators.md#sine"
+sqr = "sources/oscillators.md#square"
+tri = "sources/oscillators.md#triangle"
+noise = "sources/oscillators.md#noise"
+pulse = "sources/oscillators.md#pulse"
+supersaw = "sources/oscillators.md#supersaw"
+sync = "sources/oscillators.md#sync"
+
+# FM / Modulation
+fm = "sources/fm.md#fm"
+ring = "sources/fm.md#ring-mod"
+fbsin = "sources/fm.md#feedback-sine"
+phasemod = "sources/fm.md#phase-mod"
+fmbell = "sources/fm.md#fm-bell"
+fmbrass = "sources/fm.md#fm-brass"
+
+# Physical Models
+pluck = "sources/physical.md#pluck"
+formant = "sources/physical.md#formant"
+bowed = "sources/physical.md#bowed"
+blown = "sources/physical.md#blown"
+membrane = "sources/physical.md#membrane"
+
+# Mallet Percussion
+marimba = "sources/physical.md#marimba"
+vibes = "sources/physical.md#vibes"
+kalimba = "sources/physical.md#kalimba"
+steeldrum = "sources/physical.md#steel-drum"
+tubularbell = "sources/physical.md#tubular-bell"
+glockenspiel = "sources/physical.md#glockenspiel"
+
+# Plucked Strings
+guitar = "sources/physical.md#guitar"
+bassguitar = "sources/physical.md#bass-guitar"
+harp = "sources/physical.md#harp"
+koto = "sources/physical.md#koto"
+
+# Drums
+kick = "sources/drums.md#kick"
+snare = "sources/drums.md#snare"
+hihatclosed = "sources/drums.md#hihat"
+hihatopen = "sources/drums.md#hihat"
+clap = "sources/drums.md#clap"
+cowbell = "sources/drums.md#cowbell"
+rim = "sources/drums.md#rim"
+tom = "sources/drums.md#tom"
+clave = "sources/drums.md#clave"
+conga = "sources/drums.md#conga"
+
+# Classic Synths
+choir = "sources/oscillators.md#choir"
+epiano = "sources/oscillators.md#epiano"
+organ = "sources/oscillators.md#organ"
+brassstab = "sources/oscillators.md#brass-stab"
+strings = "sources/oscillators.md#strings"
+acid = "sources/oscillators.md#acid"
+
+# Experimental
+gendy = "sources/oscillators.md#gendy"
+chaos = "sources/oscillators.md#chaos"
+
+# Synthesis
+additive = "sources/oscillators.md#additive"
+wavetable = "sources/oscillators.md#wavetable"
+granular = "sources/samplers.md#granular"
+
+# Routing
+audioin = "sources/routing.md#audio-in"
+busin = "sources/routing.md#bus-in"
+
+# Samplers
+pitchedsampler = "sources/samplers.md#pitched-sampler"
+timestretch = "sources/samplers.md#time-stretch"
+kit = "sources/samplers.md#kit"

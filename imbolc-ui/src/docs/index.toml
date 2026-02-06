@@ -1,0 +1,25 @@
+# Topic index for the Learn browser
+
+[[topics]]
+title = "Oscillators"
+path = "sources/oscillators.md"
+
+[[topics]]
+title = "FM Synthesis"
+path = "sources/fm.md"
+
+[[topics]]
+title = "Physical Models"
+path = "sources/physical.md"
+
+[[topics]]
+title = "Drums"
+path = "sources/drums.md"
+
+[[topics]]
+title = "Samplers"
+path = "sources/samplers.md"
+
+[[topics]]
+title = "Routing"
+path = "sources/routing.md"

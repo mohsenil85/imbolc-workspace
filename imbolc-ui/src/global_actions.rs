@@ -6,7 +6,7 @@ use crate::audio::AudioHandle;
 use crate::state::{AppState, MixerSelection, ClipboardContents};
 use crate::dispatch::LocalDispatcher;
 use crate::panes::{
-    CommandPalettePane, InstrumentEditPane, PaneSwitcherPane, PianoRollPane, SequencerPane,
+    CommandPalettePane, DocsPane, InstrumentEditPane, PaneSwitcherPane, PianoRollPane, SequencerPane,
     AutomationPane, ServerPane, HelpPane, FileBrowserPane, VstParamPane,
     ConfirmPane, SaveAsPane, PendingAction,
 };
@@ -410,6 +410,27 @@ pub(crate) fn handle_global_action(
                     }
                     panes.push_to("help", dispatcher.state());
                 }
+            }
+            GlobalActionId::OpenDocs => {
+                // Open docs for the currently selected instrument's source type
+                if let Some(docs) = panes.get_pane_mut::<DocsPane>("docs") {
+                    if let Some(inst) = dispatcher.state().instruments.selected_instrument() {
+                        let short_name = inst.source.short_name().to_lowercase();
+                        docs.open_for_source(&short_name);
+                    } else {
+                        docs.open_browser();
+                    }
+                }
+                panes.push_to("docs", dispatcher.state());
+                sync_pane_layer(panes, layer_stack);
+            }
+            GlobalActionId::OpenLearn => {
+                // Open the topic browser
+                if let Some(docs) = panes.get_pane_mut::<DocsPane>("docs") {
+                    docs.open_browser();
+                }
+                panes.push_to("docs", dispatcher.state());
+                sync_pane_layer(panes, layer_stack);
             }
             GlobalActionId::SelectInstrument(n) => {
                 select_instrument(n as usize, dispatcher, panes, audio);
