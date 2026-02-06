@@ -156,6 +156,13 @@ impl InstrumentEditPane {
         instrument_row_count(self.source, &self.source_params, &self.filter, &self.effects)
     }
 
+    /// Calculate non-selectable visual lines (headers + separators)
+    fn visual_overhead(&self) -> usize {
+        let headers = if self.source.is_vst() { 4 } else { 5 };
+        let separators = if self.source.is_vst() { 3 } else { 4 };
+        headers + separators
+    }
+
     /// Calculate scroll offset to keep selected_row visible
     fn calc_scroll_offset(selected: usize, total: usize, visible: usize) -> usize {
         if visible == 0 || total <= visible {

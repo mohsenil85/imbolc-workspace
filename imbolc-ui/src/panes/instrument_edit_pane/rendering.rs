@@ -16,9 +16,11 @@ impl InstrumentEditPane {
         let base_y = inner.y + 1;
 
         // Calculate visible content area (reserve 2 lines for help text at bottom)
-        let visible_height = inner.height.saturating_sub(2) as usize;
+        let raw_visible_height = inner.height.saturating_sub(2) as usize;
+        let visual_overhead = self.visual_overhead();
+        let effective_visible = raw_visible_height.saturating_sub(visual_overhead);
         let total_rows = self.total_rows();
-        self.scroll_offset = Self::calc_scroll_offset(self.selected_row, total_rows, visible_height);
+        self.scroll_offset = Self::calc_scroll_offset(self.selected_row, total_rows, effective_visible);
 
         // Max Y we can render to (leave room for help text)
         let max_y = inner.y + inner.height.saturating_sub(2);
@@ -57,7 +59,7 @@ impl InstrumentEditPane {
 
         // Helper to check if a row is in the visible range
         let is_visible = |row: usize| -> bool {
-            row >= self.scroll_offset && row < self.scroll_offset + visible_height
+            row >= self.scroll_offset && row < self.scroll_offset + raw_visible_height
         };
 
         // === SOURCE SECTION ===
