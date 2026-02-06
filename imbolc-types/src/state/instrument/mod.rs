@@ -327,7 +327,7 @@ impl Instrument {
             eq: None,
             effects: Vec::new(),
             lfo: LfoConfig::default(),
-            amp_envelope: EnvConfig::default(),
+            amp_envelope: source.default_envelope(),
             polyphonic: true,
             level: 0.8,
             pan: 0.0,

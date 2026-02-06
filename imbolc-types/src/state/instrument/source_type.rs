@@ -1,6 +1,7 @@
 use serde::{Serialize, Deserialize};
 
 use crate::{CustomSynthDefId, Param, ParamValue, VstPluginId};
+use super::envelope::EnvConfig;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SourceType {
@@ -506,6 +507,62 @@ impl SourceType {
                 Param { name: "freq".to_string(), value: ParamValue::Float(440.0), min: 20.0, max: 20000.0 },
                 Param { name: "amp".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 1.0 },
             ],
+        }
+    }
+
+    /// Returns the default ADSR envelope for this source type.
+    /// Values are tuned to the acoustic characteristics of each category.
+    pub fn default_envelope(&self) -> EnvConfig {
+        match self {
+            // Percussive: short, punchy
+            SourceType::Kick | SourceType::Snare | SourceType::HihatClosed |
+            SourceType::HihatOpen | SourceType::Clap | SourceType::Cowbell |
+            SourceType::Rim | SourceType::Tom | SourceType::Clave | SourceType::Conga =>
+                EnvConfig { attack: 0.001, decay: 0.3, sustain: 0.0, release: 0.1 },
+
+            // Plucked strings: natural decay
+            SourceType::Guitar | SourceType::BassGuitar | SourceType::Harp |
+            SourceType::Koto | SourceType::Pluck =>
+                EnvConfig { attack: 0.001, decay: 2.5, sustain: 0.0, release: 0.1 },
+
+            // Mallet percussion: resonant decay
+            SourceType::Marimba | SourceType::Vibes | SourceType::Kalimba |
+            SourceType::SteelDrum | SourceType::Glockenspiel =>
+                EnvConfig { attack: 0.001, decay: 1.5, sustain: 0.0, release: 0.2 },
+
+            // FM/Bell: bell-like decay with longer release
+            SourceType::FMBell | SourceType::TubularBell =>
+                EnvConfig { attack: 0.001, decay: 2.0, sustain: 0.0, release: 0.5 },
+
+            // Sustained: full sustain for held notes
+            SourceType::Organ | SourceType::Strings | SourceType::Choir |
+            SourceType::Bowed | SourceType::Blown =>
+                EnvConfig { attack: 0.05, decay: 0.1, sustain: 0.8, release: 0.3 },
+
+            // EPiano/Brass: moderate sustain
+            SourceType::EPiano | SourceType::BrassStab | SourceType::FMBrass =>
+                EnvConfig { attack: 0.01, decay: 0.3, sustain: 0.5, release: 0.2 },
+
+            // Membrane: moderate decay
+            SourceType::Membrane =>
+                EnvConfig { attack: 0.001, decay: 0.8, sustain: 0.0, release: 0.15 },
+
+            // Synth oscillators and experimental: flexible default
+            SourceType::Saw | SourceType::Sin | SourceType::Sqr | SourceType::Tri |
+            SourceType::Noise | SourceType::Pulse | SourceType::SuperSaw | SourceType::Sync |
+            SourceType::Ring | SourceType::FBSin | SourceType::FM | SourceType::PhaseMod |
+            SourceType::Formant | SourceType::Gendy | SourceType::Chaos |
+            SourceType::Additive | SourceType::Wavetable | SourceType::Granular | SourceType::Acid =>
+                EnvConfig { attack: 0.01, decay: 0.1, sustain: 0.7, release: 0.3 },
+
+            // Routing/Samplers: pass-through or sample-driven
+            SourceType::AudioIn | SourceType::BusIn | SourceType::PitchedSampler |
+            SourceType::TimeStretch | SourceType::Kit =>
+                EnvConfig { attack: 0.001, decay: 0.1, sustain: 1.0, release: 0.1 },
+
+            // External: generic default
+            SourceType::Custom(_) | SourceType::Vst(_) =>
+                EnvConfig { attack: 0.01, decay: 0.1, sustain: 0.7, release: 0.3 },
         }
     }
 }

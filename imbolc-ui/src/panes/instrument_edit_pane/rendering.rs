@@ -336,6 +336,9 @@ impl InstrumentEditPane {
                 visual_y += 1;
             }
 
+            // Get source-type-specific default envelope
+            let default_env = self.source.default_envelope();
+
             let env_labels = ["Attack", "Decay", "Sustain", "Release"];
             let env_values = [
                 self.amp_envelope.attack,
@@ -343,12 +346,18 @@ impl InstrumentEditPane {
                 self.amp_envelope.sustain,
                 self.amp_envelope.release,
             ];
+            let env_defaults = [
+                default_env.attack,
+                default_env.decay,
+                default_env.sustain,
+                default_env.release,
+            ];
             let env_maxes = [5.0, 5.0, 1.0, 5.0];
 
-            for (label, (val, max)) in env_labels.iter().zip(env_values.iter().zip(env_maxes.iter())) {
+            for ((label, val), (default, max)) in env_labels.iter().zip(env_values.iter()).zip(env_defaults.iter().zip(env_maxes.iter())) {
                 if is_visible(global_row) && visual_y < max_y {
                     let is_sel = self.selected_row == global_row;
-                    render_value_row_buf(buf, content_x, visual_y, label, *val, 0.0, *max, is_sel, self.editing && is_sel, &mut self.edit_input);
+                    render_value_row_with_default_buf(buf, content_x, visual_y, label, *val, 0.0, *max, Some(*default), is_sel, self.editing && is_sel, &mut self.edit_input);
                     visual_y += 1;
                 }
                 global_row += 1;
@@ -373,19 +382,37 @@ impl InstrumentEditPane {
     }
 }
 
-fn render_slider(value: f32, min: f32, max: f32, width: usize) -> String {
+fn render_slider_with_default(value: f32, min: f32, max: f32, width: usize, default: Option<f32>) -> String {
     let normalized = (value - min) / (max - min);
     let pos = (normalized * width as f32) as usize;
     let pos = pos.min(width);
+
+    // Calculate default marker position if provided
+    let default_pos = default.map(|d| {
+        let d_norm = (d - min) / (max - min);
+        (d_norm * width as f32) as usize
+    }).map(|p| p.min(width));
+
     let mut s = String::with_capacity(width + 2);
     s.push('[');
     for i in 0..width {
-        if i == pos { s.push('|'); }
-        else if i < pos { s.push('='); }
-        else { s.push('-'); }
+        if i == pos {
+            s.push('|');
+        } else if Some(i) == default_pos {
+            // Show default marker (only if current value isn't there)
+            s.push('▾');
+        } else if i < pos {
+            s.push('=');
+        } else {
+            s.push('-');
+        }
     }
     s.push(']');
     s
+}
+
+fn render_slider(value: f32, min: f32, max: f32, width: usize) -> String {
+    render_slider_with_default(value, min, max, width, None)
 }
 
 fn render_param_row_buf(
@@ -458,12 +485,26 @@ fn render_value_row_buf(
     is_editing: bool,
     edit_input: &mut TextInput,
 ) {
+    render_value_row_with_default_buf(buf, x, y, name, value, min, max, None, is_selected, is_editing, edit_input);
+}
+
+/// Render a value row with an optional default marker
+fn render_value_row_with_default_buf(
+    buf: &mut RenderBuf,
+    x: u16, y: u16,
+    name: &str,
+    value: f32, min: f32, max: f32,
+    default: Option<f32>,
+    is_selected: bool,
+    is_editing: bool,
+    edit_input: &mut TextInput,
+) {
     // Selection indicator
     if is_selected {
         buf.set_cell(x, y, '>', Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG).bold());
     }
 
-    // Label
+    // Label with optional default annotation
     let name_style = if is_selected {
         Style::new().fg(Color::CYAN).bg(Color::SELECTION_BG)
     } else {
@@ -474,8 +515,8 @@ fn render_value_row_buf(
         buf.set_cell(x + 2 + j as u16, y, ch, name_style);
     }
 
-    // Slider
-    let slider = render_slider(value, min, max, 16);
+    // Slider with default marker
+    let slider = render_slider_with_default(value, min, max, 16, default);
     let slider_style = if is_selected {
         Style::new().fg(Color::LIME).bg(Color::SELECTION_BG)
     } else {
@@ -497,6 +538,19 @@ fn render_value_row_buf(
         let formatted = format!("{:.2}", value);
         for (j, ch) in formatted.chars().enumerate() {
             buf.set_cell(x + 34 + j as u16, y, ch, val_style);
+        }
+
+        // Show default value annotation after current value
+        if let Some(def) = default {
+            let def_style = if is_selected {
+                Style::new().fg(Color::DARK_GRAY).bg(Color::SELECTION_BG)
+            } else {
+                Style::new().fg(Color::DARK_GRAY)
+            };
+            let def_str = format!(" (def: {:.2})", def);
+            for (j, ch) in def_str.chars().enumerate() {
+                buf.set_cell(x + 34 + formatted.len() as u16 + j as u16, y, ch, def_style);
+            }
         }
     }
 }
