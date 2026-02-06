@@ -267,12 +267,12 @@ mechanical move.
   types (Clip, ClipPlacement, ClipEditContext, PlayMode)
 - **Phase 0 COMPLETE (2026-02-05)**: SessionState (full struct with
   all impl blocks)
+- **Phase 0 COMPLETE**: InstrumentState, Instrument, and all
+  dependencies (SamplerConfig, ArpeggiatorConfig, etc.)
 
 **Remaining:**
 - AppState — stays in imbolc-core (contains local-only types:
   AudioFeedbackState, MidiConnectionState, UndoHistory)
-- InstrumentState — depends on Instrument which has deep deps
-  (SamplerConfig, ArpeggiatorConfig, etc.) — deferred to Phase 1
 
 **Previous Blockers (RESOLVED):** ~~SessionState and AppState are "god
 objects" that aggregate many concerns.~~  Phase 0.5 refactoring
@@ -361,23 +361,23 @@ This is the biggest mechanical change. Everything else is additive.
 
 #### Phase 0 Summary (2026-02-05)
 
-Phase 0 is now **substantially complete**. All types needed for
-network serialization of SessionState are in imbolc-types:
+Phase 0 is now **complete**. All types needed for network
+serialization are in imbolc-types:
 
 | Type | Status |
 |------|--------|
 | SessionState | ✓ Migrated |
 | ArrangementState | ✓ Migrated |
 | MidiRecordingState | ✓ Migrated |
+| InstrumentState | ✓ Migrated |
+| Instrument | ✓ Migrated |
+| SamplerConfig | ✓ Migrated |
+| ArpeggiatorConfig | ✓ Migrated |
 | PianoRollState | ✓ Already done |
 | AutomationState | ✓ Already done |
 | MixerState | ✓ Already done |
 | CustomSynthDefRegistry | ✓ Already done |
 | VstPluginRegistry | ✓ Already done |
-
-**Deferred:** InstrumentState and Instrument (blocked by SamplerConfig,
-ArpeggiatorConfig dependencies). These are needed for full network sync
-but can be addressed in Phase 1.
 
 **Local-only (stays in imbolc-core):** AppState, AudioFeedbackState,
 MidiConnectionState, UndoHistory — these contain runtime/hardware state
@@ -576,13 +576,19 @@ pub struct AppState {
 - UndoHistory — local undo, server has its own
 - Complex impl blocks for orchestration
 
-### Phase 1: Dispatcher Trait
+### Phase 1: Dispatcher Trait ✓ COMPLETE
 
-- Define `Dispatcher` trait in `imbolc-types` (or a shared location)
-- Create `LocalDispatcher` wrapping existing dispatch logic
-- Update `imbolc` binary to use `Dispatcher` trait instead of calling
-  dispatch directly
-- Verify local mode still works identically
+See [phase1-dispatcher-trait.md](phase1-dispatcher-trait.md) for details.
+
+**Implemented:**
+- `LocalDispatcher` owns `AppState` and `io_tx` (audio kept separate)
+- `LocalDispatcher` provides `state()`, `state_mut()`, `dispatch_with_audio()`
+- `main.rs` and `global_actions.rs` use dispatcher abstraction
+- All 108 unit tests pass
+
+**Key design decision:** AudioHandle kept separate from LocalDispatcher to
+avoid borrow checker conflicts. This also benefits Phase 2 since remote
+clients don't need audio.
 
 ### Phase 2: Network Plumbing
 

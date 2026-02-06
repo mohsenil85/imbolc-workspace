@@ -12,26 +12,50 @@ use super::dispatch_action;
 
 /// Local dispatcher that executes actions directly on in-process state.
 ///
-/// This is the standard dispatcher for standalone operation. It holds references
-/// to the application state, audio handle, and I/O feedback channel.
-pub struct LocalDispatcher<'a> {
-    pub state: &'a mut AppState,
-    pub audio: &'a mut AudioHandle,
-    pub io_tx: &'a Sender<IoFeedback>,
+/// This is the standard dispatcher for standalone operation. It owns the
+/// application state and I/O feedback channel sender. The audio handle is
+/// passed separately to avoid borrow conflicts (state and audio often need
+/// to be accessed together).
+///
+/// Unlike a remote dispatcher, LocalDispatcher provides direct access to
+/// AppState for rendering.
+pub struct LocalDispatcher {
+    state: AppState,
+    io_tx: Sender<IoFeedback>,
 }
 
-impl<'a> LocalDispatcher<'a> {
-    pub fn new(
-        state: &'a mut AppState,
-        audio: &'a mut AudioHandle,
-        io_tx: &'a Sender<IoFeedback>,
-    ) -> Self {
-        Self { state, audio, io_tx }
+impl LocalDispatcher {
+    /// Create a new LocalDispatcher that owns the given state and I/O channel.
+    pub fn new(state: AppState, io_tx: Sender<IoFeedback>) -> Self {
+        Self { state, io_tx }
+    }
+
+    /// Access the application state for rendering.
+    pub fn state(&self) -> &AppState {
+        &self.state
+    }
+
+    /// Mutable access to application state for IoFeedback handling and other updates.
+    pub fn state_mut(&mut self) -> &mut AppState {
+        &mut self.state
+    }
+
+    /// Access the I/O feedback sender.
+    pub fn io_tx(&self) -> &Sender<IoFeedback> {
+        &self.io_tx
+    }
+
+    /// Dispatch an action using the provided audio handle.
+    /// This method allows passing audio separately to avoid borrow conflicts.
+    pub fn dispatch_with_audio(&mut self, action: &Action, audio: &mut AudioHandle) -> DispatchResult {
+        dispatch_action(action, &mut self.state, audio, &self.io_tx)
     }
 }
 
-impl<'a> Dispatcher for LocalDispatcher<'a> {
-    fn dispatch(&mut self, action: &Action) -> DispatchResult {
-        dispatch_action(action, self.state, self.audio, self.io_tx)
+impl Dispatcher for LocalDispatcher {
+    fn dispatch(&mut self, _action: &Action) -> DispatchResult {
+        // This method can't work without audio - use dispatch_with_audio instead.
+        // This is a temporary limitation until we have a better abstraction.
+        panic!("LocalDispatcher::dispatch() requires audio handle - use dispatch_with_audio() instead")
     }
 }

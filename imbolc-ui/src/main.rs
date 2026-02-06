@@ -16,11 +16,10 @@ mod midi_dispatch;
 use std::fs::File;
 use std::time::{Duration, Instant};
 
-use audio::AudioHandle;
 use audio::commands::AudioCmd;
+use audio::AudioHandle;
 use action::{AudioDirty, IoFeedback};
 use dispatch::LocalDispatcher;
-use imbolc_types::Dispatcher;
 use panes::{AddEffectPane, AddPane, AutomationPane, CommandPalettePane, ConfirmPane, EqPane, FileBrowserPane, FrameEditPane, HelpPane, HomePane, InstrumentEditPane, InstrumentPane, MidiSettingsPane, MixerPane, PianoRollPane, ProjectBrowserPane, QuitPromptPane, SaveAsPane, SampleChopperPane, SequencerPane, ServerPane, TrackPane, VstParamPane, WaveformPane};
 use state::AppState;
 use ui::{
@@ -116,8 +115,13 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
     }
     layer_stack.set_pane_layer(panes.active().id());
 
+    // Create audio handle and sync initial state
     let mut audio = AudioHandle::new();
     audio.sync_state(&state);
+
+    // Create the dispatcher that owns state and io_tx (audio stays separate to avoid borrow conflicts)
+    let mut dispatcher = LocalDispatcher::new(state, io_tx.clone());
+
     let mut app_frame = Frame::new();
 
     // Initialize MIDI input
@@ -127,8 +131,8 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
     if !midi_input.list_ports().is_empty() {
         let _ = midi_input.connect(0);
     }
-    state.midi.port_names = midi_input.list_ports().iter().map(|p| p.name.clone()).collect();
-    state.midi.connected_port = midi_input.connected_port_name().map(|s| s.to_string());
+    dispatcher.state_mut().midi.port_names = midi_input.list_ports().iter().map(|p| p.name.clone()).collect();
+    dispatcher.state_mut().midi.connected_port = midi_input.connected_port_name().map(|s| s.to_string());
     let mut recent_projects = state::recent_projects::RecentProjects::load();
     let mut last_render_time = Instant::now();
     let mut select_mode = InstrumentSelectMode::Normal;
@@ -148,6 +152,7 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
                     .and_then(|s| s.to_str())
                     .unwrap_or("untitled")
                     .to_string();
+                let state = dispatcher.state_mut();
                 state.session = session;
                 state.instruments = instruments;
                 state.project.path = Some(load_path);
@@ -155,10 +160,10 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
                 app_frame.set_project_name(name);
                 pending_audio_dirty.merge(AudioDirty::all());
 
-                if state.instruments.instruments.is_empty() {
-                    panes.switch_to("add", &state);
+                if dispatcher.state().instruments.instruments.is_empty() {
+                    panes.switch_to("add", dispatcher.state());
                 } else {
-                    panes.switch_to("instrument_edit", &state);
+                    panes.switch_to("instrument_edit", dispatcher.state());
                 }
                 layer_stack.set_pane_layer(panes.active().id());
             }
@@ -168,7 +173,7 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
                 .and_then(|s| s.to_str())
                 .unwrap_or("untitled")
                 .to_string();
-            state.project.path = Some(load_path);
+            dispatcher.state_mut().project.path = Some(load_path);
             app_frame.set_project_name(name);
         }
     }
@@ -189,7 +194,7 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
         if let Some(app_event) = backend.poll_event(Duration::from_millis(2)) {
             let pane_action = match app_event {
                 AppEvent::Mouse(mouse_event) => {
-                    panes.active_mut().handle_mouse(&mouse_event, last_area, &state)
+                    panes.active_mut().handle_mouse(&mouse_event, last_area, dispatcher.state())
                 }
                 AppEvent::Key(event) => {
                     // Two-digit instrument selection state machine (pre-layer)
@@ -211,7 +216,7 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
                                 if let Some(d) = c.to_digit(10) {
                                     let combined = first * 10 + d as u8;
                                     let target = if combined == 0 { 10 } else { combined };
-                                    select_instrument(target as usize, &mut state, &mut panes, &mut audio, &io_tx);
+                                    select_instrument(target as usize, &mut dispatcher, &mut panes, &mut audio);
                                     select_mode = InstrumentSelectMode::Normal;
                                     continue;
                                 }
@@ -228,14 +233,13 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
                         LayerResult::Action(action) => {
                             match handle_global_action(
                                 action,
-                                &mut state,
+                                &mut dispatcher,
                                 &mut panes,
                                 &mut audio,
                                 &mut app_frame,
                                 &mut select_mode,
                                 &mut pending_audio_dirty,
                                 &mut layer_stack,
-                                &io_tx,
                             ) {
                                 GlobalResult::Quit => break,
                                 GlobalResult::RefreshScreen => {
@@ -244,12 +248,12 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
                                 }
                                 GlobalResult::Handled => continue,
                                 GlobalResult::NotHandled => {
-                                    panes.active_mut().handle_action(action, &event, &state)
+                                    panes.active_mut().handle_action(action, &event, dispatcher.state())
                                 }
                             }
                         }
                         LayerResult::Blocked | LayerResult::Unresolved => {
-                            panes.active_mut().handle_raw_input(&event, &state)
+                            panes.active_mut().handle_raw_input(&event, dispatcher.state())
                         }
                     }
                 }
@@ -299,20 +303,19 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
             }
 
             // Process navigation
-            panes.process_nav(&pane_action, &state);
+            panes.process_nav(&pane_action, dispatcher.state());
 
             // Sync pane layer after navigation
             if matches!(&pane_action, Action::Nav(_)) {
                 sync_pane_layer(&mut panes, &mut layer_stack);
 
                 // Auto-exit clip edit when navigating away from piano roll
-                if state.session.arrangement.editing_clip.is_some()
+                if dispatcher.state().session.arrangement.editing_clip.is_some()
                     && panes.active().id() != "piano_roll"
                 {
-                    let exit_result = LocalDispatcher::new(&mut state, &mut audio, &io_tx)
-                        .dispatch(&Action::Arrangement(action::ArrangementAction::ExitClipEdit));
+                    let exit_result = dispatcher.dispatch_with_audio(&Action::Arrangement(action::ArrangementAction::ExitClipEdit), &mut audio);
                     pending_audio_dirty.merge(exit_result.audio_dirty);
-                    apply_dispatch_result(exit_result, &mut state, &mut panes, &mut app_frame, &mut audio);
+                    apply_dispatch_result(exit_result, &mut dispatcher, &mut panes, &mut app_frame, &mut audio);
                 }
             }
 
@@ -322,21 +325,21 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
                 if let Some(palette) = panes.get_pane_mut::<CommandPalettePane>("command_palette") {
                     if let Some(cmd) = palette.take_command() {
                         let global_result = handle_global_action(
-                            cmd, &mut state, &mut panes, &mut audio, &mut app_frame,
-                            &mut select_mode, &mut pending_audio_dirty, &mut layer_stack, &io_tx,
+                            cmd, &mut dispatcher, &mut panes, &mut audio, &mut app_frame,
+                            &mut select_mode, &mut pending_audio_dirty, &mut layer_stack,
                         );
                         if matches!(global_result, GlobalResult::Quit) { break; }
                         if matches!(global_result, GlobalResult::NotHandled) {
                             let dummy_event = ui::InputEvent::new(KeyCode::Enter, ui::Modifiers::none());
-                            let re_action = panes.active_mut().handle_action(cmd, &dummy_event, &state);
-                            panes.process_nav(&re_action, &state);
+                            let re_action = panes.active_mut().handle_action(cmd, &dummy_event, dispatcher.state());
+                            panes.process_nav(&re_action, dispatcher.state());
                             if matches!(&re_action, Action::Nav(_)) {
                                 sync_pane_layer(&mut panes, &mut layer_stack);
                             }
-                            let r = LocalDispatcher::new(&mut state, &mut audio, &io_tx).dispatch(&re_action);
+                            let r = dispatcher.dispatch_with_audio(&re_action, &mut audio);
                             if r.quit { break; }
                             pending_audio_dirty.merge(r.audio_dirty);
-                            apply_dispatch_result(r, &mut state, &mut panes, &mut app_frame, &mut audio);
+                            apply_dispatch_result(r, &mut dispatcher, &mut panes, &mut app_frame, &mut audio);
                         }
                     }
                 }
@@ -349,25 +352,24 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
                 midi_input.refresh_ports();
                 match midi_input.connect(port_idx) {
                     Ok(()) => {
-                        state.midi.connected_port = midi_input.connected_port_name().map(|s| s.to_string());
+                        dispatcher.state_mut().midi.connected_port = midi_input.connected_port_name().map(|s| s.to_string());
                     }
                     Err(_) => {
-                        state.midi.connected_port = None;
+                        dispatcher.state_mut().midi.connected_port = None;
                     }
                 }
-                state.midi.port_names = midi_input.list_ports().iter().map(|p| p.name.clone()).collect();
+                dispatcher.state_mut().midi.port_names = midi_input.list_ports().iter().map(|p| p.name.clone()).collect();
             } else if let Action::Midi(action::MidiAction::DisconnectPort) = &pane_action {
                 midi_input.disconnect();
-                state.midi.connected_port = None;
+                dispatcher.state_mut().midi.connected_port = None;
             }
 
             // Intercept SaveAndQuit — handle in main.rs, not dispatch
             if matches!(&pane_action, Action::SaveAndQuit) {
-                if state.project.path.is_some() {
-                    let r = LocalDispatcher::new(&mut state, &mut audio, &io_tx)
-                        .dispatch(&Action::Session(action::SessionAction::Save));
+                if dispatcher.state().project.path.is_some() {
+                    let r = dispatcher.dispatch_with_audio(&Action::Session(action::SessionAction::Save), &mut audio);
                     pending_audio_dirty.merge(r.audio_dirty);
-                    apply_dispatch_result(r, &mut state, &mut panes, &mut app_frame, &mut audio);
+                    apply_dispatch_result(r, &mut dispatcher, &mut panes, &mut app_frame, &mut audio);
                     quit_after_save = true;
                 } else {
                     // No project path — open SaveAs, then quit after save completes
@@ -376,23 +378,23 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
                         sa.reset(&default_name);
                     }
                     // Pop the quit prompt first, then push save_as
-                    panes.pop(&state);
-                    panes.push_to("save_as", &state);
+                    panes.pop(dispatcher.state());
+                    panes.push_to("save_as", dispatcher.state());
                     sync_pane_layer(&mut panes, &mut layer_stack);
                     quit_after_save = true;
                 }
             } else {
-                let dispatch_result = LocalDispatcher::new(&mut state, &mut audio, &io_tx).dispatch(&pane_action);
+                let dispatch_result = dispatcher.dispatch_with_audio(&pane_action, &mut audio);
                 if dispatch_result.quit {
                     break;
                 }
                 pending_audio_dirty.merge(dispatch_result.audio_dirty);
-                apply_dispatch_result(dispatch_result, &mut state, &mut panes, &mut app_frame, &mut audio);
+                apply_dispatch_result(dispatch_result, &mut dispatcher, &mut panes, &mut app_frame, &mut audio);
             }
         }
 
         if pending_audio_dirty.any() {
-            audio.flush_dirty(&state, pending_audio_dirty);
+            audio.flush_dirty(dispatcher.state(), pending_audio_dirty);
             pending_audio_dirty.clear();
         }
 
@@ -400,11 +402,12 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
         while let Ok(feedback) = io_rx.try_recv() {
             match feedback {
                 IoFeedback::SaveComplete { id, path, result } => {
-                    if id != state.io.generation.save {
+                    if id != dispatcher.state().io.generation.save {
                         continue;
                     }
                     let status = match result {
                         Ok(name) => {
+                            let state = dispatcher.state_mut();
                             state.project.path = Some(path.clone());
                             state.project.dirty = false;
                             recent_projects.add(&path, &name);
@@ -419,45 +422,52 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
                     }
                 }
                 IoFeedback::LoadComplete { id, path, result } => {
-                    if id != state.io.generation.load {
+                    if id != dispatcher.state().io.generation.load {
                         continue;
                     }
                      match result {
                          Ok((new_session, new_instruments, name)) => {
-                             state.undo_history.clear();
-                             state.session = new_session;
-                             state.instruments = new_instruments;
-                             state.project.path = Some(path.clone());
-                             state.project.dirty = false;
+                             {
+                                 let state = dispatcher.state_mut();
+                                 state.undo_history.clear();
+                                 state.session = new_session;
+                                 state.instruments = new_instruments;
+                                 state.project.path = Some(path.clone());
+                                 state.project.dirty = false;
+                             }
                              recent_projects.add(&path, &name);
                              recent_projects.save();
                              app_frame.set_project_name(name);
-                             
-                             if state.instruments.instruments.is_empty() {
-                                 panes.switch_to("add", &state);
+
+                             if dispatcher.state().instruments.instruments.is_empty() {
+                                 panes.switch_to("add", dispatcher.state());
                              }
 
                              let dirty = AudioDirty::all();
                              pending_audio_dirty.merge(dirty);
-                             
-                             // Queue VST state restores
-                             for inst in &state.instruments.instruments {
-                                if let (state::SourceType::Vst(_), Some(ref path)) = (&inst.source, &inst.vst_state_path) {
-                                    let _ = audio.send_cmd(audio::commands::AudioCmd::LoadVstState {
-                                        instrument_id: inst.id,
-                                        target: action::VstTarget::Source,
-                                        path: path.clone(),
-                                    });
-                                }
-                                for effect in &inst.effects {
-                                    if let (state::EffectType::Vst(_), Some(ref path)) = (&effect.effect_type, &effect.vst_state_path) {
-                                        let _ = audio.send_cmd(audio::commands::AudioCmd::LoadVstState {
-                                            instrument_id: inst.id,
-                                            target: action::VstTarget::Effect(effect.id),
-                                            path: path.clone(),
-                                        });
-                                    }
-                                }
+
+                             // Queue VST state restores - collect data first to avoid borrow conflicts
+                             let vst_restores: Vec<_> = dispatcher.state().instruments.instruments.iter()
+                                 .flat_map(|inst| {
+                                     let mut restores = Vec::new();
+                                     if let (state::SourceType::Vst(_), Some(ref path)) = (&inst.source, &inst.vst_state_path) {
+                                         restores.push((inst.id, action::VstTarget::Source, path.clone()));
+                                     }
+                                     for effect in &inst.effects {
+                                         if let (state::EffectType::Vst(_), Some(ref path)) = (&effect.effect_type, &effect.vst_state_path) {
+                                             restores.push((inst.id, action::VstTarget::Effect(effect.id), path.clone()));
+                                         }
+                                     }
+                                     restores
+                                 })
+                                 .collect();
+
+                             for (instrument_id, target, path) in vst_restores {
+                                 let _ = audio.send_cmd(audio::commands::AudioCmd::LoadVstState {
+                                     instrument_id,
+                                     target,
+                                     path,
+                                 });
                              }
 
                              if let Some(server) = panes.get_pane_mut::<ServerPane>("server") {
@@ -472,13 +482,13 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
                      }
                 }
                 IoFeedback::ImportSynthDefComplete { id, result } => {
-                    if id != state.io.generation.import_synthdef {
+                    if id != dispatcher.state().io.generation.import_synthdef {
                         continue;
                     }
                      match result {
                          Ok((custom, synthdef_name, scsyndef_path)) => {
                              // Register it
-                             let _id = state.session.custom_synthdefs.add(custom);
+                             let _id = dispatcher.state_mut().session.custom_synthdefs.add(custom);
                              pending_audio_dirty.session = true;
 
                              if audio.is_running() {
@@ -488,7 +498,7 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
 
                                  let (reply_tx, reply_rx) = std::sync::mpsc::channel();
                                  let load_path = scsyndef_path.clone();
-                                 let io_tx = io_tx.clone();
+                                 let io_tx_clone = io_tx.clone();
                                  let load_id = id;
                                  let name = synthdef_name.clone();
 
@@ -500,7 +510,7 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
                                                  Ok(Err(e)) => Err(e),
                                                  Err(_) => Err("Audio thread disconnected".to_string()),
                                              };
-                                             let _ = io_tx.send(IoFeedback::ImportSynthDefLoaded { id: load_id, result });
+                                             let _ = io_tx_clone.send(IoFeedback::ImportSynthDefLoaded { id: load_id, result });
                                          });
                                      }
                                      Err(e) => {
@@ -523,7 +533,7 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
                      }
                 }
                 IoFeedback::ImportSynthDefLoaded { id, result } => {
-                    if id != state.io.generation.import_synthdef {
+                    if id != dispatcher.state().io.generation.import_synthdef {
                         continue;
                     }
                     let status = match result {
@@ -538,22 +548,22 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
         }
 
         // Quit after save completes
-        if quit_after_save && !state.project.dirty {
+        if quit_after_save && !dispatcher.state().project.dirty {
             break;
         }
 
         // Drain audio feedback
         for feedback in audio.drain_feedback() {
             let action = Action::AudioFeedback(feedback);
-            let r = LocalDispatcher::new(&mut state, &mut audio, &io_tx).dispatch(&action);
+            let r = dispatcher.dispatch_with_audio(&action, &mut audio);
             pending_audio_dirty.merge(r.audio_dirty);
-            apply_dispatch_result(r, &mut state, &mut panes, &mut app_frame, &mut audio);
+            apply_dispatch_result(r, &mut dispatcher, &mut panes, &mut app_frame, &mut audio);
         }
 
         // Poll MIDI events
         for event in midi_input.poll_events() {
-            if let Some(action) = midi_dispatch::process_midi_event(&event, &state) {
-                let r = LocalDispatcher::new(&mut state, &mut audio, &io_tx).dispatch(&action);
+            if let Some(action) = midi_dispatch::process_midi_event(&event, dispatcher.state()) {
+                let r = dispatcher.dispatch_with_audio(&action, &mut audio);
                 pending_audio_dirty.merge(r.audio_dirty);
             }
         }
@@ -570,7 +580,7 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
                 } else {
                     0.0
                 };
-                let mute = state.session.mixer.master_mute;
+                let mute = dispatcher.state().session.mixer.master_mute;
                 app_frame.set_master_peak(peak, mute);
             }
 
@@ -582,42 +592,50 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
             }
 
             // Update recording state
-            state.recording.recording = audio.is_recording();
-            state.recording.recording_secs = audio.recording_elapsed()
-                .map(|d| d.as_secs()).unwrap_or(0);
-            app_frame.recording = state.recording.recording;
-            app_frame.recording_secs = state.recording.recording_secs;
+            {
+                let state = dispatcher.state_mut();
+                state.recording.recording = audio.is_recording();
+                state.recording.recording_secs = audio.recording_elapsed()
+                    .map(|d| d.as_secs()).unwrap_or(0);
+                app_frame.recording = state.recording.recording;
+                app_frame.recording_secs = state.recording.recording_secs;
+            }
 
             // Update visualization data from audio analysis synths
-            state.audio.visualization.spectrum_bands = audio.spectrum_bands();
-            let (peak_l, peak_r, rms_l, rms_r) = audio.lufs_data();
-            state.audio.visualization.peak_l = peak_l;
-            state.audio.visualization.peak_r = peak_r;
-            state.audio.visualization.rms_l = rms_l;
-            state.audio.visualization.rms_r = rms_r;
-            let scope = audio.scope_buffer();
-            state.audio.visualization.scope_buffer.clear();
-            state.audio.visualization.scope_buffer.extend(scope);
+            {
+                let state = dispatcher.state_mut();
+                state.audio.visualization.spectrum_bands = audio.spectrum_bands();
+                let (peak_l, peak_r, rms_l, rms_r) = audio.lufs_data();
+                state.audio.visualization.peak_l = peak_l;
+                state.audio.visualization.peak_r = peak_r;
+                state.audio.visualization.rms_l = rms_l;
+                state.audio.visualization.rms_r = rms_r;
+                let scope = audio.scope_buffer();
+                state.audio.visualization.scope_buffer.clear();
+                state.audio.visualization.scope_buffer.extend(scope);
+            }
 
             // Update waveform cache for waveform pane
             if panes.active().id() == "waveform" {
                 if let Some(wf) = panes.get_pane_mut::<WaveformPane>("waveform") {
-                    if state.recorded_waveform_peaks.is_none() {
-                        wf.audio_in_waveform = state.instruments.selected_instrument()
+                    if dispatcher.state().recorded_waveform_peaks.is_none() {
+                        let inst_data = dispatcher.state().instruments.selected_instrument()
                             .filter(|s| s.source.is_audio_input() || s.source.is_bus_in())
-                            .map(|s| audio.audio_in_waveform(s.id));
+                            .map(|s| s.id);
+                        wf.audio_in_waveform = inst_data.map(|id| audio.audio_in_waveform(id));
                     }
                 }
             } else {
                 if let Some(wf) = panes.get_pane_mut::<WaveformPane>("waveform") {
                     wf.audio_in_waveform = None;
                 }
-                state.recorded_waveform_peaks = None;
+                dispatcher.state_mut().recorded_waveform_peaks = None;
             }
 
             // Copy audio-owned state into AppState for pane rendering.
             {
                 let ars = audio.read_state();
+                let state = dispatcher.state_mut();
                 state.audio.playhead = ars.playhead;
                 state.audio.bpm = ars.bpm;
                 state.audio.server_status = ars.server_status;
@@ -628,13 +646,11 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
             let area = frame.area();
             last_area = area;
             let mut rbuf = ui::RenderBuf::new(frame.buffer_mut());
-            app_frame.render_buf(area, &mut rbuf, &state);
-            panes.render(area, &mut rbuf, &state);
+            app_frame.render_buf(area, &mut rbuf, dispatcher.state());
+            panes.render(area, &mut rbuf, dispatcher.state());
             backend.end_frame(frame)?;
         }
     }
 
     Ok(())
 }
-
-

@@ -1,11 +1,10 @@
-use crate::audio::AudioHandle;
 use crate::action::{
-    AudioDirty, IoFeedback, MixerAction, PianoRollAction, SequencerAction,
+    AudioDirty, MixerAction, PianoRollAction, SequencerAction,
     AutomationAction, Action
 };
-use crate::state::MixerSelection;
-use crate::dispatch;
-use crate::state::{AppState, ClipboardContents};
+use crate::audio::AudioHandle;
+use crate::state::{AppState, MixerSelection, ClipboardContents};
+use crate::dispatch::LocalDispatcher;
 use crate::panes::{
     CommandPalettePane, InstrumentEditPane, PianoRollPane, SequencerPane,
     AutomationPane, ServerPane, HelpPane, FileBrowserPane, VstParamPane,
@@ -34,30 +33,26 @@ pub(crate) enum GlobalResult {
 /// Select instrument by 1-based number (1=first, 10=tenth) and sync piano roll
 pub(crate) fn select_instrument(
     number: usize,
-    state: &mut AppState,
+    dispatcher: &mut LocalDispatcher,
     panes: &mut PaneManager,
     audio: &mut AudioHandle,
-    io_tx: &std::sync::mpsc::Sender<IoFeedback>,
 ) {
     let idx = number.saturating_sub(1); // Convert 1-based to 0-based
-    if idx < state.instruments.instruments.len() {
-        dispatch::dispatch_action(
-            &Action::Instrument(ui::InstrumentAction::Select(idx)),
-            state, audio, io_tx,
-        );
-        sync_piano_roll_to_selection(state, panes, audio, io_tx);
-        sync_instrument_edit(state, panes);
+    if idx < dispatcher.state().instruments.instruments.len() {
+        dispatcher.dispatch_with_audio(&Action::Instrument(ui::InstrumentAction::Select(idx)), audio);
+        sync_piano_roll_to_selection(dispatcher, panes, audio);
+        sync_instrument_edit(dispatcher.state(), panes);
     }
 }
 
 /// Sync piano roll's current track to match the globally selected instrument,
 /// and re-route the active pane if on a F2-family pane (piano_roll/sequencer/waveform).
 pub(crate) fn sync_piano_roll_to_selection(
-    state: &mut AppState,
+    dispatcher: &mut LocalDispatcher,
     panes: &mut PaneManager,
     audio: &mut AudioHandle,
-    io_tx: &std::sync::mpsc::Sender<IoFeedback>,
 ) {
+    let state = dispatcher.state();
     if let Some(selected_idx) = state.instruments.selected {
         // Extract data from instrument before any mutable borrows
         let inst_data = state.instruments.instruments.get(selected_idx).map(|inst| {
@@ -77,10 +72,10 @@ pub(crate) fn sync_piano_roll_to_selection(
             // Sync mixer selection via dispatch
             let active = panes.active().id();
             if active == "mixer" {
-                if let MixerSelection::Instrument(_) = state.session.mixer.selection {
-                    dispatch::dispatch_action(
+                if let MixerSelection::Instrument(_) = dispatcher.state().session.mixer.selection {
+                    dispatcher.dispatch_with_audio(
                         &Action::Mixer(MixerAction::SelectAt(MixerSelection::Instrument(selected_idx))),
-                        state, audio, io_tx,
+                        audio,
                     );
                 }
             }
@@ -95,7 +90,7 @@ pub(crate) fn sync_piano_roll_to_selection(
                     "piano_roll"
                 };
                 if active != target {
-                    panes.switch_to(target, state);
+                    panes.switch_to(target, dispatcher.state());
                 }
             }
         }
@@ -133,14 +128,13 @@ pub(crate) fn sync_pane_layer(panes: &mut PaneManager, layer_stack: &mut LayerSt
 
 pub(crate) fn handle_global_action(
     action: ActionId,
-    state: &mut AppState,
+    dispatcher: &mut LocalDispatcher,
     panes: &mut PaneManager,
     audio: &mut AudioHandle,
     app_frame: &mut Frame,
     select_mode: &mut InstrumentSelectMode,
     pending_audio_dirty: &mut AudioDirty,
     layer_stack: &mut LayerStack,
-    io_tx: &std::sync::mpsc::Sender<IoFeedback>,
 ) -> GlobalResult {
     // Helper to capture current view state
     let capture_view = |panes: &mut PaneManager, state: &AppState| -> ViewState {
@@ -153,17 +147,17 @@ pub(crate) fn handle_global_action(
     };
 
     // Helper to restore view state
-    let restore_view = |panes: &mut PaneManager, state: &mut AppState, view: &ViewState| {
-        state.instruments.selected = view.inst_selection;
+    let restore_view = |panes: &mut PaneManager, dispatcher: &mut LocalDispatcher, view: &ViewState| {
+        dispatcher.state_mut().instruments.selected = view.inst_selection;
         if let Some(edit_pane) = panes.get_pane_mut::<InstrumentEditPane>("instrument_edit") {
             edit_pane.set_tab_index(view.edit_tab);
         }
-        panes.switch_to(&view.pane_id, &*state);
+        panes.switch_to(&view.pane_id, dispatcher.state());
     };
 
     // Helper for pane switching with view history
-    let switch_to_pane = |target: &str, panes: &mut PaneManager, state: &mut AppState, app_frame: &mut Frame, layer_stack: &mut LayerStack, audio: &mut AudioHandle, io_tx: &std::sync::mpsc::Sender<IoFeedback>| {
-        let current = capture_view(panes, state);
+    let switch_to_pane = |target: &str, panes: &mut PaneManager, dispatcher: &mut LocalDispatcher, audio: &mut AudioHandle, app_frame: &mut Frame, layer_stack: &mut LayerStack| {
+        let current = capture_view(panes, dispatcher.state());
         if app_frame.view_history.is_empty() {
             app_frame.view_history.push(current);
         } else {
@@ -172,18 +166,18 @@ pub(crate) fn handle_global_action(
         // Truncate forward history
         app_frame.view_history.truncate(app_frame.history_cursor + 1);
         // Switch and record new view
-        panes.switch_to(target, &*state);
+        panes.switch_to(target, dispatcher.state());
         sync_pane_layer(panes, layer_stack);
         // Sync mixer highlight to global instrument selection on entry
         if target == "mixer" {
-            if let Some(selected_idx) = state.instruments.selected {
-                dispatch::dispatch_action(
+            if let Some(selected_idx) = dispatcher.state().instruments.selected {
+                dispatcher.dispatch_with_audio(
                     &Action::Mixer(MixerAction::SelectAt(MixerSelection::Instrument(selected_idx))),
-                    state, audio, io_tx,
+                    audio,
                 );
             }
         }
-        let new_view = capture_view(panes, state);
+        let new_view = capture_view(panes, dispatcher.state());
         app_frame.view_history.push(new_view);
         app_frame.history_cursor = app_frame.view_history.len() - 1;
     };
@@ -191,57 +185,57 @@ pub(crate) fn handle_global_action(
     match action {
         ActionId::Global(g) => match g {
             GlobalActionId::Quit => {
-                if state.project.dirty {
-                    panes.push_to("quit_prompt", &*state);
+                if dispatcher.state().project.dirty {
+                    panes.push_to("quit_prompt", dispatcher.state());
                     sync_pane_layer(panes, layer_stack);
                     return GlobalResult::Handled;
                 }
                 return GlobalResult::Quit;
             }
             GlobalActionId::Undo => {
-                let r = dispatch::dispatch_action(&Action::Undo, state, audio, io_tx);
+                let r = dispatcher.dispatch_with_audio(&Action::Undo, audio);
                 pending_audio_dirty.merge(r.audio_dirty);
-                apply_dispatch_result(r, state, panes, app_frame, audio);
-                sync_piano_roll_to_selection(state, panes, audio, io_tx);
-                sync_instrument_edit(state, panes);
+                apply_dispatch_result(r, dispatcher, panes, app_frame, audio);
+                sync_piano_roll_to_selection(dispatcher, panes, audio);
+                sync_instrument_edit(dispatcher.state(), panes);
             }
             GlobalActionId::Redo => {
-                let r = dispatch::dispatch_action(&Action::Redo, state, audio, io_tx);
+                let r = dispatcher.dispatch_with_audio(&Action::Redo, audio);
                 pending_audio_dirty.merge(r.audio_dirty);
-                apply_dispatch_result(r, state, panes, app_frame, audio);
-                sync_piano_roll_to_selection(state, panes, audio, io_tx);
-                sync_instrument_edit(state, panes);
+                apply_dispatch_result(r, dispatcher, panes, app_frame, audio);
+                sync_piano_roll_to_selection(dispatcher, panes, audio);
+                sync_instrument_edit(dispatcher.state(), panes);
             }
             GlobalActionId::Save => {
-                if state.project.path.is_none() {
+                if dispatcher.state().project.path.is_none() {
                     // Unnamed project — open SaveAs
                     let default_name = "untitled".to_string();
                     if let Some(sa) = panes.get_pane_mut::<SaveAsPane>("save_as") {
                         sa.reset(&default_name);
                     }
-                    panes.push_to("save_as", &*state);
+                    panes.push_to("save_as", dispatcher.state());
                     sync_pane_layer(panes, layer_stack);
                 } else {
-                    let r = dispatch::dispatch_action(&Action::Session(SessionAction::Save), state, audio, io_tx);
+                    let r = dispatcher.dispatch_with_audio(&Action::Session(SessionAction::Save), audio);
                     pending_audio_dirty.merge(r.audio_dirty);
-                    apply_dispatch_result(r, state, panes, app_frame, audio);
+                    apply_dispatch_result(r, dispatcher, panes, app_frame, audio);
                 }
             }
             GlobalActionId::Load => {
-                if state.project.dirty {
+                if dispatcher.state().project.dirty {
                     if let Some(confirm) = panes.get_pane_mut::<ConfirmPane>("confirm") {
                         confirm.set_confirm("Discard unsaved changes and reload?", PendingAction::LoadDefault);
                     }
-                    panes.push_to("confirm", &*state);
+                    panes.push_to("confirm", dispatcher.state());
                     sync_pane_layer(panes, layer_stack);
                 } else {
-                    let r = dispatch::dispatch_action(&Action::Session(SessionAction::Load), state, audio, io_tx);
+                    let r = dispatcher.dispatch_with_audio(&Action::Session(SessionAction::Load), audio);
                     pending_audio_dirty.merge(r.audio_dirty);
-                    apply_dispatch_result(r, state, panes, app_frame, audio);
+                    apply_dispatch_result(r, dispatcher, panes, app_frame, audio);
                 }
             }
             GlobalActionId::SaveAs => {
-                let default_name = state.project.path.as_ref()
+                let default_name = dispatcher.state().project.path.as_ref()
                     .and_then(|p| p.file_stem())
                     .and_then(|s| s.to_str())
                     .unwrap_or("untitled")
@@ -249,54 +243,53 @@ pub(crate) fn handle_global_action(
                 if let Some(sa) = panes.get_pane_mut::<SaveAsPane>("save_as") {
                     sa.reset(&default_name);
                 }
-                panes.push_to("save_as", &*state);
+                panes.push_to("save_as", dispatcher.state());
                 sync_pane_layer(panes, layer_stack);
             }
             GlobalActionId::OpenProjectBrowser => {
-                panes.push_to("project_browser", &*state);
+                panes.push_to("project_browser", dispatcher.state());
                 sync_pane_layer(panes, layer_stack);
             }
             GlobalActionId::MasterMute => {
-                let r = dispatch::dispatch_action(
-                    &Action::Session(SessionAction::ToggleMasterMute), state, audio, io_tx);
+                let r = dispatcher.dispatch_with_audio(&Action::Session(SessionAction::ToggleMasterMute), audio);
                 pending_audio_dirty.merge(r.audio_dirty);
-                apply_dispatch_result(r, state, panes, app_frame, audio);
+                apply_dispatch_result(r, dispatcher, panes, app_frame, audio);
             }
             GlobalActionId::RecordMaster => {
-                let r = dispatch::dispatch_action(&Action::Server(ui::ServerAction::RecordMaster), state, audio, io_tx);
+                let r = dispatcher.dispatch_with_audio(&Action::Server(ui::ServerAction::RecordMaster), audio);
                 pending_audio_dirty.merge(r.audio_dirty);
-                apply_dispatch_result(r, state, panes, app_frame, audio);
+                apply_dispatch_result(r, dispatcher, panes, app_frame, audio);
             }
             GlobalActionId::Copy => {
-                copy_from_active_pane(state, panes, audio, io_tx);
+                copy_from_active_pane(dispatcher, panes, audio);
             }
             GlobalActionId::Cut => {
-                let action = cut_from_active_pane(state, panes, audio, io_tx);
+                let action = cut_from_active_pane(dispatcher, panes, audio);
                 if let Some(action) = action {
-                    let r = dispatch::dispatch_action(&action, state, audio, io_tx);
+                    let r = dispatcher.dispatch_with_audio(&action, audio);
                     pending_audio_dirty.merge(r.audio_dirty);
-                    apply_dispatch_result(r, state, panes, app_frame, audio);
+                    apply_dispatch_result(r, dispatcher, panes, app_frame, audio);
                 }
             }
             GlobalActionId::Paste => {
-                let action = paste_to_active_pane(state, panes);
+                let action = paste_to_active_pane(dispatcher.state_mut(), panes);
                 if let Some(action) = action {
-                    let r = dispatch::dispatch_action(&action, state, audio, io_tx);
+                    let r = dispatcher.dispatch_with_audio(&action, audio);
                     pending_audio_dirty.merge(r.audio_dirty);
-                    apply_dispatch_result(r, state, panes, app_frame, audio);
+                    apply_dispatch_result(r, dispatcher, panes, app_frame, audio);
                 }
             }
             GlobalActionId::SelectAll => {
-                select_all_in_active_pane(state, panes);
+                select_all_in_active_pane(dispatcher.state_mut(), panes);
             }
             GlobalActionId::SwitchPane(PaneId::InstrumentEdit) => {
-                switch_to_pane("instrument_edit", panes, state, app_frame, layer_stack, audio, io_tx);
+                switch_to_pane("instrument_edit", panes, dispatcher, audio, app_frame, layer_stack);
             }
             GlobalActionId::SwitchPane(PaneId::InstrumentList) => {
-                switch_to_pane("instrument", panes, state, app_frame, layer_stack, audio, io_tx);
+                switch_to_pane("instrument", panes, dispatcher, audio, app_frame, layer_stack);
             }
             GlobalActionId::SwitchPane(PaneId::PianoRollOrSequencer) => {
-                let target = if let Some(inst) = state.instruments.selected_instrument() {
+                let target = if let Some(inst) = dispatcher.state().instruments.selected_instrument() {
                     if inst.source.is_kit() {
                         "sequencer"
                     } else if inst.source.is_audio_input() || inst.source.is_bus_in() {
@@ -307,37 +300,37 @@ pub(crate) fn handle_global_action(
                 } else {
                     "piano_roll"
                 };
-                switch_to_pane(target, panes, state, app_frame, layer_stack, audio, io_tx);
+                switch_to_pane(target, panes, dispatcher, audio, app_frame, layer_stack);
             }
             GlobalActionId::SwitchPane(PaneId::Track) => {
-                switch_to_pane("track", panes, state, app_frame, layer_stack, audio, io_tx);
+                switch_to_pane("track", panes, dispatcher, audio, app_frame, layer_stack);
             }
             GlobalActionId::SwitchPane(PaneId::Mixer) => {
-                switch_to_pane("mixer", panes, state, app_frame, layer_stack, audio, io_tx);
+                switch_to_pane("mixer", panes, dispatcher, audio, app_frame, layer_stack);
             }
             GlobalActionId::SwitchPane(PaneId::Server) => {
-                switch_to_pane("server", panes, state, app_frame, layer_stack, audio, io_tx);
+                switch_to_pane("server", panes, dispatcher, audio, app_frame, layer_stack);
             }
             GlobalActionId::SwitchPane(PaneId::Automation) => {
-                switch_to_pane("automation", panes, state, app_frame, layer_stack, audio, io_tx);
+                switch_to_pane("automation", panes, dispatcher, audio, app_frame, layer_stack);
             }
             GlobalActionId::SwitchPane(PaneId::Eq) => {
-                switch_to_pane("eq", panes, state, app_frame, layer_stack, audio, io_tx);
+                switch_to_pane("eq", panes, dispatcher, audio, app_frame, layer_stack);
             }
             GlobalActionId::SwitchPane(PaneId::MidiSettings) => {
-                switch_to_pane("midi_settings", panes, state, app_frame, layer_stack, audio, io_tx);
+                switch_to_pane("midi_settings", panes, dispatcher, audio, app_frame, layer_stack);
             }
             GlobalActionId::SwitchPane(PaneId::FrameEdit) => {
                 if panes.active().id() == "frame_edit" {
-                    panes.pop(&*state);
+                    panes.pop(dispatcher.state());
                 } else {
-                    panes.push_to("frame_edit", &*state);
+                    panes.push_to("frame_edit", dispatcher.state());
                 }
             }
             GlobalActionId::NavBack => {
                 let history = &mut app_frame.view_history;
                 if !history.is_empty() {
-                    let current = capture_view(panes, state);
+                    let current = capture_view(panes, dispatcher.state());
                     history[app_frame.history_cursor] = current;
 
                     let at_front = app_frame.history_cursor == history.len() - 1;
@@ -345,14 +338,14 @@ pub(crate) fn handle_global_action(
                         if app_frame.history_cursor > 0 {
                             app_frame.history_cursor -= 1;
                             let view = history[app_frame.history_cursor].clone();
-                            restore_view(panes, state, &view);
+                            restore_view(panes, dispatcher, &view);
                             sync_pane_layer(panes, layer_stack);
                         }
                     } else {
                         if app_frame.history_cursor < history.len() - 1 {
                             app_frame.history_cursor += 1;
                             let view = history[app_frame.history_cursor].clone();
-                            restore_view(panes, state, &view);
+                            restore_view(panes, dispatcher, &view);
                             sync_pane_layer(panes, layer_stack);
                         }
                     }
@@ -361,7 +354,7 @@ pub(crate) fn handle_global_action(
             GlobalActionId::NavForward => {
                 let history = &mut app_frame.view_history;
                 if !history.is_empty() {
-                    let current = capture_view(panes, state);
+                    let current = capture_view(panes, dispatcher.state());
                     history[app_frame.history_cursor] = current;
 
                     let at_front = app_frame.history_cursor == history.len() - 1;
@@ -370,7 +363,7 @@ pub(crate) fn handle_global_action(
                         if target != app_frame.history_cursor {
                             app_frame.history_cursor = target;
                             let view = history[app_frame.history_cursor].clone();
-                            restore_view(panes, state, &view);
+                            restore_view(panes, dispatcher, &view);
                             sync_pane_layer(panes, layer_stack);
                         }
                     } else {
@@ -378,7 +371,7 @@ pub(crate) fn handle_global_action(
                         if target != app_frame.history_cursor {
                             app_frame.history_cursor = target;
                             let view = history[app_frame.history_cursor].clone();
-                            restore_view(panes, state, &view);
+                            restore_view(panes, dispatcher, &view);
                             sync_pane_layer(panes, layer_stack);
                         }
                     }
@@ -405,33 +398,27 @@ pub(crate) fn handle_global_action(
                     if let Some(help) = panes.get_pane_mut::<HelpPane>("help") {
                         help.set_context(current_id, title, &current_keymap);
                     }
-                    panes.push_to("help", &*state);
+                    panes.push_to("help", dispatcher.state());
                 }
             }
             GlobalActionId::SelectInstrument(n) => {
-                select_instrument(n as usize, state, panes, audio, io_tx);
+                select_instrument(n as usize, dispatcher, panes, audio);
             }
             GlobalActionId::SelectPrevInstrument => {
-                dispatch::dispatch_action(
-                    &Action::Instrument(ui::InstrumentAction::SelectPrev),
-                    state, audio, io_tx,
-                );
-                sync_piano_roll_to_selection(state, panes, audio, io_tx);
-                sync_instrument_edit(state, panes);
+                dispatcher.dispatch_with_audio(&Action::Instrument(ui::InstrumentAction::SelectPrev), audio);
+                sync_piano_roll_to_selection(dispatcher, panes, audio);
+                sync_instrument_edit(dispatcher.state(), panes);
             }
             GlobalActionId::SelectNextInstrument => {
-                dispatch::dispatch_action(
-                    &Action::Instrument(ui::InstrumentAction::SelectNext),
-                    state, audio, io_tx,
-                );
-                sync_piano_roll_to_selection(state, panes, audio, io_tx);
-                sync_instrument_edit(state, panes);
+                dispatcher.dispatch_with_audio(&Action::Instrument(ui::InstrumentAction::SelectNext), audio);
+                sync_piano_roll_to_selection(dispatcher, panes, audio);
+                sync_instrument_edit(dispatcher.state(), panes);
             }
             GlobalActionId::SelectTwoDigit => {
                 *select_mode = InstrumentSelectMode::WaitingFirstDigit;
             }
             GlobalActionId::TogglePianoMode => {
-                let result = panes.active_mut().toggle_performance_mode(state);
+                let result = panes.active_mut().toggle_performance_mode(dispatcher.state());
                 match result {
                     ToggleResult::ActivatedPiano => {
                         layer_stack.push("piano_mode");
@@ -447,16 +434,16 @@ pub(crate) fn handle_global_action(
                 }
             }
             GlobalActionId::AddInstrument => {
-                switch_to_pane("add", panes, state, app_frame, layer_stack, audio, io_tx);
+                switch_to_pane("add", panes, dispatcher, audio, app_frame, layer_stack);
             }
             GlobalActionId::DeleteInstrument => {
-                if let Some(instrument) = state.instruments.selected_instrument() {
+                if let Some(instrument) = dispatcher.state().instruments.selected_instrument() {
                     let id = instrument.id;
-                    let r = dispatch::dispatch_action(&Action::Instrument(ui::InstrumentAction::Delete(id)), state, audio, io_tx);
+                    let r = dispatcher.dispatch_with_audio(&Action::Instrument(ui::InstrumentAction::Delete(id)), audio);
                     pending_audio_dirty.merge(r.audio_dirty);
-                    apply_dispatch_result(r, state, panes, app_frame, audio);
+                    apply_dispatch_result(r, dispatcher, panes, app_frame, audio);
                     // Re-sync edit pane after deletion
-                    sync_instrument_edit(state, panes);
+                    sync_instrument_edit(dispatcher.state(), panes);
                 }
             }
             GlobalActionId::CommandPalette => {
@@ -464,30 +451,31 @@ pub(crate) fn handle_global_action(
                 if let Some(palette) = panes.get_pane_mut::<CommandPalettePane>("command_palette") {
                     palette.open(commands);
                 }
-                panes.push_to("command_palette", &*state);
+                panes.push_to("command_palette", dispatcher.state());
                 layer_stack.push("command_palette");
             }
             GlobalActionId::PlayStop => {
                 // Skip during export/render
-                if state.io.pending_export.is_some() || state.io.pending_render.is_some() {
+                if dispatcher.state().io.pending_export.is_some() || dispatcher.state().io.pending_render.is_some() {
                     return GlobalResult::Handled;
                 }
+                let state = dispatcher.state_mut();
                 let pr = &mut state.session.piano_roll;
                 pr.playing = !pr.playing;
                 let playing = pr.playing;
                 audio.set_playing(playing);
                 if !playing {
-                    state.audio.playhead = 0;
+                    dispatcher.state_mut().audio.playhead = 0;
                     audio.reset_playhead();
                     if audio.is_running() {
                         audio.release_all_voices();
                     }
                     audio.clear_active_notes();
                 }
-                state.session.piano_roll.recording = false;
+                dispatcher.state_mut().session.piano_roll.recording = false;
 
                 // Unify: toggle all drum sequencers
-                for inst in &mut state.instruments.instruments {
+                for inst in &mut dispatcher.state_mut().instruments.instruments {
                     if let Some(seq) = &mut inst.drum_sequencer {
                         seq.playing = playing;
                         if !playing {
@@ -527,7 +515,7 @@ pub(crate) fn apply_status_events(events: &[StatusEvent], panes: &mut PaneManage
 /// and audio control signals (stop_playback, reset_playhead).
 pub(crate) fn apply_dispatch_result(
     result: DispatchResult,
-    state: &mut AppState,
+    dispatcher: &mut LocalDispatcher,
     panes: &mut PaneManager,
     app_frame: &mut Frame,
     audio: &mut AudioHandle,
@@ -539,18 +527,18 @@ pub(crate) fn apply_dispatch_result(
                 if let Some(fb) = panes.get_pane_mut::<FileBrowserPane>("file_browser") {
                     fb.open_for(file_action.clone(), None);
                 }
-                panes.push_to("file_browser", state);
+                panes.push_to("file_browser", dispatcher.state());
             }
             NavIntent::OpenVstParams(instrument_id, target) => {
                 if let Some(vp) = panes.get_pane_mut::<VstParamPane>("vst_params") {
                     vp.set_target(*instrument_id, *target);
                 }
-                panes.push_to("vst_params", state);
+                panes.push_to("vst_params", dispatcher.state());
             }
             _ => {}
         }
     }
-    panes.process_nav_intents(&result.nav, state);
+    panes.process_nav_intents(&result.nav, dispatcher.state());
 
     // Process status events
     apply_status_events(&result.status, panes);
@@ -570,41 +558,40 @@ pub(crate) fn apply_dispatch_result(
 }
 
 fn copy_from_active_pane(
-    state: &mut AppState,
+    dispatcher: &mut LocalDispatcher,
     panes: &mut PaneManager,
     audio: &mut AudioHandle,
-    io_tx: &std::sync::mpsc::Sender<IoFeedback>,
 ) {
     let pane_id = panes.active().id();
     match pane_id {
         "piano_roll" => {
             if let Some(pane) = panes.get_pane_mut::<PianoRollPane>("piano_roll") {
                 let (track, start_tick, end_tick, start_pitch, end_pitch) = pane.selection_region();
-                dispatch::dispatch_action(
+                dispatcher.dispatch_with_audio(
                     &Action::PianoRoll(PianoRollAction::CopyNotes {
                         track, start_tick, end_tick, start_pitch, end_pitch,
                     }),
-                    state, audio, io_tx,
+                    audio,
                 );
             }
         }
         "sequencer" => {
             if let Some(pane) = panes.get_pane_mut::<SequencerPane>("sequencer") {
                 let (start_pad, end_pad, start_step, end_step) = pane.selection_region();
-                dispatch::dispatch_action(
+                dispatcher.dispatch_with_audio(
                     &Action::Sequencer(SequencerAction::CopySteps {
                         start_pad, end_pad, start_step, end_step,
                     }),
-                    state, audio, io_tx,
+                    audio,
                 );
             }
         }
         "automation" => {
             if let Some(pane) = panes.get_pane_mut::<AutomationPane>("automation") {
-                if let Some((lane_id, start_tick, end_tick)) = pane.selection_region(state) {
-                    dispatch::dispatch_action(
+                if let Some((lane_id, start_tick, end_tick)) = pane.selection_region(dispatcher.state()) {
+                    dispatcher.dispatch_with_audio(
                         &Action::Automation(AutomationAction::CopyPoints(lane_id, start_tick, end_tick)),
-                        state, audio, io_tx,
+                        audio,
                     );
                 }
             }
@@ -614,13 +601,12 @@ fn copy_from_active_pane(
 }
 
 fn cut_from_active_pane(
-    state: &mut AppState,
+    dispatcher: &mut LocalDispatcher,
     panes: &mut PaneManager,
     audio: &mut AudioHandle,
-    io_tx: &std::sync::mpsc::Sender<IoFeedback>,
 ) -> Option<Action> {
     // Copy first
-    copy_from_active_pane(state, panes, audio, io_tx);
+    copy_from_active_pane(dispatcher, panes, audio);
 
     // Then return delete action
     let pane_id = panes.active().id();
@@ -684,7 +670,7 @@ fn cut_from_active_pane(
                      } else {
                          (pane.cursor_tick, anchor_tick)
                      };
-                     if let Some(lane_id) = pane.selected_lane_id(state) {
+                     if let Some(lane_id) = pane.selected_lane_id(dispatcher.state()) {
                          pane.selection_anchor_tick = None;
                          return Some(Action::Automation(AutomationAction::DeletePointsInRange(lane_id, tick_start, tick_end)));
                      }
