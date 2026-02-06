@@ -33,6 +33,3 @@ pub type CustomSynthDefId = u32;
 
 /// Unique identifier for a VST plugin.
 pub type VstPluginId = u32;
-
-/// Unique identifier for a sample buffer.
-pub type BufferId = i32;

@@ -31,7 +31,7 @@ pub use instrument::{InstrumentSection, instrument_row_count, instrument_section
 pub use instrument::{SourceTypeExt, EffectTypeExt};
 pub use instrument_state::InstrumentState;
 pub use param::{Param, ParamValue, adjust_freq_semitone, adjust_musical_step, is_freq_param};
-pub use sampler::BufferId;
+pub use sampler::{BufferId, SampleBuffer, SampleRegistry, SamplerConfig, Slice, SliceId};
 pub use session::{MixerSelection, MixerState, MusicalSettings, SessionState, MAX_BUSES, DEFAULT_BUS_COUNT};
 pub use undo::UndoHistory;
 pub use vst_plugin::{VstParamSpec, VstPlugin, VstPluginId, VstPluginKind, VstPluginRegistry};
