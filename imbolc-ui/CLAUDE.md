@@ -11,7 +11,7 @@ A terminal-based DAW (Digital Audio Workstation) in Rust. Uses ratatui for TUI r
 ```
 src/
   main.rs          — Binary event loop, global keybindings, render loop
-  panes/           — UI views (see docs/architecture.md for full list)
+  panes/           — UI views (see Panes section below)
   ui/              — TUI framework (pane trait, keymap, input, style, widgets)
   setup.rs         — Auto-startup for SuperCollider
 ```
@@ -22,18 +22,48 @@ Core library lives in `../imbolc-core/`. Types are in `../imbolc-types/`. See th
 
 | Type | Location | What It Is |
 |------|----------|------------|
-| `AppState` | `../imbolc-core/src/state/mod.rs` | Top-level state, owned by `main.rs`, passed to panes as `&AppState` |
-| `InstrumentState` | `../imbolc-core/src/state/instrument_state.rs` | Collection of instruments and selection state |
-| `SessionState` | `../imbolc-core/src/state/session.rs` | Global session data: buses, mixer, piano roll, automation |
-| `Instrument` | `../imbolc-core/src/state/instrument.rs` | One instrument: source + filter + effects + LFO + envelope + mixer |
-| `InstrumentId` | `../imbolc-core/src/state/instrument.rs` | `u32` — unique identifier for instruments |
-| `SourceType` | `../imbolc-core/src/state/instrument.rs` | Oscillator/Source types (Saw/Sin/etc, AudioIn, BusIn, PitchedSampler, Kit, Custom, VST) |
-| `EffectSlot` | `../imbolc-core/src/state/instrument.rs` | One effect in the chain: type + params + enabled + VST param values/state path |
-| `VstTarget` | `../imbolc-core/src/action.rs` | `Source` or `Effect(usize)` — identifies which VST node an action targets |
-| `Action` | `../imbolc-core/src/action.rs` | Action enum (re-exported in `src/ui/pane.rs`) |
+| `AppState` | `imbolc-core/src/state/mod.rs` | Top-level state, owned by `main.rs`, passed to panes as `&AppState` |
+| `Instrument` | `imbolc-types/src/state/instrument/` | One instrument: source + filter + effects + LFO + envelope + mixer |
+| `InstrumentState` | `imbolc-types/src/state/instrument_state.rs` | Collection of instruments and selection state |
+| `SessionState` | `imbolc-types/src/state/session.rs` | Global session data: buses, mixer, piano roll, automation |
+| `InstrumentId` | `imbolc-types/src/lib.rs` | `u32` — unique identifier for instruments |
+| `SourceType` | `imbolc-types/src/state/instrument/source_type.rs` | Oscillator/Source types (Saw/Sin/etc, AudioIn, BusIn, PitchedSampler, Kit, Custom, VST) |
+| `EffectSlot` | `imbolc-types/src/state/instrument/effect.rs` | One effect in the chain: type + params + enabled + VST param values/state path |
+| `Action` | `imbolc-types/src/action.rs` | Action enum (re-exported in `src/ui/pane.rs`) |
 | `Pane` | `src/ui/pane.rs` | Trait: `id()`, `handle_action()`, `handle_raw_input()`, `handle_mouse()`, `render()`, `keymap()` |
 | `PaneManager` | `src/ui/pane.rs` | Owns all panes, manages active pane, coordinates input |
-| `AudioHandle` | `../imbolc-core/src/audio/handle.rs` | Main-thread interface; sends AudioCmd via MPSC channel to audio thread |
+| `LocalDispatcher` | `imbolc-core/src/dispatch/local.rs` | Owns state, provides dispatch |
+| `AudioHandle` | `imbolc-core/src/audio/handle.rs` | Main-thread interface; sends AudioCmd via MPSC channel to audio thread |
+
+## Panes
+
+Single-file panes:
+- `add_effect_pane.rs` — Effect selector modal
+- `add_pane.rs` — Add instrument/bus modal
+- `command_palette_pane.rs` — Command palette
+- `confirm_pane.rs` — Confirmation dialog
+- `eq_pane.rs` — EQ editor
+- `file_browser_pane.rs` — File browser for samples
+- `frame_edit_pane.rs` — Frame/layout settings
+- `help_pane.rs` — Help overlay
+- `home_pane.rs` — Home/welcome screen
+- `instrument_pane.rs` — Instrument list
+- `midi_settings_pane.rs` — MIDI configuration
+- `project_browser_pane.rs` — Project browser
+- `quit_prompt_pane.rs` — Quit confirmation
+- `sample_chopper_pane.rs` — Sample slicing
+- `save_as_pane.rs` — Save as dialog
+- `sequencer_pane.rs` — Drum sequencer
+- `track_pane.rs` — Track view
+- `waveform_pane.rs` — Waveform display
+
+Module panes (input/rendering split):
+- `automation_pane/` — Automation lane editor
+- `instrument_edit_pane/` — Instrument parameter editor
+- `mixer_pane/` — Mixer view
+- `piano_roll_pane/` — Note editor
+- `server_pane/` — SuperCollider server status
+- `vst_param_pane/` — VST parameter editor
 
 ## Critical Patterns
 
@@ -41,12 +71,12 @@ See [../docs/architecture.md](../docs/architecture.md) for detailed architecture
 
 ### Action Dispatch
 
-Panes return `Action` values from `handle_action()` / `handle_raw_input()`. `../imbolc-core/src/dispatch/` matches on them and mutates state. Panes never mutate state directly.
+Panes return `Action` values from `handle_action()` / `handle_raw_input()`. `imbolc-core/src/dispatch/` matches on them and mutates state. Panes never mutate state directly.
 
 When adding a new action:
-1. Add variant to `Action` enum in `../imbolc-core/src/action.rs`
+1. Add variant to `Action` enum in `imbolc-types/src/action.rs`
 2. Return it from the pane's `handle_action()` (or `handle_raw_input()` if it bypasses layers)
-3. Handle it in `dispatch::dispatch_action()` in `../imbolc-core/src/dispatch/mod.rs`
+3. Handle it in `dispatch::dispatch_action()` in `imbolc-core/src/dispatch/mod.rs`
 
 ### Navigation
 
@@ -89,11 +119,12 @@ Use `ui::layout_helpers::center_rect(area, width, height)` to center a sub-rect.
 ## Build & Test
 
 ```bash
-cargo build               # compile
-cargo test                # all tests (binary + integration)
+cargo build -p imbolc-ui
+cargo test -p imbolc-ui
+cargo run -p imbolc-ui      # Run the DAW
 ```
 
-All workspace tests: `cargo test` from workspace root, or `cargo test -p imbolc-core` for core only
+All workspace tests: `cargo test` from workspace root
 
 ## Configuration
 
@@ -101,7 +132,7 @@ TOML-based configuration system with embedded defaults and optional user overrid
 
 - **Musical defaults:** `config.toml` (embedded) + `~/.config/imbolc/config.toml` (user override)
 - **Keybindings:** `keybindings.toml` (embedded) + `~/.config/imbolc/keybindings.toml` (user override)
-- Config loading: `../imbolc-core/src/config.rs` — `Config::load()` parses embedded defaults, layers user overrides
+- Config loading: `imbolc-core/src/config.rs` — `Config::load()` parses embedded defaults, layers user overrides
 - Keybinding loading: `src/ui/keybindings.rs` — same embedded + user override pattern
 - User override files are optional; missing fields fall back to embedded defaults
 
@@ -110,9 +141,8 @@ Musical defaults (`[defaults]` section): `bpm`, `key`, `scale`, `tuning_a4`, `ti
 ## Persistence
 
 - Format: SQLite database (`.imbolc` / `.sqlite`)
-- Save/load: `save_project()` / `load_project()` in `../imbolc-core/src/state/persistence/mod.rs`
+- Save/load: `save_project()` / `load_project()` in `imbolc-core/src/state/persistence/mod.rs`
 - Default path: `~/.config/imbolc/default.sqlite`
-- Persists: instruments, params, effects, filters, sends, modulations, buses, mixer, piano roll, automation, sampler configs, custom synthdefs, drum sequencer, midi settings, VST plugins, VST param values (source + effects), VST state paths
 
 ## LSP Integration (CCLSP)
 
@@ -128,10 +158,6 @@ See `../docs/` for all documentation:
 ## Plans
 
 Implementation plans live at workspace root: `../plans/`
-
-## Comment Box
-
-Log difficulties, friction points, or things that gave you trouble in `../COMMENTBOX.md` at the workspace root. This helps identify recurring pain points and areas where the codebase or documentation could be improved.
 
 ## SuperCollider Notes
 

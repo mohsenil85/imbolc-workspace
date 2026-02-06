@@ -1,5 +1,8 @@
 # Arrangement / Timeline View — Implementation Plan
 
+**Status:** FUTURE
+**Last Updated:** 2025-02-06
+
 ## Overview
 
 Transform the loop-based DAW into a full arrangement system with reusable clips on a timeline. **Key insight: the audio thread requires zero changes.** Song mode works by flattening clip placements into a temporary `PianoRollState` before sending it as the snapshot via the existing `flush_dirty()` path.

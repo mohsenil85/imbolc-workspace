@@ -1,5 +1,8 @@
 # Latency/Jitter Review Plan
 
+**Status:** FUTURE
+**Last Updated:** 2025-02-06
+
 ## Goals
 - Make drum sequencer sample-accurate under load.
 - Reduce scheduler jitter and late event delivery.

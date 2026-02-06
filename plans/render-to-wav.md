@@ -1,5 +1,8 @@
 # Render to WAV — Implementation Plan
 
+**Status:** COMPLETE
+**Last Updated:** 2025-02-06
+
 Render a MIDI instrument's piano roll track (loop region) to a WAV file in real-time, then convert the instrument to a PitchedSampler loaded with the result.
 
 ## Approach

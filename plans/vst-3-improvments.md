@@ -1,5 +1,8 @@
 # Plan: Effect Selection Menu + VST Effect Import
 
+**Status:** FUTURE
+**Last Updated:** 2025-02-06
+
 ## Overview
 
 Replace the current "press `a` to cycle through effect types" behavior with a proper selection menu pane (modeled on `AddPane`). Add VST3 effect import support to the menu.

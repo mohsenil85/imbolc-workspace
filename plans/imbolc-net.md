@@ -1,5 +1,8 @@
 # imbolc-net: Networked Jam Space
 
+**Status:** IN_PROGRESS
+**Last Updated:** 2025-02-06
+
 ## Problem
 
 Multiple musicians in the same physical space want to jam together

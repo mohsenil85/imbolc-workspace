@@ -1,5 +1,8 @@
 # Imbolc — Remaining Features for Completion
 
+**Status:** FUTURE
+**Last Updated:** 2025-02-06
+
 ## Critical Missing Features
 
 ### 1. Undo/Redo DONE

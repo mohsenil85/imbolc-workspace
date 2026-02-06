@@ -1,5 +1,8 @@
 # Project Management — Implementation Plan
 
+**Status:** FUTURE
+**Last Updated:** 2025-02-06
+
 ## Current State
 
 Persistence works: `save_project()` and `load_project()` read/write a SQLite file. But the workflow is locked to a single hard-coded path (`~/.config/imbolc/default.sqlite`). There is no way to manage multiple projects, no dirty-state tracking, no warning before discarding unsaved work, and no UI for project operations beyond Ctrl+S / Ctrl+L.

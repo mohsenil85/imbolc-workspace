@@ -9,7 +9,7 @@ imbolc/
 ├── imbolc-ui/      Terminal UI binary (ratatui + crossterm)
 ├── imbolc-core/    Core engine (state, dispatch, audio, persistence)
 ├── imbolc-types/   Shared type definitions
-└── imbolc-net/     (future) Network/collaboration layer
+└── imbolc-net/     Network/collaboration layer
 ```
 
 ## Dependency Flow
@@ -48,7 +48,7 @@ Each crate has its own `CLAUDE.md` with detailed guidance:
 - [imbolc-ui/CLAUDE.md](imbolc-ui/CLAUDE.md) — UI architecture, pane system, keybindings
 - [imbolc-core/CLAUDE.md](imbolc-core/CLAUDE.md) — State, dispatch, audio engine
 - [imbolc-types/CLAUDE.md](imbolc-types/CLAUDE.md) — Shared type definitions
-- [imbolc-net/CLAUDE.md](imbolc-net/CLAUDE.md) — Network layer for collaboration
+- [imbolc-net/CLAUDE.md](imbolc-net/CLAUDE.md) — Network protocol, LAN collaboration
 
 ## Common Workflows
 

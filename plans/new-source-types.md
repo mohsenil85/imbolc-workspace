@@ -1,5 +1,8 @@
 # Plan: New Instrument Source Types
 
+**Status:** FUTURE
+**Last Updated:** 2025-02-06
+
 Add 14 new `SourceType` variants inspired by historical synthesizers, covering noise, classic analog, FM, physical modeling, and experimental synthesis.
 
 ## New Source Types

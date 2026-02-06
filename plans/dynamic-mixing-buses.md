@@ -1,5 +1,8 @@
 # Plan: Dynamic Mixing Buses
 
+**Status:** FUTURE
+**Last Updated:** 2025-02-06
+
 ## Summary
 
 Change the number of mixing buses from a fixed 8 to a dynamic count where users can add/remove buses at runtime.

@@ -1,5 +1,8 @@
 # Plan: C FFI Layer for imbolc-core
 
+**Status:** FUTURE
+**Last Updated:** 2025-02-06
+
 Expose `imbolc-core` as a language-agnostic shared library (`.dylib`/`.so`/`.dll`) with a thin C FFI surface. Actions and state cross the boundary as JSON strings.
 
 ## API Surface

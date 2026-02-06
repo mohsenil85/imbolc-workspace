@@ -1,5 +1,8 @@
 # Backend Redesign: Lessons Learned & Fresh Approach
 
+**Status:** FUTURE
+**Last Updated:** 2025-02-06
+
 This isn't an implementation plan — it's a retrospective analysis of
 what we'd change about the audio backend architecture if starting from
 scratch, informed by the lessons learned from building the current

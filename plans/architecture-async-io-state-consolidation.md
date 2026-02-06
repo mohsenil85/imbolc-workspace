@@ -1,5 +1,8 @@
 # Architectural Refactoring Plan
 
+**Status:** FUTURE
+**Last Updated:** 2025-02-06
+
 Six issues ordered by priority. Phases are sequenced for dependency and risk: high-impact/low-risk first.
 
 Recommended order: **1 → 2 → 3 → 4 → 5 → 6**

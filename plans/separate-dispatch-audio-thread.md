@@ -1,5 +1,8 @@
 # Separate Dispatch from Audio Thread
 
+**Status:** FUTURE
+**Last Updated:** 2025-02-06
+
 ## Current State
 
 Everything runs on one thread in a tight loop (`main.rs:88`):

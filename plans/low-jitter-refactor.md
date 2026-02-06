@@ -1,5 +1,8 @@
 # Low-Latency/Low-Jitter Rewrite Analysis
 
+**Status:** FUTURE
+**Last Updated:** 2025-02-06
+
 ## Summary
 
 A rewrite focused on low latency and low jitter is feasible. The current architecture has good foundations but specific bottlenecks cause jitter. A comprehensive test harness can capture behavior for safe validation.

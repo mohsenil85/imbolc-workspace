@@ -4,63 +4,113 @@ Guide for AI agents working on imbolc-core.
 
 ## What This Is
 
-The core library for imbolc, a terminal-based DAW (Digital Audio Workstation) in Rust. Contains all application state, action dispatch, audio engine (SuperCollider via OSC), persistence, and domain logic. The TUI binary lives in `../imbolc-ui/`. Types are in `../imbolc-types/`. See the workspace root [../CLAUDE.md](../CLAUDE.md) for overview.
+The core library for imbolc, a terminal-based DAW (Digital Audio Workstation) in Rust. Contains action dispatch, audio engine (SuperCollider via OSC), persistence, and domain logic. The TUI binary lives in `../imbolc-ui/`. Types are in `../imbolc-types/`. See the workspace root [../CLAUDE.md](../CLAUDE.md) for overview.
 
 ## Directory Structure
 
 ```
 src/
-  action.rs        — Action enums + DispatchResult
-  audio/           — SuperCollider OSC client and audio engine
-    handle.rs        — AudioHandle (main-thread interface) and AudioThread (audio thread)
-    commands.rs      — AudioCmd and AudioFeedback enums
+  lib.rs           — Crate root, re-exports
+  action.rs        — Re-exports Action from imbolc-types, DispatchResult
   config.rs        — TOML config loading (musical defaults)
-  dispatch/        — Action handler (all state mutation happens here)
+  paths.rs         — Path resolution utilities
   scd_parser.rs    — SuperCollider .scd file parser
-  state/           — All application state
-    mod.rs           — AppState (top-level), re-exports
-    instrument.rs    — Instrument, InstrumentId, SourceType, FilterType, EffectType, LFO, envelope types
-    instrument_state.rs — InstrumentState (instruments, selection, persistence helpers)
-    session.rs       — SessionState (mixer, global settings, automation)
-    persistence/     — SQLite save/load implementation
-    piano_roll.rs    — PianoRollState, Track, Note
-    automation.rs    — AutomationState, lanes, points, curve types
-    sampler.rs       — SamplerConfig, SampleRegistry, slices
-    custom_synthdef.rs — CustomSynthDef registry and param specs
-    music.rs         — Key, Scale, musical theory types
-    midi_recording.rs — MIDI recording state, CC mappings
-    param.rs         — Param, ParamValue (Float/Int/Bool)
+  vst3_probe.rs    — VST3 plugin discovery
+
+  audio/           — SuperCollider OSC client and audio engine
+    mod.rs           — Module exports
+    handle.rs        — AudioHandle (main-thread interface)
+    audio_thread.rs  — AudioThread (runs in separate thread)
+    commands.rs      — AudioCmd and AudioFeedback enums
+    playback.rs      — Playback scheduling, sequencer tick
+    engine/          — Audio engine internals
+      mod.rs           — Engine state
+      backend.rs       — SuperCollider backend
+      server.rs        — Server communication
+      voices.rs        — Voice management
+      voice_allocator.rs — Polyphonic voice allocation
+      routing.rs       — Bus routing
+      samples.rs       — Sample loading
+      recording.rs     — Audio recording
+      automation.rs    — Automation playback
+      vst.rs           — VST hosting
+      node_registry.rs — SC node tracking
+    osc_client.rs    — OSC message sending
+    bus_allocator.rs — SC bus allocation
+    snapshot.rs      — State snapshots for audio thread
+    triple_buffer.rs — Lock-free state transfer
+    drum_tick.rs     — Drum sequencer tick
+    arpeggiator_tick.rs — Arpeggiator tick
+
+  dispatch/        — Action handler (all state mutation happens here)
+    mod.rs           — Main dispatch_action(), re-exports
+    local.rs         — LocalDispatcher implementation
+    helpers.rs       — Dispatch utilities
+    instrument/      — Instrument-related dispatch
+    piano_roll.rs    — Note editing actions
+    automation.rs    — Automation actions
+    sequencer.rs     — Sequencer/transport actions
+    mixer.rs         — Mixer actions
+    session.rs       — Session actions
+    server.rs        — Server control actions
+    bus.rs           — Bus routing actions
+    midi.rs          — MIDI configuration actions
+    vst_param.rs     — VST parameter actions
+    arrangement.rs   — Arrangement/clip actions
+    audio_feedback.rs — Processing audio thread feedback
+
   midi/            — MIDI utilities
+    mod.rs           — MIDI connection handling
+
+  state/           — State management
+    mod.rs           — AppState definition, re-exports from imbolc-types
+    persistence/     — SQLite save/load implementation
+      mod.rs           — save_project(), load_project()
+      blob.rs          — Binary serialization
+      tests.rs         — Persistence tests
+    undo.rs          — Undo/redo history
+    grid.rs          — Grid calculations
+    recent_projects.rs — Recent project list
+    audio_feedback.rs  — Audio feedback state
+    midi_connection.rs — MIDI device state
+    vst_plugin.rs    — VST plugin state
+    clipboard.rs     — Re-exports from imbolc-types
+    (other state files re-export from imbolc-types)
 ```
+
+**Note:** State types (Instrument, SessionState, etc.) are defined in `imbolc-types`. This crate re-exports them and provides the dispatch/audio implementation.
 
 ## Key Types
 
 | Type | Location | What It Is |
 |------|----------|------------|
 | `AppState` | `src/state/mod.rs` | Top-level state, passed to panes as `&AppState` |
-| `InstrumentState` | `src/state/instrument_state.rs` | Collection of instruments and selection state |
-| `SessionState` | `src/state/session.rs` | Global session data: buses, mixer, piano roll, automation |
-| `Instrument` | `src/state/instrument.rs` | One instrument: source + filter + effects + LFO + envelope + mixer |
-| `InstrumentId` | `src/state/instrument.rs` | `u32` — unique identifier for instruments |
-| `SourceType` | `src/state/instrument.rs` | Oscillator/Source types (Saw/Sin/etc, AudioIn, BusIn, PitchedSampler, Kit, Custom, VST) |
-| `EffectSlot` | `src/state/instrument.rs` | One effect in the chain: type + params + enabled + VST param values/state path |
-| `VstTarget` | `src/action.rs` | `Source` or `Effect(usize)` — identifies which VST node an action targets |
-| `Action` | `src/action.rs` | Action enum dispatched by the TUI binary |
-| `AudioHandle` | `src/audio/handle.rs` | Main-thread interface; sends AudioCmd via MPSC channel to audio thread |
+| `Instrument` | `imbolc-types/src/state/instrument/` | One instrument: source + filter + effects + LFO + envelope |
+| `InstrumentState` | `imbolc-types/src/state/instrument_state.rs` | Collection of instruments and selection state |
+| `SessionState` | `imbolc-types/src/state/session.rs` | Global session data: buses, mixer, transport |
+| `SourceType` | `imbolc-types/src/state/instrument/source_type.rs` | Oscillator/Source types (Saw/Sin/etc, AudioIn, BusIn, etc.) |
+| `EffectSlot` | `imbolc-types/src/state/instrument/effect.rs` | One effect in the chain |
+| `Action` | `imbolc-types/src/action.rs` | Action enum dispatched by the TUI binary |
+| `LocalDispatcher` | `src/dispatch/local.rs` | Owns state, dispatches actions |
+| `AudioHandle` | `src/audio/handle.rs` | Main-thread interface; sends AudioCmd to audio thread |
 
 ## Critical Patterns
 
 ### Action Dispatch
 
 The TUI binary returns `Action` values from pane handlers. `dispatch/` matches on them and mutates state. When adding a new action:
-1. Add variant to `Action` enum in `src/action.rs`
+1. Add variant to `Action` enum in `imbolc-types/src/action.rs`
 2. Handle it in `dispatch::dispatch_action()` in `src/dispatch/mod.rs`
+
+### State Ownership
+
+`LocalDispatcher` owns `AppState` and `io_tx`. `AudioHandle` is kept separate to avoid borrow conflicts. The main loop calls `dispatcher.dispatch_with_audio(&action, &mut audio)`.
 
 ## Build & Test
 
 ```bash
-cargo build
-cargo test
+cargo build -p imbolc-core
+cargo test -p imbolc-core
 ```
 
 ## Configuration
@@ -77,12 +127,8 @@ Musical defaults (`[defaults]` section): `bpm`, `key`, `scale`, `tuning_a4`, `ti
 - Format: SQLite database (`.imbolc` / `.sqlite`)
 - Save/load: `save_project()` / `load_project()` in `src/state/persistence/mod.rs`
 - Default path: `~/.config/imbolc/default.sqlite`
-- Persists: instruments, params, effects, filters, sends, modulations, buses, mixer, piano roll, automation, sampler configs, custom synthdefs, drum sequencer, midi settings, VST plugins, VST param values (source + effects), VST state paths
+- Persists: instruments, params, effects, filters, sends, modulations, buses, mixer, piano roll, automation, sampler configs, custom synthdefs, drum sequencer, midi settings, VST plugins, VST param values, VST state paths
 
 ## Plans
 
 Implementation plans live at workspace root: `../plans/`
-
-## Comment Box
-
-Log difficulties, friction points, or things that gave you trouble in `COMMENTBOX.md` at the project root.

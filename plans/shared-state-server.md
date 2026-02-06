@@ -1,5 +1,8 @@
 # Plan: Shared State Server (Multi-Client DAW)
 
+**Status:** FUTURE
+**Last Updated:** 2025-02-06
+
 Multiple imbolc TUI frontends connect over LAN to a shared state server that owns the SuperCollider backend.
 
 ## Architecture

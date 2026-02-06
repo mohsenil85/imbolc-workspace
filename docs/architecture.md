@@ -8,7 +8,7 @@ For VST3 plans and UI targets, see `docs/vst3-support-roadmap.md`.
 All state lives in `AppState`, owned by `main.rs` and passed to panes by reference:
 
 ```rust
-// imbolc-core/src/state/mod.rs
+// imbolc-core/src/state/mod.rs (types defined in imbolc-types)
 pub struct AppState {
     pub session: SessionState,
     pub instruments: InstrumentState,
@@ -23,7 +23,7 @@ pub struct AppState {
 `InstrumentState` contains the instruments:
 
 ```rust
-// imbolc-core/src/state/instrument_state.rs
+// imbolc-types/src/state/instrument_state.rs
 pub struct InstrumentState {
     pub instruments: Vec<Instrument>,
     pub selected: Option<usize>,
@@ -36,7 +36,7 @@ pub struct InstrumentState {
 `SessionState` contains global settings and other state:
 
 ```rust
-// imbolc-core/src/state/session.rs
+// imbolc-types/src/state/session.rs
 pub struct SessionState {
     pub key: Key,
     pub scale: Scale,
@@ -61,7 +61,7 @@ pub struct SessionState {
 An `Instrument` is the fundamental unit — it combines what were previously separate rack modules (oscillator, filter, effects, output) into a single entity:
 
 ```rust
-// imbolc-core/src/state/instrument.rs
+// imbolc-types/src/state/instrument/mod.rs
 pub struct Instrument {
     pub id: InstrumentId,
     pub name: String,

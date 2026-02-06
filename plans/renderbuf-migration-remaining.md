@@ -1,5 +1,8 @@
 # RenderBuf Migration — Remaining 6 Panes
 
+**Status:** FUTURE
+**Last Updated:** 2025-02-06
+
 ## Context
 
 We are in Phase 3 of the Rendering Abstraction Layer plan (see `~/.claude/plans/cozy-exploring-micali.md`). The `RenderBuf` struct wraps ratatui's `Buffer` and provides four convenience methods that accept our own `Style`/`Color` types natively, eliminating `ratatui::style::Style::from(...)` conversions and `Paragraph::new(Line::from(Span::styled(...)))` chains.

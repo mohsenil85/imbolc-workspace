@@ -1,5 +1,8 @@
 # Groove Panel
 
+**Status:** IN_PROGRESS
+**Last Updated:** 2025-02-06
+
 ## Concept
 
 "Groove" as umbrella term for all timing/feel controls on a track.

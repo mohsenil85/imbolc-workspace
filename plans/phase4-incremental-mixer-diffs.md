@@ -1,5 +1,8 @@
 # Phase 4: Incremental State Diffs for Mixer
 
+**Status:** FUTURE
+**Last Updated:** 2025-02-06
+
 ## Problem
 
 When a single mixer knob turns, `flush_dirty` clones the entire `InstrumentState` + `SessionState` across the MPSC channel (via `UpdateState`), then sends `UpdateMixerParams`. These types contain all instrument definitions, effects chains, samples, etc. — far more data than needed for a mixer parameter change.

@@ -1,5 +1,8 @@
 # Phase 5: Code Organization (Mega-Files)
 
+**Status:** FUTURE
+**Last Updated:** 2025-02-06
+
 Pure mechanical extraction — no behavioral changes. Three independent sub-phases.
 Do them in order: **5A → 5B → 5C**. Run `cargo build && cargo test` after each sub-phase.
 

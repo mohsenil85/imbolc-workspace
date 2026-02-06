@@ -1,5 +1,8 @@
 # Copy / Cut / Paste — Implementation Plan
 
+**Status:** COMPLETE
+**Last Updated:** 2025-02-06
+
 ## Overview
 
 Add clipboard operations (Ctrl+C copy, Ctrl+X cut, Ctrl+V paste) with Shift+Arrow
