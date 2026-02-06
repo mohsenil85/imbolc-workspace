@@ -2,11 +2,11 @@ mod input;
 mod rendering;
 
 use std::any::Any;
-
+use std::time::Instant;
 
 use crate::state::AppState;
 use crate::ui::layout_helpers::center_rect;
-use crate::ui::{Rect, RenderBuf, Action, InputEvent, Keymap, MouseEvent, Pane, PianoKeyboard, ToggleResult};
+use crate::ui::{Rect, RenderBuf, Action, InputEvent, Keymap, MouseEvent, Pane, PianoKeyboard, PianoRollAction, ToggleResult};
 use crate::ui::action_id::ActionId;
 
 pub struct PianoRollPane {
@@ -168,6 +168,37 @@ impl Pane for PianoRollPane {
         }
     }
 
+    fn tick(&mut self, state: &AppState) -> Vec<Action> {
+        if !self.piano.is_active() || !self.piano.has_active_keys() {
+            return vec![];
+        }
+        let now = Instant::now();
+        let released = self.piano.check_releases(now);
+        if released.is_empty() {
+            return vec![];
+        }
+        let instrument_id = state.session.piano_roll.track_order
+            .get(self.current_track)
+            .copied()
+            .unwrap_or(0);
+        // Flatten all released pitches (handles chords)
+        released.into_iter()
+            .map(|(_, pitches)| {
+                if pitches.len() == 1 {
+                    Action::PianoRoll(PianoRollAction::ReleaseNote {
+                        pitch: pitches[0],
+                        instrument_id,
+                    })
+                } else {
+                    Action::PianoRoll(PianoRollAction::ReleaseNotes {
+                        pitches,
+                        instrument_id,
+                    })
+                }
+            })
+            .collect()
+    }
+
     fn handle_action(&mut self, action: ActionId, event: &InputEvent, state: &AppState) -> Action {
         self.handle_action_impl(action, event, state)
     }
@@ -221,6 +252,7 @@ impl Pane for PianoRollPane {
     }
 
     fn deactivate_performance(&mut self) {
+        self.piano.release_all();
         self.piano.deactivate();
     }
 

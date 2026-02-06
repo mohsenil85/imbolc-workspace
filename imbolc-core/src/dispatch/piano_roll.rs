@@ -423,6 +423,34 @@ pub(super) fn dispatch_piano_roll(
             }
             return DispatchResult::none();
         }
+        PianoRollAction::ReleaseNote { pitch, instrument_id } => {
+            // Fan-out to layer group members
+            let targets = state.instruments.layer_group_members(*instrument_id);
+
+            if audio.is_running() {
+                for &target_id in &targets {
+                    if state.instruments.instrument(target_id).is_some() {
+                        let _ = audio.release_voice(target_id, *pitch, 0.0);
+                    }
+                }
+            }
+            return DispatchResult::none();
+        }
+        PianoRollAction::ReleaseNotes { pitches, instrument_id } => {
+            // Fan-out to layer group members
+            let targets = state.instruments.layer_group_members(*instrument_id);
+
+            if audio.is_running() {
+                for &target_id in &targets {
+                    if state.instruments.instrument(target_id).is_some() {
+                        for &pitch in pitches {
+                            let _ = audio.release_voice(target_id, pitch, 0.0);
+                        }
+                    }
+                }
+            }
+            return DispatchResult::none();
+        }
     }
 }
 

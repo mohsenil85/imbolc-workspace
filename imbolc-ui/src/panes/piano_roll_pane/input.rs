@@ -41,17 +41,22 @@ impl PianoRollPane {
                 if let KeyCode::Char(c) = event.key {
                     let c = translate_key(c, state.keyboard_layout);
                     if let Some(pitches) = self.piano.key_to_pitches(c) {
-                        let instrument_id = self.current_instrument_id(state);
-                        let track = self.current_track;
-                        if pitches.len() == 1 {
-                            return Action::PianoRoll(PianoRollAction::PlayNote {
-                                pitch: pitches[0], velocity: 100, instrument_id, track,
-                            });
-                        } else {
-                            return Action::PianoRoll(PianoRollAction::PlayNotes {
-                                pitches, velocity: 100, instrument_id, track,
-                            });
+                        // Check if this is a new press or key repeat (sustain)
+                        if let Some(new_pitches) = self.piano.key_pressed(c, pitches.clone(), event.timestamp) {
+                            // NEW press - spawn voice(s)
+                            let instrument_id = self.current_instrument_id(state);
+                            let track = self.current_track;
+                            if new_pitches.len() == 1 {
+                                return Action::PianoRoll(PianoRollAction::PlayNote {
+                                    pitch: new_pitches[0], velocity: 100, instrument_id, track,
+                                });
+                            } else {
+                                return Action::PianoRoll(PianoRollAction::PlayNotes {
+                                    pitches: new_pitches, velocity: 100, instrument_id, track,
+                                });
+                            }
                         }
+                        // Key repeat - sustain, no action needed
                     }
                 }
                 Action::None

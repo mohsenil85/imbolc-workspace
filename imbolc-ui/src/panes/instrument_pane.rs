@@ -1,8 +1,9 @@
 use std::any::Any;
+use std::time::Instant;
 
 use crate::state::{AppState, OwnershipDisplayStatus, SourceType};
 use crate::ui::layout_helpers::center_rect;
-use crate::ui::{Rect, RenderBuf, Action, NavAction, InstrumentAction, SessionAction, Color, InputEvent, KeyCode, Keymap, MouseEvent, MouseEventKind, MouseButton, PadKeyboard, Pane, PianoKeyboard, Style, ToggleResult, translate_key};
+use crate::ui::{Rect, RenderBuf, Action, NavAction, InstrumentAction, PianoRollAction, SessionAction, Color, InputEvent, KeyCode, Keymap, MouseEvent, MouseEventKind, MouseButton, PadKeyboard, Pane, PianoKeyboard, Style, ToggleResult, translate_key};
 use crate::ui::action_id::{ActionId, InstrumentListActionId, ModeActionId};
 
 fn source_color(source: SourceType) -> Color {
@@ -182,11 +183,16 @@ impl Pane for InstrumentPane {
                 if let KeyCode::Char(c) = event.key {
                     let c = translate_key(c, state.keyboard_layout);
                     if let Some(pitches) = self.piano.key_to_pitches(c) {
-                        if pitches.len() == 1 {
-                            return Action::Instrument(InstrumentAction::PlayNote(pitches[0], 100));
-                        } else {
-                            return Action::Instrument(InstrumentAction::PlayNotes(pitches, 100));
+                        // Check if this is a new press or key repeat (sustain)
+                        if let Some(new_pitches) = self.piano.key_pressed(c, pitches.clone(), event.timestamp) {
+                            // NEW press - spawn voice(s)
+                            if new_pitches.len() == 1 {
+                                return Action::Instrument(InstrumentAction::PlayNote(new_pitches[0], 100));
+                            } else {
+                                return Action::Instrument(InstrumentAction::PlayNotes(new_pitches, 100));
+                            }
                         }
+                        // Key repeat - sustain, no action needed
                     }
                 }
                 Action::None
@@ -412,6 +418,37 @@ impl Pane for InstrumentPane {
         &self.keymap
     }
 
+    fn tick(&mut self, state: &AppState) -> Vec<Action> {
+        if !self.piano.is_active() || !self.piano.has_active_keys() {
+            return vec![];
+        }
+        let now = Instant::now();
+        let released = self.piano.check_releases(now);
+        if released.is_empty() {
+            return vec![];
+        }
+        // Get the currently selected instrument ID
+        let instrument_id = state.instruments.selected_instrument()
+            .map(|inst| inst.id)
+            .unwrap_or(0);
+        // Flatten all released pitches (handles chords)
+        released.into_iter()
+            .map(|(_, pitches)| {
+                if pitches.len() == 1 {
+                    Action::PianoRoll(PianoRollAction::ReleaseNote {
+                        pitch: pitches[0],
+                        instrument_id,
+                    })
+                } else {
+                    Action::PianoRoll(PianoRollAction::ReleaseNotes {
+                        pitches,
+                        instrument_id,
+                    })
+                }
+            })
+            .collect()
+    }
+
     fn toggle_performance_mode(&mut self, state: &AppState) -> ToggleResult {
         if self.pad_keyboard.is_active() {
             self.pad_keyboard.deactivate();
@@ -445,6 +482,7 @@ impl Pane for InstrumentPane {
     }
 
     fn deactivate_performance(&mut self) {
+        self.piano.release_all();
         self.piano.deactivate();
         self.pad_keyboard.deactivate();
     }

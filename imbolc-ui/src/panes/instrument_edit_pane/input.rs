@@ -20,11 +20,16 @@ impl InstrumentEditPane {
                 if let KeyCode::Char(c) = event.key {
                     let c = translate_key(c, state.keyboard_layout);
                     if let Some(pitches) = self.piano.key_to_pitches(c) {
-                        if pitches.len() == 1 {
-                            return Action::Instrument(InstrumentAction::PlayNote(pitches[0], 100));
-                        } else {
-                            return Action::Instrument(InstrumentAction::PlayNotes(pitches.clone(), 100));
+                        // Check if this is a new press or key repeat (sustain)
+                        if let Some(new_pitches) = self.piano.key_pressed(c, pitches.clone(), event.timestamp) {
+                            // NEW press - spawn voice(s)
+                            if new_pitches.len() == 1 {
+                                return Action::Instrument(InstrumentAction::PlayNote(new_pitches[0], 100));
+                            } else {
+                                return Action::Instrument(InstrumentAction::PlayNotes(new_pitches, 100));
+                            }
                         }
+                        // Key repeat - sustain, no action needed
                     }
                 }
                 Action::None

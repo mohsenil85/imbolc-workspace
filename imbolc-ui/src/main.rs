@@ -440,6 +440,13 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
             }
         }
 
+        // Process time-based pane updates (key releases, etc.)
+        let tick_actions = panes.active_mut().tick(dispatcher.state());
+        for action in tick_actions {
+            let r = dispatcher.dispatch_with_audio(&action, &mut audio);
+            pending_audio_dirty.merge(r.audio_dirty);
+        }
+
         if pending_audio_dirty.any() {
             audio.flush_dirty(dispatcher.state(), pending_audio_dirty);
             pending_audio_dirty.clear();

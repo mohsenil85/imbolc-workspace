@@ -471,6 +471,10 @@ pub enum PianoRollAction {
     TogglePolyMode(usize),
     PlayNote { pitch: u8, velocity: u8, instrument_id: InstrumentId, track: usize },
     PlayNotes { pitches: Vec<u8>, velocity: u8, instrument_id: InstrumentId, track: usize },
+    /// Release a sustained note (key-up via timeout detection)
+    ReleaseNote { pitch: u8, instrument_id: InstrumentId },
+    /// Release multiple sustained notes (for chords)
+    ReleaseNotes { pitches: Vec<u8>, instrument_id: InstrumentId },
     PlayStopRecord,
     AdjustSwing(f32),               // delta for swing amount
     RenderToWav(InstrumentId),
@@ -505,6 +509,8 @@ impl PianoRollAction {
             // Actions with explicit instrument_id
             Self::PlayNote { instrument_id, .. } => Some(*instrument_id),
             Self::PlayNotes { instrument_id, .. } => Some(*instrument_id),
+            Self::ReleaseNote { instrument_id, .. } => Some(*instrument_id),
+            Self::ReleaseNotes { instrument_id, .. } => Some(*instrument_id),
             Self::RenderToWav(id) => Some(*id),
 
             // Actions without explicit instrument_id (use track index, need state to resolve)

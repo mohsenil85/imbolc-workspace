@@ -42,6 +42,10 @@ pub trait Pane {
     /// Called when this pane becomes inactive
     fn on_exit(&mut self, _state: &AppState) {}
 
+    /// Called each frame to check for time-based state changes (e.g., key release).
+    /// Returns actions to dispatch (default: empty).
+    fn tick(&mut self, _state: &AppState) -> Vec<Action> { vec![] }
+
     /// Toggle performance mode (piano/pad keyboard). Returns what happened.
     fn toggle_performance_mode(&mut self, _state: &AppState) -> ToggleResult {
         ToggleResult::NotSupported

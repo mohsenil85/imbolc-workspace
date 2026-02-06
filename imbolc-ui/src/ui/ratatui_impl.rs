@@ -126,6 +126,8 @@ impl InputSource for RatatuiBackend {
 }
 
 fn convert_key_event(event: KeyEvent) -> InputEvent {
+    use std::time::Instant;
+
     let key = match event.code {
         CrosstermKeyCode::Char(c) => KeyCode::Char(c),
         CrosstermKeyCode::Enter => KeyCode::Enter,
@@ -152,7 +154,7 @@ fn convert_key_event(event: KeyEvent) -> InputEvent {
         shift: event.modifiers.contains(KeyModifiers::SHIFT),
     };
 
-    InputEvent::new(key, modifiers)
+    InputEvent { key, modifiers, timestamp: Instant::now() }
 }
 
 fn convert_mouse_button(button: CrosstermMouseButton) -> MouseButton {

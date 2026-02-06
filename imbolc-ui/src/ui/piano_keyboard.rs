@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+use std::time::{Duration, Instant};
+
 pub use crate::state::KeyboardLayout;
 
 /// Translate a key character from the configured layout to QWERTY physical position.
@@ -59,11 +62,20 @@ enum StradellaRow {
 /// - `octave()` — current octave
 /// - `status_label() -> String` — e.g. "PIANO C4"
 ///
+/// Sustain tracking:
+/// - `key_pressed(char, pitches, timestamp)` — returns Some(pitches) if new press, None if repeat
+/// - `check_releases(timestamp)` — returns keys that timed out (need note-off)
+/// - `release_all()` — release all active keys, returns all pitches
+/// - `has_active_keys()` — whether any keys are currently held
+///
 /// No `set_layout()` or `set_octave()` methods exist.
 pub struct PianoKeyboard {
     active: bool,
     octave: i8,
     layout: PianoLayout,
+    // Sustain tracking - supports chords (multiple pitches per key)
+    active_keys: HashMap<char, (Vec<u8>, Instant)>,  // char -> (pitches, last_event_time)
+    release_timeout: Duration,
 }
 
 impl PianoKeyboard {
@@ -72,6 +84,8 @@ impl PianoKeyboard {
             active: false,
             octave: 4,
             layout: PianoLayout::C,
+            active_keys: HashMap::new(),
+            release_timeout: Duration::from_millis(150),
         }
     }
 
@@ -174,6 +188,50 @@ impl PianoKeyboard {
     #[allow(dead_code)]
     pub fn is_stradella(&self) -> bool {
         self.layout == PianoLayout::Stradella
+    }
+
+    // ── Sustain tracking ──────────────────────────────────────────
+
+    /// Returns Some(pitches) if this is a NEW key press (spawn voices)
+    /// Returns None if this is key repeat (sustain, ignore)
+    pub fn key_pressed(&mut self, c: char, pitches: Vec<u8>, now: Instant) -> Option<Vec<u8>> {
+        if self.active_keys.contains_key(&c) {
+            // Key is already held - just update timestamp (sustain)
+            self.active_keys.insert(c, (pitches, now));
+            return None;
+        }
+        // New press - key wasn't being held
+        let result = pitches.clone();
+        self.active_keys.insert(c, (pitches, now));
+        Some(result)
+    }
+
+    /// Check for keys that should be released, returns (char, pitches) pairs
+    pub fn check_releases(&mut self, now: Instant) -> Vec<(char, Vec<u8>)> {
+        let mut to_release = Vec::new();
+        self.active_keys.retain(|&c, (pitches, last_time)| {
+            if now.duration_since(*last_time) > self.release_timeout {
+                to_release.push((c, pitches.clone()));
+                false
+            } else {
+                true
+            }
+        });
+        to_release
+    }
+
+    /// Release all active keys, returns all pitches
+    pub fn release_all(&mut self) -> Vec<u8> {
+        let pitches: Vec<u8> = self.active_keys.values()
+            .flat_map(|(p, _)| p.clone())
+            .collect();
+        self.active_keys.clear();
+        pitches
+    }
+
+    /// Check if any keys are currently held
+    pub fn has_active_keys(&self) -> bool {
+        !self.active_keys.is_empty()
     }
 
     /// Map a keyboard character to a MIDI note offset for C layout.

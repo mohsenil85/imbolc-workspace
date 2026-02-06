@@ -3,7 +3,7 @@ mod input;
 mod rendering;
 
 use std::any::Any;
-
+use std::time::Instant;
 
 use imbolc_types::ChannelConfig;
 use crate::state::{
@@ -12,7 +12,7 @@ use crate::state::{
     instrument::{instrument_row_count, instrument_section_for_row, instrument_row_info},
 };
 use crate::ui::widgets::TextInput;
-use crate::ui::{Rect, RenderBuf, Action, InputEvent, Keymap, MouseEvent, PadKeyboard, Pane, PianoKeyboard, ToggleResult};
+use crate::ui::{Rect, RenderBuf, Action, InputEvent, Keymap, MouseEvent, PadKeyboard, Pane, PianoKeyboard, PianoRollAction, ToggleResult};
 use crate::ui::action_id::ActionId;
 
 /// Local alias for pane code compatibility
@@ -239,6 +239,37 @@ impl Pane for InstrumentEditPane {
         &self.keymap
     }
 
+    fn tick(&mut self, state: &AppState) -> Vec<Action> {
+        if !self.piano.is_active() || !self.piano.has_active_keys() {
+            return vec![];
+        }
+        let now = Instant::now();
+        let released = self.piano.check_releases(now);
+        if released.is_empty() {
+            return vec![];
+        }
+        // Get the currently selected instrument ID
+        let instrument_id = state.instruments.selected_instrument()
+            .map(|inst| inst.id)
+            .unwrap_or(0);
+        // Flatten all released pitches (handles chords)
+        released.into_iter()
+            .map(|(_, pitches)| {
+                if pitches.len() == 1 {
+                    Action::PianoRoll(PianoRollAction::ReleaseNote {
+                        pitch: pitches[0],
+                        instrument_id,
+                    })
+                } else {
+                    Action::PianoRoll(PianoRollAction::ReleaseNotes {
+                        pitches,
+                        instrument_id,
+                    })
+                }
+            })
+            .collect()
+    }
+
     fn on_enter(&mut self, state: &AppState) {
         if let Some(inst) = state.instruments.selected_instrument() {
             if self.instrument_id == Some(inst.id) {
@@ -282,6 +313,7 @@ impl Pane for InstrumentEditPane {
     }
 
     fn deactivate_performance(&mut self) {
+        self.piano.release_all();
         self.piano.deactivate();
         self.pad_keyboard.deactivate();
     }

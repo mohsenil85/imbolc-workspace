@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// Mouse button identifiers
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -28,7 +28,7 @@ pub struct MouseEvent {
 }
 
 /// Top-level input event: either keyboard or mouse
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy)]
 pub enum AppEvent {
     Key(InputEvent),
     Mouse(MouseEvent),
@@ -84,22 +84,32 @@ impl Modifiers {
 }
 
 /// Input event from the user
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy)]
 pub struct InputEvent {
     pub key: KeyCode,
     pub modifiers: Modifiers,
+    pub timestamp: Instant,
 }
 
+impl PartialEq for InputEvent {
+    fn eq(&self, other: &Self) -> bool {
+        self.key == other.key && self.modifiers == other.modifiers
+    }
+}
+
+impl Eq for InputEvent {}
+
 impl InputEvent {
-    pub const fn new(key: KeyCode, modifiers: Modifiers) -> Self {
-        Self { key, modifiers }
+    pub fn new(key: KeyCode, modifiers: Modifiers) -> Self {
+        Self { key, modifiers, timestamp: Instant::now() }
     }
 
     #[allow(dead_code)]
-    pub const fn key(key: KeyCode) -> Self {
+    pub fn key(key: KeyCode) -> Self {
         Self {
             key,
             modifiers: Modifiers::none(),
+            timestamp: Instant::now(),
         }
     }
 
