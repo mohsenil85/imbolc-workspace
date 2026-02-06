@@ -620,6 +620,42 @@ impl AudioEngine {
         Ok(())
     }
 
+    /// Spawn a click track sound (metronome tick).
+    /// Downbeats use a higher frequency (1500 Hz) than other beats (1000 Hz).
+    pub fn spawn_click(
+        &mut self,
+        is_downbeat: bool,
+        volume: f32,
+        offset_secs: f64,
+    ) -> Result<(), String> {
+        let backend = self.backend.as_ref().ok_or("Not connected")?;
+
+        let node_id = self.next_node_id;
+        self.next_node_id += 1;
+
+        // Downbeats get higher pitch
+        let freq = if is_downbeat { 1500.0 } else { 1000.0 };
+
+        let msg = BackendMessage {
+            addr: "/s_new".to_string(),
+            args: vec![
+                RawArg::Str("imbolc_click".to_string()),
+                RawArg::Int(node_id),
+                RawArg::Int(0), // addToHead
+                RawArg::Int(GROUP_SOURCES),
+                RawArg::Str("freq".to_string()),
+                RawArg::Float(freq),
+                RawArg::Str("amp".to_string()),
+                RawArg::Float(volume),
+            ],
+        };
+        backend
+            .send_bundle(vec![msg], offset_secs)
+            .map_err(|e| e.to_string())?;
+
+        Ok(())
+    }
+
     /// Play a one-shot drum sample routed through an instrument's signal chain
     pub fn play_drum_hit_to_instrument(
         &mut self,

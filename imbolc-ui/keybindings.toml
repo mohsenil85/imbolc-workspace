@@ -47,6 +47,7 @@ bindings = [
   { key = "Ctrl+n", action = "add_instrument", description = "Add instrument" },
   { key = ":", action = "command_palette", description = "Command palette" },
   { key = "Space", action = "play_stop", description = "Play / Stop" },
+  { key = "M", action = "click_track_toggle", description = "Toggle metronome" },
   { key = "Ctrl+L", action = "refresh_screen", description = "Refresh screen" },
 ]
 

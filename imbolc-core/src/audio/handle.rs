@@ -793,6 +793,20 @@ impl AudioHandle {
             value,
         })
     }
+
+    // ── Click Track ──────────────────────────────────────────────
+
+    pub fn set_click_enabled(&self, enabled: bool) -> Result<(), String> {
+        self.send_cmd(AudioCmd::SetClickEnabled { enabled })
+    }
+
+    pub fn set_click_volume(&self, volume: f32) -> Result<(), String> {
+        self.send_cmd(AudioCmd::SetClickVolume { volume })
+    }
+
+    pub fn set_click_muted(&self, muted: bool) -> Result<(), String> {
+        self.send_cmd(AudioCmd::SetClickMuted { muted })
+    }
 }
 
 impl Drop for AudioHandle {

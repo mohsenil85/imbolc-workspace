@@ -75,18 +75,28 @@ impl SharedState {
         while let Ok(io_fb) = self.io_rx.try_recv() {
             match io_fb {
                 IoFeedback::SaveComplete { result, .. } => {
-                    if let Err(e) = result {
-                        log::error!("Save failed: {}", e);
+                    self.app.io.save_in_progress = false;
+                    match result {
+                        Ok(_) => {
+                            self.app.io.last_io_error = None;
+                        }
+                        Err(e) => {
+                            log::error!("Save failed: {}", e);
+                            self.app.io.last_io_error = Some(e);
+                        }
                     }
                 }
                 IoFeedback::LoadComplete { result, .. } => {
+                    self.app.io.load_in_progress = false;
                     match result {
                         Ok((session, instruments, _)) => {
                             self.app.session = session;
                             self.app.instruments = instruments;
+                            self.app.io.last_io_error = None;
                         }
                         Err(e) => {
                             log::error!("Load failed: {}", e);
+                            self.app.io.last_io_error = Some(e);
                         }
                     }
                 }

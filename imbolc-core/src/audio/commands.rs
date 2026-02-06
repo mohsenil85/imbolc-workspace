@@ -218,6 +218,17 @@ pub enum AudioCmd {
         path: PathBuf,
     },
 
+    // ── Click track ──────────────────────────────────────────────
+    SetClickEnabled {
+        enabled: bool,
+    },
+    SetClickVolume {
+        volume: f32,
+    },
+    SetClickMuted {
+        muted: bool,
+    },
+
     // ── Lifecycle ─────────────────────────────────────────────────
     Shutdown,
 }

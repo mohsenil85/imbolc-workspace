@@ -633,6 +633,17 @@ pub enum InstrumentAction {
     SetTrackTimingOffset(InstrumentId, f32),
     AdjustTrackTimingOffset(InstrumentId, f32),
     ResetTrackGroove(InstrumentId),
+    // LFO actions
+    ToggleLfo(InstrumentId),
+    AdjustLfoRate(InstrumentId, f32),
+    AdjustLfoDepth(InstrumentId, f32),
+    SetLfoShape(InstrumentId, crate::LfoShape),
+    SetLfoTarget(InstrumentId, crate::LfoTarget),
+    // Envelope actions
+    AdjustEnvelopeAttack(InstrumentId, f32),
+    AdjustEnvelopeDecay(InstrumentId, f32),
+    AdjustEnvelopeSustain(InstrumentId, f32),
+    AdjustEnvelopeRelease(InstrumentId, f32),
 }
 
 impl InstrumentAction {
@@ -687,11 +698,33 @@ impl InstrumentAction {
             | Self::AdjustTrackHumanizeTiming(id, _)
             | Self::SetTrackTimingOffset(id, _)
             | Self::AdjustTrackTimingOffset(id, _)
-            | Self::ResetTrackGroove(id) => Some(*id),
+            | Self::ResetTrackGroove(id)
+            | Self::ToggleLfo(id)
+            | Self::AdjustLfoRate(id, _)
+            | Self::AdjustLfoDepth(id, _)
+            | Self::SetLfoShape(id, _)
+            | Self::SetLfoTarget(id, _)
+            | Self::AdjustEnvelopeAttack(id, _)
+            | Self::AdjustEnvelopeDecay(id, _)
+            | Self::AdjustEnvelopeSustain(id, _)
+            | Self::AdjustEnvelopeRelease(id, _) => Some(*id),
 
             Self::Update(update) => Some(update.id),
         }
     }
+}
+
+/// Click track (metronome) actions.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum ClickAction {
+    /// Toggle click track enabled
+    Toggle,
+    /// Toggle mute (quick silence without disabling)
+    ToggleMute,
+    /// Adjust volume by delta
+    AdjustVolume(f32),
+    /// Set volume directly
+    SetVolume(f32),
 }
 
 // ============================================================================
@@ -716,6 +749,7 @@ pub enum Action {
     Midi(MidiAction),
     Bus(BusAction),
     VstParam(VstParamAction),
+    Click(ClickAction),
     AudioFeedback(crate::AudioFeedback),
     /// Pane signals: pop piano_mode/pad_mode layer
     ExitPerformanceMode,

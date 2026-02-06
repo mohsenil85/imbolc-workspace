@@ -13,6 +13,27 @@ use super::music::{Key, Scale};
 use super::piano_roll::PianoRollState;
 use super::vst::VstPluginRegistry;
 
+/// Click track (metronome) state.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ClickTrackState {
+    /// Whether the click track is enabled
+    pub enabled: bool,
+    /// Volume (0.0 - 1.0)
+    pub volume: f32,
+    /// Quick mute without disabling
+    pub muted: bool,
+}
+
+impl Default for ClickTrackState {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            volume: 0.7,
+            muted: false,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MixerSelection {
     Instrument(usize), // index into instruments vec
@@ -75,6 +96,10 @@ pub struct SessionState {
 
     // Humanize settings (extracted)
     pub humanize: HumanizeSettings,
+
+    // Click track / metronome
+    #[serde(default)]
+    pub click_track: ClickTrackState,
 }
 
 impl SessionState {
@@ -98,6 +123,7 @@ impl SessionState {
             vst_plugins: VstPluginRegistry::new(),
             mixer: MixerState::new_with_bus_count(bus_count),
             humanize: HumanizeSettings::default(),
+            click_track: ClickTrackState::default(),
         }
     }
 

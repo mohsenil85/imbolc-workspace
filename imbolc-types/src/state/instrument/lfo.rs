@@ -40,6 +40,16 @@ impl LfoShape {
             LfoShape::Triangle => LfoShape::Sine,
         }
     }
+
+    pub fn from_name(name: &str) -> Option<LfoShape> {
+        match name {
+            "Sine" => Some(LfoShape::Sine),
+            "Square" => Some(LfoShape::Square),
+            "Saw" => Some(LfoShape::Saw),
+            "Triangle" => Some(LfoShape::Triangle),
+            _ => None,
+        }
+    }
 }
 
 // All LFO targets are wired: each target has a corresponding *_mod_in param
@@ -191,6 +201,44 @@ impl LfoTarget {
             LfoTarget::Sustain => LfoTarget::StretchRatio,
             LfoTarget::StretchRatio => LfoTarget::PitchShift,
             LfoTarget::PitchShift => LfoTarget::FilterCutoff,
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<LfoTarget> {
+        match name {
+            "Flt Cut" => Some(LfoTarget::FilterCutoff),
+            "Flt Res" => Some(LfoTarget::FilterResonance),
+            "Amp" => Some(LfoTarget::Amplitude),
+            "Pitch" => Some(LfoTarget::Pitch),
+            "Pan" => Some(LfoTarget::Pan),
+            "PW" => Some(LfoTarget::PulseWidth),
+            "SmpRate" => Some(LfoTarget::SampleRate),
+            "DlyTime" => Some(LfoTarget::DelayTime),
+            "DlyFdbk" => Some(LfoTarget::DelayFeedback),
+            "RevMix" => Some(LfoTarget::ReverbMix),
+            "GateRt" => Some(LfoTarget::GateRate),
+            "Send" => Some(LfoTarget::SendLevel),
+            "Detune" => Some(LfoTarget::Detune),
+            "Attack" => Some(LfoTarget::Attack),
+            "Release" => Some(LfoTarget::Release),
+            "FM Idx" => Some(LfoTarget::FmIndex),
+            "WTPos" => Some(LfoTarget::WavetablePosition),
+            "Frmnt" => Some(LfoTarget::FormantFreq),
+            "SyncR" => Some(LfoTarget::SyncRatio),
+            "Press" => Some(LfoTarget::Pressure),
+            "Emb" => Some(LfoTarget::Embouchure),
+            "GrnSz" => Some(LfoTarget::GrainSize),
+            "GrnDns" => Some(LfoTarget::GrainDensity),
+            "FBFbk" => Some(LfoTarget::FbFeedback),
+            "RngDp" => Some(LfoTarget::RingModDepth),
+            "Chaos" => Some(LfoTarget::ChaosParam),
+            "Rllff" => Some(LfoTarget::AdditiveRolloff),
+            "Tensn" => Some(LfoTarget::MembraneTension),
+            "Decay" => Some(LfoTarget::Decay),
+            "Sustn" => Some(LfoTarget::Sustain),
+            "Strch" => Some(LfoTarget::StretchRatio),
+            "PtchSh" => Some(LfoTarget::PitchShift),
+            _ => None,
         }
     }
 }

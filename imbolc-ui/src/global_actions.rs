@@ -1,5 +1,5 @@
 use crate::action::{
-    AudioDirty, MixerAction, PianoRollAction, SequencerAction,
+    AudioDirty, ClickAction, MixerAction, PianoRollAction, SequencerAction,
     AutomationAction, Action
 };
 use crate::audio::AudioHandle;
@@ -252,6 +252,11 @@ pub(crate) fn handle_global_action(
             }
             GlobalActionId::MasterMute => {
                 let r = dispatcher.dispatch_with_audio(&Action::Session(SessionAction::ToggleMasterMute), audio);
+                pending_audio_dirty.merge(r.audio_dirty);
+                apply_dispatch_result(r, dispatcher, panes, app_frame, audio);
+            }
+            GlobalActionId::ClickTrackToggle => {
+                let r = dispatcher.dispatch_with_audio(&Action::Click(ClickAction::Toggle), audio);
                 pending_audio_dirty.merge(r.audio_dirty);
                 apply_dispatch_result(r, dispatcher, panes, app_frame, audio);
             }

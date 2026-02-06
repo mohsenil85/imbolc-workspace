@@ -76,6 +76,7 @@ pub enum GlobalActionId {
     SelectTwoDigit,
     PlayStop,
     RefreshScreen,
+    ClickTrackToggle,
     SwitchPane(PaneId),
     SelectInstrument(u8), // 1-10
 }
@@ -109,6 +110,7 @@ impl GlobalActionId {
             GlobalActionId::SelectNextInstrument => "select_next_instrument",
             GlobalActionId::SelectTwoDigit => "select_two_digit",
             GlobalActionId::RefreshScreen => "refresh_screen",
+            GlobalActionId::ClickTrackToggle => "click_track_toggle",
             GlobalActionId::SwitchPane(pane) => match pane {
                 PaneId::InstrumentEdit => "switch:instrument",
                 PaneId::InstrumentList => "switch:instrument_list",
@@ -165,6 +167,7 @@ impl GlobalActionId {
             "select_next_instrument" => Some(GlobalActionId::SelectNextInstrument),
             "select_two_digit" => Some(GlobalActionId::SelectTwoDigit),
             "refresh_screen" => Some(GlobalActionId::RefreshScreen),
+            "click_track_toggle" => Some(GlobalActionId::ClickTrackToggle),
             "switch:instrument" => Some(GlobalActionId::SwitchPane(PaneId::InstrumentEdit)),
             "switch:instrument_list" => Some(GlobalActionId::SwitchPane(PaneId::InstrumentList)),
             "switch:piano_roll_or_sequencer" => {
@@ -802,6 +805,7 @@ mod tests {
             GlobalActionId::OpenProjectBrowser,
             GlobalActionId::Escape,
             GlobalActionId::PlayStop,
+            GlobalActionId::ClickTrackToggle,
             GlobalActionId::SelectPrevInstrument,
             GlobalActionId::SelectNextInstrument,
             GlobalActionId::SelectTwoDigit,

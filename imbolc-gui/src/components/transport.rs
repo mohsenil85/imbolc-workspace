@@ -12,12 +12,15 @@ pub fn Transport() -> Element {
     let state = use_context::<Signal<SharedState>>();
     let mut dispatch = use_dispatch();
 
-    let (is_playing, bpm, time_sig) = {
+    let (is_playing, bpm, time_sig, save_in_progress, load_in_progress, last_io_error) = {
         let s = state.read();
         (
             s.app.session.piano_roll.playing,
             s.app.session.bpm,
             s.app.session.time_signature,
+            s.app.io.save_in_progress,
+            s.app.io.load_in_progress,
+            s.app.io.last_io_error.clone(),
         )
     };
 
@@ -42,6 +45,16 @@ pub fn Transport() -> Element {
             div { class: "transport-info",
                 span { class: "bpm", "{bpm:.1} BPM" }
                 span { class: "time-sig", "{time_sig.0}/{time_sig.1}" }
+            }
+            // I/O Status indicator
+            div { class: "transport-status",
+                if save_in_progress {
+                    span { class: "status-indicator saving", "Saving..." }
+                } else if load_in_progress {
+                    span { class: "status-indicator loading", "Loading..." }
+                } else if let Some(ref error) = last_io_error {
+                    span { class: "status-indicator error", "Error: {error}" }
+                }
             }
         }
     }

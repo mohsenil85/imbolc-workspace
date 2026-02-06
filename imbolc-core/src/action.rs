@@ -12,7 +12,7 @@ use crate::state::session::SessionState;
 // Re-export all action types from imbolc-types
 pub use imbolc_types::{
     Action, ArrangementAction, AudioDirty, AudioFeedback, AutomationAction, BusAction,
-    ChopperAction, DispatchResult, FileSelectAction, FilterParamKind, InstrumentAction,
+    ChopperAction, ClickAction, DispatchResult, FileSelectAction, FilterParamKind, InstrumentAction,
     InstrumentUpdate, LfoParamKind, MidiAction, MixerAction, NavAction, NavIntent,
     PianoRollAction, SequencerAction, ServerAction, SessionAction, StatusEvent,
     ToggleResult, VstParamAction, VstTarget,

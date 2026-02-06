@@ -1,10 +1,12 @@
 mod arpeggiator;
 mod crud;
 mod effects;
+mod envelope;
 mod eq;
 mod filter;
 mod groove;
 mod layer;
+mod lfo;
 mod playback;
 mod sample;
 mod selection;
@@ -121,6 +123,33 @@ pub(super) fn dispatch_instrument(
         }
         InstrumentAction::ResetTrackGroove(id) => {
             groove::handle_reset_track_groove(state, *id)
+        }
+        // LFO actions
+        InstrumentAction::ToggleLfo(id) => lfo::handle_toggle_lfo(state, *id),
+        InstrumentAction::AdjustLfoRate(id, delta) => {
+            lfo::handle_adjust_lfo_rate(state, *id, *delta)
+        }
+        InstrumentAction::AdjustLfoDepth(id, delta) => {
+            lfo::handle_adjust_lfo_depth(state, *id, *delta)
+        }
+        InstrumentAction::SetLfoShape(id, shape) => {
+            lfo::handle_set_lfo_shape(state, *id, *shape)
+        }
+        InstrumentAction::SetLfoTarget(id, target) => {
+            lfo::handle_set_lfo_target(state, *id, *target)
+        }
+        // Envelope actions
+        InstrumentAction::AdjustEnvelopeAttack(id, delta) => {
+            envelope::handle_adjust_envelope_attack(state, *id, *delta)
+        }
+        InstrumentAction::AdjustEnvelopeDecay(id, delta) => {
+            envelope::handle_adjust_envelope_decay(state, *id, *delta)
+        }
+        InstrumentAction::AdjustEnvelopeSustain(id, delta) => {
+            envelope::handle_adjust_envelope_sustain(state, *id, *delta)
+        }
+        InstrumentAction::AdjustEnvelopeRelease(id, delta) => {
+            envelope::handle_adjust_envelope_release(state, *id, *delta)
         }
     }
 }

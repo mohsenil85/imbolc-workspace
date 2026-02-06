@@ -1,5 +1,6 @@
 pub mod audio_thread;
 pub mod bus_allocator;
+pub mod click_tick;
 pub mod commands;
 pub mod devices;
 pub mod engine;

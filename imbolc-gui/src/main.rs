@@ -5,6 +5,8 @@
 mod app;
 mod components;
 mod dispatch;
+mod file_ops;
+mod keybindings;
 mod state;
 
 fn main() {

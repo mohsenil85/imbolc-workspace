@@ -29,4 +29,11 @@ SynthDef(\imbolc_bus_out, { |in=1024, level=0.8, mute=0, pan=0, lag=0.02|
 SynthDef(\imbolc_safety, { |ceiling=0.95|
     ReplaceOut.ar(0, Limiter.ar(In.ar(0, 2), ceiling, 0.01));
 }).writeDefFile(dir);
+
+// Click track / metronome - simple sine click with fast envelope
+// Outputs directly to hardware (stereo)
+SynthDef(\imbolc_click, { |freq=1000, amp=0.5|
+    var sig = SinOsc.ar(freq) * EnvGen.kr(Env.perc(0.001, 0.05), doneAction: 2);
+    Out.ar(0, (sig * amp).dup);
+}).writeDefFile(dir);
 )

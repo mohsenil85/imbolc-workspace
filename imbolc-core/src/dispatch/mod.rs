@@ -21,7 +21,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::audio::AudioHandle;
 use crate::state::AppState;
-use crate::action::{Action, AudioDirty, DispatchResult, IoFeedback};
+use crate::action::{Action, AudioDirty, ClickAction, DispatchResult, IoFeedback};
 use crate::state::undo::is_undoable;
 
 pub use helpers::compute_waveform_peaks;
@@ -81,6 +81,7 @@ pub fn dispatch_action(
         Action::Midi(a) => midi::dispatch_midi(a, state),
         Action::Bus(a) => bus::dispatch_bus(a, state, audio),
         Action::VstParam(a) => vst_param::dispatch_vst_param(a, state, audio),
+        Action::Click(a) => dispatch_click(a, state, audio),
         Action::AudioFeedback(f) => audio_feedback::dispatch_audio_feedback(f, state, audio),
         Action::None => DispatchResult::none(),
         // Layer management actions — handled in main.rs before dispatch
@@ -114,4 +115,27 @@ pub fn dispatch_action(
     };
 
     result
+}
+
+/// Dispatch click track actions.
+fn dispatch_click(action: &ClickAction, state: &mut AppState, audio: &mut AudioHandle) -> DispatchResult {
+    match action {
+        ClickAction::Toggle => {
+            state.session.click_track.enabled = !state.session.click_track.enabled;
+            let _ = audio.set_click_enabled(state.session.click_track.enabled);
+        }
+        ClickAction::ToggleMute => {
+            state.session.click_track.muted = !state.session.click_track.muted;
+            let _ = audio.set_click_muted(state.session.click_track.muted);
+        }
+        ClickAction::AdjustVolume(delta) => {
+            state.session.click_track.volume = (state.session.click_track.volume + delta).clamp(0.0, 1.0);
+            let _ = audio.set_click_volume(state.session.click_track.volume);
+        }
+        ClickAction::SetVolume(volume) => {
+            state.session.click_track.volume = volume.clamp(0.0, 1.0);
+            let _ = audio.set_click_volume(state.session.click_track.volume);
+        }
+    }
+    DispatchResult::none()
 }

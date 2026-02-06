@@ -15,6 +15,10 @@ fn dispatch_save(
     io_tx: &Sender<IoFeedback>,
     result: &mut DispatchResult,
 ) {
+    // Mark save as in progress
+    state.io.save_in_progress = true;
+    state.io.last_io_error = None;
+
     // piano_roll.time_signature/bpm are now kept in sync by SessionState setters
     let session = state.session.clone();
     let instruments = state.instruments.clone();
@@ -48,6 +52,10 @@ fn dispatch_load(
     io_tx: &Sender<IoFeedback>,
     result: &mut DispatchResult,
 ) {
+    // Mark load as in progress
+    state.io.load_in_progress = true;
+    state.io.last_io_error = None;
+
     let tx = io_tx.clone();
     let load_id = state.io.generation.next_load();
 

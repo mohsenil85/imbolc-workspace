@@ -80,6 +80,10 @@ pub(crate) struct AudioThread {
     pending_server_connect: Option<PendingServerConnect>,
     /// In-flight VST parameter queries awaiting OSC replies
     pending_vst_queries: Vec<PendingVstQuery>,
+    /// Click track state (enabled, volume, muted)
+    click_state: imbolc_types::ClickTrackState,
+    /// Click track beat accumulator (fractional beats since last click)
+    click_accumulator: f64,
 }
 
 impl AudioThread {
@@ -112,6 +116,8 @@ impl AudioThread {
             last_status_poll: Instant::now(),
             pending_server_connect: None,
             pending_vst_queries: Vec::new(),
+            click_state: imbolc_types::ClickTrackState::default(),
+            click_accumulator: 0.0,
         }
     }
 
@@ -298,16 +304,31 @@ impl AudioThread {
                 self.piano_roll.playing = playing;
                 if playing {
                     self.tick_accumulator = 0.0;
+                    self.click_accumulator = 0.0;
                 }
             }
             AudioCmd::ResetPlayhead => {
                 self.piano_roll.playhead = 0;
                 self.tick_accumulator = 0.0;
+                self.click_accumulator = 0.0;
                 let _ = self.feedback_tx.send(AudioFeedback::PlayheadPosition(0));
             }
             AudioCmd::SetBpm { bpm } => {
                 self.piano_roll.bpm = bpm;
                 let _ = self.feedback_tx.send(AudioFeedback::BpmUpdate(bpm));
+            }
+            AudioCmd::SetClickEnabled { enabled } => {
+                self.click_state.enabled = enabled;
+                if enabled {
+                    // Reset accumulator when enabling to start fresh
+                    self.click_accumulator = 0.0;
+                }
+            }
+            AudioCmd::SetClickVolume { volume } => {
+                self.click_state.volume = volume.clamp(0.0, 1.0);
+            }
+            AudioCmd::SetClickMuted { muted } => {
+                self.click_state.muted = muted;
             }
             AudioCmd::RebuildRouting => {
                 let _ = self.engine.rebuild_instrument_routing(&self.instruments, &self.session);
@@ -753,6 +774,14 @@ impl AudioThread {
             &mut self.engine,
             &mut self.rng_state,
             elapsed,
+        );
+        super::click_tick::tick_click(
+            &mut self.engine,
+            &self.click_state,
+            &self.session,
+            &self.piano_roll,
+            elapsed,
+            &mut self.click_accumulator,
         );
     }
 

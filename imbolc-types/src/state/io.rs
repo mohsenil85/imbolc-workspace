@@ -19,4 +19,13 @@ pub struct IoState {
     /// Generation counters for ignoring stale async results
     #[serde(skip)]
     pub generation: IoGeneration,
+    /// True while a save operation is in progress
+    #[serde(skip)]
+    pub save_in_progress: bool,
+    /// True while a load operation is in progress
+    #[serde(skip)]
+    pub load_in_progress: bool,
+    /// Last I/O error message (save or load failure)
+    #[serde(skip)]
+    pub last_io_error: Option<String>,
 }
