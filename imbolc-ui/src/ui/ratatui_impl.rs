@@ -2,9 +2,14 @@ use std::io::{self, Stdout};
 use std::time::Duration;
 
 use crossterm::{
-    event::{self, Event, KeyEvent, KeyCode as CrosstermKeyCode, KeyModifiers, MouseEvent as CrosstermMouseEvent, MouseEventKind as CrosstermMouseEventKind, MouseButton as CrosstermMouseButton, EnableMouseCapture, DisableMouseCapture},
+    event::{
+        self, Event, KeyEvent, KeyCode as CrosstermKeyCode, KeyModifiers,
+        MouseEvent as CrosstermMouseEvent, MouseEventKind as CrosstermMouseEventKind,
+        MouseButton as CrosstermMouseButton, EnableMouseCapture, DisableMouseCapture,
+        KeyboardEnhancementFlags, PushKeyboardEnhancementFlags, PopKeyboardEnhancementFlags,
+    },
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen, supports_keyboard_enhancement},
 };
 use ratatui::{
     backend::CrosstermBackend,
@@ -20,6 +25,7 @@ use super::{AppEvent, InputEvent, InputSource, KeyCode, Modifiers, MouseButton, 
 /// Ratatui-based terminal backend
 pub struct RatatuiBackend {
     terminal: Terminal<CrosstermBackend<Stdout>>,
+    keyboard_enhancement_enabled: bool,
 }
 
 impl RatatuiBackend {
@@ -27,19 +33,45 @@ impl RatatuiBackend {
     pub fn new() -> io::Result<Self> {
         let backend = CrosstermBackend::new(io::stdout());
         let terminal = Terminal::new(backend)?;
-        Ok(Self { terminal })
+        Ok(Self {
+            terminal,
+            keyboard_enhancement_enabled: false,
+        })
     }
 
     /// Enter raw mode and alternate screen with mouse capture
     pub fn start(&mut self) -> io::Result<()> {
         enable_raw_mode()?;
+
+        // Check terminal support BEFORE entering alternate screen
+        let supports_enhancement = matches!(supports_keyboard_enhancement(), Ok(true));
+
         execute!(io::stdout(), EnterAlternateScreen, EnableMouseCapture)?;
+
+        // Enable Kitty keyboard protocol if supported
+        if supports_enhancement {
+            if execute!(
+                io::stdout(),
+                PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES)
+            )
+            .is_ok()
+            {
+                self.keyboard_enhancement_enabled = true;
+            }
+        }
+
         self.terminal.clear()?;
         Ok(())
     }
 
     /// Leave raw mode and alternate screen
     pub fn stop(&mut self) -> io::Result<()> {
+        // Pop keyboard enhancement flags BEFORE leaving alternate screen
+        if self.keyboard_enhancement_enabled {
+            let _ = execute!(io::stdout(), PopKeyboardEnhancementFlags);
+            self.keyboard_enhancement_enabled = false;
+        }
+
         disable_raw_mode()?;
         execute!(io::stdout(), LeaveAlternateScreen, DisableMouseCapture)?;
         Ok(())
