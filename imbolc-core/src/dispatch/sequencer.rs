@@ -326,6 +326,58 @@ pub(super) fn dispatch_sequencer(
             result.audio_dirty.instruments = true;
             return result;
         }
+        SequencerAction::SetPadInstrument(pad_idx, instrument_id, freq) => {
+            // Get target instrument name first (before mutable borrow)
+            let target_name = state.instruments.instrument(*instrument_id)
+                .map(|i| i.name.clone());
+
+            if let Some(seq) = state.instruments.selected_drum_sequencer_mut() {
+                if let Some(pad) = seq.pads.get_mut(*pad_idx) {
+                    // Clear sample source when switching to instrument
+                    pad.buffer_id = None;
+                    pad.path = None;
+                    // Set instrument trigger
+                    pad.instrument_id = Some(*instrument_id);
+                    pad.trigger_freq = *freq;
+                    // Update name to target instrument name
+                    if let Some(name) = target_name {
+                        pad.name = name;
+                    }
+                }
+            }
+            let mut result = DispatchResult::none();
+            result.audio_dirty.instruments = true;
+            return result;
+        }
+        SequencerAction::ClearPadInstrument(pad_idx) => {
+            if let Some(seq) = state.instruments.selected_drum_sequencer_mut() {
+                if let Some(pad) = seq.pads.get_mut(*pad_idx) {
+                    pad.instrument_id = None;
+                    pad.trigger_freq = 440.0;
+                    // Keep other fields (name, etc.) as-is
+                }
+            }
+            let mut result = DispatchResult::none();
+            result.audio_dirty.instruments = true;
+            return result;
+        }
+        SequencerAction::SetPadTriggerFreq(pad_idx, freq) => {
+            if let Some(seq) = state.instruments.selected_drum_sequencer_mut() {
+                if let Some(pad) = seq.pads.get_mut(*pad_idx) {
+                    pad.trigger_freq = *freq;
+                }
+            }
+            let mut result = DispatchResult::none();
+            result.audio_dirty.instruments = true;
+            return result;
+        }
+        SequencerAction::OpenInstrumentPicker(pad_idx) => {
+            // Store which pad we're editing, then open the picker
+            if let Some(seq) = state.instruments.selected_drum_sequencer_mut() {
+                seq.editing_pad = Some(*pad_idx);
+            }
+            return DispatchResult::with_nav(NavIntent::PushTo("instrument_picker"));
+        }
     }
 
 }

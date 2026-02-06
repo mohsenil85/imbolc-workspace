@@ -4,6 +4,7 @@ use std::time::Duration;
 use super::commands::AudioFeedback;
 use super::engine::{AudioEngine, SCHEDULE_LOOKAHEAD_SECS};
 use super::snapshot::{InstrumentSnapshot, SessionSnapshot};
+use crate::state::InstrumentId;
 
 pub fn tick_drum_sequencer(
     instruments: &mut InstrumentSnapshot,
@@ -14,6 +15,10 @@ pub fn tick_drum_sequencer(
     feedback_tx: &Sender<AudioFeedback>,
     elapsed: Duration,
 ) {
+    // Collect instrument triggers to execute after the main loop
+    // (target_instrument_id, freq, velocity, offset_secs)
+    let mut instrument_triggers: Vec<(InstrumentId, f32, f32, f64)> = Vec::new();
+
     for instrument in &mut instruments.instruments {
         let seq = match &mut instrument.drum_sequencer {
             Some(s) => s,
@@ -91,56 +96,67 @@ pub fn tick_drum_sequencer(
             if engine.is_running() && !instrument.mute {
                 let pattern = &seq.patterns[pattern_idx];
                 for (pad_idx, pad) in seq.pads.iter().enumerate() {
-                    if let Some(buffer_id) = pad.buffer_id {
-                        if let Some(step_data) = pattern
-                            .steps
-                            .get(pad_idx)
-                            .and_then(|s| s.get(step))
-                        {
-                            if step_data.active {
-                                // Probability check: skip hit if random exceeds probability
-                                if step_data.probability < 1.0 {
-                                    *rng_state = rng_state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
-                                    let r = ((*rng_state >> 33) as f32) / (u32::MAX as f32);
-                                    if r > step_data.probability { continue; }
-                                }
+                    if let Some(step_data) = pattern
+                        .steps
+                        .get(pad_idx)
+                        .and_then(|s| s.get(step))
+                    {
+                        if !step_data.active {
+                            continue;
+                        }
 
-                                // Per-track groove settings
-                                let effective_humanize_vel = instrument.groove
-                                    .humanize_velocity
-                                    .unwrap_or(session.humanize.velocity);
-                                let effective_humanize_time = instrument.groove
-                                    .humanize_timing
-                                    .unwrap_or(session.humanize.timing);
-                                let timing_offset_ms = instrument.groove.timing_offset_ms;
+                        // Probability check: skip hit if random exceeds probability
+                        if step_data.probability < 1.0 {
+                            *rng_state = rng_state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+                            let r = ((*rng_state >> 33) as f32) / (u32::MAX as f32);
+                            if r > step_data.probability { continue; }
+                        }
 
-                                // Calculate final offset with timing offset (rush/drag)
-                                let mut final_offset = offset_secs + (timing_offset_ms / 1000.0) as f64;
+                        // Per-track groove settings
+                        let effective_humanize_vel = instrument.groove
+                            .humanize_velocity
+                            .unwrap_or(session.humanize.velocity);
+                        let effective_humanize_time = instrument.groove
+                            .humanize_timing
+                            .unwrap_or(session.humanize.timing);
+                        let timing_offset_ms = instrument.groove.timing_offset_ms;
 
-                                // Timing humanization: jitter offset by up to +/- 20ms
-                                if effective_humanize_time > 0.0 {
-                                    *rng_state = rng_state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
-                                    let r = ((*rng_state >> 33) as f32) / (u32::MAX as f32);
-                                    let jitter = (r - 0.5) * 2.0 * effective_humanize_time * 0.02;
-                                    final_offset = (final_offset + jitter as f64).max(0.0);
-                                }
+                        // Calculate final offset with timing offset (rush/drag)
+                        let mut final_offset = offset_secs + (timing_offset_ms / 1000.0) as f64;
 
-                                let mut amp = (step_data.velocity as f32 / 127.0) * pad.level;
-                                // Velocity humanization using per-track setting
-                                if effective_humanize_vel > 0.0 {
-                                    *rng_state = rng_state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
-                                    let r = ((*rng_state >> 33) as f32) / (u32::MAX as f32);
-                                    let jitter = (r - 0.5) * 2.0 * effective_humanize_vel * (30.0 / 127.0);
-                                    amp = (amp + jitter).clamp(0.01, 1.0);
-                                }
-                                let total_pitch = pad.pitch as i16 + step_data.pitch_offset as i16;
-                                let pitch_rate = 2.0_f32.powf(total_pitch as f32 / 12.0);
-                                let rate = if pad.reverse { -pitch_rate } else { pitch_rate };
-                                let _ = engine.play_drum_hit_to_instrument(
-                                    buffer_id, amp, instrument.id,
-                                    pad.slice_start, pad.slice_end, rate, final_offset,
-                                );
-                            }
+                        // Timing humanization: jitter offset by up to +/- 20ms
+                        if effective_humanize_time > 0.0 {
+                            *rng_state = rng_state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+                            let r = ((*rng_state >> 33) as f32) / (u32::MAX as f32);
+                            let jitter = (r - 0.5) * 2.0 * effective_humanize_time * 0.02;
+                            final_offset = (final_offset + jitter as f64).max(0.0);
+                        }
+
+                        let mut amp = (step_data.velocity as f32 / 127.0) * pad.level;
+                        // Velocity humanization using per-track setting
+                        if effective_humanize_vel > 0.0 {
+                            *rng_state = rng_state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+                            let r = ((*rng_state >> 33) as f32) / (u32::MAX as f32);
+                            let jitter = (r - 0.5) * 2.0 * effective_humanize_vel * (30.0 / 127.0);
+                            amp = (amp + jitter).clamp(0.01, 1.0);
+                        }
+
+                        // Calculate pitch offset (used for both samples and instruments)
+                        let total_pitch = pad.pitch as i16 + step_data.pitch_offset as i16;
+
+                        // Check if this pad triggers an instrument (one-shot synth)
+                        if let Some(target_instrument_id) = pad.instrument_id {
+                            // Instrument trigger mode: collect for execution after loop
+                            let freq = pad.trigger_freq * 2.0_f32.powf(total_pitch as f32 / 12.0);
+                            instrument_triggers.push((target_instrument_id, freq, amp, final_offset));
+                        } else if let Some(buffer_id) = pad.buffer_id {
+                            // Sample mode: play one-shot sample
+                            let pitch_rate = 2.0_f32.powf(total_pitch as f32 / 12.0);
+                            let rate = if pad.reverse { -pitch_rate } else { pitch_rate };
+                            let _ = engine.play_drum_hit_to_instrument(
+                                buffer_id, amp, instrument.id,
+                                pad.slice_start, pad.slice_end, rate, final_offset,
+                            );
                         }
                     }
                 }
@@ -151,5 +167,10 @@ pub fn tick_drum_sequencer(
             });
             seq.last_played_step = Some(step);
         }
+    }
+
+    // Execute collected instrument triggers (needs immutable borrow of instruments)
+    for (target_id, freq, amp, offset) in instrument_triggers {
+        let _ = engine.trigger_instrument_oneshot(target_id, freq, amp, offset, instruments, session);
     }
 }

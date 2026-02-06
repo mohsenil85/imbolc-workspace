@@ -355,6 +355,10 @@ define_action_enum! {
         VelDown => "vel_down",
         StepPitchUp => "step_pitch_up",
         StepPitchDown => "step_pitch_down",
+        AssignInstrument => "assign_instrument",
+        ClearInstrument => "clear_instrument",
+        FreqUp => "freq_up",
+        FreqDown => "freq_down",
     }
 }
 

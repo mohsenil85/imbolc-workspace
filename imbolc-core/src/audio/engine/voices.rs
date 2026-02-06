@@ -705,4 +705,177 @@ impl AudioEngine {
 
         Ok(())
     }
+
+    /// Trigger an instrument as a one-shot (spawn voice + immediate release).
+    /// The voice goes through Attack → Release, skipping sustained hold.
+    /// Used by drum sequencer pads that trigger synth instruments.
+    pub fn trigger_instrument_oneshot(
+        &mut self,
+        target_instrument_id: InstrumentId,
+        freq: f32,
+        velocity: f32,
+        offset_secs: f64,
+        state: &InstrumentState,
+        session: &SessionState,
+    ) -> Result<(), String> {
+        let instrument = state.instrument(target_instrument_id)
+            .ok_or_else(|| format!("No instrument with id {}", target_instrument_id))?;
+
+        // Skip unsupported instrument types
+        if instrument.source.is_audio_input() || instrument.source.is_bus_in() || instrument.source.is_vst() {
+            return Ok(());
+        }
+
+        // Sampler instruments need buffer - skip if none
+        if (instrument.source.is_sample() || instrument.source.is_time_stretch())
+            && instrument.sampler_config.as_ref().and_then(|c| c.buffer_id).is_none()
+        {
+            return Ok(());
+        }
+
+        let backend = self.backend.as_ref().ok_or("Not connected")?;
+
+        // Get the audio bus where voices should write their output
+        let source_out_bus = self.bus_allocator.get_audio_bus(target_instrument_id, "source_out").unwrap_or(16);
+
+        // Create a group for this one-shot voice chain
+        let group_id = self.next_node_id;
+        self.next_node_id += 1;
+
+        // Allocate per-voice control buses
+        let (voice_freq_bus, voice_gate_bus, voice_vel_bus) = self.voice_allocator.alloc_control_buses();
+
+        let mut messages: Vec<BackendMessage> = Vec::new();
+
+        // 1. Create group
+        messages.push(BackendMessage {
+            addr: "/g_new".to_string(),
+            args: vec![
+                RawArg::Int(group_id),
+                RawArg::Int(1), // addToTail
+                RawArg::Int(GROUP_SOURCES),
+            ],
+        });
+
+        // 2. MIDI control node (starts with gate=1)
+        let midi_node_id = self.next_node_id;
+        self.next_node_id += 1;
+        {
+            // Convert freq to approximate MIDI note for the note parameter
+            // (used for display, the actual freq comes from freq parameter)
+            let note = 69.0 + 12.0 * (freq / 440.0).log2();
+            let note_clamped = note.clamp(0.0, 127.0);
+
+            let mut args: Vec<RawArg> = vec![
+                RawArg::Str("imbolc_midi".to_string()),
+                RawArg::Int(midi_node_id),
+                RawArg::Int(1), // addToTail
+                RawArg::Int(group_id),
+            ];
+            let params: Vec<(String, f32)> = vec![
+                ("note".to_string(), note_clamped),
+                ("freq".to_string(), freq),
+                ("vel".to_string(), velocity),
+                ("gate".to_string(), 1.0),
+                ("freq_out".to_string(), voice_freq_bus as f32),
+                ("gate_out".to_string(), voice_gate_bus as f32),
+                ("vel_out".to_string(), voice_vel_bus as f32),
+            ];
+            for (name, value) in &params {
+                args.push(RawArg::Str(name.clone()));
+                args.push(RawArg::Float(*value));
+            }
+            messages.push(BackendMessage {
+                addr: "/s_new".to_string(),
+                args,
+            });
+        }
+
+        // 3. Source synth
+        let source_node_id = self.next_node_id;
+        self.next_node_id += 1;
+        let is_mono = instrument.channel_config.is_mono();
+        {
+            let mut args: Vec<RawArg> = vec![
+                RawArg::Str(Self::source_synth_def(instrument.source, &session.custom_synthdefs, is_mono)),
+                RawArg::Int(source_node_id),
+                RawArg::Int(1),
+                RawArg::Int(group_id),
+            ];
+            // Source params
+            for p in &instrument.source_params {
+                args.push(RawArg::Str(p.name.clone()));
+                args.push(RawArg::Float(p.value.to_f32()));
+            }
+            // Wire control inputs
+            args.push(RawArg::Str("freq_in".to_string()));
+            args.push(RawArg::Float(voice_freq_bus as f32));
+            args.push(RawArg::Str("gate_in".to_string()));
+            args.push(RawArg::Float(voice_gate_bus as f32));
+            // Amp envelope (ADSR)
+            args.push(RawArg::Str("attack".to_string()));
+            args.push(RawArg::Float(instrument.amp_envelope.attack));
+            args.push(RawArg::Str("decay".to_string()));
+            args.push(RawArg::Float(instrument.amp_envelope.decay));
+            args.push(RawArg::Str("sustain".to_string()));
+            args.push(RawArg::Float(instrument.amp_envelope.sustain));
+            args.push(RawArg::Str("release".to_string()));
+            args.push(RawArg::Float(instrument.amp_envelope.release));
+            // Output to source_out_bus
+            args.push(RawArg::Str("out".to_string()));
+            args.push(RawArg::Float(source_out_bus as f32));
+
+            // Wire LFO mod inputs if enabled
+            if instrument.lfo.enabled {
+                if let Some(lfo_bus) = self.bus_allocator.get_control_bus(target_instrument_id, "lfo_out") {
+                    match instrument.lfo.target {
+                        LfoTarget::Amplitude => {
+                            args.push(RawArg::Str("amp_mod_in".to_string()));
+                            args.push(RawArg::Float(lfo_bus as f32));
+                        }
+                        LfoTarget::Pitch => {
+                            args.push(RawArg::Str("pitch_mod_in".to_string()));
+                            args.push(RawArg::Float(lfo_bus as f32));
+                        }
+                        _ => {} // Other targets handled in routing
+                    }
+                }
+            }
+
+            messages.push(BackendMessage {
+                addr: "/s_new".to_string(),
+                args,
+            });
+        }
+
+        // Send the spawn bundle
+        backend
+            .send_bundle(messages, offset_secs)
+            .map_err(|e| e.to_string())?;
+
+        // 4. Schedule gate=0 shortly after spawn to trigger release phase
+        //    Small delay (5ms) ensures attack transient is heard
+        let release_offset = offset_secs + 0.005;
+        backend
+            .set_params_bundled(midi_node_id, &[("gate", 0.0)], release_offset)
+            .map_err(|e| e.to_string())?;
+
+        // 5. Schedule cleanup after envelope completes
+        let release_time = instrument.amp_envelope.release;
+        let cleanup_offset = release_offset + release_time as f64 + 0.5;
+        backend
+            .send_bundle(
+                vec![BackendMessage {
+                    addr: "/n_free".to_string(),
+                    args: vec![RawArg::Int(group_id)],
+                }],
+                cleanup_offset,
+            )
+            .map_err(|e| e.to_string())?;
+
+        // Note: We don't add this to voice_allocator since it's a one-shot
+        // that will auto-free. No need for voice stealing or tracking.
+
+        Ok(())
+    }
 }

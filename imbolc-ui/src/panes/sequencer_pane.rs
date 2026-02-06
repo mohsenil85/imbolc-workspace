@@ -168,6 +168,32 @@ impl Pane for SequencerPane {
             ActionId::Sequencer(SequencerActionId::PitchDownOctave) => Action::Sequencer(SequencerAction::AdjustPadPitch(self.cursor_pad, -12)),
             ActionId::Sequencer(SequencerActionId::StepPitchUp) => Action::Sequencer(SequencerAction::AdjustStepPitch(self.cursor_pad, self.cursor_step, 1)),
             ActionId::Sequencer(SequencerActionId::StepPitchDown) => Action::Sequencer(SequencerAction::AdjustStepPitch(self.cursor_pad, self.cursor_step, -1)),
+            ActionId::Sequencer(SequencerActionId::AssignInstrument) => {
+                Action::Sequencer(SequencerAction::OpenInstrumentPicker(self.cursor_pad))
+            }
+            ActionId::Sequencer(SequencerActionId::ClearInstrument) => {
+                Action::Sequencer(SequencerAction::ClearPadInstrument(self.cursor_pad))
+            }
+            ActionId::Sequencer(SequencerActionId::FreqUp) => {
+                // Increase trigger freq by a semitone
+                if let Some(seq) = state.instruments.selected_drum_sequencer() {
+                    if let Some(pad) = seq.pads.get(self.cursor_pad) {
+                        let new_freq = pad.trigger_freq * 2.0_f32.powf(1.0 / 12.0);
+                        return Action::Sequencer(SequencerAction::SetPadTriggerFreq(self.cursor_pad, new_freq));
+                    }
+                }
+                Action::None
+            }
+            ActionId::Sequencer(SequencerActionId::FreqDown) => {
+                // Decrease trigger freq by a semitone
+                if let Some(seq) = state.instruments.selected_drum_sequencer() {
+                    if let Some(pad) = seq.pads.get(self.cursor_pad) {
+                        let new_freq = pad.trigger_freq * 2.0_f32.powf(-1.0 / 12.0);
+                        return Action::Sequencer(SequencerAction::SetPadTriggerFreq(self.cursor_pad, new_freq));
+                    }
+                }
+                Action::None
+            }
             _ => Action::None,
         }
     }
@@ -334,14 +360,26 @@ impl Pane for SequencerPane {
             let pad_label = format!("Pad {:>2}", self.cursor_pad + 1);
             buf.draw_line(Rect::new(cx, detail_y, 8, 1), &[(&pad_label, Style::new().fg(Color::ORANGE).bold())]);
 
-            let name_display = if pad.name.is_empty() {
-                "(no sample)"
+            // Display either instrument trigger info or sample name
+            let (name_display, name_color) = if pad.is_instrument_trigger() {
+                // Show frequency for instrument triggers
+                let freq_str = format!("{:.0}Hz", pad.trigger_freq);
+                let name = if pad.name.is_empty() {
+                    format!("[Inst] {}", freq_str)
+                } else if pad.name.len() > 14 {
+                    format!("{} {}", &pad.name[..14], freq_str)
+                } else {
+                    format!("{} {}", pad.name, freq_str)
+                };
+                (name, Color::CYAN)
+            } else if pad.name.is_empty() {
+                ("(empty)".to_string(), Color::DARK_GRAY)
             } else if pad.name.len() > 20 {
-                &pad.name[..20]
+                (pad.name[..20].to_string(), Color::WHITE)
             } else {
-                &pad.name
+                (pad.name.clone(), Color::WHITE)
             };
-            buf.draw_line(Rect::new(cx + 8, detail_y, 22, 1), &[(name_display, Style::new().fg(Color::WHITE))]);
+            buf.draw_line(Rect::new(cx + 8, detail_y, 22, 1), &[(&name_display, Style::new().fg(name_color))]);
         }
 
         // Level bar
@@ -397,7 +435,7 @@ impl Pane for SequencerPane {
         let help_y = rect.y + rect.height - 2;
         buf.draw_line(
             Rect::new(cx, help_y, rect.width.saturating_sub(4), 1),
-            &[("Enter:toggle  Space:play  s:sample  c:chop  r:rev  -/=:pitch  C-Up/Dn:step pitch", Style::new().fg(Color::DARK_GRAY))],
+            &[("Enter:toggle  Space:play  s:sample  i:inst  I:clear  c:chop  r:rev  -/=:pitch", Style::new().fg(Color::DARK_GRAY))],
         );
     }
 

@@ -167,6 +167,10 @@ bindings = [
   { key = "_", action = "vel_down", description = "Decrease step velocity" },
   { key = "Ctrl+Up", action = "step_pitch_up", description = "Step pitch offset up" },
   { key = "Ctrl+Down", action = "step_pitch_down", description = "Step pitch offset down" },
+  { key = "i", action = "assign_instrument", description = "Assign instrument to pad" },
+  { key = "I", action = "clear_instrument", description = "Clear instrument from pad" },
+  { key = "Ctrl+=", action = "freq_up", description = "Trigger freq up semitone" },
+  { key = "Ctrl+-", action = "freq_down", description = "Trigger freq down semitone" },
 ]
 
 [layers.instrument_edit]

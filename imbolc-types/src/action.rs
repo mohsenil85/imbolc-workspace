@@ -566,6 +566,14 @@ pub enum SequencerAction {
     },
     /// Copy steps within a region to the clipboard
     CopySteps { start_pad: usize, end_pad: usize, start_step: usize, end_step: usize },
+    /// Assign an instrument to a pad for one-shot triggering
+    SetPadInstrument(usize, InstrumentId, f32), // pad_idx, instrument_id, freq
+    /// Clear instrument assignment from a pad
+    ClearPadInstrument(usize), // pad_idx
+    /// Adjust the trigger frequency for a pad
+    SetPadTriggerFreq(usize, f32), // pad_idx, freq
+    /// Set the editing pad and open instrument picker
+    OpenInstrumentPicker(usize), // pad_idx
 }
 
 /// Data carried by InstrumentAction::Update to apply edits without dispatch reading pane state.

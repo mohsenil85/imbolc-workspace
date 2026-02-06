@@ -1,6 +1,7 @@
 //! Drum sequencer types.
 
 use super::sampler::{BufferId, Slice, SliceId};
+use crate::InstrumentId;
 use serde::{Deserialize, Serialize};
 
 pub const NUM_PADS: usize = 12;
@@ -41,8 +42,17 @@ pub struct ChopperState {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DrumPad {
+    // Sample source
     pub buffer_id: Option<BufferId>,
     pub path: Option<String>,
+
+    // Instrument trigger (one-shot)
+    #[serde(default)]
+    pub instrument_id: Option<InstrumentId>,
+    #[serde(default = "default_trigger_freq")]
+    pub trigger_freq: f32, // Base frequency for this pad (default 440.0)
+
+    // Common
     pub name: String,
     pub level: f32,       // 0.0-1.0, default 0.8
     pub slice_start: f32, // 0.0-1.0, default 0.0
@@ -51,11 +61,17 @@ pub struct DrumPad {
     pub pitch: i8,        // semitone offset, -24 to +24
 }
 
+fn default_trigger_freq() -> f32 {
+    440.0
+}
+
 impl Default for DrumPad {
     fn default() -> Self {
         Self {
             buffer_id: None,
             path: None,
+            instrument_id: None,
+            trigger_freq: 440.0,
             name: String::new(),
             level: 0.8,
             slice_start: 0.0,
@@ -63,6 +79,13 @@ impl Default for DrumPad {
             reverse: false,
             pitch: 0,
         }
+    }
+}
+
+impl DrumPad {
+    /// Returns true if this pad triggers an instrument (one-shot) rather than a sample.
+    pub fn is_instrument_trigger(&self) -> bool {
+        self.instrument_id.is_some()
     }
 }
 
@@ -107,6 +130,9 @@ pub struct DrumSequencerState {
     /// Current position within the chain (runtime)
     #[serde(skip)]
     pub chain_position: usize,
+    /// The pad currently being edited (for instrument picker modal)
+    #[serde(skip)]
+    pub editing_pad: Option<usize>,
 }
 
 impl DrumSequencerState {
@@ -127,6 +153,7 @@ impl DrumSequencerState {
             chain: Vec::new(),
             chain_enabled: false,
             chain_position: 0,
+            editing_pad: None,
         }
     }
 
