@@ -15,16 +15,16 @@ This directory contains technical documentation for the Imbolc DAW.
 | Document | Description |
 |----------|-------------|
 | [audio-routing.md](audio-routing.md) | Bus model, insert vs send effects, node ordering |
-| [polyphonic-voice-allocation.md](polyphonic-voice-allocation.md) | Voice stealing, note tracking, polyphony modes |
-| [lfo-targets-implementation.md](lfo-targets-implementation.md) | LFO modulation targets and implementation |
+| [polyphonic-voice-allocation.md](polyphonic-voice-allocation.md) | Voice stealing, note tracking, polyphony modes (Implemented) |
+| [lfo-targets-implementation.md](lfo-targets-implementation.md) | LFO modulation targets and implementation (Partially Implemented) |
 
 ## Features
 
 | Document | Description |
 |----------|-------------|
 | [keybindings.md](keybindings.md) | Keybinding philosophy, conventions, configuration |
-| [custom-synthdef-plan.md](custom-synthdef-plan.md) | Custom SynthDef system design and integration |
-| [vst3-support-roadmap.md](vst3-support-roadmap.md) | VST3 plugin support roadmap and implementation |
+| [custom-synthdef-plan.md](custom-synthdef-plan.md) | Custom SynthDef system — Phase 1 complete (import & playback) |
+| [vst3-support-roadmap.md](vst3-support-roadmap.md) | VST3 plugin support — Plan A complete (params, automation, state) |
 
 ## Persistence
 
@@ -32,25 +32,27 @@ This directory contains technical documentation for the Imbolc DAW.
 |----------|-------------|
 | [sqlite-persistence.md](sqlite-persistence.md) | SQLite schema, save/load implementation |
 
-## Sequencing
+## Sequencing (Reference)
+
+These documents use Java syntax from an earlier prototype. Concepts remain valid; see `imbolc-types/src/state/` for Rust implementations.
 
 | Document | Description |
 |----------|-------------|
 | [sequencer-musical-settings.md](sequencer-musical-settings.md) | Musical settings for the drum sequencer |
 | [sequencer-swing.md](sequencer-swing.md) | Swing and groove implementation |
 
-## Network
+## Network (Planned)
 
 | Document | Description |
 |----------|-------------|
-| [network-scenarios.md](network-scenarios.md) | Deployment scenarios: solo, LAN jam, pro setup |
+| [network-scenarios.md](network-scenarios.md) | Deployment scenarios: solo, LAN jam, pro setup (Not Yet Implemented) |
 
 ## Development
 
 | Document | Description |
 |----------|-------------|
 | [ai-coding-affordances.md](ai-coding-affordances.md) | AI coding agent guidance and patterns |
-| [ai-integration.md](ai-integration.md) | AI tool integration notes |
+| [ai-integration.md](ai-integration.md) | AI tool integration design (Not Implemented) |
 | [lessons-learned.md](lessons-learned.md) | Development lessons and retrospectives |
 
 ## Archive

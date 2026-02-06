@@ -1,5 +1,10 @@
 # Network Deployment Scenarios
 
+> **Status: Planned Feature - Not Yet Implemented**
+>
+> This document describes the planned network/collaboration feature.
+> The imbolc-net crate exists but is not yet functional.
+
 This document describes common deployment scenarios for Imbolc, from solo laptop use to multi-node jam sessions.
 
 ## Core Principles

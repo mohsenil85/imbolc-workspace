@@ -1,5 +1,8 @@
 # Sequencer Musical Settings
 
+> **Note:** This document uses Java/record syntax from an earlier prototype.
+> Concepts remain valid; see `imbolc-types/src/state/` for Rust implementations.
+
 ## Overview
 
 The sequencer view includes musical context settings that affect note display, input behavior, and playback. Settings are global by default but can be overridden per-track.

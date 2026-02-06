@@ -1,5 +1,8 @@
 # Sequencer & Swing
 
+> **Note:** This document uses Java/record syntax from an earlier prototype.
+> Concepts remain valid; see `imbolc-types/src/state/` for Rust implementations.
+
 ## Overview
 
 Step sequencer with advanced swing/groove controls for humanized, musical timing.

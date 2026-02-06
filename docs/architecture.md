@@ -130,21 +130,25 @@ is called only when the layer stack resolves a key to an action string; otherwis
 | `server` | `ServerPane` | `F5` | SuperCollider server status/control |
 | `track` | `TrackPane` | `F3` | Timeline overview (Arrangement view) |
 | `automation` | `AutomationPane` | `F7` | Automation lanes and point editing |
-| `waveform` | `WaveformPane` | `F2` (context) | Recorded/input waveform view |
+| `eq` | `EqPane` | `F8` | 12-band parametric EQ editor |
+| `waveform` | `WaveformPane` | `F2` (context) | Waveform, spectrum, oscilloscope, level meter |
 | `home` | `HomePane` | — | Welcome screen |
 | `add` | `AddPane` | — | Instrument creation menu |
 | `add_effect` | `AddEffectPane` | — | Add an effect (including VST effects) to the current instrument |
 | `instrument_edit` | `InstrumentEditPane` | — | Edit instrument params/effects/filter |
+| `instrument_picker` | `InstrumentPickerPane` | — | Select instrument for actions |
 | `vst_params` | `VstParamPane` | — | VST parameter browser (search/adjust/automation) |
 | `frame_edit` | `FrameEditPane` | `Ctrl+f` | Session settings (BPM, key, etc.) |
 | `file_browser` | `FileBrowserPane` | — | File selection for imports |
 | `sample_chopper` | `SampleChopperPane` | — | Slice audio and assign pads |
 | `command_palette` | `CommandPalettePane` | `Ctrl+p` | Search and execute commands |
+| `pane_switcher` | `PaneSwitcherPane` | `;` | Global pane navigation |
 | `confirm` | `ConfirmPane` | — | Confirmation dialog |
-| `midi_settings` | `MidiSettingsPane` | — | Configure MIDI input devices |
-| `project_browser` | `ProjectBrowserPane` | — | Open/manage projects |
-| `save_as` | `SaveAsPane` | — | Save project as new file |
-| `eq` | `EqPane` | — | Graphic EQ editor |
+| `quit_prompt` | `QuitPromptPane` | — | Quit confirmation with unsaved changes warning |
+| `midi_settings` | `MidiSettingsPane` | `Ctrl+m` | Configure MIDI input devices |
+| `project_browser` | `ProjectBrowserPane` | `Ctrl+o` | Open/manage projects |
+| `save_as` | `SaveAsPane` | `Ctrl+S` | Save project as new file |
+| `docs` | `DocsPane` | — | Built-in documentation viewer |
 | `help` | `HelpPane` | `?` | Context-sensitive keybinding help |
 
 ### Pane Communication

@@ -18,19 +18,39 @@ IMBOLC_NO_AUDIO=1 cargo run -p imbolc-ui
 
 ## Features
 
-- **Instrument model:** source + filter + FX chain + LFO (15 modulation targets) + envelope + mixer routing.
-- **Sources:** classic waves + noise, sync, FM/phase mod, pluck, formant, gendy, chaos, additive, wavetable; audio in/bus in; polyphonic sampler; drum kit; custom SynthDefs; VST instruments (experimental).
-- **Filters:** low-pass, high-pass, band-pass.
-- **Effects:** delay, reverb, gate, tape/sidechain comp, chorus, flanger, phaser, tremolo, distortion, bitcrusher, wavefolder, saturator, tilt EQ, stereo widener, freq shifter, limiter, pitch shifter, vinyl, cabinet, granular delay/freeze, convolution reverb.
-- **Sequencing:** multi-track piano roll with per-note velocity, probability, and swing.
-- **Drum Machine:** 16-step drum sequencer with per-step velocity and sample selection.
-- **Sampler:** Polyphonic sampler and a "Chopper" for slice-based beat making.
-- **Mixer:** channel/bus levels, pan, mute/solo, 8 buses, sends, master control.
-- **Automation:** per-track automation lanes for parameters (including VST params).
-- **Productivity:** Full Undo/Redo history, Clipboard (copy/paste notes and steps), and a Command Palette (`Ctrl+p`) for quick actions.
-- **Analysis:** Real-time master level meter, spectrum analyzer, oscilloscope, and waveform view for audio input.
-- **Low-latency playback:** Dedicated audio thread (~1ms tick) using **OSC bundles with NTP timetags** for sample-accurate scheduling, decoupled from UI jitter.
-- **Smart Voice Stealing:** Advanced polyphony management with multi-criteria scoring (prioritizing released voices, then lower velocity and older notes), optimized same-pitch retriggering, 5ms anti-click fades for stolen voices, and intelligent lifecycle cleanup.
+### Audio Engine (Backend)
+
+- **Instrument model:** Source + filter + FX chain + LFO (15 modulation targets) + envelope + mixer routing.
+- **Sources (51 types):** Classic waves, FM/phase mod, physical models (pluck, bowed, blown, membrane), mallet percussion (marimba, vibes, kalimba, steel drum), plucked strings (guitar, harp, koto), drum synthesis, classic synths (choir, organ, brass), experimental (gendy, chaos), additive/wavetable/granular synthesis, audio in/bus in, pitched sampler, time stretch, kit, custom SynthDefs, VST instruments.
+- **Filters:** Low-pass, high-pass, band-pass.
+- **Effects (37 types):** Delay, reverb, gate, tape/sidechain comp, chorus, flanger, phaser, tremolo, distortion, bitcrusher, wavefolder, saturator, tilt EQ, stereo widener, freq shifter, limiter, pitch shifter, vinyl, cabinet, granular delay/freeze, convolution reverb, vocoder, ring mod, autopan, resonator, multiband comp, para EQ, spectral freeze, glitch, Leslie, spring reverb, env follower, mid/side, crossfader, denoise, autotune, wah pedal.
+- **Smart voice stealing:** Multi-criteria scoring (released voices first, then lower velocity, older notes), same-pitch retriggering, 5ms anti-click fades.
+- **Low-latency playback:** Dedicated audio thread (~1ms tick), OSC bundles with NTP timetags for sample-accurate scheduling.
+- **Persistence:** SQLite project files with full state serialization.
+
+### Sequencing & Arrangement
+
+- **Piano roll:** Multi-track note editor with per-note velocity, probability, and swing.
+- **Drum sequencer:** 16-step sequencer with per-step velocity and sample selection.
+- **Sample chopper:** Slice-based beat making with auto-slice and manual markers.
+- **Arrangement view:** Clip-based timeline with placement and editing.
+- **Automation:** Per-track automation lanes for any parameter (including VST params).
+- **Arpeggiator:** Configurable direction, octave range, gate length.
+
+### Mixer & Routing
+
+- **Mixer:** Channel/bus levels, pan, mute/solo, 8 buses, sends, master control.
+- **Bus routing:** Insert and send effects, flexible output targets.
+- **12-band parametric EQ:** Per-instrument frequency shaping.
+
+### Terminal UI (Frontend)
+
+- **27 panes:** Instrument list, instrument editor, piano roll, sequencer, mixer, automation, EQ, VST params, server control, waveform/spectrum/oscilloscope, project browser, command palette, help, and more.
+- **Keyboard-first navigation:** Single-key actions, context-sensitive help (`?`), command palette (`Ctrl+p`).
+- **Performance mode:** Piano/pad keyboard overlay (`/`) for live playing.
+- **Analysis:** Real-time master level meter, spectrum analyzer, oscilloscope, braille waveform display.
+- **Productivity:** Full undo/redo history, clipboard (copy/paste notes and steps).
+- **Project management:** Save/load, project browser, recent projects.
 
 ## UI tour (defaults)
 

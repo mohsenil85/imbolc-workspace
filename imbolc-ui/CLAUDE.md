@@ -37,7 +37,7 @@ Core library lives in `../imbolc-core/`. Types are in `../imbolc-types/`. See th
 
 ## Panes
 
-Single-file panes:
+Single-file panes (20):
 - `add_effect_pane.rs` — Effect selector modal
 - `add_pane.rs` — Add instrument/bus modal
 - `command_palette_pane.rs` — Command palette
@@ -48,7 +48,9 @@ Single-file panes:
 - `help_pane.rs` — Help overlay
 - `home_pane.rs` — Home/welcome screen
 - `instrument_pane.rs` — Instrument list
+- `instrument_picker_pane.rs` — Instrument selection for actions
 - `midi_settings_pane.rs` — MIDI configuration
+- `pane_switcher_pane.rs` — Global pane navigation
 - `project_browser_pane.rs` — Project browser
 - `quit_prompt_pane.rs` — Quit confirmation
 - `sample_chopper_pane.rs` — Sample slicing
@@ -57,8 +59,9 @@ Single-file panes:
 - `track_pane.rs` — Track view
 - `waveform_pane.rs` — Waveform display
 
-Module panes (input/rendering split):
+Module panes (input/rendering split, 7):
 - `automation_pane/` — Automation lane editor
+- `docs_pane/` — Built-in documentation viewer
 - `instrument_edit_pane/` — Instrument parameter editor
 - `mixer_pane/` — Mixer view
 - `piano_roll_pane/` — Note editor

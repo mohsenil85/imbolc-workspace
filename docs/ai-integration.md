@@ -1,5 +1,10 @@
 # AI Integration with Haiku
 
+> **Status: Design Document - Not Implemented**
+>
+> This document describes a potential AI integration feature using Claude Haiku.
+> It has not been implemented in the current codebase.
+
 ## Overview
 
 Use Claude Haiku as a lightweight, fast AI backend for natural language sound design commands. Haiku parses user intent and returns structured actions that the app executes.
