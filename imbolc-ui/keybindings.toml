@@ -46,6 +46,8 @@ bindings = [
   { key = "Ctrl+a", action = "select_all", description = "Select all" },
   { key = "Ctrl+n", action = "add_instrument", description = "Add instrument" },
   { key = ":", action = "command_palette", description = "Command palette" },
+  { key = "F6", action = "open_docs", description = "Docs: selected instrument" },
+  { key = "Shift+F6", action = "open_learn", description = "Learn: topic browser" },
   { key = ";", action = "pane_switcher", description = "Pane switcher" },
   { key = "Space", action = "play_stop", description = "Play / Stop" },
   { key = "M", action = "click_track_toggle", description = "Toggle metronome" },
