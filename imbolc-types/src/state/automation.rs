@@ -94,6 +94,14 @@ pub enum AutomationTarget {
     VstParam(InstrumentId, u32),
     /// EQ band parameter (instrument_id, band_index 0-11, param: 0=freq 1=gain 2=q)
     EqBandParam(InstrumentId, usize, usize),
+    /// Per-track swing amount (0.0-1.0)
+    TrackSwing(InstrumentId),
+    /// Per-track velocity humanization (0.0-1.0)
+    TrackHumanizeVelocity(InstrumentId),
+    /// Per-track timing humanization (0.0-1.0)
+    TrackHumanizeTiming(InstrumentId),
+    /// Per-track timing offset (-50.0 to +50.0 ms)
+    TrackTimingOffset(InstrumentId),
 }
 
 impl AutomationTarget {
@@ -116,6 +124,10 @@ impl AutomationTarget {
             AutomationTarget::SendLevel(id, _) => Some(*id),
             AutomationTarget::VstParam(id, _) => Some(*id),
             AutomationTarget::EqBandParam(id, _, _) => Some(*id),
+            AutomationTarget::TrackSwing(id)
+            | AutomationTarget::TrackHumanizeVelocity(id)
+            | AutomationTarget::TrackHumanizeTiming(id)
+            | AutomationTarget::TrackTimingOffset(id) => Some(*id),
             AutomationTarget::BusLevel(_) | AutomationTarget::Bpm => None,
         }
     }
@@ -150,6 +162,10 @@ impl AutomationTarget {
                 };
                 format!("EQ B{} {}", band + 1, param_name)
             }
+            AutomationTarget::TrackSwing(_) => "Track Swing".to_string(),
+            AutomationTarget::TrackHumanizeVelocity(_) => "Track Humanize Vel".to_string(),
+            AutomationTarget::TrackHumanizeTiming(_) => "Track Humanize Time".to_string(),
+            AutomationTarget::TrackTimingOffset(_) => "Track Timing Offset".to_string(),
         }
     }
 
@@ -174,6 +190,10 @@ impl AutomationTarget {
             AutomationTarget::Bpm => "BPM",
             AutomationTarget::VstParam(_, _) => "VstP",
             AutomationTarget::EqBandParam(_, _, _) => "EqBd",
+            AutomationTarget::TrackSwing(_) => "TkSwg",
+            AutomationTarget::TrackHumanizeVelocity(_) => "TkHVl",
+            AutomationTarget::TrackHumanizeTiming(_) => "TkHTm",
+            AutomationTarget::TrackTimingOffset(_) => "TkOfs",
         }
     }
 
@@ -190,6 +210,10 @@ impl AutomationTarget {
             AutomationTarget::EnvelopeDecay(id),
             AutomationTarget::EnvelopeSustain(id),
             AutomationTarget::EnvelopeRelease(id),
+            AutomationTarget::TrackSwing(id),
+            AutomationTarget::TrackHumanizeVelocity(id),
+            AutomationTarget::TrackHumanizeTiming(id),
+            AutomationTarget::TrackTimingOffset(id),
         ]
     }
 
@@ -228,6 +252,10 @@ impl AutomationTarget {
                 1 => (-24.0, 24.0),    // gain
                 _ => (0.1, 10.0),      // Q
             },
+            AutomationTarget::TrackSwing(_) => (0.0, 1.0),
+            AutomationTarget::TrackHumanizeVelocity(_) => (0.0, 1.0),
+            AutomationTarget::TrackHumanizeTiming(_) => (0.0, 1.0),
+            AutomationTarget::TrackTimingOffset(_) => (-50.0, 50.0),
         }
     }
 }

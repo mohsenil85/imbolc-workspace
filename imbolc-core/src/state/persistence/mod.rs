@@ -46,7 +46,7 @@ pub fn load_project(path: &Path) -> SqlResult<(SessionState, InstrumentState)> {
 }
 
 /// Current blob format version. Increment when the serialized schema changes.
-const BLOB_FORMAT_VERSION: i32 = 1;
+const BLOB_FORMAT_VERSION: i32 = 2;
 
 fn load_project_blob(conn: &SqlConnection) -> SqlResult<(SessionState, InstrumentState)> {
     let (format_version, session_bytes, instrument_bytes): (i32, Vec<u8>, Vec<u8>) = conn.query_row(

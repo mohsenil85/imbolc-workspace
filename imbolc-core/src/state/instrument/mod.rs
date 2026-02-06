@@ -12,8 +12,8 @@ pub use envelope::*;
 
 // Re-export types from imbolc-types
 pub use imbolc_types::{
-    InstrumentId, InstrumentSection, MixerBus, MixerSend,
-    ModSource, ModulatedParam, OutputTarget,
+    GrooveConfig, InstrumentId, InstrumentSection, MixerBus, MixerSend,
+    ModSource, ModulatedParam, OutputTarget, SwingGrid,
 };
 
 use serde::{Serialize, Deserialize};
@@ -156,6 +156,8 @@ pub struct Instrument {
     pub layer_group: Option<u32>,
     /// Counter for allocating unique EffectIds
     pub next_effect_id: EffectId,
+    /// Per-track groove settings (swing, humanization, timing offset)
+    pub groove: GrooveConfig,
 }
 
 impl Instrument {
@@ -201,6 +203,7 @@ impl Instrument {
             convolution_ir_path: None,
             layer_group: None,
             next_effect_id: 0,
+            groove: GrooveConfig::default(),
         }
     }
 

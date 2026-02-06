@@ -7,6 +7,7 @@ use super::engine::{AudioEngine, SCHEDULE_LOOKAHEAD_SECS};
 use crate::state::arpeggiator::ArpPlayState;
 use super::snapshot::{AutomationSnapshot, InstrumentSnapshot, PianoRollSnapshot, SessionSnapshot};
 use crate::state::automation::AutomationTarget;
+use imbolc_types::SwingGrid;
 
 fn next_random(state: &mut u64) -> f32 {
     *state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
@@ -103,14 +104,32 @@ pub fn tick_playback(
 
     if let Some((note_ons, _old_playhead, new_playhead, tick_delta, secs_per_tick)) = playback_data {
         if engine.is_running() {
-            let swing_amount = piano_roll.swing_amount;
-            let humanize_vel = session.humanize.velocity;
-            let humanize_time = session.humanize.timing;
+            // Global settings used as fallback
+            let global_swing = piano_roll.swing_amount;
+            let global_humanize_vel = session.humanize.velocity;
+            let global_humanize_time = session.humanize.timing;
+
             for &(instrument_id, pitch, velocity, duration, note_tick, probability, ticks_from_old) in &note_ons {
                 // Probability check: skip note if random exceeds probability
                 if probability < 1.0 && next_random(rng_state) > probability {
                     continue;
                 }
+
+                // Get per-track groove settings, falling back to global
+                let groove = instruments.instrument(instrument_id).map(|i| &i.groove);
+                let effective_swing = groove
+                    .and_then(|g| g.swing_amount)
+                    .unwrap_or(global_swing);
+                let effective_swing_grid = groove
+                    .and_then(|g| g.swing_grid)
+                    .unwrap_or(SwingGrid::Eighths);
+                let effective_humanize_vel = groove
+                    .and_then(|g| g.humanize_velocity)
+                    .unwrap_or(global_humanize_vel);
+                let effective_humanize_time = groove
+                    .and_then(|g| g.humanize_timing)
+                    .unwrap_or(global_humanize_time);
+                let timing_offset_ms = groove.map(|g| g.timing_offset_ms).unwrap_or(0.0);
 
                 // Check if this instrument has arpeggiator enabled
                 let arp_enabled = instruments.instruments.iter()
@@ -132,26 +151,48 @@ pub fn tick_playback(
                 }
 
                 let mut offset = ticks_from_old * secs_per_tick + SCHEDULE_LOOKAHEAD_SECS;
-                // Apply swing: delay notes on offbeat positions (odd 8th notes)
-                if swing_amount > 0.0 {
+
+                // Apply timing offset (rush/drag) - negative = rush, positive = drag
+                offset += (timing_offset_ms / 1000.0) as f64;
+
+                // Apply swing: delay notes on offbeat positions based on swing grid
+                if effective_swing > 0.0 {
                     let tpb = piano_roll.ticks_per_beat as f64;
                     let eighth = tpb / 2.0;
+                    let sixteenth = tpb / 4.0;
                     let pos_in_beat = (note_tick as f64) % tpb;
-                    if (pos_in_beat - eighth).abs() < 1.0 {
-                        offset += swing_amount as f64 * eighth * secs_per_tick * 0.5;
+
+                    let apply_eighth_swing = matches!(
+                        effective_swing_grid,
+                        SwingGrid::Eighths | SwingGrid::Both
+                    ) && (pos_in_beat - eighth).abs() < 1.0;
+
+                    let apply_sixteenth_swing = matches!(
+                        effective_swing_grid,
+                        SwingGrid::Sixteenths | SwingGrid::Both
+                    ) && ((pos_in_beat - sixteenth).abs() < 1.0
+                        || (pos_in_beat - sixteenth * 3.0).abs() < 1.0);
+
+                    if apply_eighth_swing {
+                        offset += effective_swing as f64 * eighth * secs_per_tick * 0.5;
+                    } else if apply_sixteenth_swing {
+                        offset += effective_swing as f64 * sixteenth * secs_per_tick * 0.5;
                     }
                 }
+
                 // Apply timing humanization: jitter offset by up to +/- 20ms
-                if humanize_time > 0.0 {
-                    let jitter = (next_random(rng_state) - 0.5) * 2.0 * humanize_time * 0.02;
+                if effective_humanize_time > 0.0 {
+                    let jitter = (next_random(rng_state) - 0.5) * 2.0 * effective_humanize_time * 0.02;
                     offset = (offset + jitter as f64).max(0.0);
                 }
+
                 // Apply velocity humanization: jitter velocity by up to +/- 30
                 let mut vel_f = velocity as f32 / 127.0;
-                if humanize_vel > 0.0 {
-                    let jitter = (next_random(rng_state) - 0.5) * 2.0 * humanize_vel * (30.0 / 127.0);
+                if effective_humanize_vel > 0.0 {
+                    let jitter = (next_random(rng_state) - 0.5) * 2.0 * effective_humanize_vel * (30.0 / 127.0);
                     vel_f = (vel_f + jitter).clamp(0.01, 1.0);
                 }
+
                 let _ = engine.spawn_voice(instrument_id, pitch, vel_f, offset, instruments, session);
                 active_notes.push((instrument_id, pitch, duration));
             }

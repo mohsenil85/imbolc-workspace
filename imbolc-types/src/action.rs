@@ -579,6 +579,17 @@ pub enum InstrumentAction {
     ToggleEq(InstrumentId),
     LinkLayer(InstrumentId, InstrumentId),
     UnlinkLayer(InstrumentId),
+    // Per-track groove settings
+    SetTrackSwing(InstrumentId, Option<f32>),
+    SetTrackSwingGrid(InstrumentId, Option<crate::SwingGrid>),
+    AdjustTrackSwing(InstrumentId, f32),
+    SetTrackHumanizeVelocity(InstrumentId, Option<f32>),
+    AdjustTrackHumanizeVelocity(InstrumentId, f32),
+    SetTrackHumanizeTiming(InstrumentId, Option<f32>),
+    AdjustTrackHumanizeTiming(InstrumentId, f32),
+    SetTrackTimingOffset(InstrumentId, f32),
+    AdjustTrackTimingOffset(InstrumentId, f32),
+    ResetTrackGroove(InstrumentId),
 }
 
 // ============================================================================

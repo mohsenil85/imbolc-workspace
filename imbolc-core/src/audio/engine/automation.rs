@@ -176,6 +176,27 @@ impl AudioEngine {
                     }
                 }
             }
+            // Track groove settings: state-only, no OSC messages needed
+            AutomationTarget::TrackSwing(instrument_id) => {
+                if let Some(inst) = state.instrument_mut(*instrument_id) {
+                    inst.groove.swing_amount = Some(value);
+                }
+            }
+            AutomationTarget::TrackHumanizeVelocity(instrument_id) => {
+                if let Some(inst) = state.instrument_mut(*instrument_id) {
+                    inst.groove.humanize_velocity = Some(value);
+                }
+            }
+            AutomationTarget::TrackHumanizeTiming(instrument_id) => {
+                if let Some(inst) = state.instrument_mut(*instrument_id) {
+                    inst.groove.humanize_timing = Some(value);
+                }
+            }
+            AutomationTarget::TrackTimingOffset(instrument_id) => {
+                if let Some(inst) = state.instrument_mut(*instrument_id) {
+                    inst.groove.timing_offset_ms = value;
+                }
+            }
         }
 
         Ok(())
@@ -343,6 +364,27 @@ impl AudioEngine {
                         let sc_value = if *param == 2 { 1.0 / value } else { value };
                         msgs.push(build_n_set_message(eq_node, &param_name, sc_value));
                     }
+                }
+            }
+            // Track groove settings: state-only, no OSC messages needed
+            AutomationTarget::TrackSwing(instrument_id) => {
+                if let Some(inst) = state.instrument_mut(*instrument_id) {
+                    inst.groove.swing_amount = Some(value);
+                }
+            }
+            AutomationTarget::TrackHumanizeVelocity(instrument_id) => {
+                if let Some(inst) = state.instrument_mut(*instrument_id) {
+                    inst.groove.humanize_velocity = Some(value);
+                }
+            }
+            AutomationTarget::TrackHumanizeTiming(instrument_id) => {
+                if let Some(inst) = state.instrument_mut(*instrument_id) {
+                    inst.groove.humanize_timing = Some(value);
+                }
+            }
+            AutomationTarget::TrackTimingOffset(instrument_id) => {
+                if let Some(inst) = state.instrument_mut(*instrument_id) {
+                    inst.groove.timing_offset_ms = value;
                 }
             }
         }

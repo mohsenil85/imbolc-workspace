@@ -3,6 +3,7 @@ mod crud;
 mod effects;
 mod eq;
 mod filter;
+mod groove;
 mod layer;
 mod playback;
 mod sample;
@@ -90,5 +91,36 @@ pub(super) fn dispatch_instrument(
         }
         InstrumentAction::LinkLayer(a, b) => layer::handle_link_layer(state, *a, *b),
         InstrumentAction::UnlinkLayer(id) => layer::handle_unlink_layer(state, *id),
+        // Per-track groove settings
+        InstrumentAction::SetTrackSwing(id, value) => {
+            groove::handle_set_track_swing(state, *id, *value)
+        }
+        InstrumentAction::SetTrackSwingGrid(id, grid) => {
+            groove::handle_set_track_swing_grid(state, *id, *grid)
+        }
+        InstrumentAction::AdjustTrackSwing(id, delta) => {
+            groove::handle_adjust_track_swing(state, *id, *delta)
+        }
+        InstrumentAction::SetTrackHumanizeVelocity(id, value) => {
+            groove::handle_set_track_humanize_velocity(state, *id, *value)
+        }
+        InstrumentAction::AdjustTrackHumanizeVelocity(id, delta) => {
+            groove::handle_adjust_track_humanize_velocity(state, *id, *delta)
+        }
+        InstrumentAction::SetTrackHumanizeTiming(id, value) => {
+            groove::handle_set_track_humanize_timing(state, *id, *value)
+        }
+        InstrumentAction::AdjustTrackHumanizeTiming(id, delta) => {
+            groove::handle_adjust_track_humanize_timing(state, *id, *delta)
+        }
+        InstrumentAction::SetTrackTimingOffset(id, value) => {
+            groove::handle_set_track_timing_offset(state, *id, *value)
+        }
+        InstrumentAction::AdjustTrackTimingOffset(id, delta) => {
+            groove::handle_adjust_track_timing_offset(state, *id, *delta)
+        }
+        InstrumentAction::ResetTrackGroove(id) => {
+            groove::handle_reset_track_groove(state, *id)
+        }
     }
 }

@@ -104,12 +104,33 @@ pub fn tick_drum_sequencer(
                                     let r = ((*rng_state >> 33) as f32) / (u32::MAX as f32);
                                     if r > step_data.probability { continue; }
                                 }
-                                let mut amp = (step_data.velocity as f32 / 127.0) * pad.level;
-                                // Velocity humanization
-                                if session.humanize.velocity > 0.0 {
+
+                                // Per-track groove settings
+                                let effective_humanize_vel = instrument.groove
+                                    .humanize_velocity
+                                    .unwrap_or(session.humanize.velocity);
+                                let effective_humanize_time = instrument.groove
+                                    .humanize_timing
+                                    .unwrap_or(session.humanize.timing);
+                                let timing_offset_ms = instrument.groove.timing_offset_ms;
+
+                                // Calculate final offset with timing offset (rush/drag)
+                                let mut final_offset = offset_secs + (timing_offset_ms / 1000.0) as f64;
+
+                                // Timing humanization: jitter offset by up to +/- 20ms
+                                if effective_humanize_time > 0.0 {
                                     *rng_state = rng_state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
                                     let r = ((*rng_state >> 33) as f32) / (u32::MAX as f32);
-                                    let jitter = (r - 0.5) * 2.0 * session.humanize.velocity * (30.0 / 127.0);
+                                    let jitter = (r - 0.5) * 2.0 * effective_humanize_time * 0.02;
+                                    final_offset = (final_offset + jitter as f64).max(0.0);
+                                }
+
+                                let mut amp = (step_data.velocity as f32 / 127.0) * pad.level;
+                                // Velocity humanization using per-track setting
+                                if effective_humanize_vel > 0.0 {
+                                    *rng_state = rng_state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+                                    let r = ((*rng_state >> 33) as f32) / (u32::MAX as f32);
+                                    let jitter = (r - 0.5) * 2.0 * effective_humanize_vel * (30.0 / 127.0);
                                     amp = (amp + jitter).clamp(0.01, 1.0);
                                 }
                                 let total_pitch = pad.pitch as i16 + step_data.pitch_offset as i16;
@@ -117,7 +138,7 @@ pub fn tick_drum_sequencer(
                                 let rate = if pad.reverse { -pitch_rate } else { pitch_rate };
                                 let _ = engine.play_drum_hit_to_instrument(
                                     buffer_id, amp, instrument.id,
-                                    pad.slice_start, pad.slice_end, rate, offset_secs,
+                                    pad.slice_start, pad.slice_end, rate, final_offset,
                                 );
                             }
                         }
