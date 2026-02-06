@@ -1,0 +1,27 @@
+[package]
+name = "imbolc-ui"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+imbolc-core = { path = "../imbolc-core" }
+imbolc-types = { path = "../imbolc-types" }
+ratatui = { version = "0.29", features = ["crossterm"] }
+log = "0.4"
+simplelog = "0.12"
+crossterm = "0.28"
+rusqlite = { version = "0.31", features = ["bundled"] }
+rosc = "0.10"
+midir = "0.9"
+regex = "1"
+dirs = "5"
+hound = "3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+rat-widget = "2.11"
+rat-event = "1.4"
+rat-dialog = "1.1"
+
+[dev-dependencies]
+tempfile = "3"

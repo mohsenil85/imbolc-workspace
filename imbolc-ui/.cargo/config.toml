@@ -1,0 +1,3 @@
+[alias]
+ck = "check"
+e2e = ["test", "--test", "e2e_test"]

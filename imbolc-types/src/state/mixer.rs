@@ -1,0 +1,223 @@
+use serde::{Deserialize, Serialize};
+
+use super::instrument::MixerBus;
+use super::session::MixerSelection;
+
+/// Maximum number of buses allowed
+pub const MAX_BUSES: u8 = 32;
+
+/// Default number of buses for new projects
+pub const DEFAULT_BUS_COUNT: u8 = 8;
+
+/// Mixer state: buses, master level/mute, and selection.
+/// This is a sub-state of SessionState, extracted for modularity.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MixerState {
+    pub buses: Vec<MixerBus>,
+    /// Next bus ID to assign (never reused, always increments)
+    #[serde(skip)]
+    pub next_bus_id: u8,
+    pub master_level: f32,
+    pub master_mute: bool,
+    #[serde(skip)]
+    pub selection: MixerSelection,
+}
+
+impl MixerState {
+    pub fn new() -> Self {
+        Self::new_with_bus_count(DEFAULT_BUS_COUNT)
+    }
+
+    pub fn new_with_bus_count(bus_count: u8) -> Self {
+        let bus_count = bus_count.min(MAX_BUSES);
+        let buses: Vec<MixerBus> = (1..=bus_count).map(MixerBus::new).collect();
+        let next_bus_id = bus_count + 1;
+        Self {
+            buses,
+            next_bus_id,
+            master_level: 1.0,
+            master_mute: false,
+            selection: MixerSelection::default(),
+        }
+    }
+
+    /// Get a bus by ID
+    pub fn bus(&self, id: u8) -> Option<&MixerBus> {
+        self.buses.iter().find(|b| b.id == id)
+    }
+
+    /// Get a mutable bus by ID
+    pub fn bus_mut(&mut self, id: u8) -> Option<&mut MixerBus> {
+        self.buses.iter_mut().find(|b| b.id == id)
+    }
+
+    /// Get an iterator over current bus IDs in order
+    pub fn bus_ids(&self) -> impl Iterator<Item = u8> + '_ {
+        self.buses.iter().map(|b| b.id)
+    }
+
+    /// Add a new bus. Returns the new bus ID, or None if at max capacity.
+    pub fn add_bus(&mut self) -> Option<u8> {
+        if self.buses.len() >= MAX_BUSES as usize {
+            return None;
+        }
+        let id = self.next_bus_id;
+        self.next_bus_id = self.next_bus_id.saturating_add(1);
+        self.buses.push(MixerBus::new(id));
+        Some(id)
+    }
+
+    /// Remove a bus by ID. Returns true if the bus was found and removed.
+    pub fn remove_bus(&mut self, id: u8) -> bool {
+        if let Some(idx) = self.buses.iter().position(|b| b.id == id) {
+            self.buses.remove(idx);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Check if any bus is soloed
+    pub fn any_bus_solo(&self) -> bool {
+        self.buses.iter().any(|b| b.solo)
+    }
+
+    /// Compute effective mute for a bus, considering solo state
+    pub fn effective_bus_mute(&self, bus: &MixerBus) -> bool {
+        if self.any_bus_solo() {
+            !bus.solo
+        } else {
+            bus.mute
+        }
+    }
+
+    /// Cycle between instrument/bus/master sections
+    pub fn cycle_section(&mut self) {
+        self.selection = match self.selection {
+            MixerSelection::Instrument(_) => {
+                // Select first bus if any exist, otherwise skip to master
+                if let Some(first_id) = self.buses.first().map(|b| b.id) {
+                    MixerSelection::Bus(first_id)
+                } else {
+                    MixerSelection::Master
+                }
+            }
+            MixerSelection::Bus(_) => MixerSelection::Master,
+            MixerSelection::Master => MixerSelection::Instrument(0),
+        };
+    }
+
+    /// Recompute next_bus_id from current buses (call after loading from persistence)
+    pub fn recompute_next_bus_id(&mut self) {
+        self.next_bus_id = self.buses.iter().map(|b| b.id).max().unwrap_or(0).saturating_add(1);
+    }
+}
+
+impl Default for MixerState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bus_lookup_by_id() {
+        let mixer = MixerState::new();
+        assert!(mixer.bus(1).is_some());
+        assert_eq!(mixer.bus(1).unwrap().id, 1);
+        assert!(mixer.bus(8).is_some());
+        assert_eq!(mixer.bus(8).unwrap().id, 8);
+        // Non-existent IDs return None
+        assert!(mixer.bus(0).is_none());
+        assert!(mixer.bus(9).is_none());
+        assert!(mixer.bus(100).is_none());
+    }
+
+    #[test]
+    fn add_bus_increments_id() {
+        let mut mixer = MixerState::new();
+        assert_eq!(mixer.buses.len(), DEFAULT_BUS_COUNT as usize);
+        let new_id = mixer.add_bus().unwrap();
+        assert_eq!(new_id, DEFAULT_BUS_COUNT + 1);
+        assert_eq!(mixer.buses.len(), DEFAULT_BUS_COUNT as usize + 1);
+        assert!(mixer.bus(new_id).is_some());
+    }
+
+    #[test]
+    fn add_bus_respects_max_limit() {
+        let mut mixer = MixerState::new_with_bus_count(MAX_BUSES);
+        assert_eq!(mixer.buses.len(), MAX_BUSES as usize);
+        assert!(mixer.add_bus().is_none());
+        assert_eq!(mixer.buses.len(), MAX_BUSES as usize);
+    }
+
+    #[test]
+    fn remove_bus() {
+        let mut mixer = MixerState::new();
+        assert!(mixer.bus(3).is_some());
+        assert!(mixer.remove_bus(3));
+        assert!(mixer.bus(3).is_none());
+        // Removing non-existent bus returns false
+        assert!(!mixer.remove_bus(3));
+        assert!(!mixer.remove_bus(100));
+    }
+
+    #[test]
+    fn bus_ids_iterator() {
+        let mixer = MixerState::new();
+        let ids: Vec<u8> = mixer.bus_ids().collect();
+        assert_eq!(ids, (1..=DEFAULT_BUS_COUNT).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn recompute_next_bus_id() {
+        let mut mixer = MixerState::new();
+        mixer.next_bus_id = 0; // Simulate loading from persistence
+        mixer.recompute_next_bus_id();
+        assert_eq!(mixer.next_bus_id, DEFAULT_BUS_COUNT + 1);
+    }
+
+    #[test]
+    fn effective_bus_mute_no_solo() {
+        let mixer = MixerState::new();
+        let bus = mixer.bus(1).unwrap();
+        assert!(!mixer.effective_bus_mute(bus));
+
+        let mut bus_copy = bus.clone();
+        bus_copy.mute = true;
+        assert!(mixer.effective_bus_mute(&bus_copy));
+    }
+
+    #[test]
+    fn effective_bus_mute_with_solo() {
+        let mut mixer = MixerState::new();
+        mixer.bus_mut(1).unwrap().solo = true;
+        // Bus 1 is soloed — should not be muted
+        assert!(!mixer.effective_bus_mute(mixer.bus(1).unwrap()));
+        // Bus 2 is not soloed — should be muted
+        assert!(mixer.effective_bus_mute(mixer.bus(2).unwrap()));
+    }
+
+    #[test]
+    fn cycle_section_full_cycle() {
+        let mut mixer = MixerState::new();
+        assert!(matches!(mixer.selection, MixerSelection::Instrument(0)));
+        mixer.cycle_section();
+        assert!(matches!(mixer.selection, MixerSelection::Bus(1)));
+        mixer.cycle_section();
+        assert!(matches!(mixer.selection, MixerSelection::Master));
+        mixer.cycle_section();
+        assert!(matches!(mixer.selection, MixerSelection::Instrument(0)));
+    }
+
+    #[test]
+    fn any_bus_solo() {
+        let mut mixer = MixerState::new();
+        assert!(!mixer.any_bus_solo());
+        mixer.bus_mut(3).unwrap().solo = true;
+        assert!(mixer.any_bus_solo());
+    }
+}

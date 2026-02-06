@@ -1,0 +1,27 @@
+bin/wrapper script, command line handling
+global shortcuts, save, load, export import.
+migrations
+broken Frame settings screen
+√"jump back"
+console at bottom not updating, move that to server screen
+consistency in keybindings (eg a= add everywhere) (add shortcuts)
+√osc screen, all on one screen
+custom synths, vst's
+Piano roll fixes, remvoe bpm, midi-0 wrong name
+remove helps along bottom every where
+delete an osc doesn't work.  rename "strips" screen to oscilattors
+terminal too small when starting up, handle resize
+exporting/importing effects, instruments
+docs cleanup
+LFO mods (todo)
+better pane/ui/text input primitives
+CTL-L to re render
+ui themes
+stale diagnostics?
+logging interface
+"comfortable amount of unit tests"
+esc takes you directly out of piano mode (or insert mode)
+touch ups around insert mode
+pane markup language
+remove homepane
+file picker, scroll to bottom, does not loop back to top

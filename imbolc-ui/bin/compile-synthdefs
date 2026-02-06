@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Compile SuperCollider SynthDefs outside of the running app.
+# Usage: bin/compile-synthdefs
+
+# Resolve project root (directory containing synthdefs/)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+if [ ! -d "$PROJECT_ROOT/synthdefs" ]; then
+    echo "Error: synthdefs/ directory not found in $PROJECT_ROOT" >&2
+    exit 1
+fi
+
+if [ ! -f "$PROJECT_ROOT/synthdefs/compile.scd" ]; then
+    echo "Error: synthdefs/compile.scd not found" >&2
+    exit 1
+fi
+
+# Find sclang using the same search paths as the Rust code
+SCLANG=""
+if command -v sclang &>/dev/null; then
+    SCLANG="$(command -v sclang)"
+else
+    for candidate in \
+        "/Applications/SuperCollider.app/Contents/MacOS/sclang" \
+        "/Applications/SuperCollider/SuperCollider.app/Contents/MacOS/sclang" \
+        "/usr/local/bin/sclang" \
+        "/opt/homebrew/bin/sclang" \
+        "/usr/bin/sclang"; do
+        if [ -x "$candidate" ]; then
+            SCLANG="$candidate"
+            break
+        fi
+    done
+fi
+
+if [ -z "$SCLANG" ]; then
+    echo "Error: sclang not found. Install SuperCollider or add sclang to PATH." >&2
+    exit 1
+fi
+
+echo "Using sclang: $SCLANG"
+echo "Compiling synthdefs..."
+
+cd "$PROJECT_ROOT"
+"$SCLANG" synthdefs/compile.scd
+
+echo "Done."

@@ -1,0 +1,6 @@
+/target
+/samples
+*.wav
+*.vst3
+*.vst2
+.DS_Store

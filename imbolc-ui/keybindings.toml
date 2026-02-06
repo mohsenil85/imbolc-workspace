@@ -1,0 +1,560 @@
+version = 2
+
+[layers.global]
+bindings = [
+  { key = "Ctrl+z", action = "undo", description = "Undo" },
+  { key = "Ctrl+Z", action = "redo", description = "Redo" },
+  { key = "Ctrl+q", action = "quit", description = "Quit" },
+  { key = "Ctrl+s", action = "save", description = "Save session" },
+  { key = "Ctrl+l", action = "load", description = "Load session" },
+  { key = ".", action = "master_mute", description = "Toggle master mute" },
+  { key = "F1", action = "switch:instrument", description = "Instruments" },
+  { key = "F2", action = "switch:piano_roll_or_sequencer", description = "Piano roll / Sequencer / Waveform" },
+  { key = "F3", action = "switch:track", description = "Track" },
+  { key = "F4", action = "switch:mixer", description = "Mixer" },
+  { key = "F5", action = "switch:server", description = "Audio server" },
+  { key = "F7", action = "switch:automation", description = "Automation" },
+  { key = "F8", action = "switch:eq", description = "Parametric EQ" },
+  { key = "Ctrl+o", action = "open_project_browser", description = "Project browser" },
+  { key = "Ctrl+S", action = "save_as", description = "Save project as..." },
+  { key = "Ctrl+f", action = "switch:frame_edit", description = "Frame edit" },
+  { key = "Ctrl+m", action = "switch:midi_settings", description = "MIDI settings" },
+  { key = "`", action = "nav_back", description = "Back / Forward" },
+  { key = "~", action = "nav_forward", description = "Forward" },
+  { key = "?", action = "help", description = "Context help" },
+  { key = "<", action = "select_prev_instrument", description = "Previous instrument" },
+  { key = ">", action = "select_next_instrument", description = "Next instrument" },
+  { key = "1", action = "select:1", description = "Select instrument 1" },
+  { key = "2", action = "select:2", description = "Select instrument 2" },
+  { key = "3", action = "select:3", description = "Select instrument 3" },
+  { key = "4", action = "select:4", description = "Select instrument 4" },
+  { key = "5", action = "select:5", description = "Select instrument 5" },
+  { key = "6", action = "select:6", description = "Select instrument 6" },
+  { key = "7", action = "select:7", description = "Select instrument 7" },
+  { key = "8", action = "select:8", description = "Select instrument 8" },
+  { key = "9", action = "select:9", description = "Select instrument 9" },
+  { key = "0", action = "select:10", description = "Select instrument 10" },
+  { key = "_", action = "select_two_digit", description = "Two-digit instrument select" },
+  { key = "/", action = "toggle_piano_mode", description = "Toggle piano keyboard" },
+  { key = "Ctrl+r", action = "record_master", description = "Toggle master recording" },
+  { key = "Escape", action = "escape", description = "Escape" },
+  { key = "Ctrl+g", action = "switch:instrument_list", description = "Instrument list" },
+  { key = "Ctrl+d", action = "delete_instrument", description = "Delete instrument" },
+  { key = "Ctrl+c", action = "copy", description = "Copy" },
+  { key = "Ctrl+x", action = "cut", description = "Cut" },
+  { key = "Ctrl+v", action = "paste", description = "Paste" },
+  { key = "Ctrl+a", action = "select_all", description = "Select all" },
+  { key = "Ctrl+n", action = "add_instrument", description = "Add instrument" },
+  { key = ":", action = "command_palette", description = "Command palette" },
+  { key = "Space", action = "play_stop", description = "Play / Stop" },
+  { key = "Ctrl+L", action = "refresh_screen", description = "Refresh screen" },
+]
+
+[layers.instrument]
+bindings = [
+  { key = "q", action = "quit", description = "Quit the application" },
+  { key = "Down", action = "next", description = "Next instrument" },
+  { key = "Up", action = "prev", description = "Previous instrument" },
+  { key = "Home", action = "goto_top", description = "Go to top" },
+  { key = "End", action = "goto_bottom", description = "Go to bottom" },
+  { key = "a", action = "add", description = "Add instrument" },
+  { key = "d", action = "delete", description = "Delete instrument" },
+  { key = "Enter", action = "edit", description = "Edit instrument" },
+  { key = "w", action = "save", description = "Save" },
+  { key = "o", action = "load", description = "Load" },
+  { key = "l", action = "link_layer", description = "Link layer (select target)" },
+  { key = "L", action = "unlink_layer", description = "Unlink from layer group" },
+]
+
+[layers.mixer]
+bindings = [
+  { key = "Left", action = "prev", description = "Previous channel / Adjust left" },
+  { key = "Right", action = "next", description = "Next channel / Adjust right" },
+  { key = "Home", action = "first", description = "First channel" },
+  { key = "End", action = "last", description = "Last channel" },
+  { key = "Up", action = "level_up", description = "Increase level / Navigate up" },
+  { key = "Down", action = "level_down", description = "Decrease level / Navigate down" },
+  { key = "PageUp", action = "level_up_big", description = "Increase +10% / Coarse adjust" },
+  { key = "PageDown", action = "level_down_big", description = "Decrease -10% / Coarse adjust" },
+  { key = "m", action = "mute", description = "Toggle mute" },
+  { key = "s", action = "solo", description = "Toggle solo" },
+  { key = "o", action = "output", description = "Cycle output target" },
+  { key = "O", action = "output_rev", description = "Cycle output target backwards" },
+  { key = "Tab", action = "section", description = "Cycle section" },
+  { key = "Shift+Tab", action = "section_prev", description = "Previous section" },
+  { key = "t", action = "send_next", description = "Next send target" },
+  { key = "T", action = "send_prev", description = "Previous send target" },
+  { key = "g", action = "send_toggle", description = "Toggle selected send" },
+  { key = "Escape", action = "escape", description = "Exit detail / Clear send" },
+  { key = "Enter", action = "enter_detail", description = "Enter channel detail / Edit" },
+  { key = "a", action = "add_effect", description = "Add effect (detail)" },
+  { key = "d", action = "remove_effect", description = "Remove effect (detail)" },
+  { key = "e", action = "toggle_effect", description = "Toggle effect bypass (detail)" },
+  { key = "f", action = "toggle_filter", description = "Toggle filter (detail)" },
+  { key = "Ctrl+Left", action = "fine_left", description = "Fine adjust left" },
+  { key = "Ctrl+Right", action = "fine_right", description = "Fine adjust right" },
+  { key = "Shift+Up", action = "move_up", description = "Move effect up (detail)" },
+  { key = "Shift+Down", action = "move_down", description = "Move effect down (detail)" },
+  { key = "p", action = "pan_left", description = "Pan left" },
+  { key = "P", action = "pan_right", description = "Pan right" },
+]
+
+[layers.piano_roll]
+bindings = [
+  { key = "Up", action = "up", description = "Cursor up (higher pitch)" },
+  { key = "Down", action = "down", description = "Cursor down (lower pitch)" },
+  { key = "Left", action = "left", description = "Cursor left (earlier)" },
+  { key = "Right", action = "right", description = "Cursor later (later)" },
+  { key = "Enter", action = "toggle_note", description = "Place/remove note" },
+  { key = "+", action = "vel_up", description = "Increase velocity" },
+  { key = "-", action = "vel_down", description = "Decrease velocity" },
+  { key = "l", action = "loop", description = "Toggle loop" },
+  { key = "[", action = "loop_start", description = "Set loop start" },
+  { key = "]", action = "loop_end", description = "Set loop end" },
+  { key = "PageUp", action = "octave_up", description = "Scroll up one octave" },
+  { key = "PageDown", action = "octave_down", description = "Scroll down one octave" },
+  { key = "Home", action = "home", description = "Jump to start" },
+  { key = "End", action = "end", description = "Jump to end" },
+  { key = "z", action = "zoom_in", description = "Zoom in (time)" },
+  { key = "x", action = "zoom_out", description = "Zoom out (time)" },
+  { key = "t", action = "time_sig", description = "Cycle time signature" },
+  { key = "m", action = "toggle_poly", description = "Toggle poly/mono mode" },
+  { key = "Alt+Right", action = "grow_duration", description = "Grow note duration" },
+  { key = "Alt+Left", action = "shrink_duration", description = "Shrink note duration" },
+  { key = "Shift+Up", action = "select_up", description = "Extend selection up" },
+  { key = "Shift+Down", action = "select_down", description = "Extend selection down" },
+  { key = "Shift+Left", action = "select_left", description = "Extend selection left" },
+  { key = "Shift+Right", action = "select_right", description = "Extend selection right" },
+  { key = "A", action = "toggle_automation", description = "Toggle automation overlay" },
+  { key = "Ctrl+Up", action = "automation_lane_prev", description = "Previous automation lane" },
+  { key = "Ctrl+Down", action = "automation_lane_next", description = "Next automation lane" },
+  { key = "R", action = "render_to_wav", description = "Render track to WAV" },
+  { key = "B", action = "bounce_to_wav", description = "Bounce master to WAV" },
+  { key = "Ctrl+b", action = "export_stems", description = "Export stems to WAV" },
+]
+
+[layers.sequencer]
+bindings = [
+  { key = "Up", action = "up", description = "Previous pad" },
+  { key = "Down", action = "down", description = "Next pad" },
+  { key = "Left", action = "left", description = "Previous step" },
+  { key = "Right", action = "right", description = "Next step" },
+  { key = "j", action = "down", description = "Next pad" },
+  { key = "k", action = "up", description = "Previous pad" },
+  { key = "h", action = "left", description = "Previous step" },
+  { key = "l", action = "right", description = "Next step" },
+  { key = "Enter", action = "toggle", description = "Toggle step" },
+  { key = "s", action = "load_sample", description = "Load sample for pad" },
+  { key = "c", action = "chopper", description = "Sample chopper" },
+  { key = "x", action = "clear_pad", description = "Clear pad steps" },
+  { key = "X", action = "clear_pattern", description = "Clear entire pattern" },
+  { key = "[", action = "prev_pattern", description = "Previous pattern" },
+  { key = "]", action = "next_pattern", description = "Next pattern" },
+  { key = "{", action = "cycle_length", description = "Cycle pattern length" },
+  { key = "Shift+Up", action = "select_up", description = "Extend selection up" },
+  { key = "Shift+Down", action = "select_down", description = "Extend selection down" },
+  { key = "Shift+Left", action = "select_left", description = "Extend selection left" },
+  { key = "Shift+Right", action = "select_right", description = "Extend selection right" },
+  { key = "Ctrl+Left", action = "pad_level_down", description = "Decrease pad level" },
+  { key = "Ctrl+Right", action = "pad_level_up", description = "Increase pad level" },
+  { key = "r", action = "toggle_reverse", description = "Toggle pad reverse" },
+  { key = "=", action = "pitch_up", description = "Pad pitch up 1 semitone" },
+  { key = "-", action = "pitch_down", description = "Pad pitch down 1 semitone" },
+  { key = "Alt+=", action = "pitch_up_octave", description = "Pad pitch up 1 octave" },
+  { key = "Alt+-", action = "pitch_down_octave", description = "Pad pitch down 1 octave" },
+  { key = "+", action = "vel_up", description = "Increase step velocity" },
+  { key = "_", action = "vel_down", description = "Decrease step velocity" },
+  { key = "Ctrl+Up", action = "step_pitch_up", description = "Step pitch offset up" },
+  { key = "Ctrl+Down", action = "step_pitch_down", description = "Step pitch offset down" },
+]
+
+[layers.instrument_edit]
+bindings = [
+  { key = "Down", action = "next", description = "Next item" },
+  { key = "Up", action = "prev", description = "Previous item" },
+  { key = "Tab", action = "next_section", description = "Next section" },
+  { key = "Left", action = "decrease", description = "Decrease value" },
+  { key = "Right", action = "increase", description = "Increase value" },
+  { key = "PageUp", action = "increase_big", description = "Increase +10%" },
+  { key = "PageDown", action = "decrease_big", description = "Decrease -10%" },
+  { key = "Ctrl+Right", action = "increase_tiny", description = "Fine increase" },
+  { key = "Ctrl+Left", action = "decrease_tiny", description = "Fine decrease" },
+  { key = "Shift+Right", action = "increase_musical", description = "Musical/semantic increase" },
+  { key = "Shift+Left", action = "decrease_musical", description = "Musical/semantic decrease" },
+  { key = "Enter", action = "enter_edit", description = "Type value" },
+  { key = "f", action = "toggle_filter", description = "Toggle filter on/off" },
+  { key = "t", action = "cycle_filter_type", description = "Cycle filter type" },
+  { key = "a", action = "add_effect", description = "Add effect" },
+  { key = "d", action = "remove_effect", description = "Remove effect" },
+  { key = "p", action = "toggle_poly", description = "Toggle polyphonic" },
+  { key = "\\", action = "zero_param", description = "Set param to zero" },
+  { key = "|", action = "zero_section", description = "Zero all params in section" },
+  { key = "e", action = "toggle_eq", description = "Toggle EQ on/off" },
+  { key = "l", action = "toggle_lfo", description = "Toggle LFO on/off" },
+  { key = "s", action = "cycle_lfo_shape", description = "Cycle LFO shape" },
+  { key = "m", action = "cycle_lfo_target", description = "Cycle LFO target" },
+  { key = "Shift+Tab", action = "prev_section", description = "Previous section" },
+  { key = "x", action = "toggle_active", description = "Toggle active (AudioIn)" },
+  { key = "o", action = "load_sample", description = "Load sample" },
+  { key = "v", action = "vst_params", description = "VST parameters" },
+]
+
+[layers.server]
+bindings = [
+  { key = "s", action = "start", description = "Start scsynth" },
+  { key = "k", action = "stop", description = "Kill scsynth" },
+  { key = "c", action = "connect", description = "Connect to server" },
+  { key = "d", action = "disconnect", description = "Disconnect" },
+  { key = "b", action = "compile", description = "Build synthdefs" },
+  { key = "v", action = "compile_vst", description = "Build VST synthdefs" },
+  { key = "l", action = "load_synthdefs", description = "Load synthdefs" },
+  { key = "r", action = "refresh_devices", description = "Refresh audio devices" },
+  { key = "R", action = "record_master", description = "Toggle master recording" },
+  { key = "Tab", action = "next_section", description = "Next section" },
+]
+
+[layers.add]
+bindings = [
+  { key = "Enter", action = "confirm", description = "Add selected instrument" },
+  { key = "Escape", action = "cancel", description = "Cancel and return" },
+  { key = "Down", action = "next", description = "Next" },
+  { key = "j", action = "next", description = "Next" },
+  { key = "Up", action = "prev", description = "Previous" },
+  { key = "k", action = "prev", description = "Previous" },
+]
+
+[layers.add_effect]
+bindings = [
+  { key = "Enter", action = "confirm", description = "Add selected effect" },
+  { key = "Escape", action = "cancel", description = "Cancel" },
+  { key = "Up", action = "prev", description = "Previous" },
+  { key = "Down", action = "next", description = "Next" },
+  { key = "k", action = "prev", description = "Previous" },
+  { key = "j", action = "next", description = "Next" },
+]
+
+[layers.home]
+bindings = [
+  { key = "Up", action = "up", description = "Previous item" },
+  { key = "Down", action = "down", description = "Next item" },
+  { key = "k", action = "up", description = "Previous item" },
+  { key = "j", action = "down", description = "Next item" },
+  { key = "Enter", action = "select", description = "Open selected pane" },
+  { key = "Space", action = "select", description = "Open selected pane" },
+  { key = "q", action = "quit", description = "Quit" },
+]
+
+[layers.help]
+bindings = [
+  { key = "Escape", action = "close", description = "Close help" },
+  { key = "?", action = "close", description = "Close help" },
+  { key = "Up", action = "up", description = "Scroll up" },
+  { key = "Down", action = "down", description = "Scroll down" },
+  { key = "k", action = "up", description = "Scroll up" },
+  { key = "j", action = "down", description = "Scroll down" },
+  { key = "Home", action = "top", description = "Go to top" },
+  { key = "End", action = "bottom", description = "Go to bottom" },
+]
+
+[layers.frame_edit]
+bindings = [
+  { key = "Up", action = "prev", description = "Previous field" },
+  { key = "Down", action = "next", description = "Next field" },
+  { key = "Left", action = "decrease", description = "Decrease value" },
+  { key = "Right", action = "increase", description = "Increase value" },
+  { key = "Enter", action = "confirm", description = "Confirm changes" },
+  { key = "Escape", action = "cancel", description = "Cancel" },
+]
+
+[layers.file_browser]
+bindings = [
+  { key = "Enter", action = "select", description = "Select file/enter directory" },
+  { key = "Escape", action = "cancel", description = "Cancel and return" },
+  { key = "Backspace", action = "parent", description = "Go to parent directory" },
+  { key = "h", action = "parent", description = "Go to parent directory" },
+  { key = "^", action = "parent", description = "Go to parent directory" },
+  { key = "Down", action = "next", description = "Next entry" },
+  { key = "j", action = "next", description = "Next entry" },
+  { key = "Up", action = "prev", description = "Previous entry" },
+  { key = "k", action = "prev", description = "Previous entry" },
+  { key = "~", action = "home", description = "Go to home directory" },
+  { key = "Home", action = "goto_top", description = "Go to top" },
+  { key = "End", action = "goto_bottom", description = "Go to bottom" },
+  { key = "&", action = "toggle_hidden", description = "Toggle hidden files" },
+]
+
+[layers.sample_chopper]
+transparent = false
+bindings = [
+  { key = "h", action = "move_left", description = "Move cursor left" },
+  { key = "Left", action = "move_left", description = "Move cursor left" },
+  { key = "l", action = "move_right", description = "Move cursor right" },
+  { key = "Right", action = "move_right", description = "Move cursor right" },
+  { key = "j", action = "next_slice", description = "Select next slice" },
+  { key = "Down", action = "next_slice", description = "Select next slice" },
+  { key = "k", action = "prev_slice", description = "Select previous slice" },
+  { key = "Up", action = "prev_slice", description = "Select previous slice" },
+  { key = "Enter", action = "chop", description = "Split slice at cursor" },
+  { key = "x", action = "delete", description = "Remove selected slice" },
+  { key = "n", action = "auto_slice", description = "Auto-slice (cycle 4/8/12/16)" },
+  { key = "s", action = "load_sample", description = "Load sample" },
+  { key = "Space", action = "preview", description = "Preview slice" },
+  { key = ",", action = "commit", description = "Commit all slices to pads" },
+  { key = "Escape", action = "back", description = "Back to sequencer" },
+  { key = "1", action = "assign_1", description = "Assign to Pad 1" },
+  { key = "2", action = "assign_2", description = "Assign to Pad 2" },
+  { key = "3", action = "assign_3", description = "Assign to Pad 3" },
+  { key = "4", action = "assign_4", description = "Assign to Pad 4" },
+  { key = "5", action = "assign_5", description = "Assign to Pad 5" },
+  { key = "6", action = "assign_6", description = "Assign to Pad 6" },
+  { key = "7", action = "assign_7", description = "Assign to Pad 7" },
+  { key = "8", action = "assign_8", description = "Assign to Pad 8" },
+  { key = "9", action = "assign_9", description = "Assign to Pad 9" },
+  { key = "0", action = "assign_10", description = "Assign to Pad 10" },
+  { key = "-", action = "assign_11", description = "Assign to Pad 11" },
+  { key = "=", action = "assign_12", description = "Assign to Pad 12" },
+  { key = "Shift+Left", action = "nudge_start", description = "Nudge slice start" },
+  { key = "Shift+Right", action = "nudge_end", description = "Nudge slice end" },
+]
+
+[layers.automation]
+bindings = [
+  { key = "Tab", action = "switch_focus", description = "Switch focus (lane list / timeline)" },
+  { key = "Up", action = "up", description = "Up (select lane / increase value)" },
+  { key = "Down", action = "down", description = "Down (select lane / decrease value)" },
+  { key = "Left", action = "left", description = "Move cursor left" },
+  { key = "Right", action = "right", description = "Move cursor right" },
+  { key = "a", action = "add_lane", description = "Add automation lane" },
+  { key = "x", action = "remove_lane", description = "Remove selected lane" },
+  { key = "e", action = "toggle_enabled", description = "Toggle lane enabled" },
+  { key = "Enter", action = "place_point", description = "Place/remove point" },
+  { key = "d", action = "delete_point", description = "Delete point at cursor" },
+  { key = "c", action = "cycle_curve", description = "Cycle curve type" },
+  { key = "C", action = "clear_lane", description = "Clear all points in lane" },
+  { key = "r", action = "toggle_recording", description = "Toggle automation recording" },
+  { key = "R", action = "toggle_arm", description = "Arm/disarm lane for recording" },
+  { key = "Ctrl+r", action = "arm_all", description = "Arm all lanes" },
+  { key = "Alt+r", action = "disarm_all", description = "Disarm all lanes" },
+  { key = "z", action = "zoom_in", description = "Zoom in" },
+  { key = "Z", action = "zoom_out", description = "Zoom out" },
+  { key = "Home", action = "home", description = "Jump to start" },
+  { key = "End", action = "end", description = "Jump to end" },
+]
+
+[layers.eq]
+bindings = [
+  { key = "Left", action = "prev_band", description = "Previous band" },
+  { key = "Right", action = "next_band", description = "Next band" },
+  { key = "Tab", action = "next_param", description = "Next parameter" },
+  { key = "Shift+Tab", action = "prev_param", description = "Previous parameter" },
+  { key = "Up", action = "increase", description = "Increase value" },
+  { key = "Down", action = "decrease", description = "Decrease value" },
+  { key = "PageUp", action = "increase_big", description = "Big increase" },
+  { key = "PageDown", action = "decrease_big", description = "Big decrease" },
+  { key = "Ctrl+Up", action = "increase_tiny", description = "Fine increase" },
+  { key = "Ctrl+Down", action = "decrease_tiny", description = "Fine decrease" },
+  { key = "e", action = "toggle_eq", description = "Toggle EQ on/off" },
+  { key = "b", action = "toggle_band", description = "Toggle band on/off" },
+]
+
+[layers.track]
+bindings = [
+  { key = "Up", action = "lane_up", description = "Select instrument lane above" },
+  { key = "Down", action = "lane_down", description = "Select instrument lane below" },
+  { key = "Left", action = "cursor_left", description = "Move cursor left" },
+  { key = "Right", action = "cursor_right", description = "Move cursor right" },
+  { key = "Home", action = "cursor_home", description = "Jump to start" },
+  { key = "End", action = "cursor_end", description = "Jump to end" },
+  { key = "n", action = "new_clip", description = "Capture clip from piano roll" },
+  { key = "N", action = "new_empty_clip", description = "Create empty 1-bar clip" },
+  { key = "p", action = "place_clip", description = "Place selected clip at cursor" },
+  { key = "Enter", action = "edit_clip", description = "Edit clip under cursor" },
+  { key = "d", action = "delete", description = "Delete placement at cursor" },
+  { key = "D", action = "delete_clip", description = "Delete clip and all placements" },
+  { key = "y", action = "duplicate", description = "Duplicate placement" },
+  { key = "m", action = "toggle_mode", description = "Toggle Song/Pattern mode" },
+  { key = "Shift+Left", action = "move_left", description = "Move placement left" },
+  { key = "Shift+Right", action = "move_right", description = "Move placement right" },
+  { key = "z", action = "zoom_in", description = "Zoom in" },
+  { key = "x", action = "zoom_out", description = "Zoom out" },
+  { key = "Tab", action = "select_next_placement", description = "Next placement" },
+  { key = "Shift+Tab", action = "select_prev_placement", description = "Previous placement" },
+  { key = "[", action = "select_prev_clip", description = "Previous clip" },
+  { key = "]", action = "select_next_clip", description = "Next clip" },
+]
+
+[layers.vst_params]
+bindings = [
+  { key = "Up", action = "up", description = "Select previous param" },
+  { key = "Down", action = "down", description = "Select next param" },
+  { key = "k", action = "up", description = "Select previous param" },
+  { key = "j", action = "down", description = "Select next param" },
+  { key = "Left", action = "left", description = "Adjust value down (fine)" },
+  { key = "Right", action = "right", description = "Adjust value up (fine)" },
+  { key = "Shift+Left", action = "coarse_left", description = "Adjust value down (coarse)" },
+  { key = "Shift+Right", action = "coarse_right", description = "Adjust value up (coarse)" },
+  { key = "/", action = "search", description = "Search params" },
+  { key = "r", action = "reset", description = "Reset to default" },
+  { key = "a", action = "automate", description = "Add automation lane" },
+  { key = "d", action = "discover", description = "Re-discover params" },
+  { key = "g", action = "goto_top", description = "Go to top" },
+  { key = "G", action = "goto_bottom", description = "Go to bottom" },
+  { key = "Escape", action = "cancel", description = "Exit search / go back" },
+]
+
+[layers.waveform]
+bindings = [
+  { key = "Tab", action = "cycle_mode", description = "Cycle display mode" },
+]
+
+[layers.midi_settings]
+bindings = [
+  { key = "Tab", action = "switch_section", description = "Switch section" },
+  { key = "Up", action = "up", description = "Move up" },
+  { key = "Down", action = "down", description = "Move down" },
+  { key = "Enter", action = "connect", description = "Connect to port" },
+  { key = "d", action = "disconnect", description = "Disconnect MIDI" },
+  { key = "x", action = "remove_mapping", description = "Remove CC mapping" },
+  { key = "n", action = "toggle_passthrough", description = "Toggle note passthrough" },
+  { key = "c", action = "set_channel_all", description = "Clear channel filter" },
+  { key = "i", action = "set_live_instrument", description = "Set live input to selected" },
+  { key = "I", action = "clear_live_instrument", description = "Clear live input instrument" },
+]
+
+# --- Mode layers ---
+
+[layers.piano_mode]
+transparent = true
+bindings = [
+  { key = "Escape", action = "piano:escape", description = "Cycle layout / exit piano" },
+  { key = "[", action = "piano:octave_down", description = "Octave down" },
+  { key = "]", action = "piano:octave_up", description = "Octave up" },
+  { key = "Space", action = "piano:space", description = "Play/Stop Record" },
+  { key = "a", action = "piano:key", description = "Piano key" },
+  { key = "b", action = "piano:key", description = "Piano key" },
+  { key = "c", action = "piano:key", description = "Piano key" },
+  { key = "d", action = "piano:key", description = "Piano key" },
+  { key = "e", action = "piano:key", description = "Piano key" },
+  { key = "f", action = "piano:key", description = "Piano key" },
+  { key = "g", action = "piano:key", description = "Piano key" },
+  { key = "h", action = "piano:key", description = "Piano key" },
+  { key = "i", action = "piano:key", description = "Piano key" },
+  { key = "j", action = "piano:key", description = "Piano key" },
+  { key = "k", action = "piano:key", description = "Piano key" },
+  { key = "l", action = "piano:key", description = "Piano key" },
+  { key = "m", action = "piano:key", description = "Piano key" },
+  { key = "n", action = "piano:key", description = "Piano key" },
+  { key = "o", action = "piano:key", description = "Piano key" },
+  { key = "p", action = "piano:key", description = "Piano key" },
+  { key = "q", action = "piano:key", description = "Piano key" },
+  { key = "r", action = "piano:key", description = "Piano key" },
+  { key = "s", action = "piano:key", description = "Piano key" },
+  { key = "t", action = "piano:key", description = "Piano key" },
+  { key = "u", action = "piano:key", description = "Piano key" },
+  { key = "v", action = "piano:key", description = "Piano key" },
+  { key = "w", action = "piano:key", description = "Piano key" },
+  { key = "x", action = "piano:key", description = "Piano key" },
+  { key = "y", action = "piano:key", description = "Piano key" },
+  { key = "z", action = "piano:key", description = "Piano key" },
+  { key = ";", action = "piano:key", description = "Piano key" },
+  { key = ",", action = "piano:key", description = "Piano key" },
+  { key = "A", action = "piano:key", description = "Piano key" },
+  { key = "B", action = "piano:key", description = "Piano key" },
+  { key = "C", action = "piano:key", description = "Piano key" },
+  { key = "D", action = "piano:key", description = "Piano key" },
+  { key = "E", action = "piano:key", description = "Piano key" },
+  { key = "F", action = "piano:key", description = "Piano key" },
+  { key = "G", action = "piano:key", description = "Piano key" },
+  { key = "H", action = "piano:key", description = "Piano key" },
+  { key = "I", action = "piano:key", description = "Piano key" },
+  { key = "J", action = "piano:key", description = "Piano key" },
+  { key = "K", action = "piano:key", description = "Piano key" },
+  { key = "L", action = "piano:key", description = "Piano key" },
+  { key = "M", action = "piano:key", description = "Piano key" },
+  { key = "N", action = "piano:key", description = "Piano key" },
+  { key = "O", action = "piano:key", description = "Piano key" },
+  { key = "P", action = "piano:key", description = "Piano key" },
+  { key = "Q", action = "piano:key", description = "Piano key" },
+  { key = "R", action = "piano:key", description = "Piano key" },
+  { key = "S", action = "piano:key", description = "Piano key" },
+  { key = "T", action = "piano:key", description = "Piano key" },
+  { key = "U", action = "piano:key", description = "Piano key" },
+  { key = "V", action = "piano:key", description = "Piano key" },
+  { key = "W", action = "piano:key", description = "Piano key" },
+  { key = "X", action = "piano:key", description = "Piano key" },
+  { key = "Y", action = "piano:key", description = "Piano key" },
+  { key = "Z", action = "piano:key", description = "Piano key" },
+]
+
+[layers.pad_mode]
+transparent = true
+bindings = [
+  { key = "Escape", action = "pad:escape", description = "Exit pad mode" },
+  { key = "a", action = "pad:key", description = "Pad key" },
+  { key = "b", action = "pad:key", description = "Pad key" },
+  { key = "c", action = "pad:key", description = "Pad key" },
+  { key = "d", action = "pad:key", description = "Pad key" },
+  { key = "e", action = "pad:key", description = "Pad key" },
+  { key = "f", action = "pad:key", description = "Pad key" },
+  { key = "g", action = "pad:key", description = "Pad key" },
+  { key = "h", action = "pad:key", description = "Pad key" },
+  { key = "i", action = "pad:key", description = "Pad key" },
+  { key = "j", action = "pad:key", description = "Pad key" },
+  { key = "k", action = "pad:key", description = "Pad key" },
+  { key = "l", action = "pad:key", description = "Pad key" },
+  { key = "m", action = "pad:key", description = "Pad key" },
+  { key = "n", action = "pad:key", description = "Pad key" },
+  { key = "o", action = "pad:key", description = "Pad key" },
+  { key = "p", action = "pad:key", description = "Pad key" },
+  { key = "q", action = "pad:key", description = "Pad key" },
+  { key = "r", action = "pad:key", description = "Pad key" },
+  { key = "s", action = "pad:key", description = "Pad key" },
+  { key = "t", action = "pad:key", description = "Pad key" },
+  { key = "u", action = "pad:key", description = "Pad key" },
+  { key = "v", action = "pad:key", description = "Pad key" },
+  { key = "w", action = "pad:key", description = "Pad key" },
+  { key = "x", action = "pad:key", description = "Pad key" },
+  { key = "y", action = "pad:key", description = "Pad key" },
+  { key = "z", action = "pad:key", description = "Pad key" },
+]
+
+[layers.confirm]
+bindings = [
+  { key = "Enter", action = "confirm", description = "Confirm selection" },
+  { key = "Escape", action = "cancel", description = "Cancel" },
+  { key = "Left", action = "left", description = "Select No" },
+  { key = "Right", action = "right", description = "Select Yes" },
+  { key = "Tab", action = "toggle", description = "Toggle selection" },
+]
+
+[layers.project_browser]
+bindings = [
+  { key = "Enter", action = "select", description = "Open project" },
+  { key = "Escape", action = "close", description = "Close browser" },
+  { key = "Up", action = "up", description = "Previous project" },
+  { key = "Down", action = "down", description = "Next project" },
+  { key = "k", action = "up", description = "Previous project" },
+  { key = "j", action = "down", description = "Next project" },
+]
+
+[layers.command_palette]
+transparent = false
+bindings = [
+  { key = "Enter", action = "palette:confirm", description = "Execute command" },
+  { key = "Escape", action = "palette:cancel", description = "Cancel" },
+]
+
+[layers.quit_prompt]
+transparent = false
+bindings = []
+
+[layers.save_as]
+transparent = false
+bindings = []
+
+[layers.text_edit]
+transparent = false
+bindings = [
+  { key = "Enter", action = "text:confirm", description = "Confirm" },
+  { key = "Escape", action = "text:cancel", description = "Cancel" },
+]

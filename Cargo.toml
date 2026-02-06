@@ -4,6 +4,7 @@ members = [
     "imbolc-ui",
     "imbolc-core",
     "imbolc-types",
+    "imbolc-net",
 ]
 
 [workspace.dependencies]
