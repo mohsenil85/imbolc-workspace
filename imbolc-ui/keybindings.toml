@@ -195,6 +195,8 @@ bindings = [
   { key = "p", action = "toggle_poly", description = "Toggle polyphonic" },
   { key = "\\", action = "zero_param", description = "Set param to zero" },
   { key = "|", action = "zero_section", description = "Zero all params in section" },
+  { key = "Delete", action = "zero_param", description = "Clear param to minimum" },
+  { key = "Shift+Delete", action = "reset_param", description = "Reset param to default" },
   { key = "e", action = "toggle_eq", description = "Toggle EQ on/off" },
   { key = "l", action = "toggle_lfo", description = "Toggle LFO on/off" },
   { key = "s", action = "cycle_lfo_shape", description = "Cycle LFO shape" },

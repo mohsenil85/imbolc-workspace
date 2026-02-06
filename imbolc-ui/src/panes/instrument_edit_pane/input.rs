@@ -331,6 +331,10 @@ impl InstrumentEditPane {
                 self.zero_current_section();
                 self.emit_update()
             }
+            ActionId::InstrumentEdit(InstrumentEditActionId::ResetParam) => {
+                self.reset_current_param();
+                self.emit_update()
+            }
             ActionId::InstrumentEdit(InstrumentEditActionId::ToggleEq) => {
                 if self.eq.is_some() {
                     self.eq = None;

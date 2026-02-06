@@ -224,6 +224,81 @@ impl InstrumentEditPane {
         }
     }
 
+    /// Reset current parameter to its default value
+    pub(super) fn reset_current_param(&mut self) {
+        let (section, local_idx) = self.row_info(self.selected_row);
+
+        match section {
+            Section::Source => {
+                let param_idx = if self.source.is_sample() {
+                    if local_idx == 0 { return; }
+                    local_idx - 1
+                } else {
+                    local_idx
+                };
+                let defaults = self.source.default_params();
+                if let Some(param) = self.source_params.get_mut(param_idx) {
+                    if let Some(default) = defaults.iter().find(|p| p.name == param.name) {
+                        param.value = default.value.clone();
+                    }
+                }
+            }
+            Section::Filter => {
+                if let Some(ref mut f) = self.filter {
+                    match local_idx {
+                        0 => {} // type - can't reset
+                        1 => f.cutoff.value = 1000.0, // FilterConfig::new default
+                        2 => f.resonance.value = 0.5,
+                        idx => {
+                            let extra_idx = idx - 3;
+                            let defaults = f.filter_type.default_extra_params();
+                            if let Some(param) = f.extra_params.get_mut(extra_idx) {
+                                if let Some(default) = defaults.get(extra_idx) {
+                                    param.value = default.value.clone();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Section::Effects => {
+                if let Some((effect_idx, param_offset)) = self.effect_row_info(local_idx) {
+                    if param_offset == 0 { return; } // header row
+                    let param_idx = param_offset - 1;
+                    if let Some(effect) = self.effects.get_mut(effect_idx) {
+                        let defaults = effect.effect_type.default_params();
+                        if let Some(param) = effect.params.get_mut(param_idx) {
+                            if let Some(default) = defaults.get(param_idx) {
+                                param.value = default.value.clone();
+                            }
+                        }
+                    }
+                }
+            }
+            Section::Lfo => {
+                use crate::state::LfoConfig;
+                let defaults = LfoConfig::default();
+                match local_idx {
+                    0 => self.lfo.enabled = defaults.enabled,
+                    1 => self.lfo.rate = defaults.rate,
+                    2 => self.lfo.depth = defaults.depth,
+                    3 => {} // shape/target - cycle, not value reset
+                    _ => {}
+                }
+            }
+            Section::Envelope => {
+                let defaults = self.source.default_envelope();
+                match local_idx {
+                    0 => self.amp_envelope.attack = defaults.attack,
+                    1 => self.amp_envelope.decay = defaults.decay,
+                    2 => self.amp_envelope.sustain = defaults.sustain,
+                    3 => self.amp_envelope.release = defaults.release,
+                    _ => {}
+                }
+            }
+        }
+    }
+
     /// Set all parameters in the current section to their minimum values
     pub(super) fn zero_current_section(&mut self) {
         let section = self.current_section();
