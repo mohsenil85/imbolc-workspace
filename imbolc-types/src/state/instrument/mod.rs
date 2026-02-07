@@ -569,4 +569,70 @@ mod tests {
         let expected = 1 + inst.source_params.len().max(1) + 1 + 1 + 4 + 4;
         assert_eq!(count, expected);
     }
+
+    #[test]
+    fn channel_config_default_is_stereo() {
+        assert_eq!(ChannelConfig::default(), ChannelConfig::Stereo);
+    }
+
+    #[test]
+    fn channel_config_toggle() {
+        assert_eq!(ChannelConfig::Mono.toggle(), ChannelConfig::Stereo);
+        assert_eq!(ChannelConfig::Stereo.toggle(), ChannelConfig::Mono);
+    }
+
+    #[test]
+    fn channel_config_as_str() {
+        assert_eq!(ChannelConfig::Mono.as_str(), "MONO");
+        assert_eq!(ChannelConfig::Stereo.as_str(), "STEREO");
+    }
+
+    #[test]
+    fn channel_config_channels() {
+        assert_eq!(ChannelConfig::Mono.channels(), 1);
+        assert_eq!(ChannelConfig::Stereo.channels(), 2);
+    }
+
+    #[test]
+    fn channel_config_is_mono_is_stereo() {
+        assert!(ChannelConfig::Mono.is_mono());
+        assert!(!ChannelConfig::Mono.is_stereo());
+        assert!(ChannelConfig::Stereo.is_stereo());
+        assert!(!ChannelConfig::Stereo.is_mono());
+    }
+
+    #[test]
+    fn output_target_default_is_master() {
+        assert_eq!(OutputTarget::default(), OutputTarget::Master);
+    }
+
+    #[test]
+    fn mixer_send_new() {
+        let send = MixerSend::new(3);
+        assert_eq!(send.bus_id, 3);
+        assert_eq!(send.level, 0.0);
+        assert!(!send.enabled);
+    }
+
+    #[test]
+    fn instrument_add_remove_effect() {
+        let mut inst = Instrument::new(1, SourceType::Saw);
+        let id = inst.add_effect(EffectType::Delay);
+        assert!(inst.effect_by_id(id).is_some());
+        assert!(inst.remove_effect(id));
+        assert!(inst.effect_by_id(id).is_none());
+    }
+
+    #[test]
+    fn instrument_move_effect() {
+        let mut inst = Instrument::new(1, SourceType::Saw);
+        let id1 = inst.add_effect(EffectType::Delay);
+        let id2 = inst.add_effect(EffectType::Reverb);
+        assert_eq!(inst.effect_position(id1), Some(0));
+        assert_eq!(inst.effect_position(id2), Some(1));
+        // Move id2 backward (up)
+        inst.move_effect(id2, -1);
+        assert_eq!(inst.effect_position(id2), Some(0));
+        assert_eq!(inst.effect_position(id1), Some(1));
+    }
 }

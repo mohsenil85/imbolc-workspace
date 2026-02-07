@@ -122,4 +122,19 @@ mod tests {
         assert_eq!(p0, 60);
         assert_eq!(p1, 60);
     }
+
+    #[test]
+    fn snap_to_grid_zero() {
+        assert_eq!(snap_to_grid(0, 1), 0);
+        assert_eq!(snap_to_grid(0, 3), 0);
+        assert_eq!(snap_to_grid(0, 5), 0);
+    }
+
+    #[test]
+    fn snap_to_grid_exact_boundary() {
+        // Already on grid boundary should stay unchanged
+        assert_eq!(snap_to_grid(240, 3), 240);
+        assert_eq!(snap_to_grid(960, 5), 960);
+        assert_eq!(snap_to_grid(120, 2), 120);
+    }
 }

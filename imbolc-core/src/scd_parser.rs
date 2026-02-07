@@ -148,4 +148,18 @@ SynthDef("test_synth", {
         assert_eq!(min, -1.0);
         assert_eq!(max, 1.0);
     }
+
+    #[test]
+    fn infer_range_unknown_param() {
+        // Default 0.5 is in 0-1 range, so should get (0.0, 1.0)
+        let (min, max) = infer_param_range("some_random_param", 0.5);
+        assert_eq!(min, 0.0);
+        assert_eq!(max, 1.0);
+    }
+
+    #[test]
+    fn parse_empty_string_fails() {
+        let result = parse_scd_file("");
+        assert!(result.is_err());
+    }
 }

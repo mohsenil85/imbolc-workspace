@@ -52,3 +52,48 @@ impl CustomSynthDefRegistry {
         self.synthdefs.iter().find(|s| s.id == id)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_synthdef(name: &str) -> CustomSynthDef {
+        CustomSynthDef {
+            id: 0,
+            name: name.to_string(),
+            synthdef_name: format!("imbolc_{}", name),
+            source_path: PathBuf::from("/tmp/test.scd"),
+            params: vec![],
+        }
+    }
+
+    #[test]
+    fn registry_new_empty() {
+        let reg = CustomSynthDefRegistry::new();
+        assert!(reg.synthdefs.is_empty());
+        assert_eq!(reg.next_id, 0);
+    }
+
+    #[test]
+    fn registry_add_assigns_id() {
+        let mut reg = CustomSynthDefRegistry::new();
+        let id0 = reg.add(make_synthdef("first"));
+        let id1 = reg.add(make_synthdef("second"));
+        assert_eq!(id0, 0);
+        assert_eq!(id1, 1);
+    }
+
+    #[test]
+    fn registry_get_finds_by_id() {
+        let mut reg = CustomSynthDefRegistry::new();
+        let id = reg.add(make_synthdef("test"));
+        assert!(reg.get(id).is_some());
+        assert_eq!(reg.get(id).unwrap().name, "test");
+    }
+
+    #[test]
+    fn registry_get_missing_returns_none() {
+        let reg = CustomSynthDefRegistry::new();
+        assert!(reg.get(99).is_none());
+    }
+}

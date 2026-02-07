@@ -503,3 +503,78 @@ impl EffectSlot {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn effect_type_name_coverage() {
+        for et in EffectType::all() {
+            assert!(!et.name().is_empty(), "{:?} has empty name", et);
+        }
+    }
+
+    #[test]
+    fn effect_type_synth_def_name_coverage() {
+        for et in EffectType::all() {
+            assert!(et.synth_def_name().starts_with("imbolc_"), "{:?}", et);
+        }
+    }
+
+    #[test]
+    fn effect_type_has_mono_variant() {
+        assert!(!EffectType::StereoWidener.has_mono_variant());
+        assert!(EffectType::Delay.has_mono_variant());
+        assert!(!EffectType::Vst(0).has_mono_variant());
+    }
+
+    #[test]
+    fn effect_type_mono_name_stereo_only_falls_back() {
+        // StereoWidener has no mono variant, so mono name should equal stereo name
+        assert_eq!(
+            EffectType::StereoWidener.synth_def_name_mono(),
+            EffectType::StereoWidener.synth_def_name()
+        );
+    }
+
+    #[test]
+    fn effect_type_all_count() {
+        let all = EffectType::all();
+        // Should not contain Vst
+        assert!(all.iter().all(|e| !e.is_vst()));
+        assert!(!all.is_empty());
+    }
+
+    #[test]
+    fn effect_type_is_vst() {
+        assert!(EffectType::Vst(0).is_vst());
+        assert!(!EffectType::Delay.is_vst());
+    }
+
+    #[test]
+    fn effect_type_vst_id() {
+        assert_eq!(EffectType::Vst(42).vst_id(), Some(42));
+        assert_eq!(EffectType::Delay.vst_id(), None);
+    }
+
+    #[test]
+    fn effect_type_default_params_non_empty() {
+        assert!(!EffectType::Delay.default_params().is_empty());
+        assert!(!EffectType::Reverb.default_params().is_empty());
+    }
+
+    #[test]
+    fn effect_type_default_params_vst_empty() {
+        assert!(EffectType::Vst(0).default_params().is_empty());
+    }
+
+    #[test]
+    fn effect_slot_new() {
+        let slot = EffectSlot::new(5, EffectType::Delay);
+        assert_eq!(slot.id, 5);
+        assert!(slot.enabled);
+        assert_eq!(slot.effect_type, EffectType::Delay);
+        assert!(!slot.params.is_empty());
+    }
+}

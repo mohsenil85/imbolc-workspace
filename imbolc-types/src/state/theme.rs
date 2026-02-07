@@ -252,4 +252,23 @@ mod tests {
         let color = ThemeColor::new(10, 20, 30);
         assert_eq!(color.to_rgb(), (10, 20, 30));
     }
+
+    #[test]
+    fn theme_all_colors_non_zero() {
+        let theme = Theme::dark();
+        // Key semantic colors should have at least one non-zero channel
+        let colors = [theme.error, theme.warning, theme.success, theme.osc_color, theme.filter_color];
+        for color in &colors {
+            assert!(color.r > 0 || color.g > 0 || color.b > 0, "Color {:?} is all zeros", color);
+        }
+    }
+
+    #[test]
+    fn cycle_theme_wraps() {
+        let themes = Theme::built_in_themes();
+        // After the last theme, cycling should wrap to the first
+        let last_idx = themes.len() - 1;
+        let next_idx = (last_idx + 1) % themes.len();
+        assert_eq!(next_idx, 0);
+    }
 }

@@ -339,6 +339,11 @@ impl PianoKeyboard {
         Some(pitches)
     }
 
+    #[cfg(test)]
+    pub fn layout(&self) -> PianoLayout {
+        self.layout
+    }
+
     /// Map a keyboard character to Stradella column index and row type.
     /// 3 physical rows with shift selecting the alternate row:
     /// - QWERTY: unshifted=Dom7, shifted=Dim7
@@ -420,5 +425,229 @@ impl PianoKeyboard {
 
             _ => None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_defaults() {
+        let kb = PianoKeyboard::new();
+        assert!(!kb.is_active());
+        assert_eq!(kb.octave(), 4);
+        assert_eq!(kb.layout(), PianoLayout::C);
+    }
+
+    #[test]
+    fn activate_deactivate() {
+        let mut kb = PianoKeyboard::new();
+        kb.activate();
+        assert!(kb.is_active());
+        kb.deactivate();
+        assert!(!kb.is_active());
+    }
+
+    #[test]
+    fn handle_escape_cycles_c_a_stradella_off() {
+        let mut kb = PianoKeyboard::new();
+        kb.activate();
+        assert_eq!(kb.layout(), PianoLayout::C);
+
+        assert!(!kb.handle_escape()); // C -> A
+        assert_eq!(kb.layout(), PianoLayout::A);
+
+        assert!(!kb.handle_escape()); // A -> Stradella
+        assert_eq!(kb.layout(), PianoLayout::Stradella);
+
+        assert!(kb.handle_escape()); // Stradella -> off
+        assert!(!kb.is_active());
+    }
+
+    #[test]
+    fn octave_up_clamps_at_9() {
+        let mut kb = PianoKeyboard::new();
+        kb.activate();
+        for _ in 0..20 {
+            kb.octave_up();
+        }
+        assert_eq!(kb.octave(), 9);
+        assert!(!kb.octave_up()); // at max, returns false
+    }
+
+    #[test]
+    fn octave_down_clamps_at_neg1() {
+        let mut kb = PianoKeyboard::new();
+        kb.activate();
+        for _ in 0..20 {
+            kb.octave_down();
+        }
+        assert_eq!(kb.octave(), -1);
+        assert!(!kb.octave_down()); // at min, returns false
+    }
+
+    #[test]
+    fn status_label_c() {
+        let mut kb = PianoKeyboard::new();
+        kb.activate();
+        assert!(kb.status_label().contains("PIANO"));
+        assert!(kb.status_label().contains("C4"));
+    }
+
+    #[test]
+    fn status_label_a() {
+        let mut kb = PianoKeyboard::new();
+        kb.activate();
+        kb.handle_escape(); // C -> A
+        assert!(kb.status_label().contains("PIANO"));
+        assert!(kb.status_label().contains("A4"));
+    }
+
+    #[test]
+    fn status_label_stradella() {
+        let mut kb = PianoKeyboard::new();
+        kb.activate();
+        kb.handle_escape(); // C -> A
+        kb.handle_escape(); // A -> Stradella
+        assert!(kb.status_label().contains("BASS"));
+    }
+
+    #[test]
+    fn key_to_pitch_c_layout_a_is_c() {
+        let mut kb = PianoKeyboard::new();
+        kb.activate();
+        // 'a' in C layout is C, at octave 4: (4+1)*12 + 0 = 60
+        assert_eq!(kb.key_to_pitch('a'), Some(60));
+    }
+
+    #[test]
+    fn key_to_pitch_c_layout_sharps() {
+        let mut kb = PianoKeyboard::new();
+        kb.activate();
+        // 'w' = C# = offset 1 -> 61
+        assert_eq!(kb.key_to_pitch('w'), Some(61));
+        // 'e' = D# = offset 3 -> 63
+        assert_eq!(kb.key_to_pitch('e'), Some(63));
+        // 't' = F# = offset 6 -> 66
+        assert_eq!(kb.key_to_pitch('t'), Some(66));
+    }
+
+    #[test]
+    fn key_to_pitch_a_layout_a_is_a() {
+        let mut kb = PianoKeyboard::new();
+        kb.activate();
+        kb.handle_escape(); // C -> A
+        // 'a' in A layout is offset 0 from A. Base = (4+1)*12 - 3 = 57
+        assert_eq!(kb.key_to_pitch('a'), Some(57));
+    }
+
+    #[test]
+    fn key_to_pitch_unknown_key_none() {
+        let mut kb = PianoKeyboard::new();
+        kb.activate();
+        assert_eq!(kb.key_to_pitch('1'), None);
+    }
+
+    #[test]
+    fn key_to_pitch_stradella_returns_none() {
+        let mut kb = PianoKeyboard::new();
+        kb.activate();
+        kb.handle_escape(); // C -> A
+        kb.handle_escape(); // A -> Stradella
+        assert_eq!(kb.key_to_pitch('a'), None);
+    }
+
+    #[test]
+    fn key_to_pitches_stradella_bass() {
+        let mut kb = PianoKeyboard::new();
+        kb.activate();
+        kb.handle_escape(); // C -> A
+        kb.handle_escape(); // A -> Stradella
+        // 'c' = Bass, col 2 (F root). Bass = single root note at bass octave.
+        let pitches = kb.key_to_pitches('c').unwrap();
+        assert_eq!(pitches.len(), 1);
+    }
+
+    #[test]
+    fn key_to_pitches_stradella_major() {
+        let mut kb = PianoKeyboard::new();
+        kb.activate();
+        kb.handle_escape();
+        kb.handle_escape();
+        // 'd' = Major, col 2 (F root). Major triad = 3 notes.
+        let pitches = kb.key_to_pitches('d').unwrap();
+        assert_eq!(pitches.len(), 3);
+    }
+
+    #[test]
+    fn key_to_pitches_stradella_minor() {
+        let mut kb = PianoKeyboard::new();
+        kb.activate();
+        kb.handle_escape();
+        kb.handle_escape();
+        // 'D' (shifted) = Minor, col 2 (F root). Minor triad = 3 notes.
+        let pitches = kb.key_to_pitches('D').unwrap();
+        assert_eq!(pitches.len(), 3);
+    }
+
+    #[test]
+    fn key_to_pitches_stradella_dom7() {
+        let mut kb = PianoKeyboard::new();
+        kb.activate();
+        kb.handle_escape();
+        kb.handle_escape();
+        // 'e' = Dom7, col 2 (F root). Dom7 = 3 notes (root, 3rd, 7th).
+        let pitches = kb.key_to_pitches('e').unwrap();
+        assert_eq!(pitches.len(), 3);
+    }
+
+    #[test]
+    fn sustain_new_press_returns_pitches() {
+        let mut kb = PianoKeyboard::new();
+        kb.activate();
+        let now = Instant::now();
+        let result = kb.key_pressed('a', vec![60], now);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), vec![60]);
+    }
+
+    #[test]
+    fn sustain_repeat_returns_none() {
+        let mut kb = PianoKeyboard::new();
+        kb.activate();
+        let now = Instant::now();
+        kb.key_pressed('a', vec![60], now);
+        // Second press of same key returns None (key repeat)
+        let result = kb.key_pressed('a', vec![60], now);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn release_all_clears() {
+        let mut kb = PianoKeyboard::new();
+        kb.activate();
+        let now = Instant::now();
+        kb.key_pressed('a', vec![60], now);
+        kb.key_pressed('s', vec![62], now);
+        assert!(kb.has_active_keys());
+        let released = kb.release_all();
+        assert!(!kb.has_active_keys());
+        assert_eq!(released.len(), 2);
+    }
+
+    #[test]
+    fn colemak_translation() {
+        assert_eq!(translate_key('f', KeyboardLayout::Colemak), 'e');
+        assert_eq!(translate_key('p', KeyboardLayout::Colemak), 'r');
+        assert_eq!(translate_key('r', KeyboardLayout::Colemak), 's');
+    }
+
+    #[test]
+    fn colemak_unchanged_keys() {
+        // Keys not in colemak map should pass through
+        assert_eq!(translate_key('a', KeyboardLayout::Colemak), 'a');
+        assert_eq!(translate_key('q', KeyboardLayout::Colemak), 'q');
+        assert_eq!(translate_key('z', KeyboardLayout::Colemak), 'z');
     }
 }

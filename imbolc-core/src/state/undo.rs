@@ -255,8 +255,64 @@ mod tests {
         history.push(&session, &instruments);
         history.undo(&session, &instruments);
         assert!(history.can_redo());
-        
+
         history.push(&session, &instruments);
         assert!(!history.can_redo());
+    }
+
+    #[test]
+    fn clear_empties_both_stacks() {
+        let mut history = UndoHistory::new(5);
+        let session = SessionState::new();
+        let instruments = InstrumentState::new();
+
+        history.push(&session, &instruments);
+        history.push(&session, &instruments);
+        history.undo(&session, &instruments);
+        assert!(history.can_undo());
+        assert!(history.can_redo());
+
+        history.clear();
+        assert!(!history.can_undo());
+        assert!(!history.can_redo());
+    }
+
+    #[test]
+    fn push_from_owned_works() {
+        let mut history = UndoHistory::new(5);
+        let session = SessionState::new();
+        let instruments = InstrumentState::new();
+
+        history.push_from(session.clone(), instruments.clone());
+        assert!(history.can_undo());
+        assert_eq!(history.undo_stack.len(), 1);
+    }
+
+    #[test]
+    fn undo_empty_returns_none() {
+        let mut history = UndoHistory::new(5);
+        let session = SessionState::new();
+        let instruments = InstrumentState::new();
+        assert!(history.undo(&session, &instruments).is_none());
+    }
+
+    #[test]
+    fn redo_empty_returns_none() {
+        let mut history = UndoHistory::new(5);
+        let session = SessionState::new();
+        let instruments = InstrumentState::new();
+        assert!(history.redo(&session, &instruments).is_none());
+    }
+
+    #[test]
+    fn is_undoable_instrument_add() {
+        let action = Action::Instrument(crate::action::InstrumentAction::Add(imbolc_types::SourceType::Saw));
+        assert!(is_undoable(&action));
+    }
+
+    #[test]
+    fn is_undoable_select_is_not() {
+        let action = Action::Instrument(crate::action::InstrumentAction::Select(0));
+        assert!(!is_undoable(&action));
     }
 }

@@ -74,3 +74,65 @@ impl Default for LfoConfig {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn lfo_shape_name() {
+        assert_eq!(LfoShape::Sine.name(), "Sine");
+        assert_eq!(LfoShape::Square.name(), "Square");
+        assert_eq!(LfoShape::Saw.name(), "Saw");
+        assert_eq!(LfoShape::Triangle.name(), "Triangle");
+    }
+
+    #[test]
+    fn lfo_shape_index() {
+        assert_eq!(LfoShape::Sine.index(), 0);
+        assert_eq!(LfoShape::Square.index(), 1);
+        assert_eq!(LfoShape::Saw.index(), 2);
+        assert_eq!(LfoShape::Triangle.index(), 3);
+    }
+
+    #[test]
+    fn lfo_shape_all() {
+        assert_eq!(LfoShape::all().len(), 4);
+    }
+
+    #[test]
+    fn lfo_shape_next_cycles() {
+        assert_eq!(LfoShape::Sine.next(), LfoShape::Square);
+        assert_eq!(LfoShape::Square.next(), LfoShape::Saw);
+        assert_eq!(LfoShape::Saw.next(), LfoShape::Triangle);
+        assert_eq!(LfoShape::Triangle.next(), LfoShape::Sine);
+    }
+
+    #[test]
+    fn lfo_shape_from_name() {
+        assert_eq!(LfoShape::from_name("Sine"), Some(LfoShape::Sine));
+        assert_eq!(LfoShape::from_name("Square"), Some(LfoShape::Square));
+        assert_eq!(LfoShape::from_name("unknown"), None);
+    }
+
+    #[test]
+    fn lfo_shape_from_name_case_sensitive() {
+        assert_eq!(LfoShape::from_name("sine"), None);
+    }
+
+    #[test]
+    fn lfo_config_default() {
+        let cfg = LfoConfig::default();
+        assert!(!cfg.enabled);
+        assert_eq!(cfg.rate, 2.0);
+        assert_eq!(cfg.depth, 0.5);
+        assert_eq!(cfg.shape, LfoShape::Sine);
+    }
+
+    #[test]
+    fn lfo_shape_index_matches_position() {
+        for (i, shape) in LfoShape::all().iter().enumerate() {
+            assert_eq!(shape.index(), i as i32);
+        }
+    }
+}

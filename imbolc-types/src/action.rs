@@ -790,3 +790,75 @@ pub enum Action {
     /// Save the project then quit (used by quit prompt)
     SaveAndQuit,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn audio_dirty_all_sets_everything() {
+        let d = AudioDirty::all();
+        assert!(d.instruments);
+        assert!(d.session);
+        assert!(d.piano_roll);
+        assert!(d.automation);
+        assert!(d.routing);
+        assert!(d.mixer_params);
+    }
+
+    #[test]
+    fn audio_dirty_any_detects_single_flag() {
+        let mut d = AudioDirty::default();
+        assert!(!d.any());
+        d.instruments = true;
+        assert!(d.any());
+    }
+
+    #[test]
+    fn audio_dirty_any_false_when_empty() {
+        let d = AudioDirty::default();
+        assert!(!d.any());
+    }
+
+    #[test]
+    fn audio_dirty_merge_combines_flags() {
+        let mut a = AudioDirty { instruments: true, ..AudioDirty::default() };
+        let b = AudioDirty { session: true, ..AudioDirty::default() };
+        a.merge(b);
+        assert!(a.instruments);
+        assert!(a.session);
+    }
+
+    #[test]
+    fn audio_dirty_clear() {
+        let mut d = AudioDirty::all();
+        d.clear();
+        assert!(!d.any());
+    }
+
+    #[test]
+    fn dispatch_result_none_is_empty() {
+        let r = DispatchResult::none();
+        assert!(!r.quit);
+        assert!(r.nav.is_empty());
+        assert!(r.status.is_empty());
+    }
+
+    #[test]
+    fn dispatch_result_with_quit() {
+        let r = DispatchResult::with_quit();
+        assert!(r.quit);
+    }
+
+    #[test]
+    fn filter_param_kind_as_str() {
+        assert_eq!(FilterParamKind::Cutoff.as_str(), "cutoff");
+        assert_eq!(FilterParamKind::Resonance.as_str(), "resonance");
+    }
+
+    #[test]
+    fn lfo_param_kind_as_str() {
+        assert_eq!(LfoParamKind::Rate.as_str(), "rate");
+        assert_eq!(LfoParamKind::Depth.as_str(), "depth");
+    }
+}

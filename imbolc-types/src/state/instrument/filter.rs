@@ -159,3 +159,92 @@ impl Default for EqConfig {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn filter_type_name_non_empty() {
+        for ft in FilterType::all() {
+            assert!(!ft.name().is_empty(), "{:?} has empty name", ft);
+        }
+    }
+
+    #[test]
+    fn filter_type_synth_def_name_prefixed() {
+        for ft in FilterType::all() {
+            assert!(ft.synth_def_name().starts_with("imbolc_"), "{:?}", ft);
+        }
+    }
+
+    #[test]
+    fn filter_type_synth_def_name_mono_suffixed() {
+        for ft in FilterType::all() {
+            assert!(ft.synth_def_name_mono().ends_with("_mono"), "{:?}", ft);
+        }
+    }
+
+    #[test]
+    fn filter_type_all_returns_all_variants() {
+        let all = FilterType::all();
+        assert_eq!(all.len(), 8);
+        // No duplicates
+        let mut deduped = all.clone();
+        deduped.dedup();
+        assert_eq!(deduped.len(), 8);
+    }
+
+    #[test]
+    fn filter_type_default_extra_params_vowel() {
+        let params = FilterType::Vowel.default_extra_params();
+        assert_eq!(params.len(), 1);
+        assert_eq!(params[0].name, "shape");
+    }
+
+    #[test]
+    fn filter_type_default_extra_params_resdrive() {
+        let params = FilterType::ResDrive.default_extra_params();
+        assert_eq!(params.len(), 1);
+        assert_eq!(params[0].name, "drive");
+    }
+
+    #[test]
+    fn filter_type_default_extra_params_others_empty() {
+        for ft in [FilterType::Lpf, FilterType::Hpf, FilterType::Bpf, FilterType::Notch, FilterType::Comb, FilterType::Allpass] {
+            assert!(ft.default_extra_params().is_empty(), "{:?} should have no extra params", ft);
+        }
+    }
+
+    #[test]
+    fn filter_config_new_defaults() {
+        let cfg = FilterConfig::new(FilterType::Lpf);
+        assert_eq!(cfg.cutoff.value, 1000.0);
+        assert_eq!(cfg.resonance.value, 0.5);
+        assert!(cfg.enabled);
+        assert_eq!(cfg.filter_type, FilterType::Lpf);
+    }
+
+    #[test]
+    fn filter_config_new_vowel_has_extra_params() {
+        let cfg = FilterConfig::new(FilterType::Vowel);
+        assert_eq!(cfg.extra_params.len(), 1);
+        assert_eq!(cfg.extra_params[0].name, "shape");
+    }
+
+    #[test]
+    fn eq_config_default() {
+        let eq = EqConfig::default();
+        assert_eq!(eq.bands.len(), EQ_BAND_COUNT);
+        assert_eq!(eq.bands[0].band_type, EqBandType::LowShelf);
+        assert_eq!(eq.bands[11].band_type, EqBandType::HighShelf);
+        assert!(eq.enabled);
+    }
+
+    #[test]
+    fn eq_band_type_name() {
+        assert_eq!(EqBandType::LowShelf.name(), "LS");
+        assert_eq!(EqBandType::Peaking.name(), "PK");
+        assert_eq!(EqBandType::HighShelf.name(), "HS");
+    }
+}

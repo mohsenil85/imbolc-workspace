@@ -86,3 +86,62 @@ impl Scale {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    #[test]
+    fn key_all_has_12() {
+        assert_eq!(Key::ALL.len(), 12);
+    }
+
+    #[test]
+    fn key_names_unique() {
+        let names: HashSet<&str> = Key::ALL.iter().map(|k| k.name()).collect();
+        assert_eq!(names.len(), 12);
+    }
+
+    #[test]
+    fn key_semitones_0_to_11() {
+        let semitones: Vec<i32> = Key::ALL.iter().map(|k| k.semitone()).collect();
+        assert_eq!(semitones, (0..12).collect::<Vec<i32>>());
+    }
+
+    #[test]
+    fn key_c_semitone_is_zero() {
+        assert_eq!(Key::C.semitone(), 0);
+    }
+
+    #[test]
+    fn scale_all_has_11() {
+        assert_eq!(Scale::ALL.len(), 11);
+    }
+
+    #[test]
+    fn scale_names_unique() {
+        let names: HashSet<&str> = Scale::ALL.iter().map(|s| s.name()).collect();
+        assert_eq!(names.len(), 11);
+    }
+
+    #[test]
+    fn scale_major_intervals() {
+        assert_eq!(Scale::Major.intervals(), &[0, 2, 4, 5, 7, 9, 11]);
+    }
+
+    #[test]
+    fn scale_minor_intervals() {
+        assert_eq!(Scale::Minor.intervals(), &[0, 2, 3, 5, 7, 8, 10]);
+    }
+
+    #[test]
+    fn scale_chromatic_has_12_notes() {
+        assert_eq!(Scale::Chromatic.intervals().len(), 12);
+    }
+
+    #[test]
+    fn scale_pentatonic_has_5_notes() {
+        assert_eq!(Scale::Pentatonic.intervals().len(), 5);
+    }
+}

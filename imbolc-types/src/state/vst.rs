@@ -87,3 +87,100 @@ impl VstPluginRegistry {
         self.plugins.iter_mut().find(|p| p.id == id)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_plugin(name: &str, kind: VstPluginKind) -> VstPlugin {
+        VstPlugin {
+            id: 0,
+            name: name.to_string(),
+            plugin_path: PathBuf::from("/tmp/test.vst3"),
+            kind,
+            params: vec![],
+        }
+    }
+
+    #[test]
+    fn registry_new_empty() {
+        let reg = VstPluginRegistry::new();
+        assert!(reg.is_empty());
+        assert_eq!(reg.next_id, 0);
+    }
+
+    #[test]
+    fn registry_add_assigns_id() {
+        let mut reg = VstPluginRegistry::new();
+        let id0 = reg.add(make_plugin("A", VstPluginKind::Instrument));
+        let id1 = reg.add(make_plugin("B", VstPluginKind::Effect));
+        assert_eq!(id0, 0);
+        assert_eq!(id1, 1);
+    }
+
+    #[test]
+    fn registry_get_by_id() {
+        let mut reg = VstPluginRegistry::new();
+        let id = reg.add(make_plugin("Test", VstPluginKind::Instrument));
+        assert!(reg.get(id).is_some());
+        assert_eq!(reg.get(id).unwrap().name, "Test");
+    }
+
+    #[test]
+    fn registry_remove() {
+        let mut reg = VstPluginRegistry::new();
+        let id = reg.add(make_plugin("X", VstPluginKind::Effect));
+        reg.remove(id);
+        assert!(reg.get(id).is_none());
+    }
+
+    #[test]
+    fn registry_by_name() {
+        let mut reg = VstPluginRegistry::new();
+        reg.add(make_plugin("Synth1", VstPluginKind::Instrument));
+        assert!(reg.by_name("Synth1").is_some());
+    }
+
+    #[test]
+    fn registry_by_name_missing() {
+        let reg = VstPluginRegistry::new();
+        assert!(reg.by_name("Nonexistent").is_none());
+    }
+
+    #[test]
+    fn registry_is_empty() {
+        let mut reg = VstPluginRegistry::new();
+        assert!(reg.is_empty());
+        reg.add(make_plugin("A", VstPluginKind::Instrument));
+        assert!(!reg.is_empty());
+    }
+
+    #[test]
+    fn registry_len() {
+        let mut reg = VstPluginRegistry::new();
+        assert_eq!(reg.len(), 0);
+        reg.add(make_plugin("A", VstPluginKind::Instrument));
+        reg.add(make_plugin("B", VstPluginKind::Effect));
+        assert_eq!(reg.len(), 2);
+    }
+
+    #[test]
+    fn registry_instruments_filter() {
+        let mut reg = VstPluginRegistry::new();
+        reg.add(make_plugin("Inst", VstPluginKind::Instrument));
+        reg.add(make_plugin("FX", VstPluginKind::Effect));
+        let insts: Vec<_> = reg.instruments().collect();
+        assert_eq!(insts.len(), 1);
+        assert_eq!(insts[0].name, "Inst");
+    }
+
+    #[test]
+    fn registry_effects_filter() {
+        let mut reg = VstPluginRegistry::new();
+        reg.add(make_plugin("Inst", VstPluginKind::Instrument));
+        reg.add(make_plugin("FX", VstPluginKind::Effect));
+        let effs: Vec<_> = reg.effects().collect();
+        assert_eq!(effs.len(), 1);
+        assert_eq!(effs[0].name, "FX");
+    }
+}
