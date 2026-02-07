@@ -1,5 +1,5 @@
 use crate::audio::devices;
-use crate::audio::{self, AudioHandle};
+use crate::audio::{self, AudioEngine, AudioHandle};
 use crate::ui::StatusEvent;
 
 /// Auto-start SuperCollider server, connect, and load synthdefs.
@@ -13,7 +13,35 @@ pub fn auto_start_sc(
 
     let mut events = Vec::new();
 
-    // Load saved device preferences
+    // Step 1: Check if synthdefs need compilation
+    let scd_path = imbolc_core::paths::compile_scd_path();
+    if scd_path.exists() && AudioEngine::synthdefs_need_compilation(&scd_path) {
+        events.push(StatusEvent {
+            status: audio::ServerStatus::Stopped,
+            message: "Compiling synthdefs...".to_string(),
+            server_running: None,
+        });
+
+        match audio.compile_synthdefs_sync(&scd_path) {
+            Ok(msg) => {
+                events.push(StatusEvent {
+                    status: audio::ServerStatus::Stopped,
+                    message: format!("Synthdefs compiled: {}", msg),
+                    server_running: None,
+                });
+            }
+            Err(e) => {
+                events.push(StatusEvent {
+                    status: audio::ServerStatus::Stopped,
+                    message: format!("Synthdef compile warning: {}", e),
+                    server_running: None,
+                });
+                // Continue anyway - may have partial synthdefs
+            }
+        }
+    }
+
+    // Step 2: Load saved device preferences and start server
     let config = devices::load_device_config();
 
     match audio.start_server_with_devices(

@@ -216,6 +216,12 @@ impl AudioEngine {
         Ok(())
     }
 
+    /// Check if synthdefs need compilation (returns true if compilation needed).
+    /// This is the public wrapper for use during startup.
+    pub fn synthdefs_need_compilation(scd_path: &Path) -> bool {
+        !Self::synthdefs_are_fresh(scd_path)
+    }
+
     /// Check if all `.scsyndef` files in the same directory as `scd_path` are
     /// newer than the newest `.scd` source file. Scans all `.scd` files
     /// recursively under the parent directory (to cover `defs/` subdirectory).

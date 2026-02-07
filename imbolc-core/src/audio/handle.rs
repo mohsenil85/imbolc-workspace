@@ -575,6 +575,33 @@ impl AudioHandle {
         }
     }
 
+    /// Compile synthdefs synchronously. Blocks until complete.
+    /// Used during startup to ensure synthdefs exist before connecting.
+    pub fn compile_synthdefs_sync(&mut self, scd_path: &Path) -> Result<String, String> {
+        // Send compile command (this triggers the background compilation)
+        self.compile_synthdefs_async(scd_path)?;
+
+        // Poll for completion (with timeout)
+        let timeout = Duration::from_secs(120);
+        let start = std::time::Instant::now();
+
+        loop {
+            // Drain feedback looking for CompileResult
+            while let Ok(msg) = self.feedback_rx.try_recv() {
+                self.apply_feedback(&msg);
+                if let AudioFeedback::CompileResult(result) = msg {
+                    return result;
+                }
+            }
+
+            if start.elapsed() > timeout {
+                return Err("Synthdef compilation timed out".to_string());
+            }
+
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    }
+
     pub fn load_synthdefs(&self, dir: &Path) -> Result<(), String> {
         let (reply_tx, reply_rx) = mpsc::channel();
         self.send_cmd(AudioCmd::LoadSynthDefs {

@@ -149,13 +149,33 @@ impl WaveformPane {
             return;
         }
 
+        // Use fixed display size for live audio-in to prevent jumping
+        // Recorded waveform peaks are already fixed at 512 samples
+        const DISPLAY_SAMPLES: usize = 200;
+
+        // Normalize live waveform to fixed size
+        // - Recorded: use as-is (already fixed size)
+        // - Live >= DISPLAY_SAMPLES: use last DISPLAY_SAMPLES
+        // - Live < DISPLAY_SAMPLES: stretch to fill display
+        let display_buffer: Vec<f32> = if is_recorded {
+            waveform.to_vec()
+        } else if waveform_len >= DISPLAY_SAMPLES {
+            waveform[waveform_len - DISPLAY_SAMPLES..].to_vec()
+        } else {
+            // Stretch available samples to fill display (nearest-neighbor interpolation)
+            (0..DISPLAY_SAMPLES)
+                .map(|i| waveform[i * waveform_len / DISPLAY_SAMPLES])
+                .collect()
+        };
+        let display_len = display_buffer.len();
+
         // Build a 2D grid of dots
         let mut dot_grid: Vec<Vec<bool>> = vec![vec![false; dot_height]; dot_width];
 
         // Map samples to dots - for waveform, we show amplitude mirrored around center
         for dot_x in 0..dot_width {
-            let sample_idx = (dot_x * waveform_len / dot_width).min(waveform_len - 1);
-            let amplitude = waveform[sample_idx].abs().min(1.0);
+            let sample_idx = (dot_x * display_len / dot_width).min(display_len - 1);
+            let amplitude = display_buffer[sample_idx].abs().min(1.0);
 
             // Calculate how many dots above/below center to fill
             let half_dot_height = center_dot_y;
@@ -299,6 +319,23 @@ impl WaveformPane {
         buf.draw_line(Rect::new(grid_x, grid_y, 2, 1), &[("+1", dark_gray)]);
         buf.draw_line(Rect::new(grid_x, grid_y + grid_height - 1, 2, 1), &[("-1", dark_gray)]);
 
+        // Use fixed display size to prevent jumping from variable OSC receive rate
+        const DISPLAY_SAMPLES: usize = 200;
+
+        // Normalize buffer to fixed size
+        // - If >= DISPLAY_SAMPLES: use last DISPLAY_SAMPLES (stable mapping)
+        // - If < DISPLAY_SAMPLES: stretch to fill (prevents half-empty display)
+        let display_buffer: Vec<f32> = if scope_len == 0 {
+            vec![0.0; DISPLAY_SAMPLES]
+        } else if scope_len >= DISPLAY_SAMPLES {
+            scope.iter().skip(scope_len - DISPLAY_SAMPLES).copied().collect()
+        } else {
+            // Stretch available samples to fill display (nearest-neighbor interpolation)
+            (0..DISPLAY_SAMPLES)
+                .map(|i| scope[i * scope_len / DISPLAY_SAMPLES])
+                .collect()
+        };
+
         if scope_len == 0 {
             let status_y = grid_y + grid_height;
             let status = "Samples: 0  [Tab: cycle mode]";
@@ -313,8 +350,8 @@ impl WaveformPane {
         // Map samples to dots - oscilloscope shows actual waveform (not mirrored)
         let mut prev_dot_y: Option<usize> = None;
         for dot_x in 0..dot_width {
-            let sample_idx = (dot_x * scope_len / dot_width).min(scope_len - 1);
-            let sample = scope[sample_idx].clamp(-1.0, 1.0);
+            let sample_idx = (dot_x * DISPLAY_SAMPLES / dot_width).min(DISPLAY_SAMPLES - 1);
+            let sample = display_buffer[sample_idx].clamp(-1.0, 1.0);
 
             // Map sample (-1 to 1) to dot y coordinate (0 to dot_height-1)
             // -1 -> bottom (dot_height-1), +1 -> top (0)
