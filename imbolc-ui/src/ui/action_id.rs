@@ -16,6 +16,7 @@ pub enum PaneId {
     Eq,
     FrameEdit,
     MidiSettings,
+    Groove,
 }
 
 /// Macro to generate action enums with string conversion methods
@@ -130,6 +131,7 @@ impl GlobalActionId {
                 PaneId::Eq => "switch:eq",
                 PaneId::FrameEdit => "switch:frame_edit",
                 PaneId::MidiSettings => "switch:midi_settings",
+                PaneId::Groove => "switch:groove",
             },
             GlobalActionId::SelectInstrument(n) => match n {
                 1 => "select:1",
@@ -192,6 +194,7 @@ impl GlobalActionId {
             "switch:eq" => Some(GlobalActionId::SwitchPane(PaneId::Eq)),
             "switch:frame_edit" => Some(GlobalActionId::SwitchPane(PaneId::FrameEdit)),
             "switch:midi_settings" => Some(GlobalActionId::SwitchPane(PaneId::MidiSettings)),
+            "switch:groove" => Some(GlobalActionId::SwitchPane(PaneId::Groove)),
             "select:1" => Some(GlobalActionId::SelectInstrument(1)),
             "select:2" => Some(GlobalActionId::SelectInstrument(2)),
             "select:3" => Some(GlobalActionId::SelectInstrument(3)),
@@ -602,6 +605,23 @@ define_action_enum! {
 }
 
 define_action_enum! {
+    /// Groove layer actions
+    pub enum GrooveActionId {
+        PrevParam => "prev_param",
+        NextParam => "next_param",
+        Increase => "increase",
+        Decrease => "decrease",
+        IncreaseBig => "increase_big",
+        DecreaseBig => "decrease_big",
+        IncreaseTiny => "increase_tiny",
+        DecreaseTiny => "decrease_tiny",
+        CycleSwingGrid => "cycle_swing_grid",
+        CycleTimeSig => "cycle_time_sig",
+        Reset => "reset",
+    }
+}
+
+define_action_enum! {
     /// Track layer actions
     pub enum TrackActionId {
         LaneUp => "lane_up",
@@ -737,6 +757,7 @@ pub enum ActionId {
     SampleChopper(SampleChopperActionId),
     Automation(AutomationActionId),
     Eq(EqActionId),
+    Groove(GrooveActionId),
     Track(TrackActionId),
     VstParams(VstParamsActionId),
     Waveform(WaveformActionId),
@@ -765,6 +786,7 @@ impl ActionId {
             ActionId::SampleChopper(a) => a.as_str(),
             ActionId::Automation(a) => a.as_str(),
             ActionId::Eq(a) => a.as_str(),
+            ActionId::Groove(a) => a.as_str(),
             ActionId::Track(a) => a.as_str(),
             ActionId::VstParams(a) => a.as_str(),
             ActionId::Waveform(a) => a.as_str(),
@@ -798,6 +820,7 @@ pub fn parse_action_id(layer: &str, action: &str) -> Option<ActionId> {
         }
         "automation" => AutomationActionId::from_str(action).map(ActionId::Automation),
         "eq" => EqActionId::from_str(action).map(ActionId::Eq),
+        "groove" => GrooveActionId::from_str(action).map(ActionId::Groove),
         "track" => TrackActionId::from_str(action).map(ActionId::Track),
         "vst_params" => VstParamsActionId::from_str(action).map(ActionId::VstParams),
         "waveform" => WaveformActionId::from_str(action).map(ActionId::Waveform),

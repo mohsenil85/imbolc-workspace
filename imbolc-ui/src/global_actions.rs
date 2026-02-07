@@ -330,6 +330,9 @@ pub(crate) fn handle_global_action(
             GlobalActionId::SwitchPane(PaneId::MidiSettings) => {
                 switch_to_pane("midi_settings", panes, dispatcher, audio, app_frame, layer_stack);
             }
+            GlobalActionId::SwitchPane(PaneId::Groove) => {
+                switch_to_pane("groove", panes, dispatcher, audio, app_frame, layer_stack);
+            }
             GlobalActionId::SwitchPane(PaneId::FrameEdit) => {
                 if panes.active().id() == "frame_edit" {
                     panes.pop(dispatcher.state());

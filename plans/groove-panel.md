@@ -44,6 +44,37 @@ Quantize at top (grid adherence), expressive deviations below.
 
 ## Implementation Status
 
-- `TrackSwing`, `TrackHumanizeVelocity`, `TrackHumanizeTiming` action variants added
-- `AutomationTarget` variants added for groove parameters
-- Dispatch handlers need completion (see compiler errors in `automation.rs`, `mod.rs`)
+| Component | Status |
+|-----------|--------|
+| Action Variants | ✓ Complete |
+| AutomationTarget Variants | ✓ Complete |
+| Dispatch Handlers | ✓ Complete |
+| Track State (GrooveConfig) | ✓ Complete |
+| Global Settings | ✓ Complete |
+| UI Panel | Not started |
+| Quantize Feature | Not started |
+
+## Next Steps
+
+### 1. Create Groove Pane UI
+- [ ] Create `imbolc-ui/src/panes/groove_pane.rs`
+- [ ] Register pane in `imbolc-ui/src/main.rs`
+- [ ] Add keybinding to open groove panel (suggest: `g` from track context)
+- [ ] Implement rendering per UI Layout mockup
+- [ ] Wire controls to existing actions:
+  - `SetTrackSwing` / `AdjustTrackSwing`
+  - `SetTrackSwingGrid`
+  - `SetTrackHumanizeVelocity` / `AdjustTrackHumanizeVelocity`
+  - `SetTrackHumanizeTiming` / `AdjustTrackHumanizeTiming`
+  - `SetTrackTimingOffset` / `AdjustTrackTimingOffset`
+  - `ResetTrackGroove`
+
+### 2. Implement Quantize Feature
+- [ ] Add `QuantizeConfig` to `GrooveConfig` (grid + strength %)
+- [ ] Add `SetTrackQuantize`, `SetTrackQuantizeStrength` actions
+- [ ] Add dispatch handlers
+- [ ] Wire to UI
+
+### 3. Audio Integration
+- [ ] Verify groove parameters affect note scheduling in audio engine
+- [ ] Test swing/humanize/timing-offset at playback time
