@@ -1,9 +1,8 @@
+use crate::action::{DispatchResult, MixerAction};
 use crate::audio::AudioHandle;
+use crate::dispatch::helpers::{apply_bus_update, maybe_record_automation};
 use crate::state::automation::AutomationTarget;
 use crate::state::{AppState, MixerSelection};
-use crate::action::{DispatchResult, MixerAction};
-
-use super::automation::record_automation_point;
 
 pub(super) fn dispatch_mixer(
     action: &MixerAction,
@@ -70,15 +69,9 @@ pub(super) fn dispatch_mixer(
                     result.audio_dirty.mixer_params = true;
                 }
             }
-            if audio.is_running() {
-                if let Some((bus_id, level, mute, pan)) = bus_update {
-                    let _ = audio.set_bus_mixer_params(bus_id, level, mute, pan);
-                }
-            }
-            // Record automation point
+            apply_bus_update(audio, bus_update);
             if let Some((target, value)) = record_target {
-                record_automation_point(state, target, value);
-                result.audio_dirty.automation = true;
+                maybe_record_automation(state, &mut result, target, value);
             }
         }
         MixerAction::ToggleMute => {
@@ -108,11 +101,7 @@ pub(super) fn dispatch_mixer(
                     result.audio_dirty.mixer_params = true;
                 }
             }
-            if audio.is_running() {
-                if let Some((bus_id, level, mute, pan)) = bus_update {
-                    let _ = audio.set_bus_mixer_params(bus_id, level, mute, pan);
-                }
-            }
+            apply_bus_update(audio, bus_update);
         }
         MixerAction::ToggleSolo => {
             let mut bus_updates: Vec<(u8, f32, bool, f32)> = Vec::new();
@@ -137,10 +126,8 @@ pub(super) fn dispatch_mixer(
                 let mute = state.session.effective_bus_mute(bus);
                 bus_updates.push((bus.id, bus.level, mute, bus.pan));
             }
-            if audio.is_running() {
-                for (bus_id, level, mute, pan) in bus_updates {
-                    let _ = audio.set_bus_mixer_params(bus_id, level, mute, pan);
-                }
+            for update in bus_updates {
+                apply_bus_update(audio, Some(update));
             }
         }
         MixerAction::CycleSection => {
@@ -177,8 +164,7 @@ pub(super) fn dispatch_mixer(
                 }
             }
             if let Some((target, value)) = record_target {
-                record_automation_point(state, target, value);
-                result.audio_dirty.automation = true;
+                maybe_record_automation(state, &mut result, target, value);
             }
         }
         MixerAction::AdjustPan(delta) => {
@@ -196,6 +182,7 @@ pub(super) fn dispatch_mixer(
                     }
                 }
                 MixerSelection::Bus(id) => {
+                    let mut bus_update: Option<(u8, f32, bool, f32)> = None;
                     if let Some(bus) = state.session.bus_mut(id) {
                         bus.pan = (bus.pan + delta).clamp(-1.0, 1.0);
                         result.audio_dirty.session = true;
@@ -203,16 +190,14 @@ pub(super) fn dispatch_mixer(
                     }
                     if let Some(bus) = state.session.bus(id) {
                         let mute = state.session.effective_bus_mute(bus);
-                        if audio.is_running() {
-                            let _ = audio.set_bus_mixer_params(id, bus.level, mute, bus.pan);
-                        }
+                        bus_update = Some((id, bus.level, mute, bus.pan));
                     }
+                    apply_bus_update(audio, bus_update);
                 }
                 MixerSelection::Master => {}
             }
             if let Some((target, value)) = record_target {
-                record_automation_point(state, target, value);
-                result.audio_dirty.automation = true;
+                maybe_record_automation(state, &mut result, target, value);
             }
         }
         MixerAction::ToggleSend(bus_id) => {

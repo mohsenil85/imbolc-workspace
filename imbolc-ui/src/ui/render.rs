@@ -68,6 +68,14 @@ impl<'a> RenderBuf<'a> {
         ratatui::widgets::Paragraph::new(line).render(area, self.buf);
     }
 
+    /// Fill a horizontal line with a background color.
+    /// Useful for extending selection highlighting across the full width.
+    pub fn fill_line_bg(&mut self, x: u16, y: u16, width: u16, style: Style) {
+        for col in x..x.saturating_add(width) {
+            self.set_cell(col, y, ' ', style);
+        }
+    }
+
     /// Escape hatch: direct access to the underlying ratatui `Buffer`.
     /// Use this for code that hasn't been migrated yet, or for ratatui widgets
     /// that need a raw buffer reference.

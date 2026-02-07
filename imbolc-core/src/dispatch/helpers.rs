@@ -1,3 +1,99 @@
+use crate::action::DispatchResult;
+use crate::audio::AudioHandle;
+use crate::state::automation::AutomationTarget;
+use crate::state::AppState;
+use imbolc_types::InstrumentId;
+
+use super::automation::record_automation_point;
+
+/// Record automation point if currently recording and playing.
+/// Returns true if a point was recorded (for setting audio_dirty.automation).
+pub fn maybe_record_automation(
+    state: &mut AppState,
+    result: &mut DispatchResult,
+    target: AutomationTarget,
+    value: f32,
+) {
+    if state.recording.automation_recording && state.session.piano_roll.playing {
+        record_automation_point(state, target, value);
+        result.audio_dirty.automation = true;
+    }
+}
+
+/// Adjust an instrument parameter with clamping and optional automation recording.
+/// Generic helper that reduces boilerplate in envelope, LFO, and filter dispatch handlers.
+pub fn adjust_instrument_param<F, G>(
+    state: &mut AppState,
+    id: InstrumentId,
+    delta: f32,
+    scale: f32,
+    min: f32,
+    max: f32,
+    get_value: F,
+    set_value: G,
+    make_target: impl FnOnce(InstrumentId) -> AutomationTarget,
+    normalize: impl FnOnce(f32) -> f32,
+) -> DispatchResult
+where
+    F: FnOnce(&crate::state::Instrument) -> f32,
+    G: FnOnce(&mut crate::state::Instrument, f32),
+{
+    let mut record_target: Option<(AutomationTarget, f32)> = None;
+
+    if let Some(instrument) = state.instruments.instrument_mut(id) {
+        let old_value = get_value(instrument);
+        let new_value = (old_value + delta * scale).clamp(min, max);
+        set_value(instrument, new_value);
+
+        if state.recording.automation_recording && state.session.piano_roll.playing {
+            let target = make_target(instrument.id);
+            record_target = Some((target, normalize(new_value)));
+        }
+    }
+
+    let mut result = DispatchResult::none();
+    result.audio_dirty.instruments = true;
+    result.audio_dirty.routing_instrument = Some(id);
+
+    if let Some((target, value)) = record_target {
+        record_automation_point(state, target, value);
+        result.audio_dirty.automation = true;
+    }
+
+    result
+}
+
+/// Adjust a groove parameter (swing, humanize_velocity, humanize_timing).
+/// Falls back to the global session value if no per-instrument override exists.
+pub fn adjust_groove_param<F, G>(
+    state: &mut AppState,
+    id: InstrumentId,
+    delta: f32,
+    get_override: F,
+    set_override: G,
+    get_default: impl FnOnce(&crate::state::SessionState) -> f32,
+) -> DispatchResult
+where
+    F: FnOnce(&crate::state::Instrument) -> Option<f32>,
+    G: FnOnce(&mut crate::state::Instrument, Option<f32>),
+{
+    if let Some(instrument) = state.instruments.instrument_mut(id) {
+        let current = get_override(instrument).unwrap_or_else(|| get_default(&state.session));
+        let new_value = (current + delta).clamp(0.0, 1.0);
+        set_override(instrument, Some(new_value));
+    }
+    DispatchResult::none()
+}
+
+/// Send bus mixer params to audio if running.
+pub fn apply_bus_update(audio: &mut AudioHandle, update: Option<(u8, f32, bool, f32)>) {
+    if let Some((bus_id, level, mute, pan)) = update {
+        if audio.is_running() {
+            let _ = audio.set_bus_mixer_params(bus_id, level, mute, pan);
+        }
+    }
+}
+
 /// Compute waveform peaks from a WAV file for display
 pub fn compute_waveform_peaks(path: &str) -> (Vec<f32>, f32) {
     let reader = match hound::WavReader::open(path) {

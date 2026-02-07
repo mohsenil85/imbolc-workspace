@@ -3,7 +3,11 @@ use std::any::Any;
 use crate::state::{AppState, CustomSynthDefRegistry, SourceType, SourceTypeExt, VstPluginRegistry};
 use crate::ui::action_id::{ActionId, AddActionId};
 use crate::ui::layout_helpers::center_rect;
-use crate::ui::{Rect, RenderBuf, Action, Color, FileSelectAction, InputEvent, InstrumentAction, Keymap, MouseEvent, MouseEventKind, MouseButton, NavAction, Pane, SessionAction, Style};
+use crate::ui::{
+    Action, Color, FileSelectAction, InputEvent, InstrumentAction, Keymap, ListSelector,
+    MouseButton, MouseEvent, MouseEventKind, NavAction, Pane, Rect, RenderBuf, SessionAction,
+    Style,
+};
 
 /// Options available in the Add Instrument menu
 #[derive(Debug, Clone)]
@@ -16,8 +20,7 @@ pub enum AddOption {
 
 pub struct AddPane {
     keymap: Keymap,
-    selected: usize,
-    scroll_offset: usize,
+    selector: ListSelector,
     /// Cached options list - rebuilt on each render_with_registry call
     cached_options: Vec<AddOption>,
 }
@@ -26,11 +29,11 @@ impl AddPane {
     pub fn new(keymap: Keymap) -> Self {
         Self {
             keymap,
-            selected: 1, // Start on first selectable item (skip separator)
-            scroll_offset: 0,
+            selector: ListSelector::new(1), // Start on first selectable item (skip separator)
             cached_options: Self::build_options_static(),
         }
     }
+
 
     /// Build options without registries (used for initial state)
     fn build_options_static() -> Vec<AddOption> {
@@ -255,67 +258,28 @@ impl AddPane {
     /// Update cached options from registries
     pub fn update_options(&mut self, custom_registry: &CustomSynthDefRegistry, vst_registry: &VstPluginRegistry) {
         self.cached_options = self.build_options(custom_registry, vst_registry);
-        self.scroll_offset = 0;
-        // Clamp selection and ensure it's not on a separator
-        if self.selected >= self.cached_options.len() {
-            self.selected = self.cached_options.len().saturating_sub(1);
-        }
+        self.selector.scroll_offset = 0;
+        self.selector.clamp(self.cached_options.len());
         // Skip separator if we landed on one
-        while matches!(self.cached_options.get(self.selected), Some(AddOption::Separator(_))) {
-            self.selected = (self.selected + 1) % self.cached_options.len();
+        if matches!(self.cached_options.get(self.selector.selected), Some(AddOption::Separator(_))) {
+            self.select_next();
         }
     }
 
     /// Move to next selectable item
     fn select_next(&mut self) {
         let len = self.cached_options.len();
-        if len == 0 {
-            return;
-        }
-
-        let mut next = (self.selected + 1) % len;
-        // Skip separators
-        while matches!(self.cached_options.get(next), Some(AddOption::Separator(_))) {
-            next = (next + 1) % len;
-        }
-        self.selected = next;
-        self.adjust_scroll();
+        let opts = &self.cached_options;
+        self.selector.select_next(len, |i| matches!(opts.get(i), Some(AddOption::Separator(_))));
+        self.selector.adjust_scroll(22); // Conservative visible rows estimate
     }
 
     /// Move to previous selectable item
     fn select_prev(&mut self) {
         let len = self.cached_options.len();
-        if len == 0 {
-            return;
-        }
-
-        let mut prev = if self.selected == 0 {
-            len - 1
-        } else {
-            self.selected - 1
-        };
-        // Skip separators
-        while matches!(self.cached_options.get(prev), Some(AddOption::Separator(_))) {
-            prev = if prev == 0 { len - 1 } else { prev - 1 };
-        }
-        self.selected = prev;
-        self.adjust_scroll();
-    }
-
-    /// Adjust scroll_offset so the selected item stays visible.
-    /// Uses the dialog's fixed height (29) to estimate visible rows.
-    fn adjust_scroll(&mut self) {
-        // Dialog is 29 tall, border=1 each side, padding=1 top, title line, gap = list starts at +5
-        // Bottom border + help line + gap = 3 rows reserved at bottom
-        // visible_rows ≈ 29 - 2 (borders) - 1 (padding) - 1 (title) - 1 (gap) - 2 (help+border) = ~22
-        // But the exact value is computed in render from inner rect.
-        // Use a conservative estimate here; render will correct if needed.
-        let visible_rows = 22usize;
-        if self.selected < self.scroll_offset {
-            self.scroll_offset = self.selected;
-        } else if self.selected >= self.scroll_offset + visible_rows {
-            self.scroll_offset = self.selected - visible_rows + 1;
-        }
+        let opts = &self.cached_options;
+        self.selector.select_prev(len, |i| matches!(opts.get(i), Some(AddOption::Separator(_))));
+        self.selector.adjust_scroll(22);
     }
 
     /// Render with registries for custom synthdef and VST plugin names
@@ -339,11 +303,11 @@ impl AddPane {
 
         // Scroll offset: keep selected item visible
         let visible_rows = (inner.y + inner.height).saturating_sub(list_y) as usize;
-        let mut eff_scroll = self.scroll_offset;
-        if self.selected < eff_scroll {
-            eff_scroll = self.selected;
-        } else if visible_rows > 0 && self.selected >= eff_scroll + visible_rows {
-            eff_scroll = self.selected - visible_rows + 1;
+        let mut eff_scroll = self.selector.scroll_offset;
+        if self.selector.selected < eff_scroll {
+            eff_scroll = self.selector.selected;
+        } else if visible_rows > 0 && self.selector.selected >= eff_scroll + visible_rows {
+            eff_scroll = self.selector.selected - visible_rows + 1;
         }
 
         // Scroll indicator: items hidden above
@@ -357,7 +321,7 @@ impl AddPane {
 
         for (i, option) in self.cached_options.iter().skip(eff_scroll).take(visible_rows).enumerate() {
             let y = list_y + i as u16;
-            let is_selected = eff_scroll + i == self.selected;
+            let is_selected = eff_scroll + i == self.selector.selected;
 
             match option {
                 AddOption::Separator(label) => {
@@ -486,7 +450,7 @@ impl Pane for AddPane {
     fn handle_action(&mut self, action: ActionId, _event: &InputEvent, state: &AppState) -> Action {
         match action {
             ActionId::Add(AddActionId::Confirm) => {
-                if let Some(option) = self.cached_options.get(self.selected) {
+                if let Some(option) = self.cached_options.get(self.selector.selected) {
                     match option {
                         AddOption::Source(source) => Action::Instrument(InstrumentAction::Add(*source)),
                         AddOption::ImportCustom => {
@@ -531,13 +495,13 @@ impl Pane for AddPane {
             MouseEventKind::Down(MouseButton::Left) => {
                 let row = event.row;
                 if row >= list_y && (row - list_y) < visible_rows as u16 {
-                    let idx = self.scroll_offset + (row - list_y) as usize;
+                    let idx = self.selector.scroll_offset + (row - list_y) as usize;
                     if idx < self.cached_options.len() {
                         // Skip separators
                         if matches!(self.cached_options.get(idx), Some(AddOption::Separator(_))) {
                             return Action::None;
                         }
-                        self.selected = idx;
+                        self.selector.selected = idx;
                         // Confirm selection
                         match &self.cached_options[idx] {
                             AddOption::Source(source) => return Action::Instrument(InstrumentAction::Add(*source)),

@@ -1,40 +1,36 @@
-use crate::state::AppState;
-use crate::state::automation::AutomationTarget;
 use crate::action::DispatchResult;
+use crate::dispatch::helpers::adjust_instrument_param;
+use crate::state::automation::AutomationTarget;
+use crate::state::AppState;
 use imbolc_types::InstrumentId;
 
-use super::super::automation::record_automation_point;
+// Envelope parameter ranges
+const ATTACK_MIN: f32 = 0.001;
+const ATTACK_MAX: f32 = 2.0;
+const DECAY_MIN: f32 = 0.001;
+const DECAY_MAX: f32 = 2.0;
+const SUSTAIN_MIN: f32 = 0.0;
+const SUSTAIN_MAX: f32 = 1.0;
+const RELEASE_MIN: f32 = 0.001;
+const RELEASE_MAX: f32 = 5.0;
 
 pub(super) fn handle_adjust_envelope_attack(
     state: &mut AppState,
     id: InstrumentId,
     delta: f32,
 ) -> DispatchResult {
-    let mut record_target: Option<(AutomationTarget, f32)> = None;
-
-    if let Some(instrument) = state.instruments.instrument_mut(id) {
-        // Attack range: 0.001 to 2.0 seconds
-        let old_attack = instrument.amp_envelope.attack;
-        instrument.amp_envelope.attack = (old_attack + delta * 0.1).clamp(0.001, 2.0);
-
-        if state.recording.automation_recording && state.session.piano_roll.playing {
-            let target = AutomationTarget::EnvelopeAttack(instrument.id);
-            // Normalize to 0-1 range for automation
-            let normalized = (instrument.amp_envelope.attack - 0.001) / (2.0 - 0.001);
-            record_target = Some((target, normalized));
-        }
-    }
-
-    let mut result = DispatchResult::none();
-    result.audio_dirty.instruments = true;
-    result.audio_dirty.routing_instrument = Some(id);
-
-    if let Some((target, value)) = record_target {
-        record_automation_point(state, target, value);
-        result.audio_dirty.automation = true;
-    }
-
-    result
+    adjust_instrument_param(
+        state,
+        id,
+        delta,
+        0.1,
+        ATTACK_MIN,
+        ATTACK_MAX,
+        |inst| inst.amp_envelope.attack,
+        |inst, v| inst.amp_envelope.attack = v,
+        AutomationTarget::EnvelopeAttack,
+        |v| (v - ATTACK_MIN) / (ATTACK_MAX - ATTACK_MIN),
+    )
 }
 
 pub(super) fn handle_adjust_envelope_decay(
@@ -42,30 +38,18 @@ pub(super) fn handle_adjust_envelope_decay(
     id: InstrumentId,
     delta: f32,
 ) -> DispatchResult {
-    let mut record_target: Option<(AutomationTarget, f32)> = None;
-
-    if let Some(instrument) = state.instruments.instrument_mut(id) {
-        // Decay range: 0.001 to 2.0 seconds
-        let old_decay = instrument.amp_envelope.decay;
-        instrument.amp_envelope.decay = (old_decay + delta * 0.1).clamp(0.001, 2.0);
-
-        if state.recording.automation_recording && state.session.piano_roll.playing {
-            let target = AutomationTarget::EnvelopeDecay(instrument.id);
-            let normalized = (instrument.amp_envelope.decay - 0.001) / (2.0 - 0.001);
-            record_target = Some((target, normalized));
-        }
-    }
-
-    let mut result = DispatchResult::none();
-    result.audio_dirty.instruments = true;
-    result.audio_dirty.routing_instrument = Some(id);
-
-    if let Some((target, value)) = record_target {
-        record_automation_point(state, target, value);
-        result.audio_dirty.automation = true;
-    }
-
-    result
+    adjust_instrument_param(
+        state,
+        id,
+        delta,
+        0.1,
+        DECAY_MIN,
+        DECAY_MAX,
+        |inst| inst.amp_envelope.decay,
+        |inst, v| inst.amp_envelope.decay = v,
+        AutomationTarget::EnvelopeDecay,
+        |v| (v - DECAY_MIN) / (DECAY_MAX - DECAY_MIN),
+    )
 }
 
 pub(super) fn handle_adjust_envelope_sustain(
@@ -73,28 +57,18 @@ pub(super) fn handle_adjust_envelope_sustain(
     id: InstrumentId,
     delta: f32,
 ) -> DispatchResult {
-    let mut record_target: Option<(AutomationTarget, f32)> = None;
-
-    if let Some(instrument) = state.instruments.instrument_mut(id) {
-        // Sustain range: 0.0 to 1.0
-        instrument.amp_envelope.sustain = (instrument.amp_envelope.sustain + delta * 0.05).clamp(0.0, 1.0);
-
-        if state.recording.automation_recording && state.session.piano_roll.playing {
-            let target = AutomationTarget::EnvelopeSustain(instrument.id);
-            record_target = Some((target, instrument.amp_envelope.sustain));
-        }
-    }
-
-    let mut result = DispatchResult::none();
-    result.audio_dirty.instruments = true;
-    result.audio_dirty.routing_instrument = Some(id);
-
-    if let Some((target, value)) = record_target {
-        record_automation_point(state, target, value);
-        result.audio_dirty.automation = true;
-    }
-
-    result
+    adjust_instrument_param(
+        state,
+        id,
+        delta,
+        0.05,
+        SUSTAIN_MIN,
+        SUSTAIN_MAX,
+        |inst| inst.amp_envelope.sustain,
+        |inst, v| inst.amp_envelope.sustain = v,
+        AutomationTarget::EnvelopeSustain,
+        |v| v, // Already 0-1 range
+    )
 }
 
 pub(super) fn handle_adjust_envelope_release(
@@ -102,28 +76,16 @@ pub(super) fn handle_adjust_envelope_release(
     id: InstrumentId,
     delta: f32,
 ) -> DispatchResult {
-    let mut record_target: Option<(AutomationTarget, f32)> = None;
-
-    if let Some(instrument) = state.instruments.instrument_mut(id) {
-        // Release range: 0.001 to 5.0 seconds
-        let old_release = instrument.amp_envelope.release;
-        instrument.amp_envelope.release = (old_release + delta * 0.2).clamp(0.001, 5.0);
-
-        if state.recording.automation_recording && state.session.piano_roll.playing {
-            let target = AutomationTarget::EnvelopeRelease(instrument.id);
-            let normalized = (instrument.amp_envelope.release - 0.001) / (5.0 - 0.001);
-            record_target = Some((target, normalized));
-        }
-    }
-
-    let mut result = DispatchResult::none();
-    result.audio_dirty.instruments = true;
-    result.audio_dirty.routing_instrument = Some(id);
-
-    if let Some((target, value)) = record_target {
-        record_automation_point(state, target, value);
-        result.audio_dirty.automation = true;
-    }
-
-    result
+    adjust_instrument_param(
+        state,
+        id,
+        delta,
+        0.2,
+        RELEASE_MIN,
+        RELEASE_MAX,
+        |inst| inst.amp_envelope.release,
+        |inst, v| inst.amp_envelope.release = v,
+        AutomationTarget::EnvelopeRelease,
+        |v| (v - RELEASE_MIN) / (RELEASE_MAX - RELEASE_MIN),
+    )
 }

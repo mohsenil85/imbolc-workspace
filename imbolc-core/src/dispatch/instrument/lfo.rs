@@ -1,14 +1,14 @@
-use crate::state::AppState;
-use crate::state::automation::AutomationTarget;
 use crate::action::{DispatchResult, LfoParamKind};
+use crate::dispatch::helpers::maybe_record_automation;
+use crate::state::automation::AutomationTarget;
+use crate::state::AppState;
 use imbolc_types::{InstrumentId, LfoShape, LfoTarget};
 
-use super::super::automation::record_automation_point;
+// LFO parameter ranges
+const LFO_RATE_MIN: f32 = 0.1;
+const LFO_RATE_MAX: f32 = 20.0;
 
-pub(super) fn handle_toggle_lfo(
-    state: &mut AppState,
-    id: InstrumentId,
-) -> DispatchResult {
+pub(super) fn handle_toggle_lfo(state: &mut AppState, id: InstrumentId) -> DispatchResult {
     if let Some(instrument) = state.instruments.instrument_mut(id) {
         instrument.lfo.enabled = !instrument.lfo.enabled;
     }
@@ -23,34 +23,26 @@ pub(super) fn handle_adjust_lfo_rate(
     id: InstrumentId,
     delta: f32,
 ) -> DispatchResult {
-    let mut record_target: Option<(AutomationTarget, f32)> = None;
+    let mut result = DispatchResult::none();
+    let mut automation_data: Option<(InstrumentId, f32)> = None;
     let mut new_rate: Option<f32> = None;
 
     if let Some(instrument) = state.instruments.instrument_mut(id) {
-        // LFO rate range: 0.1 to 20.0 Hz
         let old_rate = instrument.lfo.rate;
-        instrument.lfo.rate = (old_rate + delta * 0.5).clamp(0.1, 20.0);
+        instrument.lfo.rate = (old_rate + delta * 0.5).clamp(LFO_RATE_MIN, LFO_RATE_MAX);
         new_rate = Some(instrument.lfo.rate);
 
-        if state.recording.automation_recording && state.session.piano_roll.playing {
-            let target = AutomationTarget::LfoRate(instrument.id);
-            // Normalize to 0-1 range for automation
-            let normalized = (instrument.lfo.rate - 0.1) / (20.0 - 0.1);
-            record_target = Some((target, normalized));
-        }
+        let normalized = (instrument.lfo.rate - LFO_RATE_MIN) / (LFO_RATE_MAX - LFO_RATE_MIN);
+        automation_data = Some((instrument.id, normalized));
     }
 
-    let mut result = DispatchResult::none();
-    result.audio_dirty.instruments = true;
+    if let Some((inst_id, normalized)) = automation_data {
+        maybe_record_automation(state, &mut result, AutomationTarget::LfoRate(inst_id), normalized);
+    }
 
-    // Targeted LFO param update
+    result.audio_dirty.instruments = true;
     if let Some(rate) = new_rate {
         result.audio_dirty.lfo_param = Some((id, LfoParamKind::Rate, rate));
-    }
-
-    if let Some((target, value)) = record_target {
-        record_automation_point(state, target, value);
-        result.audio_dirty.automation = true;
     }
 
     result
@@ -61,31 +53,23 @@ pub(super) fn handle_adjust_lfo_depth(
     id: InstrumentId,
     delta: f32,
 ) -> DispatchResult {
-    let mut record_target: Option<(AutomationTarget, f32)> = None;
+    let mut result = DispatchResult::none();
+    let mut automation_data: Option<(InstrumentId, f32)> = None;
     let mut new_depth: Option<f32> = None;
 
     if let Some(instrument) = state.instruments.instrument_mut(id) {
-        // LFO depth range: 0.0 to 1.0
         instrument.lfo.depth = (instrument.lfo.depth + delta * 0.05).clamp(0.0, 1.0);
         new_depth = Some(instrument.lfo.depth);
-
-        if state.recording.automation_recording && state.session.piano_roll.playing {
-            let target = AutomationTarget::LfoDepth(instrument.id);
-            record_target = Some((target, instrument.lfo.depth));
-        }
+        automation_data = Some((instrument.id, instrument.lfo.depth));
     }
 
-    let mut result = DispatchResult::none();
-    result.audio_dirty.instruments = true;
+    if let Some((inst_id, depth)) = automation_data {
+        maybe_record_automation(state, &mut result, AutomationTarget::LfoDepth(inst_id), depth);
+    }
 
-    // Targeted LFO param update
+    result.audio_dirty.instruments = true;
     if let Some(depth) = new_depth {
         result.audio_dirty.lfo_param = Some((id, LfoParamKind::Depth, depth));
-    }
-
-    if let Some((target, value)) = record_target {
-        record_automation_point(state, target, value);
-        result.audio_dirty.automation = true;
     }
 
     result

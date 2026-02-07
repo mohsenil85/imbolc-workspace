@@ -220,6 +220,26 @@ pub fn selection_style(theme: &Theme) -> Style {
         .bg(theme_selection_bg(theme))
 }
 
+/// Create style with conditional selection background.
+/// Useful for list items that highlight when selected.
+pub fn selected_style(is_selected: bool, fg: Color) -> Style {
+    if is_selected {
+        Style::new().fg(fg).bg(Color::SELECTION_BG)
+    } else {
+        Style::new().fg(fg)
+    }
+}
+
+/// Create bold style with conditional selection background.
+/// Useful for list items that need bold text and highlight when selected.
+pub fn selected_style_bold(is_selected: bool, fg: Color) -> Style {
+    if is_selected {
+        Style::new().fg(fg).bg(Color::SELECTION_BG).bold()
+    } else {
+        Style::new().fg(fg).bold()
+    }
+}
+
 /// Text style with foreground, background, and attributes.
 ///
 /// Builder methods (all const, chainable):

@@ -24,7 +24,10 @@ use crate::state::AppState;
 use crate::action::{Action, AudioDirty, ClickAction, DispatchResult, IoFeedback};
 use crate::state::undo::is_undoable;
 
-pub use helpers::compute_waveform_peaks;
+pub use helpers::{
+    adjust_groove_param, adjust_instrument_param, apply_bus_update, compute_waveform_peaks,
+    maybe_record_automation,
+};
 
 /// Default path for save file
 pub fn default_rack_path() -> PathBuf {

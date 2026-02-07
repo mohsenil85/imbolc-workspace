@@ -1,6 +1,7 @@
 //! Dispatch handlers for per-track groove settings.
 
 use crate::action::DispatchResult;
+use crate::dispatch::helpers::adjust_groove_param;
 use crate::state::AppState;
 use imbolc_types::{InstrumentId, SwingGrid};
 
@@ -31,14 +32,14 @@ pub fn handle_adjust_track_swing(
     instrument_id: InstrumentId,
     delta: f32,
 ) -> DispatchResult {
-    if let Some(inst) = state.instruments.instrument_mut(instrument_id) {
-        // Get current value (override or fall back to global piano roll swing)
-        let current = inst.groove.swing_amount
-            .unwrap_or(state.session.piano_roll.swing_amount);
-        let new_value = (current + delta).clamp(0.0, 1.0);
-        inst.groove.swing_amount = Some(new_value);
-    }
-    DispatchResult::none()
+    adjust_groove_param(
+        state,
+        instrument_id,
+        delta,
+        |inst| inst.groove.swing_amount,
+        |inst, v| inst.groove.swing_amount = v,
+        |session| session.piano_roll.swing_amount,
+    )
 }
 
 pub fn handle_set_track_humanize_velocity(
@@ -57,13 +58,14 @@ pub fn handle_adjust_track_humanize_velocity(
     instrument_id: InstrumentId,
     delta: f32,
 ) -> DispatchResult {
-    if let Some(inst) = state.instruments.instrument_mut(instrument_id) {
-        let current = inst.groove.humanize_velocity
-            .unwrap_or(state.session.humanize.velocity);
-        let new_value = (current + delta).clamp(0.0, 1.0);
-        inst.groove.humanize_velocity = Some(new_value);
-    }
-    DispatchResult::none()
+    adjust_groove_param(
+        state,
+        instrument_id,
+        delta,
+        |inst| inst.groove.humanize_velocity,
+        |inst, v| inst.groove.humanize_velocity = v,
+        |session| session.humanize.velocity,
+    )
 }
 
 pub fn handle_set_track_humanize_timing(
@@ -82,13 +84,14 @@ pub fn handle_adjust_track_humanize_timing(
     instrument_id: InstrumentId,
     delta: f32,
 ) -> DispatchResult {
-    if let Some(inst) = state.instruments.instrument_mut(instrument_id) {
-        let current = inst.groove.humanize_timing
-            .unwrap_or(state.session.humanize.timing);
-        let new_value = (current + delta).clamp(0.0, 1.0);
-        inst.groove.humanize_timing = Some(new_value);
-    }
-    DispatchResult::none()
+    adjust_groove_param(
+        state,
+        instrument_id,
+        delta,
+        |inst| inst.groove.humanize_timing,
+        |inst, v| inst.groove.humanize_timing = v,
+        |session| session.humanize.timing,
+    )
 }
 
 pub fn handle_set_track_timing_offset(
