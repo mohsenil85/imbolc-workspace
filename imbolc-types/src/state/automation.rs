@@ -507,18 +507,17 @@ impl AutomationLane {
             return None;
         }
 
-        // Find surrounding points
-        let mut prev: Option<&AutomationPoint> = None;
-        let mut next: Option<&AutomationPoint> = None;
+        // Binary search: find first point with tick > target
+        // partition_point returns the index where the predicate becomes false
+        // i.e., the first index where p.tick > tick
+        let next_idx = self.points.partition_point(|p| p.tick <= tick);
 
-        for point in &self.points {
-            if point.tick <= tick {
-                prev = Some(point);
-            } else {
-                next = Some(point);
-                break;
-            }
-        }
+        let prev = if next_idx > 0 {
+            Some(&self.points[next_idx - 1])
+        } else {
+            None
+        };
+        let next = self.points.get(next_idx);
 
         // Force step behavior for discrete targets
         let force_step = self.target.value_kind() == ValueKind::Discrete;

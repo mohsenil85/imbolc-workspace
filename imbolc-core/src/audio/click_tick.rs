@@ -45,30 +45,36 @@ pub fn tick_click(
     let old_accum = *click_accumulator;
     *click_accumulator += elapsed.as_secs_f64() * beats_per_second;
 
-    // Track how many beat thresholds we've consumed
-    let mut threshold_consumed: f64 = 0.0;
+    // Pre-calculate bar/beat constants
+    let beats_per_bar = session.time_signature.0 as u32;
+    let ticks_per_beat_u32 = piano_roll.ticks_per_beat;
+    let ticks_per_bar = beats_per_bar * ticks_per_beat_u32;
+
+    if ticks_per_bar == 0 {
+        return;
+    }
+
+    // Calculate the base tick position before any beats in this tick
+    // This is where we were at the start of the tick minus accumulated fractional beats
+    let base_tick = (piano_roll.playhead as f64) - (*click_accumulator * ticks_per_beat as f64);
+
+    // Track how many beat boundaries we've crossed
+    let mut beat_count: u32 = 0;
 
     // Process all beat boundaries crossed in this tick
     while *click_accumulator >= 1.0 {
         *click_accumulator -= 1.0;
-        threshold_consumed += 1.0;
+        beat_count += 1;
 
-        // Calculate which beat we're on (0-indexed within bar)
-        let beats_per_bar = session.time_signature.0 as u32;
-        let current_tick = piano_roll.playhead;
-        let ticks_per_beat_u32 = piano_roll.ticks_per_beat;
-        let ticks_per_bar = beats_per_bar * ticks_per_beat_u32;
+        // Calculate the tick position for THIS beat boundary
+        let beat_tick = (base_tick + (beat_count as f64 * ticks_per_beat as f64)) as u32;
 
-        // Determine beat number within bar
-        let beat_in_bar = if ticks_per_bar > 0 {
-            (current_tick % ticks_per_bar) / ticks_per_beat_u32
-        } else {
-            0
-        };
+        // Determine beat number within bar for this specific beat
+        let beat_in_bar = (beat_tick % ticks_per_bar) / ticks_per_beat_u32;
         let is_downbeat = beat_in_bar == 0;
 
         // Calculate precise offset from tick start
-        let offset_secs = ((threshold_consumed - old_accum) * secs_per_beat).max(0.0)
+        let offset_secs = ((beat_count as f64 - old_accum) * secs_per_beat).max(0.0)
             + SCHEDULE_LOOKAHEAD_SECS;
 
         // Spawn the click sound

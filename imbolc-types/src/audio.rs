@@ -73,4 +73,15 @@ pub enum AudioFeedback {
     ServerCrashed {
         message: String,
     },
+    /// Periodic telemetry summary from the audio thread.
+    TelemetrySummary {
+        /// Average tick duration in microseconds
+        avg_tick_us: u32,
+        /// Maximum tick duration in the window
+        max_tick_us: u32,
+        /// 95th percentile tick duration
+        p95_tick_us: u32,
+        /// Cumulative count of ticks exceeding budget
+        overruns: u64,
+    },
 }

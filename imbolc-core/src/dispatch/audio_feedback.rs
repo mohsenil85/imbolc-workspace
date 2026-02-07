@@ -154,6 +154,13 @@ pub fn dispatch_audio_feedback(
             state.session.piano_roll.playing = false;
             result.stop_playback = true;
         }
+        AudioFeedback::TelemetrySummary { avg_tick_us, max_tick_us, p95_tick_us, overruns } => {
+            // Log telemetry for monitoring; could be exposed to UI in future
+            log::debug!(target: "audio",
+                "Telemetry: avg={}us max={}us p95={}us overruns={}",
+                avg_tick_us, max_tick_us, p95_tick_us, overruns
+            );
+        }
     }
 
     result

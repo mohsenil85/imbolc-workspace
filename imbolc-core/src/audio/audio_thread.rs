@@ -8,6 +8,7 @@ use crossbeam_channel::{Receiver, TryRecvError};
 use super::commands::{AudioCmd, AudioFeedback, ExportKind};
 use super::engine::AudioEngine;
 use super::osc_client::AudioMonitor;
+use super::telemetry::AudioTelemetry;
 use super::ServerStatus;
 use crate::action::VstTarget;
 use crate::state::arpeggiator::ArpPlayState;
@@ -84,6 +85,14 @@ pub(crate) struct AudioThread {
     click_state: imbolc_types::ClickTrackState,
     /// Click track beat accumulator (fractional beats since last click)
     click_accumulator: f64,
+    /// Telemetry collector for tick duration metrics
+    telemetry: AudioTelemetry,
+    /// Last time telemetry was emitted
+    last_telemetry_emit: Instant,
+    /// Last time voice cleanup was performed (rate-limited to reduce overhead)
+    last_voice_cleanup: Instant,
+    /// Last time server health was checked (rate-limited to reduce overhead)
+    last_health_check: Instant,
 }
 
 impl AudioThread {
@@ -118,6 +127,10 @@ impl AudioThread {
             pending_vst_queries: Vec::new(),
             click_state: imbolc_types::ClickTrackState::default(),
             click_accumulator: 0.0,
+            telemetry: AudioTelemetry::new(),
+            last_telemetry_emit: Instant::now(),
+            last_voice_cleanup: Instant::now(),
+            last_health_check: Instant::now(),
         }
     }
 
@@ -170,7 +183,11 @@ impl AudioThread {
             let elapsed = now.duration_since(self.last_tick);
             if elapsed >= TICK_INTERVAL {
                 self.last_tick = now;
+
+                // Record tick timing for telemetry
+                let tick_start = Instant::now();
                 self.tick(elapsed);
+                self.telemetry.record(tick_start.elapsed(), TICK_INTERVAL.as_micros() as u32);
             }
 
             self.poll_engine();
@@ -178,14 +195,17 @@ impl AudioThread {
     }
 
     /// Drain priority commands first (voice spawn, param changes)
-    /// Uses adaptive batching: drains more when queue is backed up
+    /// Uses time-budgeted draining: stops when time budget OR count limit is reached
     fn drain_priority_commands(&mut self) -> bool {
-        // Base limit increased from 64 to 256 for reduced latency
-        // Adaptive: if queue still has items after base drain, continue up to 1024
-        const BASE_DRAIN: usize = 256;
-        const MAX_DRAIN: usize = 1024;
+        const MAX_DURATION: Duration = Duration::from_micros(200);
+        const MAX_COUNT: usize = 128;
 
-        for i in 0..MAX_DRAIN {
+        let start = Instant::now();
+        for _ in 0..MAX_COUNT {
+            // Check time budget before processing each command
+            if start.elapsed() >= MAX_DURATION {
+                break;
+            }
             match self.priority_rx.try_recv() {
                 Ok(cmd) => {
                     if self.handle_cmd(cmd) {
@@ -195,22 +215,22 @@ impl AudioThread {
                 Err(TryRecvError::Empty) => return false,
                 Err(TryRecvError::Disconnected) => return true,
             }
-            // After base drain, check if we should continue (adaptive batching)
-            if i == BASE_DRAIN - 1 && self.priority_rx.is_empty() {
-                return false;
-            }
         }
         false
     }
 
-    /// Drain normal commands (state sync, routing)
-    /// Uses adaptive batching: drains more when queue is backed up
+    /// Drain normal commands (state sync, routing, bulk mixer updates)
+    /// Uses time-budgeted draining: stops when time budget OR count limit is reached
     fn drain_normal_commands(&mut self) -> bool {
-        // Base limit increased from 32 to 128 for reduced latency
-        const BASE_DRAIN: usize = 128;
-        const MAX_DRAIN: usize = 512;
+        const MAX_DURATION: Duration = Duration::from_micros(100);
+        const MAX_COUNT: usize = 64;
 
-        for i in 0..MAX_DRAIN {
+        let start = Instant::now();
+        for _ in 0..MAX_COUNT {
+            // Check time budget before processing each command
+            if start.elapsed() >= MAX_DURATION {
+                break;
+            }
             match self.normal_rx.try_recv() {
                 Ok(cmd) => {
                     if self.handle_cmd(cmd) {
@@ -219,10 +239,6 @@ impl AudioThread {
                 }
                 Err(TryRecvError::Empty) => return false,
                 Err(TryRecvError::Disconnected) => return true,
-            }
-            // After base drain, check if we should continue (adaptive batching)
-            if i == BASE_DRAIN - 1 && self.normal_rx.is_empty() {
-                return false;
             }
         }
         false
@@ -681,6 +697,9 @@ impl AudioThread {
     /// Resolve a VstTarget to a SuperCollider node ID using the instrument snapshot and engine node map
     /// Check pending VST param queries — complete when replies stop arriving or timeout
     fn poll_vst_param_queries(&mut self) {
+        // Drain any new VST param replies from the channel into accumulated storage
+        self.monitor.drain_vst_param_channel();
+
         let now = Instant::now();
         let mut completed = Vec::new();
 
@@ -917,7 +936,11 @@ impl AudioThread {
     }
 
     fn poll_engine(&mut self) {
-        self.engine.cleanup_expired_voices();
+        // Rate-limit voice cleanup to every 100ms (reduces overhead)
+        if self.last_voice_cleanup.elapsed() >= Duration::from_millis(100) {
+            self.last_voice_cleanup = Instant::now();
+            self.engine.cleanup_expired_voices();
+        }
 
         if let Some(result) = self.engine.poll_compile_result() {
             let result = match result {
@@ -971,17 +994,21 @@ impl AudioThread {
             }
         }
 
-        if let Some(msg) = self.engine.check_server_health() {
-            if self.engine.status() == ServerStatus::Error {
-                let _ = self.feedback_tx.send(AudioFeedback::ServerCrashed {
-                    message: msg.clone(),
+        // Rate-limit server health checks to every 5s (reduces syscall overhead)
+        if self.last_health_check.elapsed() >= Duration::from_secs(5) {
+            self.last_health_check = Instant::now();
+            if let Some(msg) = self.engine.check_server_health() {
+                if self.engine.status() == ServerStatus::Error {
+                    let _ = self.feedback_tx.send(AudioFeedback::ServerCrashed {
+                        message: msg.clone(),
+                    });
+                }
+                let _ = self.feedback_tx.send(AudioFeedback::ServerStatus {
+                    status: self.engine.status(),
+                    message: msg,
+                    server_running: self.engine.server_running(),
                 });
             }
-            let _ = self.feedback_tx.send(AudioFeedback::ServerStatus {
-                status: self.engine.status(),
-                message: msg,
-                server_running: self.engine.server_running(),
-            });
         }
 
         // Poll SuperCollider /status for CPU load and latency
@@ -989,6 +1016,18 @@ impl AudioThread {
             self.last_status_poll = Instant::now();
             self.monitor.mark_status_sent();
             self.engine.send_status_query();
+        }
+
+        // Emit telemetry summary every 1s
+        if self.last_telemetry_emit.elapsed() >= Duration::from_secs(1) {
+            self.last_telemetry_emit = Instant::now();
+            let (avg_tick_us, max_tick_us, p95_tick_us, overruns) = self.telemetry.take_summary();
+            let _ = self.feedback_tx.send(AudioFeedback::TelemetrySummary {
+                avg_tick_us,
+                max_tick_us,
+                p95_tick_us,
+                overruns,
+            });
         }
 
         // Poll pending VST param queries for completed OSC replies

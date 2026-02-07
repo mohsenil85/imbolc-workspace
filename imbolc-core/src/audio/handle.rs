@@ -240,6 +240,9 @@ impl AudioHandle {
             AudioFeedback::ServerCrashed { .. } => {
                 self.is_running = false;
             }
+            AudioFeedback::TelemetrySummary { .. } => {
+                // Telemetry is logged/monitored elsewhere; no state update needed
+            }
         }
     }
 

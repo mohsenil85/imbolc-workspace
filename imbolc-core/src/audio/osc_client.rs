@@ -1,9 +1,10 @@
 use std::collections::{HashMap, VecDeque};
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
-use std::sync::{Arc, LazyLock};
+use std::sync::{Arc, LazyLock, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use crossbeam_channel::{Sender, Receiver, unbounded};
 use rosc::{OscBundle, OscMessage, OscPacket, OscTime, OscType};
 
 use super::triple_buffer::TripleBufferHandle;
@@ -87,8 +88,12 @@ pub struct AudioMonitor {
     /// Timestamp when /status was last sent (for latency measurement)
     /// Encoded as nanos since INSTANT_ANCHOR; 0 = not set
     status_sent_at: Arc<AtomicU64>,
-    /// VST param query replies: nodeID → Vec<VstParamReply> (lock-free triple buffer)
-    vst_params: TripleBufferHandle<HashMap<i32, Vec<VstParamReply>>>,
+    /// Channel receiver for VST param replies from OSC thread (SPSC)
+    vst_param_rx: Receiver<(i32, VstParamReply)>,
+    /// Channel sender for VST param replies (cloned into OSC thread)
+    vst_param_tx: Sender<(i32, VstParamReply)>,
+    /// Accumulated VST param replies per node (populated by audio thread from channel)
+    vst_params_accumulated: Arc<Mutex<HashMap<i32, Vec<VstParamReply>>>>,
 }
 
 impl Default for AudioMonitor {
@@ -101,6 +106,7 @@ impl AudioMonitor {
     pub fn new() -> Self {
         let mut scope = VecDeque::with_capacity(SCOPE_BUFFER_SIZE);
         scope.resize(SCOPE_BUFFER_SIZE, 0.0);
+        let (vst_param_tx, vst_param_rx) = unbounded();
         Self {
             meter_data: Arc::new(AtomicU64::new(pack_f32_pair(0.0, 0.0))),
             audio_in_waveforms: TripleBufferHandle::new(),
@@ -111,7 +117,9 @@ impl AudioMonitor {
             osc_latency_ms: Arc::new(AtomicU32::new(0.0_f32.to_bits())),
             audio_latency_ms: Arc::new(AtomicU32::new(0.0_f32.to_bits())),
             status_sent_at: Arc::new(AtomicU64::new(0)),
-            vst_params: TripleBufferHandle::new(),
+            vst_param_rx,
+            vst_param_tx,
+            vst_params_accumulated: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -171,36 +179,38 @@ impl AudioMonitor {
         self.status_sent_at.store(encode_instant(Some(Instant::now())), Ordering::Release);
     }
 
-    /// Take accumulated VST param replies for a node (clears the entry)
-    /// Note: Uses modify which writes to the back buffer, so this needs to be called from
-    /// the writer thread (OSC receive thread) or coordinated appropriately.
-    pub fn take_vst_params(&self, node_id: i32) -> Option<Vec<VstParamReply>> {
-        // First read the current value
-        let result = self.vst_params.with(|map| map.get(&node_id).cloned());
-        // Then clear it if it existed
-        if result.is_some() {
-            self.vst_params.modify(|map| {
-                map.remove(&node_id);
-            });
+    /// Drain incoming VST param replies from the channel and accumulate them.
+    /// Call this from the audio thread before checking/taking params.
+    pub fn drain_vst_param_channel(&self) {
+        let mut map = self.vst_params_accumulated.lock().unwrap();
+        while let Ok((node_id, reply)) = self.vst_param_rx.try_recv() {
+            map.entry(node_id).or_default().push(reply);
         }
-        result
+    }
+
+    /// Take accumulated VST param replies for a node (clears the entry).
+    /// Call drain_vst_param_channel() first to ensure all pending replies are processed.
+    pub fn take_vst_params(&self, node_id: i32) -> Option<Vec<VstParamReply>> {
+        let mut map = self.vst_params_accumulated.lock().unwrap();
+        map.remove(&node_id)
     }
 
     /// Clear VST param replies for a node (before starting a new query)
     pub fn clear_vst_params(&self, node_id: i32) {
-        self.vst_params.modify(|map| {
-            map.remove(&node_id);
-        });
+        let mut map = self.vst_params_accumulated.lock().unwrap();
+        map.remove(&node_id);
     }
 
     /// Check if any VST param replies have accumulated for a node
     pub fn has_vst_params(&self, node_id: i32) -> bool {
-        self.vst_params.with(|map| map.contains_key(&node_id))
+        let map = self.vst_params_accumulated.lock().unwrap();
+        map.contains_key(&node_id)
     }
 
     /// Get the count of accumulated VST param replies for a node
     pub fn vst_param_count(&self, node_id: i32) -> usize {
-        self.vst_params.with(|map| map.get(&node_id).map(|v| v.len()).unwrap_or(0))
+        let map = self.vst_params_accumulated.lock().unwrap();
+        map.get(&node_id).map(|v| v.len()).unwrap_or(0)
     }
 }
 
@@ -217,7 +227,10 @@ pub struct OscClient {
     osc_latency_ms: Arc<AtomicU32>,
     audio_latency_ms: Arc<AtomicU32>,
     status_sent_at: Arc<AtomicU64>,
-    vst_params: TripleBufferHandle<HashMap<i32, Vec<VstParamReply>>>,
+    /// Channel for VST param replies (receiver kept in AudioMonitor)
+    vst_param_tx: Sender<(i32, VstParamReply)>,
+    vst_param_rx: Receiver<(i32, VstParamReply)>,
+    vst_params_accumulated: Arc<Mutex<HashMap<i32, Vec<VstParamReply>>>>,
     _recv_thread: Option<JoinHandle<()>>,
 }
 
@@ -231,7 +244,7 @@ struct OscRefs {
     sc_cpu: Arc<AtomicU32>,
     osc_latency_ms: Arc<AtomicU32>,
     status_sent_at: Arc<AtomicU64>,
-    vst_params: TripleBufferHandle<HashMap<i32, Vec<VstParamReply>>>,
+    vst_param_tx: Sender<(i32, VstParamReply)>,
 }
 
 fn handle_osc_packet(packet: &OscPacket, refs: &OscRefs) {
@@ -351,13 +364,12 @@ fn handle_osc_packet(packet: &OscPacket, refs: &OscRefs) {
                         }
                     })
                     .collect();
-                refs.vst_params.modify(|map| {
-                    map.entry(node_id).or_default().push(VstParamReply {
-                        index,
-                        value,
-                        display,
-                    });
-                });
+                // Send to channel instead of modifying shared state (fixes race condition)
+                let _ = refs.vst_param_tx.send((node_id, VstParamReply {
+                    index,
+                    value,
+                    display,
+                }));
             }
         }
         OscPacket::Bundle(bundle) => {
@@ -385,11 +397,14 @@ impl OscClient {
         let osc_latency_ms = Arc::clone(&monitor.osc_latency_ms);
         let audio_latency_ms = Arc::clone(&monitor.audio_latency_ms);
         let status_sent_at = Arc::clone(&monitor.status_sent_at);
-        let vst_params = monitor.vst_params.clone();
+        let vst_param_tx = monitor.vst_param_tx.clone();
+        let vst_param_rx = monitor.vst_param_rx.clone();
+        let vst_params_accumulated = Arc::clone(&monitor.vst_params_accumulated);
 
         // Clone socket for receive thread
         let recv_socket = socket.try_clone()?;
         recv_socket.set_read_timeout(Some(Duration::from_millis(50)))?;
+        let osc_vst_param_tx = vst_param_tx.clone();
         let refs = OscRefs {
             meter: Arc::clone(&meter_data),
             waveforms: audio_in_waveforms.clone(),
@@ -399,7 +414,7 @@ impl OscClient {
             sc_cpu: Arc::clone(&sc_cpu),
             osc_latency_ms: Arc::clone(&osc_latency_ms),
             status_sent_at: Arc::clone(&status_sent_at),
-            vst_params: vst_params.clone(),
+            vst_param_tx: osc_vst_param_tx,
         };
 
         let handle = thread::spawn(move || {
@@ -429,7 +444,9 @@ impl OscClient {
             osc_latency_ms,
             audio_latency_ms,
             status_sent_at,
-            vst_params,
+            vst_param_tx,
+            vst_param_rx,
+            vst_params_accumulated,
             _recv_thread: Some(handle),
         })
     }
@@ -446,7 +463,9 @@ impl OscClient {
             osc_latency_ms: Arc::clone(&self.osc_latency_ms),
             audio_latency_ms: Arc::clone(&self.audio_latency_ms),
             status_sent_at: Arc::clone(&self.status_sent_at),
-            vst_params: self.vst_params.clone(),
+            vst_param_tx: self.vst_param_tx.clone(),
+            vst_param_rx: self.vst_param_rx.clone(),
+            vst_params_accumulated: Arc::clone(&self.vst_params_accumulated),
         }
     }
 

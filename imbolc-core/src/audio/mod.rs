@@ -11,6 +11,7 @@ pub mod playback;
 pub mod drum_tick;
 pub mod arpeggiator_tick;
 pub mod snapshot;
+pub mod telemetry;
 pub mod triple_buffer;
 
 pub use engine::{AudioEngine, ServerStatus};
