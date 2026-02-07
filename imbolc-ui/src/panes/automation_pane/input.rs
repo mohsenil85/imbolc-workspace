@@ -69,15 +69,15 @@ impl AutomationPane {
                     // Add send targets
                     let id = inst.id;
                     for (idx, _send) in inst.sends.iter().enumerate() {
-                        options.push(AutomationTarget::SendLevel(id, idx));
+                        options.push(AutomationTarget::send_level(id, idx));
                     }
                 }
                 // Add global targets (skip when editing a clip — only instrument targets apply)
                 if !editing_clip {
                     for bus_id in 1..=8u8 {
-                        options.push(AutomationTarget::BusLevel(bus_id));
+                        options.push(AutomationTarget::bus_level(bus_id));
                     }
-                    options.push(AutomationTarget::Bpm);
+                    options.push(AutomationTarget::bpm());
                 }
 
                 self.target_picker = TargetPickerState::Active { options, cursor: 0 };

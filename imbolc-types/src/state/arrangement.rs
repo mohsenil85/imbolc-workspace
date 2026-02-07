@@ -549,7 +549,7 @@ mod tests {
         let cid = arr.add_clip("Test".to_string(), 1, 384);
 
         if let Some(clip) = arr.clip_mut(cid) {
-            let mut lane = AutomationLane::new(0, AutomationTarget::InstrumentLevel(1));
+            let mut lane = AutomationLane::new(0, AutomationTarget::level(1));
             lane.points.push(AutomationPoint::new(0, 0.0));
             lane.points.push(AutomationPoint::new(192, 1.0));
             clip.automation_lanes.push(lane);
@@ -559,7 +559,7 @@ mod tests {
 
         let flat = arr.flatten_automation();
         assert_eq!(flat.len(), 1);
-        assert_eq!(flat[0].target, AutomationTarget::InstrumentLevel(1));
+        assert_eq!(flat[0].target, AutomationTarget::level(1));
         assert_eq!(flat[0].points.len(), 2);
         assert_eq!(flat[0].points[0].tick, 100);
         assert_eq!(flat[0].points[1].tick, 292);
@@ -571,7 +571,7 @@ mod tests {
         let cid = arr.add_clip("Test".to_string(), 1, 200);
 
         if let Some(clip) = arr.clip_mut(cid) {
-            let mut lane = AutomationLane::new(0, AutomationTarget::FilterCutoff(1));
+            let mut lane = AutomationLane::new(0, AutomationTarget::filter_cutoff(1));
             lane.points.push(AutomationPoint::new(0, 0.5));
             lane.points.push(AutomationPoint::new(100, 1.0));
             clip.automation_lanes.push(lane);
@@ -608,12 +608,12 @@ mod tests {
         let cid2 = arr.add_clip("B".to_string(), 1, 100);
 
         if let Some(clip) = arr.clip_mut(cid1) {
-            let mut lane = AutomationLane::new(0, AutomationTarget::InstrumentLevel(1));
+            let mut lane = AutomationLane::new(0, AutomationTarget::level(1));
             lane.points.push(AutomationPoint::new(50, 0.2));
             clip.automation_lanes.push(lane);
         }
         if let Some(clip) = arr.clip_mut(cid2) {
-            let mut lane = AutomationLane::new(1, AutomationTarget::InstrumentLevel(1));
+            let mut lane = AutomationLane::new(1, AutomationTarget::level(1));
             lane.points.push(AutomationPoint::new(0, 0.8));
             clip.automation_lanes.push(lane);
         }
@@ -638,7 +638,7 @@ mod tests {
         let cid = arr.add_clip("Test".to_string(), 1, 200);
 
         if let Some(clip) = arr.clip_mut(cid) {
-            let mut lane = AutomationLane::new(0, AutomationTarget::InstrumentPan(1));
+            let mut lane = AutomationLane::new(0, AutomationTarget::pan(1));
             lane.points.push(AutomationPoint::new(0, 0.0));
             lane.points.push(AutomationPoint::new(50, 0.5));
             lane.points.push(AutomationPoint::new(150, 1.0)); // Past trim point

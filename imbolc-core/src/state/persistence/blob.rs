@@ -161,7 +161,7 @@ mod tests {
         // Automation lane targeting effect param
         let lane_id = session
             .automation
-            .add_lane(AutomationTarget::EffectParam(saw_id, 0, 0));
+            .add_lane(AutomationTarget::effect_param(saw_id, 0, 0));
         if let Some(lane) = session.automation.lane_mut(lane_id) {
             lane.add_point(0, 0.2);
             lane.add_point(480, 0.8);
@@ -173,7 +173,7 @@ mod tests {
         session.midi_recording.channel_filter = Some(2);
         let mut cc = crate::state::midi_recording::MidiCcMapping::new(
             7,
-            AutomationTarget::InstrumentLevel(saw_id),
+            AutomationTarget::level(saw_id),
         );
         cc.channel = Some(1);
         cc.min_value = 0.1;
@@ -181,7 +181,7 @@ mod tests {
         session.midi_recording.add_cc_mapping(cc);
         session.midi_recording.add_pitch_bend_config(
             crate::state::midi_recording::PitchBendConfig {
-                target: AutomationTarget::SampleRate(sampler_id),
+                target: AutomationTarget::sample_rate(sampler_id),
                 center_value: 1.0,
                 range: 0.5,
                 sensitivity: 2.0,
@@ -240,7 +240,7 @@ mod tests {
         let loaded_lane = &loaded_session.automation.lanes[0];
         assert_eq!(
             loaded_lane.target,
-            AutomationTarget::EffectParam(saw_id, 0, 0)
+            AutomationTarget::effect_param(saw_id, 0, 0)
         );
         assert_eq!(loaded_lane.points.len(), 2);
 

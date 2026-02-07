@@ -91,7 +91,7 @@ impl VstParamPane {
                     let idx = self.get_param_index(param_idx, state);
                     if let Some(idx) = idx {
                         return Action::Automation(AutomationAction::AddLane(
-                            AutomationTarget::VstParam(instrument_id, idx),
+                            AutomationTarget::vst_param(instrument_id, idx),
                         ));
                     }
                 }

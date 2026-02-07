@@ -355,7 +355,7 @@ mod tests {
         // Envelope targets — update state and active voices
         engine
             .apply_automation(
-                &AutomationTarget::EnvelopeAttack(inst_id),
+                &AutomationTarget::attack(inst_id),
                 0.05,
                 &mut state.instruments,
                 &state.session,
@@ -363,7 +363,7 @@ mod tests {
             .unwrap();
         engine
             .apply_automation(
-                &AutomationTarget::EnvelopeDecay(inst_id),
+                &AutomationTarget::decay(inst_id),
                 0.2,
                 &mut state.instruments,
                 &state.session,
@@ -371,7 +371,7 @@ mod tests {
             .unwrap();
         engine
             .apply_automation(
-                &AutomationTarget::EnvelopeSustain(inst_id),
+                &AutomationTarget::sustain(inst_id),
                 0.7,
                 &mut state.instruments,
                 &state.session,
@@ -379,7 +379,7 @@ mod tests {
             .unwrap();
         engine
             .apply_automation(
-                &AutomationTarget::EnvelopeRelease(inst_id),
+                &AutomationTarget::release(inst_id),
                 1.5,
                 &mut state.instruments,
                 &state.session,

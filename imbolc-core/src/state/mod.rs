@@ -291,11 +291,11 @@ mod tests {
         state
             .session
             .automation
-            .add_lane(AutomationTarget::InstrumentLevel(instrument_id));
+            .add_lane(AutomationTarget::level(instrument_id));
         state
             .session
             .automation
-            .add_lane(AutomationTarget::InstrumentPan(instrument_id));
+            .add_lane(AutomationTarget::pan(instrument_id));
 
         assert_eq!(
             state.session.automation.lanes_for_instrument(instrument_id).len(),
@@ -427,7 +427,7 @@ mod tests {
     fn remove_instrument_cleans_up_all() {
         let mut state = AppState::new();
         let id = state.add_instrument(SourceType::Saw);
-        state.session.automation.add_lane(AutomationTarget::InstrumentLevel(id));
+        state.session.automation.add_lane(AutomationTarget::level(id));
         assert_eq!(state.session.automation.lanes.len(), 1);
 
         state.remove_instrument(id);
