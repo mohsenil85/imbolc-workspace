@@ -132,7 +132,7 @@ mod tests {
     #[test]
     fn remove_bus_clears_automation() {
         let (mut state, mut audio) = setup();
-        state.session.automation.add_lane(AutomationTarget::BusLevel(3));
+        state.session.automation.add_lane(AutomationTarget::bus_level(3));
         assert!(!state.session.automation.lanes.is_empty());
 
         dispatch_bus(&BusAction::Remove(3), &mut state, &mut audio);

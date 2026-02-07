@@ -649,3 +649,101 @@ clients don't need audio.
 - State diffing instead of full broadcasts
 - Monitoring / cue bus routing
 - Privileged node semantics
+
+---
+
+## Future Extensions
+
+### Per-Client Instrument Bookmarks
+
+Currently `InstrumentState.selected` is a global `Option<usize>` index and number keys 1-10 select by list position. In multi-client, each musician needs independent selection and number-key mappings.
+
+**Client-local state (never sent to server):**
+- `selected: Option<InstrumentId>` — which instrument this client is viewing/editing
+- `bookmarks: [Option<InstrumentId>; 10]` — maps number keys 1-10 to instrument IDs
+
+**How it works:**
+- Pressing `1` → looks up `bookmarks[0]` → gets `InstrumentId` → sets client-local `selected`
+- Before rendering, client patches `state.instruments.selected` in its local AppState copy to match
+- Panes call `state.instruments.selected_instrument()` unchanged — no pane modifications needed
+- Selection is instant (no server round-trip, purely client-local)
+
+**Bookmark management:**
+- Auto-bookmark on instrument claim (fills next free slot)
+- Manual override: `Ctrl+1` to assign current instrument to slot 1
+- Bookmarks persist client-side even after releasing ownership (for easy re-claim)
+
+### Per-Client Undo Stacks
+
+- Server maintains a separate undo stack per client
+- Each stack only contains actions that client made on instruments they owned
+- Undo reverses your own most recent action — never touches another client's work
+- If you release an instrument, your undo entries for it are discarded (you gave up ownership)
+- This keeps undo predictable: you can only undo what you did, on things you own
+
+### Registers (Shared Named Buffers)
+
+Named storage slots (`a`-`z` or string keys) on the server. Any client can read or write.
+
+**Content types:**
+- **Note sequences** — piano roll selections (pitch, time, duration, velocity)
+- **Drum patterns** — sequencer steps (hits, accents, per-step velocity)
+- **Instrument presets** — full instrument config (source, filter, effects, envelope, LFO, mixer params)
+- **Automation curves** — lane segments (control points, curve types)
+- **Keybinding snippets** — custom keymap fragments to share workflows
+
+**Actions:**
+- `YankToRegister { name: String, content: RegisterContent }` — store data
+- `PasteFromRegister { name: String, target: ... }` — retrieve and apply
+- `ListRegisters` → server responds with register names + content summaries
+- `ClearRegister { name: String }`
+
+**RegisterContent enum:**
+```rust
+#[derive(Serialize, Deserialize)]
+enum RegisterContent {
+    Notes(Vec<ClipboardNote>),
+    DrumPattern { steps: Vec<DrumStep>, length: u32 },
+    InstrumentPreset(Instrument),
+    AutomationCurve { points: Vec<AutomationPoint>, curve: CurveType },
+    Keybindings(String),  // TOML fragment
+}
+```
+
+Registers persist in server memory for the session. Could optionally save to disk.
+
+### Import/Export & Preset Library
+
+Multi-client makes import/export a first-class workflow. Each musician has their own preset library on their machine and needs to move instruments/patterns in and out of shared sessions.
+
+**Preset format** (`.imbolc-preset`): Self-contained SQLite file containing:
+- Instrument definition (MessagePack blob, same format as persistence)
+- Embedded sample data (audio bytes stored as BLOBs, keyed by original filename)
+- SynthDef source if custom
+- Fully portable — works on any machine without external file dependencies
+
+**Preset library:** `~/.config/imbolc/presets/` on each musician's machine. Browsable from a client-local preset browser pane.
+
+**Import to server:**
+1. Client reads `.imbolc-preset` from local disk
+2. Client sends `ImportPreset { instrument: Instrument, samples: Vec<(String, Vec<u8>)>, synthdef: Option<String> }` to server
+3. Server writes sample files to its local sample directory, updates paths in instrument
+4. Server creates instrument, auto-owns to importer, auto-bookmarks
+5. Server loads samples into SC buffers
+
+**Export from server:**
+1. Client sends `ExportInstrument(InstrumentId)` (must own it)
+2. Server gathers the instrument + all referenced sample files + synthdef source
+3. Server sends back the full bundle
+4. Client writes `.imbolc-preset` to their local preset library
+
+**Session snapshot (local backup):**
+1. Client sends `RequestSessionSnapshot`
+2. Server sends full `SessionState + InstrumentState` + all sample data
+3. Client writes it locally as a `.imbolc` SQLite file using existing persistence code
+4. Acts as a fork point — can be opened standalone later
+
+**Relationship to Registers:**
+- Registers = ephemeral shared buffers, session-scoped, lightweight (no file I/O)
+- Presets = persistent files, disk-scoped, self-contained (embed samples)
+- Both carry similar content types but serve different purposes (quick sharing vs. permanent library)

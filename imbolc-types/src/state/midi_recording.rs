@@ -77,7 +77,7 @@ pub struct PitchBendConfig {
 impl PitchBendConfig {
     pub fn new_for_sampler(instrument_id: InstrumentId) -> Self {
         Self {
-            target: AutomationTarget::SampleRate(instrument_id),
+            target: AutomationTarget::sample_rate(instrument_id),
             center_value: 1.0, // Normal playback speed
             range: 1.0,        // -0.0 (stopped/reverse) to 2.0 (double speed)
             sensitivity: 1.0,
@@ -223,7 +223,7 @@ mod tests {
 
     #[test]
     fn test_cc_mapping() {
-        let mapping = MidiCcMapping::new(1, AutomationTarget::FilterCutoff(0));
+        let mapping = MidiCcMapping::new(1, AutomationTarget::filter_cutoff(0));
 
         // CC 0 -> min (20 Hz for filter cutoff)
         let val_min = mapping.map_value(0);
@@ -260,7 +260,7 @@ mod tests {
         let mut state = MidiRecordingState::new();
 
         // Add CC mapping
-        state.add_cc_mapping(MidiCcMapping::new(1, AutomationTarget::FilterCutoff(0)));
+        state.add_cc_mapping(MidiCcMapping::new(1, AutomationTarget::filter_cutoff(0)));
         assert!(state.find_cc_mapping(1, 0).is_some());
         assert!(state.find_cc_mapping(2, 0).is_none());
 

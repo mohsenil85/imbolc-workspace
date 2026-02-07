@@ -298,7 +298,7 @@ mod tests {
 
         engine
             .apply_automation(
-                &AutomationTarget::InstrumentLevel(inst_id),
+                &AutomationTarget::level(inst_id),
                 0.5,
                 &mut state.instruments,
                 &state.session,
@@ -306,7 +306,7 @@ mod tests {
             .unwrap();
         engine
             .apply_automation(
-                &AutomationTarget::InstrumentPan(inst_id),
+                &AutomationTarget::pan(inst_id),
                 -0.25,
                 &mut state.instruments,
                 &state.session,
@@ -314,7 +314,7 @@ mod tests {
             .unwrap();
         engine
             .apply_automation(
-                &AutomationTarget::FilterCutoff(inst_id),
+                &AutomationTarget::filter_cutoff(inst_id),
                 800.0,
                 &mut state.instruments,
                 &state.session,
@@ -322,7 +322,7 @@ mod tests {
             .unwrap();
         engine
             .apply_automation(
-                &AutomationTarget::FilterResonance(inst_id),
+                &AutomationTarget::filter_resonance(inst_id),
                 0.5,
                 &mut state.instruments,
                 &state.session,
@@ -330,7 +330,7 @@ mod tests {
             .unwrap();
         engine
             .apply_automation(
-                &AutomationTarget::EffectParam(inst_id, 1, 0),
+                &AutomationTarget::effect_param(inst_id, 1, 0),
                 0.7,
                 &mut state.instruments,
                 &state.session,
@@ -338,7 +338,7 @@ mod tests {
             .unwrap();
         engine
             .apply_automation(
-                &AutomationTarget::SampleRate(inst_id),
+                &AutomationTarget::sample_rate(inst_id),
                 1.2,
                 &mut state.instruments,
                 &state.session,
@@ -346,7 +346,7 @@ mod tests {
             .unwrap();
         engine
             .apply_automation(
-                &AutomationTarget::SampleAmp(inst_id),
+                &AutomationTarget::sample_amp(inst_id),
                 0.8,
                 &mut state.instruments,
                 &state.session,
@@ -743,7 +743,7 @@ mod tests {
             let inst_id = state.add_instrument(SourceType::AudioIn);
             if let Some(inst) = state.instruments.instrument_mut(inst_id) {
                 inst.lfo.enabled = true;
-                inst.lfo.target = crate::state::LfoTarget::Pan;
+                inst.lfo.target = crate::state::ParameterTarget::Pan;
                 inst.lfo.rate = 2.0;
                 inst.lfo.depth = 0.5;
             }

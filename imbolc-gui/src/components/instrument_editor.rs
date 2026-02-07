@@ -7,7 +7,7 @@ use crate::components::effect_slot::{AddEffectButton, EffectSlotComponent};
 use crate::dispatch::{use_dispatch, DispatchExt};
 use crate::state::SharedState;
 use imbolc_types::{
-    Action, FilterType, InstrumentAction, LfoShape, LfoTarget, MixerAction, SourceType,
+    Action, FilterType, InstrumentAction, LfoShape, ParameterTarget, MixerAction, SourceType,
 };
 
 /// Instrument editor showing source, filter, effects, LFO, envelope, and parameters.
@@ -356,16 +356,16 @@ pub fn InstrumentEditor() -> Element {
                                     select {
                                         class: "lfo-target-select",
                                         onchange: move |evt| {
-                                            if let Some(target) = LfoTarget::from_name(&evt.value()) {
+                                            if let Some(target) = ParameterTarget::from_short_name(&evt.value()) {
                                                 dispatch.dispatch_action(Action::Instrument(
                                                     InstrumentAction::SetLfoTarget(id, target)
                                                 ));
                                             }
                                         },
-                                        for target in [LfoTarget::FilterCutoff, LfoTarget::FilterResonance, LfoTarget::Amplitude, LfoTarget::Pitch, LfoTarget::Pan] {
+                                        for target in [ParameterTarget::FilterCutoff, ParameterTarget::FilterResonance, ParameterTarget::Level, ParameterTarget::Pitch, ParameterTarget::Pan] {
                                             option {
-                                                key: "{target.name()}",
-                                                value: "{target.name()}",
+                                                key: "{target.short_name()}",
+                                                value: "{target.short_name()}",
                                                 selected: target == lfo_target,
                                                 "{target.name()}"
                                             }

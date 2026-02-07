@@ -111,7 +111,7 @@ pub(super) fn dispatch_vst_param(
             if state.recording.automation_recording && state.session.piano_roll.playing {
                 record_automation_point(
                     state,
-                    AutomationTarget::VstParam(*instrument_id, *param_index),
+                    AutomationTarget::vst_param(*instrument_id, *param_index),
                     value,
                 );
             }
@@ -269,7 +269,7 @@ mod tests {
             &mut audio,
         );
 
-        let target = AutomationTarget::VstParam(id, 0);
+        let target = AutomationTarget::vst_param(id, 0);
         let lane = state.session.automation.lane_for_target(&target);
         assert!(lane.is_some(), "VstParam lane should be created");
         assert_eq!(lane.unwrap().points.len(), 1);
@@ -288,7 +288,7 @@ mod tests {
             &mut audio,
         );
 
-        let target = AutomationTarget::VstParam(id, 0);
+        let target = AutomationTarget::vst_param(id, 0);
         assert!(state.session.automation.lane_for_target(&target).is_none());
     }
 

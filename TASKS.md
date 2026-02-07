@@ -116,3 +116,96 @@ High Contrast), store active theme in `AppState`, add theme
 switcher. Large change touching every pane.
 
 **Files:** `imbolc-ui/src/ui/style.rs`, `imbolc-types/src/state/mod.rs`, all panes
+
+---
+
+### Input/Automation Capture
+
+Live recording of parameter changes and MIDI input as automation
+data. When a user tweaks a knob or moves a fader during playback,
+those movements should be captured as automation points on the
+corresponding lane. MIDI CC input should record directly to automation
+lanes. Arm/disarm per-lane recording.
+
+---
+
+### VST Parameter Discovery
+
+Replace synthetic 128-parameter placeholders with real parameter
+names, units, and ranges from the plugin via SuperCollider OSC
+replies. Currently usable but clunky — users see "Param 0", "Param 1"
+instead of meaningful names.
+
+---
+
+### MIDI Learn
+
+"Wiggle a knob to assign it" workflow. CC mapping state exists but
+there's no interactive UI for binding a physical controller to a
+parameter. Should support learn mode where the next incoming CC
+automatically maps to the selected target.
+
+---
+
+### Notification/Feedback System
+
+A one-line status bar across the bottom of the screen that we can
+print to programatically.
+
+---
+
+### Test Coverage
+
+~31 unit tests and a handful of e2e tests — low for a project this
+size. The e2e harness (tmux-based) is a good foundation but covers
+very little. Needs render snapshot tests, UI interaction tests,
+multi-step workflow tests, and regression coverage for input handling.
+
+---
+
+### Sidechain Visualization
+
+Compressor gain reduction meters, sidechain input indicators in the
+mixer.
+
+---
+
+### Group/Bus Metering
+
+Level meters for the 8 buses and master in the mixer view.
+
+---
+
+### Plugin Scanning/Cataloging
+
+Automatic VST3 directory scanning instead of manual file
+import. Plugin database with search, favorites, and categories.
+
+---
+
+### VST Preset/Program Browser
+
+UI for browsing and loading VST presets and programs. Currently state
+save/restore works but there's no preset management interface.
+
+---
+
+### Latency Compensation
+
+Plugin delay compensation (PDC) for VST instruments and
+effects. Report and compensate for processing latency to keep tracks
+aligned.
+
+---
+
+### MIDI Clock Sync
+
+Send and receive MIDI clock for synchronization with external hardware
+and software. Tempo leader/follower modes.
+
+---
+
+### CPU/DSP Load Meter
+
+Real-time display of SuperCollider CPU usage and DSP load. Warning
+indicators when approaching capacity.

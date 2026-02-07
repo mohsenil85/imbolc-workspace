@@ -67,7 +67,7 @@ pub(super) fn handle_adjust_filter_cutoff(
                 .clamp(filter.cutoff.min, filter.cutoff.max);
             new_cutoff = Some(filter.cutoff.value);
 
-            let target = AutomationTarget::FilterCutoff(instrument.id);
+            let target = AutomationTarget::filter_cutoff(instrument.id);
             let normalized = target.normalize_value(filter.cutoff.value);
             automation_data = Some((instrument.id, normalized));
         }
@@ -77,7 +77,7 @@ pub(super) fn handle_adjust_filter_cutoff(
         maybe_record_automation(
             state,
             &mut result,
-            AutomationTarget::FilterCutoff(inst_id),
+            AutomationTarget::filter_cutoff(inst_id),
             normalized,
         );
     }
@@ -104,7 +104,7 @@ pub(super) fn handle_adjust_filter_resonance(
                 .clamp(filter.resonance.min, filter.resonance.max);
             new_resonance = Some(filter.resonance.value);
 
-            let target = AutomationTarget::FilterResonance(instrument.id);
+            let target = AutomationTarget::filter_resonance(instrument.id);
             let normalized = target.normalize_value(filter.resonance.value);
             automation_data = Some((instrument.id, normalized));
         }
@@ -114,7 +114,7 @@ pub(super) fn handle_adjust_filter_resonance(
         maybe_record_automation(
             state,
             &mut result,
-            AutomationTarget::FilterResonance(inst_id),
+            AutomationTarget::filter_resonance(inst_id),
             normalized,
         );
     }

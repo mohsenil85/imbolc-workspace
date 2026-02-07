@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::{EffectId, InstrumentId};
+use crate::{EffectId, InstrumentId, ParameterTarget};
 
 /// Whether target uses continuous interpolation or discrete steps.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -86,186 +86,264 @@ impl AutomationPoint {
     }
 }
 
-/// What parameter is being automated.
+// ============================================================================
+// New Structured AutomationTarget
+// ============================================================================
+
+/// Per-instrument parameter automation target.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum AutomationTarget {
-    /// Instrument output level
-    InstrumentLevel(InstrumentId),
-    /// Instrument pan
-    InstrumentPan(InstrumentId),
-    /// Filter cutoff frequency
-    FilterCutoff(InstrumentId),
-    /// Filter resonance
-    FilterResonance(InstrumentId),
-    /// Effect parameter (instrument_id, effect_id, param_index)
-    EffectParam(InstrumentId, EffectId, usize),
-    /// Sample playback rate (for scratching)
-    SampleRate(InstrumentId),
-    /// Sample amplitude
-    SampleAmp(InstrumentId),
-    /// LFO rate (0.1-32.0 Hz)
-    LfoRate(InstrumentId),
-    /// LFO depth (0.0-1.0)
-    LfoDepth(InstrumentId),
-    /// Envelope attack time (0.001-2.0 s)
-    EnvelopeAttack(InstrumentId),
-    /// Envelope decay time (0.001-2.0 s)
-    EnvelopeDecay(InstrumentId),
-    /// Envelope sustain level (0.0-1.0)
-    EnvelopeSustain(InstrumentId),
-    /// Envelope release time (0.001-5.0 s)
-    EnvelopeRelease(InstrumentId),
-    /// Send level (instrument_id, send_index, 0.0-1.0)
-    SendLevel(InstrumentId, usize),
-    /// Bus output level (bus 1-8, 0.0-1.0)
-    BusLevel(u8),
+pub enum InstrumentParameter {
+    /// Standard modulatable parameter (reuses ParameterTarget)
+    Standard(ParameterTarget),
+}
+
+/// Bus parameter target.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum BusParameter {
+    /// Bus output level (0.0-1.0)
+    Level,
+}
+
+/// Global session parameter target.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum GlobalParameter {
     /// Global BPM (30.0-300.0)
     Bpm,
-    /// VST plugin parameter (instrument_id, param_index, 0.0-1.0 normalized)
-    VstParam(InstrumentId, u32),
-    /// EQ band parameter (instrument_id, band_index 0-11, param: 0=freq 1=gain 2=q)
-    EqBandParam(InstrumentId, usize, usize),
-    /// Per-track swing amount (0.0-1.0)
-    TrackSwing(InstrumentId),
-    /// Per-track velocity humanization (0.0-1.0)
-    TrackHumanizeVelocity(InstrumentId),
-    /// Per-track timing humanization (0.0-1.0)
-    TrackHumanizeTiming(InstrumentId),
-    /// Per-track timing offset (-50.0 to +50.0 ms)
-    TrackTimingOffset(InstrumentId),
     /// Global time signature (discrete)
     TimeSignature,
-    /// Per-track time signature override (discrete)
-    TrackTimeSignature(InstrumentId),
-    /// Effect bypass toggle (discrete)
-    EffectBypass(InstrumentId, EffectId),
-    /// Filter bypass toggle (discrete)
-    FilterBypass(InstrumentId),
+}
+
+/// What parameter is being automated.
+///
+/// Structured enum that reuses ParameterTarget for per-instrument parameters,
+/// providing a single source of truth for modulatable parameters.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum AutomationTarget {
+    /// Per-instrument parameter automation
+    Instrument(InstrumentId, InstrumentParameter),
+    /// Bus output level (bus 1-8)
+    Bus(u8, BusParameter),
+    /// Global session parameters
+    Global(GlobalParameter),
 }
 
 impl AutomationTarget {
-    /// Get the instrument ID associated with this target (None for global targets).
+    // ========================================================================
+    // Convenience constructors
+    // ========================================================================
+
+    /// Create an instrument target with a standard parameter.
+    #[inline]
+    pub fn instrument(id: InstrumentId, param: ParameterTarget) -> Self {
+        Self::Instrument(id, InstrumentParameter::Standard(param))
+    }
+
+    /// Create a bus level target.
+    #[inline]
+    pub fn bus_level(bus_id: u8) -> Self {
+        Self::Bus(bus_id, BusParameter::Level)
+    }
+
+    /// Create a global BPM target.
+    #[inline]
+    pub fn bpm() -> Self {
+        Self::Global(GlobalParameter::Bpm)
+    }
+
+    /// Create a global time signature target.
+    #[inline]
+    pub fn time_signature() -> Self {
+        Self::Global(GlobalParameter::TimeSignature)
+    }
+
+    // ========================================================================
+    // Common parameter shortcuts
+    // ========================================================================
+
+    #[inline]
+    pub fn level(id: InstrumentId) -> Self {
+        Self::instrument(id, ParameterTarget::Level)
+    }
+
+    #[inline]
+    pub fn pan(id: InstrumentId) -> Self {
+        Self::instrument(id, ParameterTarget::Pan)
+    }
+
+    #[inline]
+    pub fn filter_cutoff(id: InstrumentId) -> Self {
+        Self::instrument(id, ParameterTarget::FilterCutoff)
+    }
+
+    #[inline]
+    pub fn filter_resonance(id: InstrumentId) -> Self {
+        Self::instrument(id, ParameterTarget::FilterResonance)
+    }
+
+    #[inline]
+    pub fn filter_bypass(id: InstrumentId) -> Self {
+        Self::instrument(id, ParameterTarget::FilterBypass)
+    }
+
+    #[inline]
+    pub fn attack(id: InstrumentId) -> Self {
+        Self::instrument(id, ParameterTarget::Attack)
+    }
+
+    #[inline]
+    pub fn decay(id: InstrumentId) -> Self {
+        Self::instrument(id, ParameterTarget::Decay)
+    }
+
+    #[inline]
+    pub fn sustain(id: InstrumentId) -> Self {
+        Self::instrument(id, ParameterTarget::Sustain)
+    }
+
+    #[inline]
+    pub fn release(id: InstrumentId) -> Self {
+        Self::instrument(id, ParameterTarget::Release)
+    }
+
+    #[inline]
+    pub fn lfo_rate(id: InstrumentId) -> Self {
+        Self::instrument(id, ParameterTarget::LfoRate)
+    }
+
+    #[inline]
+    pub fn lfo_depth(id: InstrumentId) -> Self {
+        Self::instrument(id, ParameterTarget::LfoDepth)
+    }
+
+    #[inline]
+    pub fn send_level(id: InstrumentId, send_idx: usize) -> Self {
+        Self::instrument(id, ParameterTarget::SendLevel(send_idx))
+    }
+
+    #[inline]
+    pub fn sample_rate(id: InstrumentId) -> Self {
+        Self::instrument(id, ParameterTarget::SampleRate)
+    }
+
+    #[inline]
+    pub fn sample_amp(id: InstrumentId) -> Self {
+        Self::instrument(id, ParameterTarget::SampleAmp)
+    }
+
+    #[inline]
+    pub fn vst_param(id: InstrumentId, param_idx: u32) -> Self {
+        Self::instrument(id, ParameterTarget::VstParam(param_idx))
+    }
+
+    #[inline]
+    pub fn effect_param(id: InstrumentId, effect_id: EffectId, param_idx: usize) -> Self {
+        Self::instrument(id, ParameterTarget::EffectParam(effect_id, param_idx))
+    }
+
+    #[inline]
+    pub fn effect_bypass(id: InstrumentId, effect_id: EffectId) -> Self {
+        Self::instrument(id, ParameterTarget::EffectBypass(effect_id))
+    }
+
+    #[inline]
+    pub fn eq_band_freq(id: InstrumentId, band: usize) -> Self {
+        Self::instrument(id, ParameterTarget::EqBandFreq(band))
+    }
+
+    #[inline]
+    pub fn eq_band_gain(id: InstrumentId, band: usize) -> Self {
+        Self::instrument(id, ParameterTarget::EqBandGain(band))
+    }
+
+    #[inline]
+    pub fn eq_band_q(id: InstrumentId, band: usize) -> Self {
+        Self::instrument(id, ParameterTarget::EqBandQ(band))
+    }
+
+    #[inline]
+    pub fn swing(id: InstrumentId) -> Self {
+        Self::instrument(id, ParameterTarget::Swing)
+    }
+
+    #[inline]
+    pub fn humanize_velocity(id: InstrumentId) -> Self {
+        Self::instrument(id, ParameterTarget::HumanizeVelocity)
+    }
+
+    #[inline]
+    pub fn humanize_timing(id: InstrumentId) -> Self {
+        Self::instrument(id, ParameterTarget::HumanizeTiming)
+    }
+
+    #[inline]
+    pub fn timing_offset(id: InstrumentId) -> Self {
+        Self::instrument(id, ParameterTarget::TimingOffset)
+    }
+
+    #[inline]
+    pub fn track_time_signature(id: InstrumentId) -> Self {
+        Self::instrument(id, ParameterTarget::TimeSignature)
+    }
+
+    // ========================================================================
+    // Query methods
+    // ========================================================================
+
+    /// Get the instrument ID associated with this target (None for global/bus targets).
     pub fn instrument_id(&self) -> Option<InstrumentId> {
         match self {
-            AutomationTarget::InstrumentLevel(id)
-            | AutomationTarget::InstrumentPan(id)
-            | AutomationTarget::FilterCutoff(id)
-            | AutomationTarget::FilterResonance(id)
-            | AutomationTarget::SampleRate(id)
-            | AutomationTarget::SampleAmp(id)
-            | AutomationTarget::LfoRate(id)
-            | AutomationTarget::LfoDepth(id)
-            | AutomationTarget::EnvelopeAttack(id)
-            | AutomationTarget::EnvelopeDecay(id)
-            | AutomationTarget::EnvelopeSustain(id)
-            | AutomationTarget::EnvelopeRelease(id) => Some(*id),
-            AutomationTarget::EffectParam(id, _, _) => Some(*id),
-            AutomationTarget::SendLevel(id, _) => Some(*id),
-            AutomationTarget::VstParam(id, _) => Some(*id),
-            AutomationTarget::EqBandParam(id, _, _) => Some(*id),
-            AutomationTarget::TrackSwing(id)
-            | AutomationTarget::TrackHumanizeVelocity(id)
-            | AutomationTarget::TrackHumanizeTiming(id)
-            | AutomationTarget::TrackTimingOffset(id)
-            | AutomationTarget::TrackTimeSignature(id)
-            | AutomationTarget::EffectBypass(id, _)
-            | AutomationTarget::FilterBypass(id) => Some(*id),
-            AutomationTarget::BusLevel(_) | AutomationTarget::Bpm | AutomationTarget::TimeSignature => None,
+            AutomationTarget::Instrument(id, _) => Some(*id),
+            AutomationTarget::Bus(_, _) | AutomationTarget::Global(_) => None,
+        }
+    }
+
+    /// Get the underlying ParameterTarget if this is an instrument target with a standard param.
+    pub fn parameter_target(&self) -> Option<&ParameterTarget> {
+        match self {
+            AutomationTarget::Instrument(_, InstrumentParameter::Standard(param)) => Some(param),
+            _ => None,
         }
     }
 
     /// Get a human-readable name for this target.
     pub fn name(&self) -> String {
         match self {
-            AutomationTarget::InstrumentLevel(_) => "Level".to_string(),
-            AutomationTarget::InstrumentPan(_) => "Pan".to_string(),
-            AutomationTarget::FilterCutoff(_) => "Filter Cutoff".to_string(),
-            AutomationTarget::FilterResonance(_) => "Filter Resonance".to_string(),
-            AutomationTarget::EffectParam(_, fx_idx, param_idx) => {
-                format!("FX{} Param{}", fx_idx + 1, param_idx + 1)
-            }
-            AutomationTarget::SampleRate(_) => "Sample Rate".to_string(),
-            AutomationTarget::SampleAmp(_) => "Sample Amp".to_string(),
-            AutomationTarget::LfoRate(_) => "LFO Rate".to_string(),
-            AutomationTarget::LfoDepth(_) => "LFO Depth".to_string(),
-            AutomationTarget::EnvelopeAttack(_) => "Env Attack".to_string(),
-            AutomationTarget::EnvelopeDecay(_) => "Env Decay".to_string(),
-            AutomationTarget::EnvelopeSustain(_) => "Env Sustain".to_string(),
-            AutomationTarget::EnvelopeRelease(_) => "Env Release".to_string(),
-            AutomationTarget::SendLevel(_, idx) => format!("Send {}", idx + 1),
-            AutomationTarget::BusLevel(bus) => format!("Bus {} Level", bus),
-            AutomationTarget::Bpm => "BPM".to_string(),
-            AutomationTarget::VstParam(_, idx) => format!("VST P{}", idx),
-            AutomationTarget::EqBandParam(_, band, param) => {
-                let param_name = match param {
-                    0 => "Freq",
-                    1 => "Gain",
-                    _ => "Q",
-                };
-                format!("EQ B{} {}", band + 1, param_name)
-            }
-            AutomationTarget::TrackSwing(_) => "Track Swing".to_string(),
-            AutomationTarget::TrackHumanizeVelocity(_) => "Track Humanize Vel".to_string(),
-            AutomationTarget::TrackHumanizeTiming(_) => "Track Humanize Time".to_string(),
-            AutomationTarget::TrackTimingOffset(_) => "Track Timing Offset".to_string(),
-            AutomationTarget::TimeSignature => "Time Signature".to_string(),
-            AutomationTarget::TrackTimeSignature(_) => "Track Time Sig".to_string(),
-            AutomationTarget::EffectBypass(_, effect_id) => format!("FX{} Bypass", effect_id + 1),
-            AutomationTarget::FilterBypass(_) => "Filter Bypass".to_string(),
+            AutomationTarget::Instrument(_, InstrumentParameter::Standard(param)) => param.name(),
+            AutomationTarget::Bus(bus_id, BusParameter::Level) => format!("Bus {} Level", bus_id),
+            AutomationTarget::Global(GlobalParameter::Bpm) => "BPM".to_string(),
+            AutomationTarget::Global(GlobalParameter::TimeSignature) => "Time Signature".to_string(),
         }
     }
 
     /// Get a short name for compact display.
     pub fn short_name(&self) -> &'static str {
         match self {
-            AutomationTarget::InstrumentLevel(_) => "Level",
-            AutomationTarget::InstrumentPan(_) => "Pan",
-            AutomationTarget::FilterCutoff(_) => "FltCt",
-            AutomationTarget::FilterResonance(_) => "FltRs",
-            AutomationTarget::EffectParam(_, _, _) => "FX",
-            AutomationTarget::SampleRate(_) => "SRate",
-            AutomationTarget::SampleAmp(_) => "SAmp",
-            AutomationTarget::LfoRate(_) => "LfoRt",
-            AutomationTarget::LfoDepth(_) => "LfoDp",
-            AutomationTarget::EnvelopeAttack(_) => "EnvA",
-            AutomationTarget::EnvelopeDecay(_) => "EnvD",
-            AutomationTarget::EnvelopeSustain(_) => "EnvS",
-            AutomationTarget::EnvelopeRelease(_) => "EnvR",
-            AutomationTarget::SendLevel(_, _) => "Send",
-            AutomationTarget::BusLevel(_) => "BusLv",
-            AutomationTarget::Bpm => "BPM",
-            AutomationTarget::VstParam(_, _) => "VstP",
-            AutomationTarget::EqBandParam(_, _, _) => "EqBd",
-            AutomationTarget::TrackSwing(_) => "TkSwg",
-            AutomationTarget::TrackHumanizeVelocity(_) => "TkHVl",
-            AutomationTarget::TrackHumanizeTiming(_) => "TkHTm",
-            AutomationTarget::TrackTimingOffset(_) => "TkOfs",
-            AutomationTarget::TimeSignature => "TSig",
-            AutomationTarget::TrackTimeSignature(_) => "TkTS",
-            AutomationTarget::EffectBypass(_, _) => "FXByp",
-            AutomationTarget::FilterBypass(_) => "FltBp",
+            AutomationTarget::Instrument(_, InstrumentParameter::Standard(param)) => param.short_name(),
+            AutomationTarget::Bus(_, BusParameter::Level) => "BusLv",
+            AutomationTarget::Global(GlobalParameter::Bpm) => "BPM",
+            AutomationTarget::Global(GlobalParameter::TimeSignature) => "TSig",
         }
     }
 
     /// Get all possible automation targets for an instrument (static set).
     pub fn targets_for_instrument(id: InstrumentId) -> Vec<AutomationTarget> {
         vec![
-            AutomationTarget::InstrumentLevel(id),
-            AutomationTarget::InstrumentPan(id),
-            AutomationTarget::FilterCutoff(id),
-            AutomationTarget::FilterResonance(id),
-            AutomationTarget::LfoRate(id),
-            AutomationTarget::LfoDepth(id),
-            AutomationTarget::EnvelopeAttack(id),
-            AutomationTarget::EnvelopeDecay(id),
-            AutomationTarget::EnvelopeSustain(id),
-            AutomationTarget::EnvelopeRelease(id),
-            AutomationTarget::TrackSwing(id),
-            AutomationTarget::TrackHumanizeVelocity(id),
-            AutomationTarget::TrackHumanizeTiming(id),
-            AutomationTarget::TrackTimingOffset(id),
-            AutomationTarget::TrackTimeSignature(id),
-            AutomationTarget::FilterBypass(id),
+            Self::level(id),
+            Self::pan(id),
+            Self::filter_cutoff(id),
+            Self::filter_resonance(id),
+            Self::filter_bypass(id),
+            Self::lfo_rate(id),
+            Self::lfo_depth(id),
+            Self::attack(id),
+            Self::decay(id),
+            Self::sustain(id),
+            Self::release(id),
+            Self::swing(id),
+            Self::humanize_velocity(id),
+            Self::humanize_timing(id),
+            Self::timing_offset(id),
+            Self::track_time_signature(id),
         ]
     }
 
@@ -282,59 +360,44 @@ impl AutomationTarget {
     /// Get the default min/max range for this target type.
     pub fn default_range(&self) -> (f32, f32) {
         match self {
-            AutomationTarget::InstrumentLevel(_) => (0.0, 1.0),
-            AutomationTarget::InstrumentPan(_) => (-1.0, 1.0),
-            AutomationTarget::FilterCutoff(_) => (20.0, 20000.0),
-            AutomationTarget::FilterResonance(_) => (0.0, 1.0),
-            AutomationTarget::EffectParam(_, _, _) => (0.0, 1.0),
-            AutomationTarget::SampleRate(_) => (-2.0, 2.0),
-            AutomationTarget::SampleAmp(_) => (0.0, 1.0),
-            AutomationTarget::LfoRate(_) => (0.1, 32.0),
-            AutomationTarget::LfoDepth(_) => (0.0, 1.0),
-            AutomationTarget::EnvelopeAttack(_) => (0.001, 2.0),
-            AutomationTarget::EnvelopeDecay(_) => (0.001, 2.0),
-            AutomationTarget::EnvelopeSustain(_) => (0.0, 1.0),
-            AutomationTarget::EnvelopeRelease(_) => (0.001, 5.0),
-            AutomationTarget::SendLevel(_, _) => (0.0, 1.0),
-            AutomationTarget::BusLevel(_) => (0.0, 1.0),
-            AutomationTarget::Bpm => (30.0, 300.0),
-            AutomationTarget::VstParam(_, _) => (0.0, 1.0),
-            AutomationTarget::EqBandParam(_, _, param) => match param {
-                0 => (20.0, 20000.0),  // freq
-                1 => (-24.0, 24.0),    // gain
-                _ => (0.1, 10.0),      // Q
-            },
-            AutomationTarget::TrackSwing(_) => (0.0, 1.0),
-            AutomationTarget::TrackHumanizeVelocity(_) => (0.0, 1.0),
-            AutomationTarget::TrackHumanizeTiming(_) => (0.0, 1.0),
-            AutomationTarget::TrackTimingOffset(_) => (-50.0, 50.0),
-            // Discrete targets use 0.0-1.0 normalized to map to enum indices
-            AutomationTarget::TimeSignature => (0.0, 1.0),
-            AutomationTarget::TrackTimeSignature(_) => (0.0, 1.0),
-            AutomationTarget::EffectBypass(_, _) => (0.0, 1.0),
-            AutomationTarget::FilterBypass(_) => (0.0, 1.0),
+            AutomationTarget::Instrument(_, InstrumentParameter::Standard(param)) => param.default_range(),
+            AutomationTarget::Bus(_, BusParameter::Level) => (0.0, 1.0),
+            AutomationTarget::Global(GlobalParameter::Bpm) => (30.0, 300.0),
+            AutomationTarget::Global(GlobalParameter::TimeSignature) => (0.0, 1.0),
         }
     }
 
     /// Get the value kind for this target (continuous or discrete).
     pub fn value_kind(&self) -> ValueKind {
         match self {
-            AutomationTarget::TimeSignature
-            | AutomationTarget::TrackTimeSignature(_)
-            | AutomationTarget::EffectBypass(_, _)
-            | AutomationTarget::FilterBypass(_) => ValueKind::Discrete,
-            _ => ValueKind::Continuous,
+            AutomationTarget::Instrument(_, InstrumentParameter::Standard(param)) => {
+                match param {
+                    ParameterTarget::FilterBypass
+                    | ParameterTarget::EffectBypass(_)
+                    | ParameterTarget::TimeSignature => ValueKind::Discrete,
+                    _ => ValueKind::Continuous,
+                }
+            }
+            AutomationTarget::Bus(_, _) => ValueKind::Continuous,
+            AutomationTarget::Global(GlobalParameter::Bpm) => ValueKind::Continuous,
+            AutomationTarget::Global(GlobalParameter::TimeSignature) => ValueKind::Discrete,
         }
     }
 
     /// Get the discrete value kind for this target (if discrete).
     pub fn discrete_value_kind(&self) -> Option<DiscreteValueKind> {
         match self {
-            AutomationTarget::TimeSignature | AutomationTarget::TrackTimeSignature(_) => {
+            AutomationTarget::Global(GlobalParameter::TimeSignature) => {
                 Some(DiscreteValueKind::TimeSignature)
             }
-            AutomationTarget::EffectBypass(_, _) | AutomationTarget::FilterBypass(_) => {
-                Some(DiscreteValueKind::Bool)
+            AutomationTarget::Instrument(_, InstrumentParameter::Standard(param)) => {
+                match param {
+                    ParameterTarget::TimeSignature => Some(DiscreteValueKind::TimeSignature),
+                    ParameterTarget::FilterBypass | ParameterTarget::EffectBypass(_) => {
+                        Some(DiscreteValueKind::Bool)
+                    }
+                    _ => None,
+                }
             }
             _ => None,
         }
@@ -343,21 +406,17 @@ impl AutomationTarget {
     /// Get the available options for discrete targets.
     /// Returns None for continuous targets.
     pub fn discrete_options(&self) -> Option<Vec<String>> {
-        match self {
-            AutomationTarget::EffectBypass(_, _) | AutomationTarget::FilterBypass(_) => {
-                Some(vec!["Off".to_string(), "On".to_string()])
-            }
-            AutomationTarget::TimeSignature | AutomationTarget::TrackTimeSignature(_) => {
-                Some(vec![
-                    "4/4".to_string(),
-                    "3/4".to_string(),
-                    "5/4".to_string(),
-                    "6/8".to_string(),
-                    "7/8".to_string(),
-                    "12/8".to_string(),
-                ])
-            }
-            _ => None,
+        match self.discrete_value_kind()? {
+            DiscreteValueKind::Bool => Some(vec!["Off".to_string(), "On".to_string()]),
+            DiscreteValueKind::TimeSignature => Some(vec![
+                "4/4".to_string(),
+                "3/4".to_string(),
+                "5/4".to_string(),
+                "6/8".to_string(),
+                "7/8".to_string(),
+                "12/8".to_string(),
+            ]),
+            DiscreteValueKind::EnumIndex => None,
         }
     }
 
@@ -659,7 +718,7 @@ impl AutomationState {
 
     /// Remove all lanes for a bus (when bus is deleted)
     pub fn remove_lanes_for_bus(&mut self, bus_id: u8) {
-        self.lanes.retain(|l| !matches!(l.target, AutomationTarget::BusLevel(id) if id == bus_id));
+        self.lanes.retain(|l| !matches!(l.target, AutomationTarget::Bus(id, _) if id == bus_id));
         // Adjust selection
         if let Some(sel) = self.selected_lane {
             if sel >= self.lanes.len() {

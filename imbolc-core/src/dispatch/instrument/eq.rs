@@ -26,15 +26,14 @@ pub(super) fn handle_set_eq_param(
                     _ => {}
                 }
                 if state.recording.automation_recording && state.session.piano_roll.playing {
-                    let param_idx = match param_name {
-                        "freq" => Some(0),
-                        "gain" => Some(1),
-                        "q" => Some(2),
+                    let target = match param_name {
+                        "freq" => Some(AutomationTarget::eq_band_freq(instrument.id, band_idx)),
+                        "gain" => Some(AutomationTarget::eq_band_gain(instrument.id, band_idx)),
+                        "q" => Some(AutomationTarget::eq_band_q(instrument.id, band_idx)),
                         _ => None,
                     };
-                    if let Some(pi) = param_idx {
-                        let target = AutomationTarget::EqBandParam(instrument.id, band_idx, pi);
-                        record_target = Some((target.clone(), target.normalize_value(value)));
+                    if let Some(t) = target {
+                        record_target = Some((t.clone(), t.normalize_value(value)));
                     }
                 }
             }

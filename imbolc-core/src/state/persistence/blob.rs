@@ -23,7 +23,7 @@ mod tests {
     use crate::state::AutomationTarget;
     use crate::state::custom_synthdef::{CustomSynthDef, CustomSynthDefRegistry, ParamSpec};
     use crate::state::instrument::{
-        EffectType, FilterConfig, FilterType, LfoConfig, LfoShape, LfoTarget, ModSource,
+        EffectType, FilterConfig, FilterType, LfoConfig, LfoShape, ParameterTarget, ModSource,
         OutputTarget, SourceType,
     };
     use crate::state::param::ParamValue;
@@ -84,7 +84,7 @@ mod tests {
                     rate: 3.0,
                     depth: 0.25,
                     shape: LfoShape::Triangle,
-                    target: LfoTarget::FilterCutoff,
+                    target: ParameterTarget::FilterCutoff,
                 }));
             }
             inst.output_target = OutputTarget::Bus(2);

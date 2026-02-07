@@ -2,7 +2,7 @@ use super::AudioEngine;
 use super::{InstrumentNodes, GROUP_SOURCES, GROUP_PROCESSING, GROUP_OUTPUT, VST_UGEN_INDEX};
 use super::backend::RawArg;
 use std::collections::HashMap;
-use crate::state::{CustomSynthDefRegistry, EffectId, EffectType, FilterType, Instrument, InstrumentId, InstrumentState, LfoTarget, ParamValue, SessionState, SourceType, SourceTypeExt};
+use crate::state::{CustomSynthDefRegistry, EffectId, EffectType, FilterType, Instrument, InstrumentId, InstrumentState, ParameterTarget, ParamValue, SessionState, SourceType, SourceTypeExt};
 
 impl AudioEngine {
     pub(super) fn source_synth_def(source: SourceType, registry: &CustomSynthDefRegistry, mono: bool) -> String {
@@ -158,12 +158,12 @@ impl AudioEngine {
                 instrument.id, "filter_out", channels,
             );
 
-            let cutoff_mod_bus = if instrument.lfo.enabled && instrument.lfo.target == LfoTarget::FilterCutoff {
+            let cutoff_mod_bus = if instrument.lfo.enabled && instrument.lfo.target == ParameterTarget::FilterCutoff {
                 lfo_control_bus.map(|b| b as f32).unwrap_or(-1.0)
             } else {
                 -1.0
             };
-            let res_mod_bus = if instrument.lfo.enabled && instrument.lfo.target == LfoTarget::FilterResonance {
+            let res_mod_bus = if instrument.lfo.enabled && instrument.lfo.target == ParameterTarget::FilterResonance {
                 lfo_control_bus.map(|b| b as f32).unwrap_or(-1.0)
             } else {
                 -1.0
@@ -274,16 +274,16 @@ impl AudioEngine {
             if instrument.lfo.enabled {
                 if let Some(lfo_bus) = lfo_control_bus {
                     match (instrument.lfo.target, effect.effect_type) {
-                        (LfoTarget::DelayTime, EffectType::Delay) => {
+                        (ParameterTarget::DelayTime, EffectType::Delay) => {
                             params.push(("time_mod_in".to_string(), lfo_bus as f32));
                         }
-                        (LfoTarget::DelayFeedback, EffectType::Delay) => {
+                        (ParameterTarget::DelayFeedback, EffectType::Delay) => {
                             params.push(("feedback_mod_in".to_string(), lfo_bus as f32));
                         }
-                        (LfoTarget::ReverbMix, EffectType::Reverb) => {
+                        (ParameterTarget::ReverbMix, EffectType::Reverb) => {
                             params.push(("mix_mod_in".to_string(), lfo_bus as f32));
                         }
-                        (LfoTarget::GateRate, EffectType::Gate) => {
+                        (ParameterTarget::GateRate, EffectType::Gate) => {
                             params.push(("rate_mod_in".to_string(), lfo_bus as f32));
                         }
                         _ => {}
@@ -318,7 +318,7 @@ impl AudioEngine {
             self.next_node_id += 1;
             let mute = if any_solo { !instrument.solo } else { instrument.mute || session.mixer.master_mute };
 
-            let pan_mod_bus = if instrument.lfo.enabled && instrument.lfo.target == LfoTarget::Pan {
+            let pan_mod_bus = if instrument.lfo.enabled && instrument.lfo.target == ParameterTarget::Pan {
                 lfo_control_bus.map(|b| b as f32).unwrap_or(-1.0)
             } else {
                 -1.0
@@ -367,7 +367,7 @@ impl AudioEngine {
         let instrument_audio_bus = self.bus_allocator.get_audio_bus(instrument.id, "source_out").unwrap_or(16);
         let is_mono = instrument.channel_config.is_mono();
 
-        let send_lfo_bus = if instrument.lfo.enabled && instrument.lfo.target == LfoTarget::SendLevel {
+        let send_lfo_bus = if instrument.lfo.enabled && matches!(instrument.lfo.target, ParameterTarget::SendLevel(_)) {
             self.bus_allocator.get_control_bus(instrument.id, "lfo_out")
                 .map(|b| b as f32)
                 .unwrap_or(-1.0)

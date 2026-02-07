@@ -1,6 +1,7 @@
-use super::backend::{BackendMessage, RawArg, build_n_set_message};
+use super::backend::{AudioBackend, BackendMessage, RawArg, build_n_set_message};
 use super::AudioEngine;
 use crate::state::{AutomationTarget, InstrumentState, SessionState};
+use imbolc_types::{BusParameter, GlobalParameter, InstrumentParameter, ParameterTarget};
 
 impl AudioEngine {
     /// Apply an automation value to a target parameter
@@ -12,39 +13,96 @@ impl AudioEngine {
         let backend = self.backend.as_ref().ok_or("Not connected")?;
 
         match target {
-            AutomationTarget::InstrumentLevel(instrument_id) => {
-                if let Some(nodes) = self.node_map.get(instrument_id) {
+            AutomationTarget::Instrument(instrument_id, param) => {
+                self.apply_instrument_automation(&**backend, *instrument_id, param, value, state, session)?;
+            }
+            AutomationTarget::Bus(bus_id, BusParameter::Level) => {
+                if let Some(&node_id) = self.bus_node_map.get(bus_id) {
+                    backend.set_param(node_id, "level", value)
+                        .map_err(|e| e.to_string())?;
+                }
+            }
+            AutomationTarget::Global(GlobalParameter::Bpm) => {
+                // Handled in playback.rs, not here
+            }
+            AutomationTarget::Global(GlobalParameter::TimeSignature) => {
+                // Global time signature changes are handled via session state sync
+                // No direct OSC action needed here
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Apply automation to an instrument parameter
+    fn apply_instrument_automation(
+        &self,
+        backend: &dyn AudioBackend,
+        instrument_id: u32,
+        param: &InstrumentParameter,
+        value: f32,
+        state: &mut InstrumentState,
+        session: &SessionState,
+    ) -> Result<(), String> {
+        match param {
+            InstrumentParameter::Standard(pt) => {
+                self.apply_parameter_target(backend, instrument_id, pt, value, state, session)
+            }
+        }
+    }
+
+    /// Apply automation for a ParameterTarget on a specific instrument
+    fn apply_parameter_target(
+        &self,
+        backend: &dyn AudioBackend,
+        instrument_id: u32,
+        param: &ParameterTarget,
+        value: f32,
+        state: &mut InstrumentState,
+        session: &SessionState,
+    ) -> Result<(), String> {
+        match param {
+            ParameterTarget::Level => {
+                if let Some(nodes) = self.node_map.get(&instrument_id) {
                     let effective_level = value * session.mixer.master_level;
                     backend.set_param(nodes.output, "level", effective_level)
                         .map_err(|e| e.to_string())?;
                 }
             }
-            AutomationTarget::InstrumentPan(instrument_id) => {
-                if let Some(nodes) = self.node_map.get(instrument_id) {
+            ParameterTarget::Pan => {
+                if let Some(nodes) = self.node_map.get(&instrument_id) {
                     backend.set_param(nodes.output, "pan", value)
                         .map_err(|e| e.to_string())?;
                 }
             }
-            AutomationTarget::FilterCutoff(instrument_id) => {
-                if let Some(nodes) = self.node_map.get(instrument_id) {
+            ParameterTarget::FilterCutoff => {
+                if let Some(nodes) = self.node_map.get(&instrument_id) {
                     if let Some(filter_node) = nodes.filter {
                         backend.set_param(filter_node, "cutoff", value)
                             .map_err(|e| e.to_string())?;
                     }
                 }
             }
-            AutomationTarget::FilterResonance(instrument_id) => {
-                if let Some(nodes) = self.node_map.get(instrument_id) {
+            ParameterTarget::FilterResonance => {
+                if let Some(nodes) = self.node_map.get(&instrument_id) {
                     if let Some(filter_node) = nodes.filter {
                         backend.set_param(filter_node, "resonance", value)
                             .map_err(|e| e.to_string())?;
                     }
                 }
             }
-            AutomationTarget::EffectParam(instrument_id, effect_id, param_idx) => {
-                if let Some(nodes) = self.node_map.get(instrument_id) {
+            ParameterTarget::FilterBypass => {
+                let bypassed = value >= 0.5;
+                if let Some(inst) = state.instrument_mut(instrument_id) {
+                    if let Some(ref mut filter) = inst.filter {
+                        filter.enabled = !bypassed;
+                    }
+                }
+            }
+            ParameterTarget::EffectParam(effect_id, param_idx) => {
+                if let Some(nodes) = self.node_map.get(&instrument_id) {
                     if let Some(&effect_node) = nodes.effects.get(effect_id) {
-                        if let Some(instrument) = state.instrument(*instrument_id) {
+                        if let Some(instrument) = state.instrument(instrument_id) {
                             if let Some(effect) = instrument.effect_by_id(*effect_id) {
                                 if let Some(param) = effect.params.get(*param_idx) {
                                     backend.set_param(effect_node, &param.name, value)
@@ -55,103 +113,102 @@ impl AudioEngine {
                     }
                 }
             }
-            AutomationTarget::SampleRate(instrument_id) => {
+            ParameterTarget::EffectBypass(effect_id) => {
+                let bypassed = value >= 0.5;
+                if let Some(inst) = state.instrument_mut(instrument_id) {
+                    if let Some(effect) = inst.effect_by_id_mut(*effect_id) {
+                        effect.enabled = !bypassed;
+                    }
+                }
+            }
+            ParameterTarget::SampleRate => {
                 for voice in self.voice_allocator.chains() {
-                    if voice.instrument_id == *instrument_id {
+                    if voice.instrument_id == instrument_id {
                         backend.set_param(voice.source_node, "rate", value)
                             .map_err(|e| e.to_string())?;
                     }
                 }
             }
-            AutomationTarget::SampleAmp(instrument_id) => {
+            ParameterTarget::SampleAmp => {
                 for voice in self.voice_allocator.chains() {
-                    if voice.instrument_id == *instrument_id {
+                    if voice.instrument_id == instrument_id {
                         backend.set_param(voice.source_node, "amp", value)
                             .map_err(|e| e.to_string())?;
                     }
                 }
             }
-            AutomationTarget::LfoRate(instrument_id) => {
-                if let Some(nodes) = self.node_map.get(instrument_id) {
+            ParameterTarget::LfoRate => {
+                if let Some(nodes) = self.node_map.get(&instrument_id) {
                     if let Some(lfo_node) = nodes.lfo {
                         backend.set_param(lfo_node, "rate", value)
                             .map_err(|e| e.to_string())?;
                     }
                 }
             }
-            AutomationTarget::LfoDepth(instrument_id) => {
-                if let Some(nodes) = self.node_map.get(instrument_id) {
+            ParameterTarget::LfoDepth => {
+                if let Some(nodes) = self.node_map.get(&instrument_id) {
                     if let Some(lfo_node) = nodes.lfo {
                         backend.set_param(lfo_node, "depth", value)
                             .map_err(|e| e.to_string())?;
                     }
                 }
             }
-            AutomationTarget::EnvelopeAttack(instrument_id) => {
-                if let Some(inst) = state.instrument_mut(*instrument_id) {
+            ParameterTarget::Attack => {
+                if let Some(inst) = state.instrument_mut(instrument_id) {
                     inst.amp_envelope.attack = value;
                 }
                 for voice in self.voice_allocator.chains() {
-                    if voice.instrument_id == *instrument_id {
+                    if voice.instrument_id == instrument_id {
                         backend.set_param(voice.source_node, "attack", value)
                             .map_err(|e| e.to_string())?;
                     }
                 }
             }
-            AutomationTarget::EnvelopeDecay(instrument_id) => {
-                if let Some(inst) = state.instrument_mut(*instrument_id) {
+            ParameterTarget::Decay => {
+                if let Some(inst) = state.instrument_mut(instrument_id) {
                     inst.amp_envelope.decay = value;
                 }
                 for voice in self.voice_allocator.chains() {
-                    if voice.instrument_id == *instrument_id {
+                    if voice.instrument_id == instrument_id {
                         backend.set_param(voice.source_node, "decay", value)
                             .map_err(|e| e.to_string())?;
                     }
                 }
             }
-            AutomationTarget::EnvelopeSustain(instrument_id) => {
-                if let Some(inst) = state.instrument_mut(*instrument_id) {
+            ParameterTarget::Sustain => {
+                if let Some(inst) = state.instrument_mut(instrument_id) {
                     inst.amp_envelope.sustain = value;
                 }
                 for voice in self.voice_allocator.chains() {
-                    if voice.instrument_id == *instrument_id {
+                    if voice.instrument_id == instrument_id {
                         backend.set_param(voice.source_node, "sustain", value)
                             .map_err(|e| e.to_string())?;
                     }
                 }
             }
-            AutomationTarget::EnvelopeRelease(instrument_id) => {
-                if let Some(inst) = state.instrument_mut(*instrument_id) {
+            ParameterTarget::Release => {
+                if let Some(inst) = state.instrument_mut(instrument_id) {
                     inst.amp_envelope.release = value;
                 }
                 for voice in self.voice_allocator.chains() {
-                    if voice.instrument_id == *instrument_id {
+                    if voice.instrument_id == instrument_id {
                         backend.set_param(voice.source_node, "release", value)
                             .map_err(|e| e.to_string())?;
                     }
                 }
             }
-            AutomationTarget::SendLevel(instrument_id, send_idx) => {
-                if let Some(inst) = state.instrument(*instrument_id) {
+            ParameterTarget::SendLevel(send_idx) => {
+                if let Some(inst) = state.instrument(instrument_id) {
                     if let Some(send) = inst.sends.get(*send_idx) {
-                        if let Some(&node_id) = self.send_node_map.get(&(*instrument_id, send.bus_id)) {
+                        if let Some(&node_id) = self.send_node_map.get(&(instrument_id, send.bus_id)) {
                             backend.set_param(node_id, "level", value)
                                 .map_err(|e| e.to_string())?;
                         }
                     }
                 }
             }
-            AutomationTarget::BusLevel(bus_id) => {
-                if let Some(&node_id) = self.bus_node_map.get(bus_id) {
-                    backend.set_param(node_id, "level", value)
-                        .map_err(|e| e.to_string())?;
-                }
-            }
-            AutomationTarget::Bpm => {
-                // Handled in playback.rs, not here
-            }
-            AutomationTarget::VstParam(instrument_id, param_index) => {
-                if let Some(nodes) = self.node_map.get(instrument_id) {
+            ParameterTarget::VstParam(param_index) => {
+                if let Some(nodes) = self.node_map.get(&instrument_id) {
                     if let Some(source_node) = nodes.source {
                         backend.send_unit_cmd(
                             source_node,
@@ -162,73 +219,92 @@ impl AudioEngine {
                     }
                 }
             }
-            AutomationTarget::EqBandParam(instrument_id, band, param) => {
-                if let Some(nodes) = self.node_map.get(instrument_id) {
+            ParameterTarget::EqBandFreq(band) => {
+                if let Some(nodes) = self.node_map.get(&instrument_id) {
                     if let Some(eq_node) = nodes.eq {
-                        let param_name = match param {
-                            0 => format!("b{}_freq", band),
-                            1 => format!("b{}_gain", band),
-                            _ => format!("b{}_q", band),
-                        };
-                        let sc_value = if *param == 2 { 1.0 / value } else { value };
+                        let param_name = format!("b{}_freq", band);
+                        backend.set_param(eq_node, &param_name, value)
+                            .map_err(|e| e.to_string())?;
+                    }
+                }
+            }
+            ParameterTarget::EqBandGain(band) => {
+                if let Some(nodes) = self.node_map.get(&instrument_id) {
+                    if let Some(eq_node) = nodes.eq {
+                        let param_name = format!("b{}_gain", band);
+                        backend.set_param(eq_node, &param_name, value)
+                            .map_err(|e| e.to_string())?;
+                    }
+                }
+            }
+            ParameterTarget::EqBandQ(band) => {
+                if let Some(nodes) = self.node_map.get(&instrument_id) {
+                    if let Some(eq_node) = nodes.eq {
+                        let param_name = format!("b{}_q", band);
+                        // Q is inverted in SC
+                        let sc_value = 1.0 / value;
                         backend.set_param(eq_node, &param_name, sc_value)
                             .map_err(|e| e.to_string())?;
                     }
                 }
             }
             // Track groove settings: state-only, no OSC messages needed
-            AutomationTarget::TrackSwing(instrument_id) => {
-                if let Some(inst) = state.instrument_mut(*instrument_id) {
+            ParameterTarget::Swing => {
+                if let Some(inst) = state.instrument_mut(instrument_id) {
                     inst.groove.swing_amount = Some(value);
                 }
             }
-            AutomationTarget::TrackHumanizeVelocity(instrument_id) => {
-                if let Some(inst) = state.instrument_mut(*instrument_id) {
+            ParameterTarget::HumanizeVelocity => {
+                if let Some(inst) = state.instrument_mut(instrument_id) {
                     inst.groove.humanize_velocity = Some(value);
                 }
             }
-            AutomationTarget::TrackHumanizeTiming(instrument_id) => {
-                if let Some(inst) = state.instrument_mut(*instrument_id) {
+            ParameterTarget::HumanizeTiming => {
+                if let Some(inst) = state.instrument_mut(instrument_id) {
                     inst.groove.humanize_timing = Some(value);
                 }
             }
-            AutomationTarget::TrackTimingOffset(instrument_id) => {
-                if let Some(inst) = state.instrument_mut(*instrument_id) {
+            ParameterTarget::TimingOffset => {
+                if let Some(inst) = state.instrument_mut(instrument_id) {
                     inst.groove.timing_offset_ms = value;
                 }
             }
-            // Discrete targets
-            AutomationTarget::TimeSignature => {
-                // Global time signature changes are handled via session state sync
-                // No direct OSC action needed here
-            }
-            AutomationTarget::TrackTimeSignature(instrument_id) => {
+            ParameterTarget::TimeSignature => {
                 // Decode time signature from normalized value and update state
+                let target = AutomationTarget::track_time_signature(instrument_id);
                 if let Some(discrete) = target.normalized_to_discrete(value) {
                     if let imbolc_types::DiscreteValue::TimeSignature(num, denom) = discrete {
-                        if let Some(inst) = state.instrument_mut(*instrument_id) {
+                        if let Some(inst) = state.instrument_mut(instrument_id) {
                             inst.groove.time_signature = Some((num, denom));
                         }
                     }
                 }
             }
-            AutomationTarget::EffectBypass(instrument_id, effect_id) => {
-                // Toggle effect bypass based on value (>= 0.5 = bypassed)
-                let bypassed = value >= 0.5;
-                if let Some(inst) = state.instrument_mut(*instrument_id) {
-                    if let Some(effect) = inst.effect_by_id_mut(*effect_id) {
-                        effect.enabled = !bypassed;
-                    }
-                }
-            }
-            AutomationTarget::FilterBypass(instrument_id) => {
-                // Toggle filter bypass based on value (>= 0.5 = bypassed)
-                let bypassed = value >= 0.5;
-                if let Some(inst) = state.instrument_mut(*instrument_id) {
-                    if let Some(ref mut filter) = inst.filter {
-                        filter.enabled = !bypassed;
-                    }
-                }
+            // Voice synthesis params - state-only for now (future SynthDef support)
+            ParameterTarget::Pitch
+            | ParameterTarget::PulseWidth
+            | ParameterTarget::Detune
+            | ParameterTarget::FmIndex
+            | ParameterTarget::WavetablePosition
+            | ParameterTarget::FormantFreq
+            | ParameterTarget::SyncRatio
+            | ParameterTarget::Pressure
+            | ParameterTarget::Embouchure
+            | ParameterTarget::GrainSize
+            | ParameterTarget::GrainDensity
+            | ParameterTarget::FbFeedback
+            | ParameterTarget::RingModDepth
+            | ParameterTarget::ChaosParam
+            | ParameterTarget::AdditiveRolloff
+            | ParameterTarget::MembraneTension
+            | ParameterTarget::StretchRatio
+            | ParameterTarget::PitchShift
+            | ParameterTarget::DelayTime
+            | ParameterTarget::DelayFeedback
+            | ParameterTarget::ReverbMix
+            | ParameterTarget::GateRate => {
+                // These are state-only updates for now
+                // Future: map to appropriate SynthDef params
             }
         }
 
@@ -248,35 +324,90 @@ impl AudioEngine {
         let mut msgs = Vec::new();
 
         match target {
-            AutomationTarget::InstrumentLevel(instrument_id) => {
-                if let Some(nodes) = self.node_map.get(instrument_id) {
+            AutomationTarget::Instrument(instrument_id, param) => {
+                self.collect_instrument_messages(&mut msgs, *instrument_id, param, value, state, session);
+            }
+            AutomationTarget::Bus(bus_id, BusParameter::Level) => {
+                if let Some(&node_id) = self.bus_node_map.get(bus_id) {
+                    msgs.push(build_n_set_message(node_id, "level", value));
+                }
+            }
+            AutomationTarget::Global(GlobalParameter::Bpm) => {
+                // Handled in playback.rs
+            }
+            AutomationTarget::Global(GlobalParameter::TimeSignature) => {
+                // State-only update
+            }
+        }
+
+        msgs
+    }
+
+    /// Collect messages for an instrument parameter
+    fn collect_instrument_messages(
+        &self,
+        msgs: &mut Vec<BackendMessage>,
+        instrument_id: u32,
+        param: &InstrumentParameter,
+        value: f32,
+        state: &mut InstrumentState,
+        session: &SessionState,
+    ) {
+        match param {
+            InstrumentParameter::Standard(pt) => {
+                self.collect_parameter_target_messages(msgs, instrument_id, pt, value, state, session);
+            }
+        }
+    }
+
+    /// Collect messages for a ParameterTarget
+    fn collect_parameter_target_messages(
+        &self,
+        msgs: &mut Vec<BackendMessage>,
+        instrument_id: u32,
+        param: &ParameterTarget,
+        value: f32,
+        state: &mut InstrumentState,
+        session: &SessionState,
+    ) {
+        match param {
+            ParameterTarget::Level => {
+                if let Some(nodes) = self.node_map.get(&instrument_id) {
                     let effective_level = value * session.mixer.master_level;
                     msgs.push(build_n_set_message(nodes.output, "level", effective_level));
                 }
             }
-            AutomationTarget::InstrumentPan(instrument_id) => {
-                if let Some(nodes) = self.node_map.get(instrument_id) {
+            ParameterTarget::Pan => {
+                if let Some(nodes) = self.node_map.get(&instrument_id) {
                     msgs.push(build_n_set_message(nodes.output, "pan", value));
                 }
             }
-            AutomationTarget::FilterCutoff(instrument_id) => {
-                if let Some(nodes) = self.node_map.get(instrument_id) {
+            ParameterTarget::FilterCutoff => {
+                if let Some(nodes) = self.node_map.get(&instrument_id) {
                     if let Some(filter_node) = nodes.filter {
                         msgs.push(build_n_set_message(filter_node, "cutoff", value));
                     }
                 }
             }
-            AutomationTarget::FilterResonance(instrument_id) => {
-                if let Some(nodes) = self.node_map.get(instrument_id) {
+            ParameterTarget::FilterResonance => {
+                if let Some(nodes) = self.node_map.get(&instrument_id) {
                     if let Some(filter_node) = nodes.filter {
                         msgs.push(build_n_set_message(filter_node, "resonance", value));
                     }
                 }
             }
-            AutomationTarget::EffectParam(instrument_id, effect_id, param_idx) => {
-                if let Some(nodes) = self.node_map.get(instrument_id) {
+            ParameterTarget::FilterBypass => {
+                let bypassed = value >= 0.5;
+                if let Some(inst) = state.instrument_mut(instrument_id) {
+                    if let Some(ref mut filter) = inst.filter {
+                        filter.enabled = !bypassed;
+                    }
+                }
+            }
+            ParameterTarget::EffectParam(effect_id, param_idx) => {
+                if let Some(nodes) = self.node_map.get(&instrument_id) {
                     if let Some(&effect_node) = nodes.effects.get(effect_id) {
-                        if let Some(instrument) = state.instrument(*instrument_id) {
+                        if let Some(instrument) = state.instrument(instrument_id) {
                             if let Some(effect) = instrument.effect_by_id(*effect_id) {
                                 if let Some(param) = effect.params.get(*param_idx) {
                                     msgs.push(build_n_set_message(effect_node, &param.name, value));
@@ -286,94 +417,94 @@ impl AudioEngine {
                     }
                 }
             }
-            AutomationTarget::SampleRate(instrument_id) => {
+            ParameterTarget::EffectBypass(effect_id) => {
+                let bypassed = value >= 0.5;
+                if let Some(inst) = state.instrument_mut(instrument_id) {
+                    if let Some(effect) = inst.effect_by_id_mut(*effect_id) {
+                        effect.enabled = !bypassed;
+                    }
+                }
+            }
+            ParameterTarget::SampleRate => {
                 for voice in self.voice_allocator.chains() {
-                    if voice.instrument_id == *instrument_id {
+                    if voice.instrument_id == instrument_id {
                         msgs.push(build_n_set_message(voice.source_node, "rate", value));
                     }
                 }
             }
-            AutomationTarget::SampleAmp(instrument_id) => {
+            ParameterTarget::SampleAmp => {
                 for voice in self.voice_allocator.chains() {
-                    if voice.instrument_id == *instrument_id {
+                    if voice.instrument_id == instrument_id {
                         msgs.push(build_n_set_message(voice.source_node, "amp", value));
                     }
                 }
             }
-            AutomationTarget::LfoRate(instrument_id) => {
-                if let Some(nodes) = self.node_map.get(instrument_id) {
+            ParameterTarget::LfoRate => {
+                if let Some(nodes) = self.node_map.get(&instrument_id) {
                     if let Some(lfo_node) = nodes.lfo {
                         msgs.push(build_n_set_message(lfo_node, "rate", value));
                     }
                 }
             }
-            AutomationTarget::LfoDepth(instrument_id) => {
-                if let Some(nodes) = self.node_map.get(instrument_id) {
+            ParameterTarget::LfoDepth => {
+                if let Some(nodes) = self.node_map.get(&instrument_id) {
                     if let Some(lfo_node) = nodes.lfo {
                         msgs.push(build_n_set_message(lfo_node, "depth", value));
                     }
                 }
             }
-            AutomationTarget::EnvelopeAttack(instrument_id) => {
-                if let Some(inst) = state.instrument_mut(*instrument_id) {
+            ParameterTarget::Attack => {
+                if let Some(inst) = state.instrument_mut(instrument_id) {
                     inst.amp_envelope.attack = value;
                 }
                 for voice in self.voice_allocator.chains() {
-                    if voice.instrument_id == *instrument_id {
+                    if voice.instrument_id == instrument_id {
                         msgs.push(build_n_set_message(voice.source_node, "attack", value));
                     }
                 }
             }
-            AutomationTarget::EnvelopeDecay(instrument_id) => {
-                if let Some(inst) = state.instrument_mut(*instrument_id) {
+            ParameterTarget::Decay => {
+                if let Some(inst) = state.instrument_mut(instrument_id) {
                     inst.amp_envelope.decay = value;
                 }
                 for voice in self.voice_allocator.chains() {
-                    if voice.instrument_id == *instrument_id {
+                    if voice.instrument_id == instrument_id {
                         msgs.push(build_n_set_message(voice.source_node, "decay", value));
                     }
                 }
             }
-            AutomationTarget::EnvelopeSustain(instrument_id) => {
-                if let Some(inst) = state.instrument_mut(*instrument_id) {
+            ParameterTarget::Sustain => {
+                if let Some(inst) = state.instrument_mut(instrument_id) {
                     inst.amp_envelope.sustain = value;
                 }
                 for voice in self.voice_allocator.chains() {
-                    if voice.instrument_id == *instrument_id {
+                    if voice.instrument_id == instrument_id {
                         msgs.push(build_n_set_message(voice.source_node, "sustain", value));
                     }
                 }
             }
-            AutomationTarget::EnvelopeRelease(instrument_id) => {
-                if let Some(inst) = state.instrument_mut(*instrument_id) {
+            ParameterTarget::Release => {
+                if let Some(inst) = state.instrument_mut(instrument_id) {
                     inst.amp_envelope.release = value;
                 }
                 for voice in self.voice_allocator.chains() {
-                    if voice.instrument_id == *instrument_id {
+                    if voice.instrument_id == instrument_id {
                         msgs.push(build_n_set_message(voice.source_node, "release", value));
                     }
                 }
             }
-            AutomationTarget::SendLevel(instrument_id, send_idx) => {
-                if let Some(inst) = state.instrument(*instrument_id) {
+            ParameterTarget::SendLevel(send_idx) => {
+                if let Some(inst) = state.instrument(instrument_id) {
                     if let Some(send) = inst.sends.get(*send_idx) {
-                        if let Some(&node_id) = self.send_node_map.get(&(*instrument_id, send.bus_id)) {
+                        if let Some(&node_id) = self.send_node_map.get(&(instrument_id, send.bus_id)) {
                             msgs.push(build_n_set_message(node_id, "level", value));
                         }
                     }
                 }
             }
-            AutomationTarget::BusLevel(bus_id) => {
-                if let Some(&node_id) = self.bus_node_map.get(bus_id) {
-                    msgs.push(build_n_set_message(node_id, "level", value));
-                }
-            }
-            AutomationTarget::Bpm => {
-                // Handled in playback.rs, not here
-            }
-            AutomationTarget::VstParam(instrument_id, param_index) => {
+            ParameterTarget::VstParam(param_index) => {
                 // /u_cmd doesn't use /n_set — fall back to direct send via apply_automation
-                if let Some(nodes) = self.node_map.get(instrument_id) {
+                if let Some(nodes) = self.node_map.get(&instrument_id) {
                     if let Some(source_node) = nodes.source {
                         if let Some(backend) = self.backend.as_ref() {
                             let _ = backend.send_unit_cmd(
@@ -386,72 +517,88 @@ impl AudioEngine {
                     }
                 }
             }
-            AutomationTarget::EqBandParam(instrument_id, band, param) => {
-                if let Some(nodes) = self.node_map.get(instrument_id) {
+            ParameterTarget::EqBandFreq(band) => {
+                if let Some(nodes) = self.node_map.get(&instrument_id) {
                     if let Some(eq_node) = nodes.eq {
-                        let param_name = match param {
-                            0 => format!("b{}_freq", band),
-                            1 => format!("b{}_gain", band),
-                            _ => format!("b{}_q", band),
-                        };
-                        let sc_value = if *param == 2 { 1.0 / value } else { value };
+                        let param_name = format!("b{}_freq", band);
+                        msgs.push(build_n_set_message(eq_node, &param_name, value));
+                    }
+                }
+            }
+            ParameterTarget::EqBandGain(band) => {
+                if let Some(nodes) = self.node_map.get(&instrument_id) {
+                    if let Some(eq_node) = nodes.eq {
+                        let param_name = format!("b{}_gain", band);
+                        msgs.push(build_n_set_message(eq_node, &param_name, value));
+                    }
+                }
+            }
+            ParameterTarget::EqBandQ(band) => {
+                if let Some(nodes) = self.node_map.get(&instrument_id) {
+                    if let Some(eq_node) = nodes.eq {
+                        let param_name = format!("b{}_q", band);
+                        let sc_value = 1.0 / value;
                         msgs.push(build_n_set_message(eq_node, &param_name, sc_value));
                     }
                 }
             }
             // Track groove settings: state-only, no OSC messages needed
-            AutomationTarget::TrackSwing(instrument_id) => {
-                if let Some(inst) = state.instrument_mut(*instrument_id) {
+            ParameterTarget::Swing => {
+                if let Some(inst) = state.instrument_mut(instrument_id) {
                     inst.groove.swing_amount = Some(value);
                 }
             }
-            AutomationTarget::TrackHumanizeVelocity(instrument_id) => {
-                if let Some(inst) = state.instrument_mut(*instrument_id) {
+            ParameterTarget::HumanizeVelocity => {
+                if let Some(inst) = state.instrument_mut(instrument_id) {
                     inst.groove.humanize_velocity = Some(value);
                 }
             }
-            AutomationTarget::TrackHumanizeTiming(instrument_id) => {
-                if let Some(inst) = state.instrument_mut(*instrument_id) {
+            ParameterTarget::HumanizeTiming => {
+                if let Some(inst) = state.instrument_mut(instrument_id) {
                     inst.groove.humanize_timing = Some(value);
                 }
             }
-            AutomationTarget::TrackTimingOffset(instrument_id) => {
-                if let Some(inst) = state.instrument_mut(*instrument_id) {
+            ParameterTarget::TimingOffset => {
+                if let Some(inst) = state.instrument_mut(instrument_id) {
                     inst.groove.timing_offset_ms = value;
                 }
             }
-            // Discrete targets: state-only updates for collect_automation_messages
-            AutomationTarget::TimeSignature => {
-                // Global time signature handled via session state sync
-            }
-            AutomationTarget::TrackTimeSignature(instrument_id) => {
+            ParameterTarget::TimeSignature => {
+                let target = AutomationTarget::track_time_signature(instrument_id);
                 if let Some(discrete) = target.normalized_to_discrete(value) {
                     if let imbolc_types::DiscreteValue::TimeSignature(num, denom) = discrete {
-                        if let Some(inst) = state.instrument_mut(*instrument_id) {
+                        if let Some(inst) = state.instrument_mut(instrument_id) {
                             inst.groove.time_signature = Some((num, denom));
                         }
                     }
                 }
             }
-            AutomationTarget::EffectBypass(instrument_id, effect_id) => {
-                let bypassed = value >= 0.5;
-                if let Some(inst) = state.instrument_mut(*instrument_id) {
-                    if let Some(effect) = inst.effect_by_id_mut(*effect_id) {
-                        effect.enabled = !bypassed;
-                    }
-                }
-            }
-            AutomationTarget::FilterBypass(instrument_id) => {
-                let bypassed = value >= 0.5;
-                if let Some(inst) = state.instrument_mut(*instrument_id) {
-                    if let Some(ref mut filter) = inst.filter {
-                        filter.enabled = !bypassed;
-                    }
-                }
+            // Voice synthesis params - state-only for now
+            ParameterTarget::Pitch
+            | ParameterTarget::PulseWidth
+            | ParameterTarget::Detune
+            | ParameterTarget::FmIndex
+            | ParameterTarget::WavetablePosition
+            | ParameterTarget::FormantFreq
+            | ParameterTarget::SyncRatio
+            | ParameterTarget::Pressure
+            | ParameterTarget::Embouchure
+            | ParameterTarget::GrainSize
+            | ParameterTarget::GrainDensity
+            | ParameterTarget::FbFeedback
+            | ParameterTarget::RingModDepth
+            | ParameterTarget::ChaosParam
+            | ParameterTarget::AdditiveRolloff
+            | ParameterTarget::MembraneTension
+            | ParameterTarget::StretchRatio
+            | ParameterTarget::PitchShift
+            | ParameterTarget::DelayTime
+            | ParameterTarget::DelayFeedback
+            | ParameterTarget::ReverbMix
+            | ParameterTarget::GateRate => {
+                // State-only updates for now
             }
         }
-
-        msgs
     }
 
     /// Send a batch of automation messages as a single timestamped bundle.

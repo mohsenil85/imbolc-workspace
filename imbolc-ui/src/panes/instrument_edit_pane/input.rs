@@ -352,7 +352,7 @@ impl InstrumentEditPane {
                 self.emit_update()
             }
             ActionId::InstrumentEdit(InstrumentEditActionId::CycleLfoTarget) => {
-                self.lfo.target = self.lfo.target.next();
+                self.lfo.target = self.lfo.target.next_lfo_target();
                 self.emit_update()
             }
             ActionId::InstrumentEdit(InstrumentEditActionId::VstParams) => {

@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use super::backend::{AudioBackend, BackendMessage, RawArg};
 use super::{AudioEngine, VoiceChain, GROUP_SOURCES};
-use crate::state::{BufferId, InstrumentId, InstrumentState, LfoTarget, ParamValue, SessionState};
+use crate::state::{BufferId, InstrumentId, InstrumentState, ParameterTarget, ParamValue, SessionState};
 
 impl AudioEngine {
     /// Spawn a voice for an instrument
@@ -130,87 +130,87 @@ impl AudioEngine {
             if instrument.lfo.enabled {
                 if let Some(lfo_bus) = self.bus_allocator.get_control_bus(instrument_id, "lfo_out") {
                     match instrument.lfo.target {
-                        LfoTarget::Amplitude => {
+                        ParameterTarget::Level => {
                             args.push(RawArg::Str("amp_mod_in".to_string()));
                             args.push(RawArg::Float(lfo_bus as f32));
                         }
-                        LfoTarget::Pitch => {
+                        ParameterTarget::Pitch => {
                             args.push(RawArg::Str("pitch_mod_in".to_string()));
                             args.push(RawArg::Float(lfo_bus as f32));
                         }
-                        LfoTarget::Detune => {
+                        ParameterTarget::Detune => {
                             args.push(RawArg::Str("detune_mod_in".to_string()));
                             args.push(RawArg::Float(lfo_bus as f32));
                         }
-                        LfoTarget::PulseWidth => {
+                        ParameterTarget::PulseWidth => {
                             args.push(RawArg::Str("width_mod_in".to_string()));
                             args.push(RawArg::Float(lfo_bus as f32));
                         }
-                        LfoTarget::Attack => {
+                        ParameterTarget::Attack => {
                             args.push(RawArg::Str("attack_mod_in".to_string()));
                             args.push(RawArg::Float(lfo_bus as f32));
                         }
-                        LfoTarget::Release => {
+                        ParameterTarget::Release => {
                             args.push(RawArg::Str("release_mod_in".to_string()));
                             args.push(RawArg::Float(lfo_bus as f32));
                         }
-                        LfoTarget::FmIndex => {
+                        ParameterTarget::FmIndex => {
                             args.push(RawArg::Str("index_mod_in".to_string()));
                             args.push(RawArg::Float(lfo_bus as f32));
                         }
-                        LfoTarget::WavetablePosition => {
+                        ParameterTarget::WavetablePosition => {
                             args.push(RawArg::Str("position_mod_in".to_string()));
                             args.push(RawArg::Float(lfo_bus as f32));
                         }
-                        LfoTarget::FormantFreq => {
+                        ParameterTarget::FormantFreq => {
                             args.push(RawArg::Str("formant_mod_in".to_string()));
                             args.push(RawArg::Float(lfo_bus as f32));
                         }
-                        LfoTarget::SyncRatio => {
+                        ParameterTarget::SyncRatio => {
                             args.push(RawArg::Str("sync_ratio_mod_in".to_string()));
                             args.push(RawArg::Float(lfo_bus as f32));
                         }
-                        LfoTarget::Pressure => {
+                        ParameterTarget::Pressure => {
                             args.push(RawArg::Str("pressure_mod_in".to_string()));
                             args.push(RawArg::Float(lfo_bus as f32));
                         }
-                        LfoTarget::Embouchure => {
+                        ParameterTarget::Embouchure => {
                             args.push(RawArg::Str("embouchure_mod_in".to_string()));
                             args.push(RawArg::Float(lfo_bus as f32));
                         }
-                        LfoTarget::GrainSize => {
+                        ParameterTarget::GrainSize => {
                             args.push(RawArg::Str("grain_size_mod_in".to_string()));
                             args.push(RawArg::Float(lfo_bus as f32));
                         }
-                        LfoTarget::GrainDensity => {
+                        ParameterTarget::GrainDensity => {
                             args.push(RawArg::Str("density_mod_in".to_string()));
                             args.push(RawArg::Float(lfo_bus as f32));
                         }
-                        LfoTarget::FbFeedback => {
+                        ParameterTarget::FbFeedback => {
                             args.push(RawArg::Str("feedback_mod_in".to_string()));
                             args.push(RawArg::Float(lfo_bus as f32));
                         }
-                        LfoTarget::RingModDepth => {
+                        ParameterTarget::RingModDepth => {
                             args.push(RawArg::Str("mod_depth_mod_in".to_string()));
                             args.push(RawArg::Float(lfo_bus as f32));
                         }
-                        LfoTarget::ChaosParam => {
+                        ParameterTarget::ChaosParam => {
                             args.push(RawArg::Str("chaos_param_mod_in".to_string()));
                             args.push(RawArg::Float(lfo_bus as f32));
                         }
-                        LfoTarget::AdditiveRolloff => {
+                        ParameterTarget::AdditiveRolloff => {
                             args.push(RawArg::Str("rolloff_mod_in".to_string()));
                             args.push(RawArg::Float(lfo_bus as f32));
                         }
-                        LfoTarget::MembraneTension => {
+                        ParameterTarget::MembraneTension => {
                             args.push(RawArg::Str("tension_mod_in".to_string()));
                             args.push(RawArg::Float(lfo_bus as f32));
                         }
-                        LfoTarget::Decay => {
+                        ParameterTarget::Decay => {
                             args.push(RawArg::Str("decay_mod_in".to_string()));
                             args.push(RawArg::Float(lfo_bus as f32));
                         }
-                        LfoTarget::Sustain => {
+                        ParameterTarget::Sustain => {
                             args.push(RawArg::Str("sustain_mod_in".to_string()));
                             args.push(RawArg::Float(lfo_bus as f32));
                         }
@@ -431,39 +431,39 @@ impl AudioEngine {
             if instrument.lfo.enabled {
                 if let Some(lfo_bus) = self.bus_allocator.get_control_bus(instrument_id, "lfo_out") {
                     match instrument.lfo.target {
-                        LfoTarget::Amplitude => {
+                        ParameterTarget::Level => {
                             args.push(RawArg::Str("amp_mod_in".to_string()));
                             args.push(RawArg::Float(lfo_bus as f32));
                         }
-                        LfoTarget::SampleRate if !is_time_stretch => {
+                        ParameterTarget::SampleRate if !is_time_stretch => {
                             args.push(RawArg::Str("srate_mod_in".to_string()));
                             args.push(RawArg::Float(lfo_bus as f32));
                         }
-                        LfoTarget::Attack => {
+                        ParameterTarget::Attack => {
                             args.push(RawArg::Str("attack_mod_in".to_string()));
                             args.push(RawArg::Float(lfo_bus as f32));
                         }
-                        LfoTarget::Release => {
+                        ParameterTarget::Release => {
                             args.push(RawArg::Str("release_mod_in".to_string()));
                             args.push(RawArg::Float(lfo_bus as f32));
                         }
-                        LfoTarget::Decay => {
+                        ParameterTarget::Decay => {
                             args.push(RawArg::Str("decay_mod_in".to_string()));
                             args.push(RawArg::Float(lfo_bus as f32));
                         }
-                        LfoTarget::Sustain => {
+                        ParameterTarget::Sustain => {
                             args.push(RawArg::Str("sustain_mod_in".to_string()));
                             args.push(RawArg::Float(lfo_bus as f32));
                         }
-                        LfoTarget::StretchRatio if is_time_stretch => {
+                        ParameterTarget::StretchRatio if is_time_stretch => {
                             args.push(RawArg::Str("stretch_mod_in".to_string()));
                             args.push(RawArg::Float(lfo_bus as f32));
                         }
-                        LfoTarget::PitchShift if is_time_stretch => {
+                        ParameterTarget::PitchShift if is_time_stretch => {
                             args.push(RawArg::Str("pitch_mod_in".to_string()));
                             args.push(RawArg::Float(lfo_bus as f32));
                         }
-                        LfoTarget::GrainSize if is_time_stretch => {
+                        ParameterTarget::GrainSize if is_time_stretch => {
                             args.push(RawArg::Str("grain_size_mod_in".to_string()));
                             args.push(RawArg::Float(lfo_bus as f32));
                         }
@@ -837,11 +837,11 @@ impl AudioEngine {
             if instrument.lfo.enabled {
                 if let Some(lfo_bus) = self.bus_allocator.get_control_bus(target_instrument_id, "lfo_out") {
                     match instrument.lfo.target {
-                        LfoTarget::Amplitude => {
+                        ParameterTarget::Level => {
                             args.push(RawArg::Str("amp_mod_in".to_string()));
                             args.push(RawArg::Float(lfo_bus as f32));
                         }
-                        LfoTarget::Pitch => {
+                        ParameterTarget::Pitch => {
                             args.push(RawArg::Str("pitch_mod_in".to_string()));
                             args.push(RawArg::Float(lfo_bus as f32));
                         }

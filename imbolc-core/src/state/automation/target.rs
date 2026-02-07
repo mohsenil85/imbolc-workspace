@@ -4,6 +4,7 @@ pub use imbolc_types::AutomationTarget;
 // Keep the context-aware methods that need Instrument and VstPluginRegistry
 use crate::state::instrument::{Instrument, SourceType};
 use crate::state::vst_plugin::VstPluginRegistry;
+use imbolc_types::ParameterTarget;
 
 /// Extension trait for context-aware AutomationTarget methods that depend on complex types.
 pub trait AutomationTargetExt {
@@ -28,21 +29,23 @@ impl AutomationTargetExt for AutomationTarget {
                 continue;
             }
             for (param_idx, _param) in effect.params.iter().enumerate() {
-                targets.push(AutomationTarget::EffectParam(id, effect.id, param_idx));
+                targets.push(AutomationTarget::effect_param(id, effect.id, param_idx));
             }
+            // Effect bypass
+            targets.push(AutomationTarget::effect_bypass(id, effect.id));
         }
 
         // SampleRate + SampleAmp: only for sample-based sources
         if matches!(inst.source, SourceType::PitchedSampler | SourceType::Kit) {
-            targets.push(AutomationTarget::SampleRate(id));
-            targets.push(AutomationTarget::SampleAmp(id));
+            targets.push(AutomationTarget::sample_rate(id));
+            targets.push(AutomationTarget::sample_amp(id));
         }
 
         // VstParam: only for VST source instruments
         if let SourceType::Vst(vst_id) = inst.source {
             if let Some(plugin) = vst_registry.get(vst_id) {
                 for param in &plugin.params {
-                    targets.push(AutomationTarget::VstParam(id, param.index));
+                    targets.push(AutomationTarget::vst_param(id, param.index));
                 }
             }
         }
@@ -50,9 +53,9 @@ impl AutomationTargetExt for AutomationTarget {
         // EqBandParam: only when EQ is enabled (12 bands x 3 params = 36 targets)
         if inst.eq.is_some() {
             for band in 0..12 {
-                for param in 0..3 {
-                    targets.push(AutomationTarget::EqBandParam(id, band, param));
-                }
+                targets.push(AutomationTarget::eq_band_freq(id, band));
+                targets.push(AutomationTarget::eq_band_gain(id, band));
+                targets.push(AutomationTarget::eq_band_q(id, band));
             }
         }
 
@@ -60,8 +63,8 @@ impl AutomationTargetExt for AutomationTarget {
     }
 
     fn name_with_context(&self, inst: Option<&Instrument>, vst_registry: &VstPluginRegistry) -> String {
-        match self {
-            AutomationTarget::EffectParam(_, effect_id, param_idx) => {
+        match self.parameter_target() {
+            Some(ParameterTarget::EffectParam(effect_id, param_idx)) => {
                 if let Some(inst) = inst {
                     if let Some(effect) = inst.effect_by_id(*effect_id) {
                         let effect_name = effect.effect_type.name();
@@ -72,7 +75,7 @@ impl AutomationTargetExt for AutomationTarget {
                 }
                 self.name()
             }
-            AutomationTarget::VstParam(_, param_index) => {
+            Some(ParameterTarget::VstParam(param_index)) => {
                 if let Some(inst) = inst {
                     if let SourceType::Vst(vst_id) = inst.source {
                         if let Some(plugin) = vst_registry.get(vst_id) {

@@ -2,7 +2,7 @@ use crate::action::{DispatchResult, LfoParamKind};
 use crate::dispatch::helpers::maybe_record_automation;
 use crate::state::automation::AutomationTarget;
 use crate::state::AppState;
-use imbolc_types::{InstrumentId, LfoShape, LfoTarget};
+use imbolc_types::{InstrumentId, LfoShape, ParameterTarget};
 
 // LFO parameter ranges
 const LFO_RATE_MIN: f32 = 0.1;
@@ -37,7 +37,7 @@ pub(super) fn handle_adjust_lfo_rate(
     }
 
     if let Some((inst_id, normalized)) = automation_data {
-        maybe_record_automation(state, &mut result, AutomationTarget::LfoRate(inst_id), normalized);
+        maybe_record_automation(state, &mut result, AutomationTarget::lfo_rate(inst_id), normalized);
     }
 
     result.audio_dirty.instruments = true;
@@ -64,7 +64,7 @@ pub(super) fn handle_adjust_lfo_depth(
     }
 
     if let Some((inst_id, depth)) = automation_data {
-        maybe_record_automation(state, &mut result, AutomationTarget::LfoDepth(inst_id), depth);
+        maybe_record_automation(state, &mut result, AutomationTarget::lfo_depth(inst_id), depth);
     }
 
     result.audio_dirty.instruments = true;
@@ -92,7 +92,7 @@ pub(super) fn handle_set_lfo_shape(
 pub(super) fn handle_set_lfo_target(
     state: &mut AppState,
     id: InstrumentId,
-    target: LfoTarget,
+    target: ParameterTarget,
 ) -> DispatchResult {
     if let Some(instrument) = state.instruments.instrument_mut(id) {
         instrument.lfo.target = target;

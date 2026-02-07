@@ -187,13 +187,13 @@ mod tests {
     }
 
     fn add_lane(state: &mut AppState) -> AutomationLaneId {
-        state.session.automation.add_lane(AutomationTarget::InstrumentLevel(0))
+        state.session.automation.add_lane(AutomationTarget::level(0))
     }
 
     #[test]
     fn add_lane_creates_and_is_idempotent() {
         let (mut state, mut audio) = setup();
-        let target = AutomationTarget::InstrumentLevel(0);
+        let target = AutomationTarget::level(0);
         let result = dispatch_automation(&AutomationAction::AddLane(target.clone()), &mut state, &mut audio);
         assert!(result.audio_dirty.automation);
         assert_eq!(state.session.automation.lanes.len(), 1);
@@ -260,7 +260,7 @@ mod tests {
     fn arm_all_and_disarm_all() {
         let (mut state, mut audio) = setup();
         add_lane(&mut state);
-        state.session.automation.add_lane(AutomationTarget::InstrumentPan(0));
+        state.session.automation.add_lane(AutomationTarget::pan(0));
 
         dispatch_automation(&AutomationAction::ArmAllLanes, &mut state, &mut audio);
         assert!(state.session.automation.lanes.iter().all(|l| l.record_armed));
@@ -283,7 +283,7 @@ mod tests {
         let (mut state, _audio) = setup();
         state.recording.automation_recording = true;
         state.session.piano_roll.playing = true;
-        let target = AutomationTarget::InstrumentLevel(0);
+        let target = AutomationTarget::level(0);
 
         // First point always added
         state.audio.playhead = 0;
@@ -309,7 +309,7 @@ mod tests {
         let (mut state, _audio) = setup();
         state.recording.automation_recording = true;
         state.session.piano_roll.playing = true;
-        let target = AutomationTarget::InstrumentLevel(0);
+        let target = AutomationTarget::level(0);
         let lane_id = state.session.automation.add_lane(target.clone());
 
         // Disarm the lane
@@ -326,7 +326,7 @@ mod tests {
         // Not recording — RecordValue should NOT add any points
         state.recording.automation_recording = false;
         state.session.piano_roll.playing = true;
-        let target = AutomationTarget::InstrumentLevel(0);
+        let target = AutomationTarget::level(0);
         dispatch_automation(&AutomationAction::RecordValue(target.clone(), 0.5), &mut state, &mut audio);
         // No lane should be created
         assert!(state.session.automation.lane_for_target(&target).is_none());
@@ -338,7 +338,7 @@ mod tests {
         // Recording but not playing — RecordValue should NOT add points
         state.recording.automation_recording = true;
         state.session.piano_roll.playing = false;
-        let target = AutomationTarget::InstrumentLevel(0);
+        let target = AutomationTarget::level(0);
         dispatch_automation(&AutomationAction::RecordValue(target.clone(), 0.5), &mut state, &mut audio);
         assert!(state.session.automation.lane_for_target(&target).is_none());
     }
@@ -349,7 +349,7 @@ mod tests {
         state.recording.automation_recording = true;
         state.session.piano_roll.playing = true;
         state.audio.playhead = 100;
-        let target = AutomationTarget::InstrumentLevel(0);
+        let target = AutomationTarget::level(0);
         let result = dispatch_automation(&AutomationAction::RecordValue(target.clone(), 0.5), &mut state, &mut audio);
         assert!(result.audio_dirty.automation);
         let lane = state.session.automation.lane_for_target(&target).unwrap();
@@ -362,7 +362,7 @@ mod tests {
         let (mut state, mut audio) = setup();
         state.recording.automation_recording = true;
         state.session.piano_roll.playing = true;
-        let target = AutomationTarget::InstrumentLevel(0);
+        let target = AutomationTarget::level(0);
 
         // First point
         state.audio.playhead = 0;

@@ -204,7 +204,7 @@ pub fn tick_playback(
                     continue;
                 }
                 if let Some(value) = lane.value_at(new_playhead) {
-                    if matches!(lane.target, AutomationTarget::Bpm) {
+                    if matches!(lane.target, AutomationTarget::Global(imbolc_types::GlobalParameter::Bpm)) {
                         if (piano_roll.bpm - value).abs() > f32::EPSILON {
                             piano_roll.bpm = value;
                             let _ = feedback_tx.send(AudioFeedback::BpmUpdate(value));

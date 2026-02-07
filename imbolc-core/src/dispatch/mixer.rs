@@ -40,7 +40,7 @@ pub(super) fn dispatch_mixer(
                         result.audio_dirty.mixer_params = true;
                         if state.recording.automation_recording && state.session.piano_roll.playing {
                             record_target = Some((
-                                AutomationTarget::InstrumentLevel(instrument.id),
+                                AutomationTarget::level(instrument.id),
                                 instrument.level,
                             ));
                         }
@@ -57,7 +57,7 @@ pub(super) fn dispatch_mixer(
                         bus_update = Some((id, bus.level, mute, bus.pan));
                         if state.recording.automation_recording && state.session.piano_roll.playing {
                             record_target = Some((
-                                AutomationTarget::BusLevel(id),
+                                AutomationTarget::bus_level(id),
                                 bus.level,
                             ));
                         }
@@ -156,7 +156,7 @@ pub(super) fn dispatch_mixer(
                         result.audio_dirty.instruments = true;
                         if state.recording.automation_recording && state.session.piano_roll.playing {
                             record_target = Some((
-                                AutomationTarget::SendLevel(instrument.id, send_idx),
+                                AutomationTarget::send_level(instrument.id, send_idx),
                                 send.level,
                             ));
                         }
@@ -176,7 +176,7 @@ pub(super) fn dispatch_mixer(
                         result.audio_dirty.instruments = true;
                         result.audio_dirty.mixer_params = true;
                         if state.recording.automation_recording && state.session.piano_roll.playing {
-                            let target = AutomationTarget::InstrumentPan(instrument.id);
+                            let target = AutomationTarget::pan(instrument.id);
                             record_target = Some((target.clone(), target.normalize_value(instrument.pan)));
                         }
                     }

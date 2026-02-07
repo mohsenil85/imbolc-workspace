@@ -99,28 +99,28 @@ pub(super) fn handle_update(
         let threshold = 0.001;
 
         if (update.lfo.rate - old_lfo_rate).abs() > threshold {
-            let normalized = AutomationTarget::LfoRate(id).normalize_value(update.lfo.rate);
-            record_automation_point(state, AutomationTarget::LfoRate(id), normalized);
+            let normalized = AutomationTarget::lfo_rate(id).normalize_value(update.lfo.rate);
+            record_automation_point(state, AutomationTarget::lfo_rate(id), normalized);
         }
         if (update.lfo.depth - old_lfo_depth).abs() > threshold {
-            let normalized = AutomationTarget::LfoDepth(id).normalize_value(update.lfo.depth);
-            record_automation_point(state, AutomationTarget::LfoDepth(id), normalized);
+            let normalized = AutomationTarget::lfo_depth(id).normalize_value(update.lfo.depth);
+            record_automation_point(state, AutomationTarget::lfo_depth(id), normalized);
         }
         if (update.amp_envelope.attack - old_attack).abs() > threshold {
-            let normalized = AutomationTarget::EnvelopeAttack(id).normalize_value(update.amp_envelope.attack);
-            record_automation_point(state, AutomationTarget::EnvelopeAttack(id), normalized);
+            let normalized = AutomationTarget::attack(id).normalize_value(update.amp_envelope.attack);
+            record_automation_point(state, AutomationTarget::attack(id), normalized);
         }
         if (update.amp_envelope.decay - old_decay).abs() > threshold {
-            let normalized = AutomationTarget::EnvelopeDecay(id).normalize_value(update.amp_envelope.decay);
-            record_automation_point(state, AutomationTarget::EnvelopeDecay(id), normalized);
+            let normalized = AutomationTarget::decay(id).normalize_value(update.amp_envelope.decay);
+            record_automation_point(state, AutomationTarget::decay(id), normalized);
         }
         if (update.amp_envelope.sustain - old_sustain).abs() > threshold {
-            let normalized = AutomationTarget::EnvelopeSustain(id).normalize_value(update.amp_envelope.sustain);
-            record_automation_point(state, AutomationTarget::EnvelopeSustain(id), normalized);
+            let normalized = AutomationTarget::sustain(id).normalize_value(update.amp_envelope.sustain);
+            record_automation_point(state, AutomationTarget::sustain(id), normalized);
         }
         if (update.amp_envelope.release - old_release).abs() > threshold {
-            let normalized = AutomationTarget::EnvelopeRelease(id).normalize_value(update.amp_envelope.release);
-            record_automation_point(state, AutomationTarget::EnvelopeRelease(id), normalized);
+            let normalized = AutomationTarget::release(id).normalize_value(update.amp_envelope.release);
+            record_automation_point(state, AutomationTarget::release(id), normalized);
         }
     }
 
@@ -181,7 +181,7 @@ mod tests {
         update.lfo.rate = 10.0; // changed from default 2.0
         handle_update(&mut state, &update);
 
-        let target = AutomationTarget::LfoRate(id);
+        let target = AutomationTarget::lfo_rate(id);
         let lane = state.session.automation.lane_for_target(&target);
         assert!(lane.is_some(), "LfoRate lane should be created");
         assert_eq!(lane.unwrap().points.len(), 1);
@@ -199,11 +199,11 @@ mod tests {
         update.amp_envelope.release = 1.0; // changed from default
         handle_update(&mut state, &update);
 
-        let attack_lane = state.session.automation.lane_for_target(&AutomationTarget::EnvelopeAttack(id));
+        let attack_lane = state.session.automation.lane_for_target(&AutomationTarget::attack(id));
         assert!(attack_lane.is_some(), "EnvelopeAttack lane should be created");
         assert_eq!(attack_lane.unwrap().points.len(), 1);
 
-        let release_lane = state.session.automation.lane_for_target(&AutomationTarget::EnvelopeRelease(id));
+        let release_lane = state.session.automation.lane_for_target(&AutomationTarget::release(id));
         assert!(release_lane.is_some(), "EnvelopeRelease lane should be created");
         assert_eq!(release_lane.unwrap().points.len(), 1);
     }
@@ -225,8 +225,8 @@ mod tests {
         assert!((inst.amp_envelope.attack - 0.5).abs() < f32::EPSILON);
 
         // But no automation lanes created
-        assert!(state.session.automation.lane_for_target(&AutomationTarget::LfoRate(id)).is_none());
-        assert!(state.session.automation.lane_for_target(&AutomationTarget::EnvelopeAttack(id)).is_none());
+        assert!(state.session.automation.lane_for_target(&AutomationTarget::lfo_rate(id)).is_none());
+        assert!(state.session.automation.lane_for_target(&AutomationTarget::attack(id)).is_none());
     }
 
     #[test]

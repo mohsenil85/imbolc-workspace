@@ -1,1 +1,1 @@
-pub use imbolc_types::{LfoConfig, LfoShape, LfoTarget};
+pub use imbolc_types::{LfoConfig, LfoShape, ParameterTarget};

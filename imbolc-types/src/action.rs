@@ -659,7 +659,7 @@ pub enum InstrumentAction {
     AdjustLfoRate(InstrumentId, f32),
     AdjustLfoDepth(InstrumentId, f32),
     SetLfoShape(InstrumentId, crate::LfoShape),
-    SetLfoTarget(InstrumentId, crate::LfoTarget),
+    SetLfoTarget(InstrumentId, crate::ParameterTarget),
     // Envelope actions
     AdjustEnvelopeAttack(InstrumentId, f32),
     AdjustEnvelopeDecay(InstrumentId, f32),
