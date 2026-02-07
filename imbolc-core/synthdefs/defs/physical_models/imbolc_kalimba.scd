@@ -21,7 +21,7 @@ SynthDef(\imbolc_kalimba, { |out=1024, freq_in=(-1), gate_in=(-1), vel_in=(-1),
     var trig = Trig1.kr(gateSig, 0.001);
     var modeRatios = [1, 2.8, 5.4, 8.93];
     var brightLag = brightness.lag(lag);
-    var exciter = Impulse.ar(0) * EnvGen.kr(Env.perc(0.0001, 0.005), trig);
+    var exciter = WhiteNoise.ar * EnvGen.ar(Env.perc(0.0001, 0.005), trig);
     var sig = Mix.fill(4, { |i|
         var modeFreq = finalFreq * modeRatios[i];
         var ringTime = finalDecay / (i + 1);
