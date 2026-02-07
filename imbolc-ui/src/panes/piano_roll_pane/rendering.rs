@@ -164,11 +164,8 @@ impl PianoRollPane {
         let header_y = rect.y + 1;
         let play_icon = if piano_roll.playing { "||" } else { "> " };
         let loop_icon = if piano_roll.looping { "L" } else { " " };
-        let (ts_num, ts_den) = piano_roll.time_signature;
         let header_text = format!(
-            " {}/{}  {}  {}  Beat:{:.1}",
-            ts_num,
-            ts_den,
+            " {}  {}  Beat:{:.1}",
             play_icon,
             loop_icon,
             piano_roll.tick_to_beat(state.audio.playhead),

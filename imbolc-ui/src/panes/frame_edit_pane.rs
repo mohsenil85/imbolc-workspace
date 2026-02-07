@@ -276,19 +276,6 @@ impl Pane for FrameEditPane {
             }
         }
 
-        // Help
-        let help_y = rect.y + rect.height - 2;
-        if help_y < area.y + area.height {
-            let help = if self.editing {
-                "Enter: confirm | Esc: cancel"
-            } else {
-                "Left/Right: adjust | Enter: type/confirm | Esc: cancel"
-            };
-            buf.draw_line(
-                Rect::new(inner.x + 2, help_y, inner.width.saturating_sub(2), 1),
-                &[(help, Style::new().fg(Color::DARK_GRAY))],
-            );
-        }
     }
 
     fn keymap(&self) -> &Keymap {

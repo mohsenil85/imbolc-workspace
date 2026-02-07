@@ -166,12 +166,6 @@ impl MixerPane {
             }
         }
 
-        // Help text
-        let help_y = rect.y + rect.height - 2;
-        buf.draw_line(
-            Rect::new(base_x, help_y, rect.width.saturating_sub(4), 1),
-            &[("[\u{2190}/\u{2192}] Select  [\u{2191}/\u{2193}] Level  [M]ute [S]olo [o]ut  [t/T] Send  [g] Toggle", Style::new().fg(Color::DARK_GRAY))],
-        );
     }
 
     pub(super) fn render_detail_buf(&self, buf: &mut RenderBuf, area: Rect, state: &AppState) {
@@ -430,13 +424,6 @@ impl MixerPane {
             Self::write_str(buf, col3_x, ly, "(off)", dim);
         }
 
-        // ── Help bar ──
-        let help_y = rect.y + rect.height - 2;
-        let help_text = "Tab: Section  \u{2191}/\u{2193}: Nav  PageUp/Dn: Adjust  [a]dd [d]el [e] Bypass  [f]ilter  [p/P] Pan  Esc: Back";
-        buf.draw_line(
-            Rect::new(inner_x, help_y, inner_w, 1),
-            &[(help_text, Style::new().fg(Color::DARK_GRAY))],
-        );
 
         // Section indicator bar (just below title)
         let section_bar_y = rect.y;

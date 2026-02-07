@@ -396,6 +396,8 @@ pub enum SessionAction {
     AdjustHumanizeVelocity(f32),
     AdjustHumanizeTiming(f32),
     ToggleMasterMute,
+    /// Cycle through available themes (dark -> light -> high contrast)
+    CycleTheme,
 }
 
 /// MIDI configuration actions.
@@ -580,6 +582,8 @@ pub enum SequencerAction {
     SetPadTriggerFreq(usize, f32), // pad_idx, freq
     /// Set the editing pad and open instrument picker
     OpenInstrumentPicker(usize), // pad_idx
+    /// Cycle step resolution (1/4 -> 1/8 -> 1/16 -> 1/32)
+    CycleStepResolution,
 }
 
 /// Data carried by InstrumentAction::Update to apply edits without dispatch reading pane state.

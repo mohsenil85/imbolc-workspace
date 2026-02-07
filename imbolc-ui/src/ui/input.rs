@@ -27,11 +27,12 @@ pub struct MouseEvent {
     pub modifiers: Modifiers,
 }
 
-/// Top-level input event: either keyboard or mouse
+/// Top-level input event: keyboard, mouse, or resize
 #[derive(Debug, Clone, Copy)]
 pub enum AppEvent {
     Key(InputEvent),
     Mouse(MouseEvent),
+    Resize(u16, u16),
 }
 
 /// Key codes for keyboard input

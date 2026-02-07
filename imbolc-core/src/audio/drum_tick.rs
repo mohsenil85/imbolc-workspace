@@ -30,7 +30,7 @@ pub fn tick_drum_sequencer(
         }
 
         let pattern_length = seq.pattern().length;
-        let steps_per_beat = 4.0_f64;
+        let steps_per_beat = seq.step_resolution.steps_per_beat();
         let steps_per_second = (bpm as f64 / 60.0) * steps_per_beat;
         if steps_per_second <= 0.0 {
             continue;

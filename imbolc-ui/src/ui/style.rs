@@ -1,3 +1,4 @@
+use imbolc_types::state::theme::{Theme, ThemeColor};
 use ratatui::style::{Color as RatatuiColor, Modifier, Style as RatatuiStyle};
 
 /// RGB color. Construct with `Color::new(r, g, b)` or use named constants
@@ -76,6 +77,147 @@ impl Color {
     pub const SELECTION_BG: Color = Color::new(60, 100, 180);  // Selection highlight
     pub const MUTE_COLOR: Color = Color::new(255, 100, 100);   // Muted state
     pub const SOLO_COLOR: Color = Color::new(255, 220, 80);    // Solo state
+}
+
+impl From<ThemeColor> for Color {
+    fn from(tc: ThemeColor) -> Self {
+        Color::new(tc.r, tc.g, tc.b)
+    }
+}
+
+// === Theme-aware style functions ===
+// Use these instead of hardcoded Color constants when rendering with a theme.
+
+/// Get the background color from theme
+pub fn theme_bg(theme: &Theme) -> Color {
+    theme.background.into()
+}
+
+/// Get the foreground color from theme
+pub fn theme_fg(theme: &Theme) -> Color {
+    theme.foreground.into()
+}
+
+/// Get the border color from theme
+pub fn theme_border(theme: &Theme) -> Color {
+    theme.border.into()
+}
+
+/// Get the selection background color from theme
+pub fn theme_selection_bg(theme: &Theme) -> Color {
+    theme.selection_bg.into()
+}
+
+/// Get the selection foreground color from theme
+pub fn theme_selection_fg(theme: &Theme) -> Color {
+    theme.selection_fg.into()
+}
+
+/// Get the muted/disabled color from theme
+pub fn theme_muted(theme: &Theme) -> Color {
+    theme.muted.into()
+}
+
+/// Get the error color from theme
+pub fn theme_error(theme: &Theme) -> Color {
+    theme.error.into()
+}
+
+/// Get the warning color from theme
+pub fn theme_warning(theme: &Theme) -> Color {
+    theme.warning.into()
+}
+
+/// Get the success color from theme
+pub fn theme_success(theme: &Theme) -> Color {
+    theme.success.into()
+}
+
+/// Get the oscillator module color from theme
+pub fn theme_osc_color(theme: &Theme) -> Color {
+    theme.osc_color.into()
+}
+
+/// Get the filter module color from theme
+pub fn theme_filter_color(theme: &Theme) -> Color {
+    theme.filter_color.into()
+}
+
+/// Get the envelope module color from theme
+pub fn theme_env_color(theme: &Theme) -> Color {
+    theme.env_color.into()
+}
+
+/// Get the LFO module color from theme
+pub fn theme_lfo_color(theme: &Theme) -> Color {
+    theme.lfo_color.into()
+}
+
+/// Get the effects module color from theme
+pub fn theme_fx_color(theme: &Theme) -> Color {
+    theme.fx_color.into()
+}
+
+/// Get the sample module color from theme
+pub fn theme_sample_color(theme: &Theme) -> Color {
+    theme.sample_color.into()
+}
+
+/// Get the MIDI module color from theme
+pub fn theme_midi_color(theme: &Theme) -> Color {
+    theme.midi_color.into()
+}
+
+/// Get the audio input module color from theme
+pub fn theme_audio_in_color(theme: &Theme) -> Color {
+    theme.audio_in_color.into()
+}
+
+/// Get meter color for low level
+pub fn theme_meter_low(theme: &Theme) -> Color {
+    theme.meter_low.into()
+}
+
+/// Get meter color for mid level
+pub fn theme_meter_mid(theme: &Theme) -> Color {
+    theme.meter_mid.into()
+}
+
+/// Get meter color for high level
+pub fn theme_meter_high(theme: &Theme) -> Color {
+    theme.meter_high.into()
+}
+
+/// Get the playing status color from theme
+pub fn theme_playing(theme: &Theme) -> Color {
+    theme.playing.into()
+}
+
+/// Get the recording status color from theme
+pub fn theme_recording(theme: &Theme) -> Color {
+    theme.recording.into()
+}
+
+/// Get the armed status color from theme
+pub fn theme_armed(theme: &Theme) -> Color {
+    theme.armed.into()
+}
+
+/// Get waveform gradient colors from theme (array of 4 colors from center outward)
+pub fn theme_waveform_gradient(theme: &Theme) -> [Color; 4] {
+    [
+        theme.waveform_gradient[0].into(),
+        theme.waveform_gradient[1].into(),
+        theme.waveform_gradient[2].into(),
+        theme.waveform_gradient[3].into(),
+    ]
+}
+
+/// Build a selection style from theme
+pub fn selection_style(theme: &Theme) -> Style {
+    Style::new()
+        .fg(theme_selection_fg(theme))
+        .bg(theme_selection_bg(theme))
 }
 
 /// Text style with foreground, background, and attributes.

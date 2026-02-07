@@ -543,14 +543,7 @@ impl Pane for TrackPane {
         // --- Footer ---
         let footer_y = inner.y + inner.height - 2;
 
-        // Line 1: key hints
-        let hints = "n:new  p:place  Enter:edit  d:del  m:mode  Space:play  z/x:zoom";
-        buf.draw_line(
-            Rect::new(inner.x + 1, footer_y, inner.width.saturating_sub(2), 1),
-            &[(hints, Style::new().fg(Color::DARK_GRAY))],
-        );
-
-        // Line 2: cursor position + selected clip info
+        // Cursor position + selected clip info
         let bar = arr.cursor_tick / ticks_per_bar + 1;
         let beat = (arr.cursor_tick % ticks_per_bar) / 480 + 1;
         let inst_id = state.instruments.instruments[selected_lane].id;

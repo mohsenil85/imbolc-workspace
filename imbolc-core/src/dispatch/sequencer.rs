@@ -378,6 +378,14 @@ pub(super) fn dispatch_sequencer(
             }
             return DispatchResult::with_nav(NavIntent::PushTo("instrument_picker"));
         }
+        SequencerAction::CycleStepResolution => {
+            if let Some(seq) = state.instruments.selected_drum_sequencer_mut() {
+                seq.step_resolution = seq.step_resolution.cycle_next();
+            }
+            let mut result = DispatchResult::none();
+            result.audio_dirty.instruments = true;
+            return result;
+        }
     }
 
 }

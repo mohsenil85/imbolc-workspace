@@ -8,6 +8,62 @@ pub const NUM_PADS: usize = 12;
 pub const DEFAULT_STEPS: usize = 16;
 pub const NUM_PATTERNS: usize = 4;
 
+/// Step resolution determines grid subdivision (steps per beat).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum StepResolution {
+    /// Quarter notes (1 step per beat)
+    Quarter,
+    /// Eighth notes (2 steps per beat)
+    Eighth,
+    /// Sixteenth notes (4 steps per beat) - default
+    #[default]
+    Sixteenth,
+    /// Thirty-second notes (8 steps per beat)
+    ThirtySecond,
+}
+
+impl StepResolution {
+    /// Number of steps per beat
+    pub fn steps_per_beat(&self) -> f64 {
+        match self {
+            Self::Quarter => 1.0,
+            Self::Eighth => 2.0,
+            Self::Sixteenth => 4.0,
+            Self::ThirtySecond => 8.0,
+        }
+    }
+
+    /// Tick duration for each step (at 480 TPB)
+    pub fn ticks_per_step(&self) -> u32 {
+        match self {
+            Self::Quarter => 480,  // 1 beat
+            Self::Eighth => 240,   // 1/2 beat
+            Self::Sixteenth => 120, // 1/4 beat
+            Self::ThirtySecond => 60, // 1/8 beat
+        }
+    }
+
+    /// Short label for display
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Quarter => "1/4",
+            Self::Eighth => "1/8",
+            Self::Sixteenth => "1/16",
+            Self::ThirtySecond => "1/32",
+        }
+    }
+
+    /// Cycle to next resolution
+    pub fn cycle_next(&self) -> Self {
+        match self {
+            Self::Quarter => Self::Eighth,
+            Self::Eighth => Self::Sixteenth,
+            Self::Sixteenth => Self::ThirtySecond,
+            Self::ThirtySecond => Self::Quarter,
+        }
+    }
+}
+
 /// A single step in a drum pattern.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DrumStep {
@@ -133,6 +189,9 @@ pub struct DrumSequencerState {
     /// The pad currently being edited (for instrument picker modal)
     #[serde(skip)]
     pub editing_pad: Option<usize>,
+    /// Step resolution (grid subdivision)
+    #[serde(default)]
+    pub step_resolution: StepResolution,
 }
 
 impl DrumSequencerState {
@@ -154,6 +213,7 @@ impl DrumSequencerState {
             chain_enabled: false,
             chain_position: 0,
             editing_pad: None,
+            step_resolution: StepResolution::default(),
         }
     }
 

@@ -368,17 +368,6 @@ impl InstrumentEditPane {
         let _ = global_row;
         let _ = visual_y;
 
-        // Help text
-        let help_y = rect.y + rect.height - 2;
-        let help_text = if self.pad_keyboard.is_active() {
-            "R T Y U / F G H J / V B N M: trigger pads | /: cycle | Esc: exit"
-        } else if self.piano.is_active() {
-            "Play keys | [/]: octave | \u{2190}/\u{2192}: adjust | \\: zero | /: cycle | Esc: exit"
-        } else {
-            "\u{2191}/\u{2193}: move | Tab/S-Tab: section | \u{2190}/\u{2192}: adjust | \\: zero | /: piano"
-        };
-        buf.draw_line(Rect::new(content_x, help_y, inner.width.saturating_sub(2), 1),
-            &[(help_text, Style::new().fg(Color::DARK_GRAY))]);
     }
 }
 

@@ -268,12 +268,6 @@ impl Pane for SampleChopperPane {
             }
         }
 
-        // Footer help
-        let help_y = rect.y + rect.height - 2;
-        buf.draw_line(
-            Rect::new(content_x, help_y, rect.width.saturating_sub(4), 1),
-            &[("Enter:chop ,:commit x:del n:auto 1-0:assign Space:preview s:load Esc:back", Style::new().fg(Color::DARK_GRAY))],
-        );
     }
 
     fn keymap(&self) -> &Keymap {

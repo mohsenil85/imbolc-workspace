@@ -365,21 +365,6 @@ impl Pane for InstrumentPane {
             );
         }
 
-        // Help text
-        let help_y = rect.y + rect.height - 2;
-        let help_text = if self.linking_from.is_some() {
-            "\u{2191}/\u{2193}: select target | any other key: cancel"
-        } else if self.pad_keyboard.is_active() {
-            "R T Y U / F G H J / V B N M: trigger pads | /: cycle | Esc: exit"
-        } else if self.piano.is_active() {
-            "Play keys | [/]: octave | \u{2191}/\u{2193}: select instrument | /: cycle | Esc: exit"
-        } else {
-            "a: add | d: delete | Enter: edit | l: link layer | L: unlink | /: piano"
-        };
-        buf.draw_line(
-            Rect::new(content_x, help_y, inner.width.saturating_sub(2), 1),
-            &[(help_text, Style::new().fg(Color::DARK_GRAY))],
-        );
     }
 
     fn handle_mouse(&mut self, event: &MouseEvent, area: Rect, state: &AppState) -> Action {

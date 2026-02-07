@@ -531,6 +531,11 @@ pub(crate) fn handle_global_action(
             GlobalActionId::RefreshScreen => {
                 return GlobalResult::RefreshScreen;
             }
+            GlobalActionId::CycleTheme => {
+                let r = dispatcher.dispatch_with_audio(&Action::Session(SessionAction::CycleTheme), audio);
+                pending_audio_dirty.merge(r.audio_dirty);
+                apply_dispatch_result(r, dispatcher, panes, app_frame, audio);
+            }
         },
         _ => return GlobalResult::NotHandled,
     }

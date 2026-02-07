@@ -261,6 +261,17 @@ pub(super) fn dispatch_session(
             result.audio_dirty.session = true;
             result.audio_dirty.mixer_params = true;
         }
+        SessionAction::CycleTheme => {
+            use imbolc_types::state::Theme;
+            // Cycle through built-in themes: Dark -> Light -> High Contrast -> Dark
+            let current_name = &state.session.theme.name;
+            state.session.theme = match current_name.as_str() {
+                "Dark" => Theme::light(),
+                "Light" => Theme::high_contrast(),
+                _ => Theme::dark(),
+            };
+            result.push_status(audio.status(), &format!("Theme: {}", state.session.theme.name));
+        }
     }
 
     result

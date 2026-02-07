@@ -11,6 +11,7 @@ use super::midi_recording::MidiRecordingState;
 use super::mixer::{MixerState, DEFAULT_BUS_COUNT};
 use super::music::{Key, Scale};
 use super::piano_roll::PianoRollState;
+use super::theme::Theme;
 use super::vst::VstPluginRegistry;
 
 /// Click track (metronome) state.
@@ -100,6 +101,10 @@ pub struct SessionState {
     // Click track / metronome
     #[serde(default)]
     pub click_track: ClickTrackState,
+
+    // UI theme
+    #[serde(default)]
+    pub theme: Theme,
 }
 
 impl SessionState {
@@ -124,6 +129,7 @@ impl SessionState {
             mixer: MixerState::new_with_bus_count(bus_count),
             humanize: HumanizeSettings::default(),
             click_track: ClickTrackState::default(),
+            theme: Theme::default(),
         }
     }
 

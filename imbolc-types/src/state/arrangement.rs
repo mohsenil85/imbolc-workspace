@@ -1,6 +1,7 @@
 //! Arrangement and clip types for timeline-based composition.
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 use super::automation::{AutomationLane, AutomationLaneId, AutomationPoint, AutomationTarget};
 use super::piano_roll::Note;
@@ -12,6 +13,28 @@ pub type ClipId = u32;
 
 /// Unique identifier for a clip placement on the timeline.
 pub type PlacementId = u32;
+
+/// Unique identifier for an audio clip (recorded audio)
+pub type AudioClipId = u32;
+
+/// An audio clip represents recorded audio from an input.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AudioClip {
+    pub id: AudioClipId,
+    pub name: String,
+    /// Path to the WAV file on disk
+    pub path: PathBuf,
+    /// Start tick of the recording on the timeline
+    pub start_tick: u32,
+    /// Duration in ticks
+    pub duration_ticks: u32,
+    /// Associated instrument (track) ID
+    pub instrument_id: InstrumentId,
+    /// Waveform peaks for display (normalized 0-1)
+    pub waveform_peaks: Vec<f32>,
+    /// Original sample rate of the recording
+    pub sample_rate: u32,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PlayMode {

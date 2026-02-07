@@ -194,6 +194,9 @@ impl Pane for SequencerPane {
                 }
                 Action::None
             }
+            ActionId::Sequencer(SequencerActionId::CycleGrid) => {
+                Action::Sequencer(SequencerAction::CycleStepResolution)
+            }
             _ => Action::None,
         }
     }
@@ -244,14 +247,17 @@ impl Pane for SequencerPane {
         };
         let play_label = if seq.playing { "PLAY" } else { "STOP" };
         let play_color = if seq.playing { Color::GREEN } else { Color::GRAY };
+        let grid_label = seq.step_resolution.label();
 
         let pat_str = format!("Pattern {}", pattern_label);
         let len_str = format!("  Length: {}", pattern.length);
+        let grid_str = format!("  Grid: {}", grid_label);
         let bpm_str = format!("  BPM: {:.0}", state.audio.bpm);
         let play_str = format!("  {}", play_label);
         buf.draw_line(Rect::new(cx, cy, rect.width.saturating_sub(4), 1), &[
             (&pat_str, Style::new().fg(Color::WHITE).bold()),
             (&len_str, Style::new().fg(Color::DARK_GRAY)),
+            (&grid_str, Style::new().fg(Color::CYAN)),
             (&bpm_str, Style::new().fg(Color::DARK_GRAY)),
             (&play_str, Style::new().fg(play_color).bold()),
         ]);
@@ -431,12 +437,6 @@ impl Pane for SequencerPane {
             }
         }
 
-        // Help line
-        let help_y = rect.y + rect.height - 2;
-        buf.draw_line(
-            Rect::new(cx, help_y, rect.width.saturating_sub(4), 1),
-            &[("Enter:toggle  Space:play  s:sample  i:inst  I:clear  c:chop  r:rev  -/=:pitch", Style::new().fg(Color::DARK_GRAY))],
-        );
     }
 
     fn handle_mouse(&mut self, event: &MouseEvent, area: Rect, state: &AppState) -> Action {

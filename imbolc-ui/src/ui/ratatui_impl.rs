@@ -148,8 +148,11 @@ impl InputSource for RatatuiBackend {
                     // Discarded mouse event (Moved, etc.) — drain with zero timeout
                     t = Duration::ZERO;
                 }
+                Event::Resize(w, h) => {
+                    return Some(AppEvent::Resize(w, h));
+                }
                 _ => {
-                    // Discarded event (Resize, etc.) — drain with zero timeout
+                    // Discarded event (FocusGained, etc.) — drain with zero timeout
                     t = Duration::ZERO;
                 }
             }

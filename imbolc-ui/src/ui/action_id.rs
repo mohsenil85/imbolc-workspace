@@ -80,6 +80,7 @@ pub enum GlobalActionId {
     RefreshScreen,
     ClickTrackToggle,
     PaneSwitcher,
+    CycleTheme,
     SwitchPane(PaneId),
     SelectInstrument(u8), // 1-10
 }
@@ -117,6 +118,7 @@ impl GlobalActionId {
             GlobalActionId::RefreshScreen => "refresh_screen",
             GlobalActionId::ClickTrackToggle => "click_track_toggle",
             GlobalActionId::PaneSwitcher => "pane_switcher",
+            GlobalActionId::CycleTheme => "cycle_theme",
             GlobalActionId::SwitchPane(pane) => match pane {
                 PaneId::InstrumentEdit => "switch:instrument",
                 PaneId::InstrumentList => "switch:instrument_list",
@@ -177,6 +179,7 @@ impl GlobalActionId {
             "refresh_screen" => Some(GlobalActionId::RefreshScreen),
             "click_track_toggle" => Some(GlobalActionId::ClickTrackToggle),
             "pane_switcher" => Some(GlobalActionId::PaneSwitcher),
+            "cycle_theme" => Some(GlobalActionId::CycleTheme),
             "switch:instrument" => Some(GlobalActionId::SwitchPane(PaneId::InstrumentEdit)),
             "switch:instrument_list" => Some(GlobalActionId::SwitchPane(PaneId::InstrumentList)),
             "switch:piano_roll_or_sequencer" => {
@@ -369,6 +372,7 @@ define_action_enum! {
         ClearInstrument => "clear_instrument",
         FreqUp => "freq_up",
         FreqDown => "freq_down",
+        CycleGrid => "cycle_grid",
     }
 }
 

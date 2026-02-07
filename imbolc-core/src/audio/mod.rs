@@ -5,6 +5,7 @@ pub mod commands;
 pub mod devices;
 pub mod engine;
 pub mod handle;
+pub mod input;
 pub mod osc_client;
 pub mod playback;
 pub mod drum_tick;
@@ -14,4 +15,5 @@ pub mod triple_buffer;
 
 pub use engine::{AudioEngine, ServerStatus};
 pub use handle::{AudioHandle, AudioReadState};
+pub use input::AudioInputManager;
 pub use osc_client::AudioMonitor;

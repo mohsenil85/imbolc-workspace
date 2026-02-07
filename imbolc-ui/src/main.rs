@@ -249,6 +249,10 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
 
         if let Some(app_event) = backend.poll_event(Duration::from_millis(2)) {
             let pane_action = match app_event {
+                AppEvent::Resize(_, _) => {
+                    // Terminal resized — just continue to redraw
+                    continue;
+                }
                 AppEvent::Mouse(mouse_event) => {
                     panes.active_mut().handle_mouse(&mouse_event, last_area, dispatcher.state())
                 }

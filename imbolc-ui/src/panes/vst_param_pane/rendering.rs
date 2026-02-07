@@ -149,11 +149,5 @@ impl VstParamPane {
             }
         }
 
-        // Help line at bottom
-        let help_y = inner.y + inner.height - 1;
-        buf.draw_line(
-            Rect::new(inner.x + 1, help_y, inner.width.saturating_sub(1), 1),
-            &[("[</> ] adjust  [Sh+</> ] coarse  [/] search  [r] reset  [a] automate  [d] discover", Style::new().fg(Color::DARK_GRAY))],
-        );
     }
 }

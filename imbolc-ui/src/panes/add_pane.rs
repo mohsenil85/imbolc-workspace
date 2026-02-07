@@ -468,14 +468,6 @@ impl AddPane {
             }
         }
 
-        // Help text
-        let help_y = rect.y + rect.height - 2;
-        if help_y < area.y + area.height {
-            buf.draw_line(
-                Rect::new(content_x, help_y, inner.width.saturating_sub(2), 1),
-                &[("Enter: add | Escape: cancel | Up/Down: navigate", Style::new().fg(Color::DARK_GRAY))],
-            );
-        }
     }
 
 }

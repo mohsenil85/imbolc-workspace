@@ -87,7 +87,15 @@ impl Frame {
 
     /// Render the frame border, header, indicators, meter, and status bar.
     pub fn render_buf(&self, area: Rect, buf: &mut RenderBuf, state: &AppState) {
-        if area.width < 10 || area.height < 10 {
+        const MIN_WIDTH: u16 = 80;
+        const MIN_HEIGHT: u16 = 24;
+
+        if area.width < MIN_WIDTH || area.height < MIN_HEIGHT {
+            let msg = format!(
+                "Terminal too small: {}x{} (need {}x{})",
+                area.width, area.height, MIN_WIDTH, MIN_HEIGHT
+            );
+            buf.draw_str(0, 0, &msg, Style::new().fg(Color::MUTE_COLOR));
             return;
         }
 
@@ -161,6 +169,12 @@ impl Frame {
             buf.draw_str(inst_start, area.y, &inst_indicator, inst_style);
             cursor = inst_start;
         }
+
+        // Help hint (leftmost right-aligned item)
+        let help_hint = " ? ";
+        let help_start = cursor.saturating_sub(help_hint.len() as u16);
+        buf.draw_str(help_start, area.y, help_hint, Style::new().fg(Color::DARK_GRAY));
+        cursor = help_start;
 
         // Fill gap between header and right-aligned items with border
         let header_end = area.x + 1 + header.len() as u16;

@@ -17,6 +17,7 @@ pub mod project;
 pub mod recording;
 pub mod sampler;
 pub mod session;
+pub mod theme;
 pub mod vst;
 
 pub use arpeggiator::*;
@@ -38,6 +39,7 @@ pub use project::*;
 pub use recording::*;
 pub use sampler::*;
 pub use session::*;
+pub use theme::*;
 pub use vst::*;
 
 use std::collections::VecDeque;

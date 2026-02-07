@@ -52,6 +52,7 @@ bindings = [
   { key = "Space", action = "play_stop", description = "Play / Stop" },
   { key = "M", action = "click_track_toggle", description = "Toggle metronome" },
   { key = "Ctrl+L", action = "refresh_screen", description = "Refresh screen" },
+  { key = "T", action = "cycle_theme", description = "Cycle UI theme" },
 ]
 
 [layers.instrument]
@@ -174,6 +175,7 @@ bindings = [
   { key = "I", action = "clear_instrument", description = "Clear instrument from pad" },
   { key = "Ctrl+=", action = "freq_up", description = "Trigger freq up semitone" },
   { key = "Ctrl+-", action = "freq_down", description = "Trigger freq down semitone" },
+  { key = "g", action = "cycle_grid", description = "Cycle step resolution (1/4, 1/8, 1/16, 1/32)" },
 ]
 
 [layers.instrument_edit]
