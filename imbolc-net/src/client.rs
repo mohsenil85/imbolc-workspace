@@ -15,7 +15,7 @@ use imbolc_types::InstrumentId;
 use crate::framing::{read_message, write_message};
 use crate::protocol::{
     ClientId, ClientMessage, NetworkAction, NetworkState, OwnerInfo, PrivilegeLevel,
-    ServerMessage, SessionToken,
+    ServerMessage, SessionToken, StatePatch,
 };
 
 /// Metering update from server.
@@ -40,6 +40,14 @@ enum ServerUpdate {
     PrivilegeDenied(String),
     /// This client's privilege was revoked.
     PrivilegeRevoked,
+    /// Server sent a heartbeat ping — respond with Pong.
+    PingReceived,
+    /// Connection lost (EOF/error, not graceful shutdown).
+    ConnectionLost,
+    /// Partial state update (only changed subsystems).
+    Patch(StatePatch),
+    /// Full state sync.
+    FullSync(NetworkState, u64),
 }
 
 /// Ownership status for an instrument from this client's perspective.
@@ -67,6 +75,14 @@ pub struct RemoteDispatcher {
     privilege: PrivilegeLevel,
     /// Session token for reconnection.
     session_token: SessionToken,
+    /// Whether the connection was lost (vs graceful shutdown).
+    connection_lost: bool,
+    /// Last received sequence number for ordering.
+    last_seq: u64,
+    /// Server address for reconnection.
+    server_addr: String,
+    /// Client name for reconnection.
+    client_name: String,
 }
 
 impl RemoteDispatcher {
@@ -171,6 +187,10 @@ impl RemoteDispatcher {
             last_rejection: None,
             privilege,
             session_token,
+            connection_lost: false,
+            last_seq: 0,
+            server_addr: addr.to_string(),
+            client_name: client_name.to_string(),
         })
     }
 
@@ -233,6 +253,21 @@ impl RemoteDispatcher {
         &self.session_token
     }
 
+    /// Check if the connection was lost (vs graceful shutdown).
+    pub fn connection_lost(&self) -> bool {
+        self.connection_lost
+    }
+
+    /// Get the server address for reconnection.
+    pub fn server_addr(&self) -> &str {
+        &self.server_addr
+    }
+
+    /// Get the client name.
+    pub fn client_name(&self) -> &str {
+        &self.client_name
+    }
+
     /// Get ownership status for an instrument.
     pub fn ownership_status(&self, instrument_id: InstrumentId) -> OwnershipStatus {
         if self.owned_instruments.contains(&instrument_id) {
@@ -269,6 +304,11 @@ impl RemoteDispatcher {
     /// Request privileged status from the server.
     pub fn request_privilege(&mut self) -> io::Result<()> {
         write_message(&mut self.writer, &ClientMessage::RequestPrivilege)
+    }
+
+    /// Request a full state sync from the server (desync recovery).
+    pub fn request_full_sync(&mut self) -> io::Result<()> {
+        write_message(&mut self.writer, &ClientMessage::RequestFullSync)
     }
 
     /// Poll for updates from the server and apply them to local state.
@@ -315,11 +355,58 @@ impl RemoteDispatcher {
                         info!("Privilege revoked");
                         self.privilege = PrivilegeLevel::Normal;
                     }
+                    ServerUpdate::PingReceived => {
+                        // Respond to server heartbeat
+                        if let Err(e) = write_message(&mut self.writer, &ClientMessage::Pong) {
+                            warn!("Failed to send pong: {}", e);
+                        }
+                    }
+                    ServerUpdate::ConnectionLost => {
+                        warn!("Connection to server lost");
+                        self.connection_lost = true;
+                        break;
+                    }
+                    ServerUpdate::Patch(patch) => {
+                        if patch.seq > self.last_seq {
+                            self.last_seq = patch.seq;
+                            if let Some(session) = patch.session {
+                                self.state.session = session;
+                            }
+                            if let Some(instruments) = patch.instruments {
+                                self.state.instruments = instruments;
+                            }
+                            if let Some(ownership) = patch.ownership {
+                                self.state.ownership = ownership;
+                            }
+                            if let Some(privileged_client) = patch.privileged_client {
+                                self.state.privileged_client = privileged_client;
+                            }
+                            // Update owned instruments from ownership
+                            self.owned_instruments.clear();
+                            for (&inst_id, owner_info) in &self.state.ownership {
+                                if owner_info.client_id == self.client_id {
+                                    self.owned_instruments.insert(inst_id);
+                                }
+                            }
+                            state_updated = true;
+                        }
+                    }
+                    ServerUpdate::FullSync(new_state, seq) => {
+                        self.last_seq = seq;
+                        self.owned_instruments.clear();
+                        for (&inst_id, owner_info) in &new_state.ownership {
+                            if owner_info.client_id == self.client_id {
+                                self.owned_instruments.insert(inst_id);
+                            }
+                        }
+                        self.state = new_state;
+                        state_updated = true;
+                    }
                 },
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => {
-                    warn!("Server connection lost");
-                    self.server_shutdown = true;
+                    warn!("Server connection lost (reader thread exited)");
+                    self.connection_lost = true;
                     break;
                 }
             }
@@ -356,11 +443,17 @@ fn server_reader_thread(
                         ServerUpdate::Metering(MeteringUpdate { playhead, bpm, peaks })
                     }
                     ServerMessage::Shutdown => {
+                        info!("Server sent graceful shutdown");
                         let _ = update_tx.send(ServerUpdate::Shutdown);
                         break;
                     }
+                    ServerMessage::Ping => {
+                        // Server heartbeat — notify main thread to send Pong
+                        let _ = update_tx.send(ServerUpdate::PingReceived);
+                        continue;
+                    }
                     ServerMessage::Pong => {
-                        // Ignore pongs
+                        // Response to our Ping — ignore
                         continue;
                     }
                     ServerMessage::Error { message } => {
@@ -385,6 +478,12 @@ fn server_reader_thread(
                     ServerMessage::ReconnectFailed { reason } => {
                         ServerUpdate::Error(format!("Reconnect failed: {}", reason))
                     }
+                    ServerMessage::StatePatchUpdate { patch } => {
+                        ServerUpdate::Patch(patch)
+                    }
+                    ServerMessage::FullStateSync { state, seq } => {
+                        ServerUpdate::FullSync(state, seq)
+                    }
                 };
 
                 if update_tx.send(update).is_err() {
@@ -396,7 +495,8 @@ fn server_reader_thread(
                 if e.kind() != io::ErrorKind::UnexpectedEof {
                     error!("Server read error: {}", e);
                 }
-                let _ = update_tx.send(ServerUpdate::Shutdown);
+                // Connection lost (not a graceful shutdown from server)
+                let _ = update_tx.send(ServerUpdate::ConnectionLost);
                 break;
             }
         }

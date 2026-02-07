@@ -54,6 +54,7 @@ bindings = [
   { key = "M", action = "click_track_toggle", description = "Toggle metronome" },
   { key = "Ctrl+L", action = "refresh_screen", description = "Refresh screen" },
   { key = "T", action = "cycle_theme", description = "Cycle UI theme" },
+  { key = "Ctrl+p", action = "request_privilege", description = "Request network privilege" },
 ]
 
 [layers.instrument]

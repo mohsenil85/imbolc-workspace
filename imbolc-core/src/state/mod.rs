@@ -38,8 +38,9 @@ pub use vst_plugin::{VstParamSpec, VstPlugin, VstPluginId, VstPluginKind, VstPlu
 
 // Re-export types moved to imbolc-types
 pub use imbolc_types::{
-    IoGeneration, IoState, KeyboardLayout, NetworkDisplayContext, OwnershipDisplayStatus,
-    PendingExport, PendingRender, ProjectMeta, RecordingState, VisualizationState,
+    ClientDisplayInfo, IoGeneration, IoState, KeyboardLayout, NetworkConnectionStatus,
+    NetworkDisplayContext, OwnershipDisplayStatus, PendingExport, PendingRender, ProjectMeta,
+    RecordingState, VisualizationState,
 };
 
 /// Top-level application state, owned by main.rs and passed to panes by reference.

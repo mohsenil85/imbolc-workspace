@@ -61,7 +61,7 @@ fn main() -> std::io::Result<()> {
 
     // Check for network modes
     let server_mode = args.iter().any(|a| a == "--server");
-    let _discover_mode = args.iter().any(|a| a == "--discover");
+    let discover_mode = args.iter().any(|a| a == "--discover");
     let connect_addr = args.iter()
         .position(|a| a == "--connect")
         .and_then(|i| args.get(i + 1).cloned());

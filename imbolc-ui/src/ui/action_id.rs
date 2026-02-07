@@ -82,6 +82,7 @@ pub enum GlobalActionId {
     ClickTrackToggle,
     PaneSwitcher,
     CycleTheme,
+    RequestPrivilege,
     SwitchPane(PaneId),
     SelectInstrument(u8), // 1-10
 }
@@ -120,6 +121,7 @@ impl GlobalActionId {
             GlobalActionId::ClickTrackToggle => "click_track_toggle",
             GlobalActionId::PaneSwitcher => "pane_switcher",
             GlobalActionId::CycleTheme => "cycle_theme",
+            GlobalActionId::RequestPrivilege => "request_privilege",
             GlobalActionId::SwitchPane(pane) => match pane {
                 PaneId::InstrumentEdit => "switch:instrument",
                 PaneId::InstrumentList => "switch:instrument_list",
@@ -182,6 +184,7 @@ impl GlobalActionId {
             "click_track_toggle" => Some(GlobalActionId::ClickTrackToggle),
             "pane_switcher" => Some(GlobalActionId::PaneSwitcher),
             "cycle_theme" => Some(GlobalActionId::CycleTheme),
+            "request_privilege" => Some(GlobalActionId::RequestPrivilege),
             "switch:instrument" => Some(GlobalActionId::SwitchPane(PaneId::InstrumentEdit)),
             "switch:instrument_list" => Some(GlobalActionId::SwitchPane(PaneId::InstrumentList)),
             "switch:piano_roll_or_sequencer" => {
@@ -867,6 +870,7 @@ mod tests {
             GlobalActionId::Escape,
             GlobalActionId::PlayStop,
             GlobalActionId::ClickTrackToggle,
+            GlobalActionId::RequestPrivilege,
             GlobalActionId::SelectPrevInstrument,
             GlobalActionId::SelectNextInstrument,
             GlobalActionId::SelectTwoDigit,

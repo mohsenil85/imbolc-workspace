@@ -83,9 +83,15 @@ pub fn run_server() -> std::io::Result<()> {
         // Accept new connections
         server.accept_connections(&network_state);
 
+        // Heartbeat: ping clients, detect dead connections
+        server.tick_heartbeat();
+
         // Poll for client actions
         for (client_id, net_action) in server.poll_actions(&network_state) {
             log::debug!("Received action from {:?}: {:?}", client_id, net_action);
+
+            // Mark dirty based on action
+            server.mark_dirty(&net_action);
 
             // Convert NetworkAction to Action
             let action = network_action_to_action(net_action);
@@ -105,15 +111,19 @@ pub fn run_server() -> std::io::Result<()> {
         if pending_audio_dirty.any() {
             audio.flush_dirty(dispatcher.state(), pending_audio_dirty);
             pending_audio_dirty.clear();
+        }
 
-            // Broadcast updated state
-            let network_state = NetworkState {
-                session: dispatcher.state().session.clone(),
-                instruments: dispatcher.state().instruments.clone(),
-                ownership: server.build_ownership_map(),
-                privileged_client: server.privileged_client_info(),
-            };
-            server.broadcast_state(&network_state);
+        // Broadcast state updates
+        let network_state = NetworkState {
+            session: dispatcher.state().session.clone(),
+            instruments: dispatcher.state().instruments.clone(),
+            ownership: server.build_ownership_map(),
+            privileged_client: server.privileged_client_info(),
+        };
+        if server.needs_full_sync() {
+            server.broadcast_full_sync(&network_state);
+        } else {
+            server.broadcast_state_patch(&network_state);
         }
 
         // Drain I/O feedback (simplified - no UI updates in server mode)
@@ -239,6 +249,11 @@ pub fn run_client(addr: &str, own_instruments: Vec<u32>) -> std::io::Result<()> 
         remote.owned_instruments().len()
     );
 
+    // Save session token for reconnection
+    if let Err(e) = imbolc_net::save_session(addr, remote.session_token(), &client_name) {
+        log::warn!("Failed to save session token: {}", e);
+    }
+
     let mut backend = RatatuiBackend::new()?;
     backend.start()?;
 
@@ -281,10 +296,74 @@ pub fn run_client(addr: &str, own_instruments: Vec<u32>) -> std::io::Result<()> 
         local_state.audio.playhead = metering.playhead;
         local_state.audio.bpm = metering.bpm;
 
-        // Check for server shutdown
+        // Check for server shutdown or connection loss
         if remote.server_shutdown() {
-            log::info!("Server shut down, exiting");
+            log::info!("Server shut down gracefully, exiting");
             break;
+        }
+        if remote.connection_lost() {
+            log::info!("Connection lost, attempting reconnect...");
+            let saved_token = remote.session_token().clone();
+            let saved_addr = remote.server_addr().to_string();
+            let saved_name = remote.client_name().to_string();
+
+            // Update display to show reconnecting status
+            if let Some(ref mut net) = local_state.network {
+                net.connection_status = state::NetworkConnectionStatus::Reconnecting;
+            }
+
+            // Reconnect with exponential backoff
+            let mut delay_ms = 500u64;
+            let deadline = Instant::now() + Duration::from_secs(60);
+            let mut reconnected = false;
+
+            while Instant::now() < deadline {
+                // Render reconnecting state
+                let now_render = Instant::now();
+                if now_render.duration_since(last_render_time).as_millis() >= 16 {
+                    last_render_time = now_render;
+                    let mut frame = backend.begin_frame()?;
+                    let area = frame.area();
+                    last_area = area;
+                    let mut rbuf = crate::ui::RenderBuf::new(frame.buffer_mut());
+                    app_frame.render_buf(area, &mut rbuf, &local_state);
+                    panes.render(area, &mut rbuf, &local_state);
+                    backend.end_frame(frame)?;
+                }
+
+                std::thread::sleep(Duration::from_millis(delay_ms));
+
+                match RemoteDispatcher::reconnect(&saved_addr, &saved_name, saved_token.clone()) {
+                    Ok(new_remote) => {
+                        log::info!("Reconnected successfully");
+                        remote = new_remote;
+
+                        // Save new session token
+                        if let Err(e) = imbolc_net::save_session(&saved_addr, remote.session_token(), &saved_name) {
+                            log::warn!("Failed to save session token: {}", e);
+                        }
+
+                        // Sync state
+                        local_state.session = remote.state().session.clone();
+                        local_state.instruments = remote.state().instruments.clone();
+                        sync_network_context(&mut local_state, &remote);
+                        reconnected = true;
+                        break;
+                    }
+                    Err(e) => {
+                        log::warn!("Reconnect attempt failed: {}", e);
+                        delay_ms = (delay_ms * 2).min(8000);
+                    }
+                }
+            }
+
+            if !reconnected {
+                log::error!("Failed to reconnect within 60s, exiting");
+                if let Some(ref mut net) = local_state.network {
+                    net.connection_status = state::NetworkConnectionStatus::Disconnected;
+                }
+                break;
+            }
         }
 
         if let Some(app_event) = backend.poll_event(Duration::from_millis(2)) {
@@ -292,6 +371,7 @@ pub fn run_client(addr: &str, own_instruments: Vec<u32>) -> std::io::Result<()> 
                 crate::ui::AppEvent::Mouse(mouse_event) => {
                     panes.active_mut().handle_mouse(&mouse_event, last_area, &local_state)
                 }
+                crate::ui::AppEvent::Resize(_, _) => Action::None,
                 crate::ui::AppEvent::Key(event) => {
                     match layer_stack.resolve(&event) {
                         crate::ui::LayerResult::Action(action) => {
@@ -299,7 +379,15 @@ pub fn run_client(addr: &str, own_instruments: Vec<u32>) -> std::io::Result<()> 
                             if matches!(action, ActionId::Global(GlobalActionId::Quit)) {
                                 break;
                             }
-                            panes.active_mut().handle_action(action, &event, &local_state)
+                            // Handle privilege request in network mode
+                            if matches!(action, ActionId::Global(GlobalActionId::RequestPrivilege)) {
+                                if let Err(e) = remote.request_privilege() {
+                                    log::warn!("Failed to request privilege: {}", e);
+                                }
+                                Action::None
+                            } else {
+                                panes.active_mut().handle_action(action, &event, &local_state)
+                            }
                         }
                         crate::ui::LayerResult::Blocked | crate::ui::LayerResult::Unresolved => {
                             panes.active_mut().handle_raw_input(&event, &local_state)
@@ -356,6 +444,7 @@ pub fn run_client(addr: &str, own_instruments: Vec<u32>) -> std::io::Result<()> 
     }
 
     let _ = remote.disconnect();
+    imbolc_net::clear_session();
     backend.stop()?;
     Ok(())
 }
@@ -422,7 +511,7 @@ pub fn action_to_network_action(action: &Action) -> Option<imbolc_net::NetworkAc
 pub fn sync_network_context(local_state: &mut AppState, remote: &RemoteDispatcher) {
     use std::collections::HashMap;
     use imbolc_net::OwnershipStatus;
-    use state::{NetworkDisplayContext, OwnershipDisplayStatus};
+    use state::{ClientDisplayInfo, NetworkConnectionStatus, NetworkDisplayContext, OwnershipDisplayStatus};
 
     let mut ownership = HashMap::new();
 
@@ -437,9 +526,40 @@ pub fn sync_network_context(local_state: &mut AppState, remote: &RemoteDispatche
 
     let privileged_client_name = remote.privileged_client().map(|(_, name)| name.to_string());
 
+    // Build connected clients list by deduplicating the ownership map by client name
+    let mut client_counts: HashMap<String, (bool, usize)> = HashMap::new();
+    for owner_info in remote.ownership_map().values() {
+        let is_priv = remote.privileged_client()
+            .map(|(id, _)| id == owner_info.client_id)
+            .unwrap_or(false);
+        let entry = client_counts.entry(owner_info.client_name.clone()).or_insert((is_priv, 0));
+        entry.1 += 1;
+    }
+    // Always include ourselves
+    let client_name = remote.client_name().to_string();
+    client_counts.entry(client_name.clone()).or_insert((remote.is_privileged(), 0));
+
+    let connected_clients: Vec<ClientDisplayInfo> = client_counts
+        .into_iter()
+        .map(|(name, (is_privileged, owned_instrument_count))| ClientDisplayInfo {
+            name,
+            is_privileged,
+            owned_instrument_count,
+        })
+        .collect();
+
+    let connection_status = if remote.connection_lost() {
+        NetworkConnectionStatus::Disconnected
+    } else {
+        NetworkConnectionStatus::Connected
+    };
+
     local_state.network = Some(NetworkDisplayContext {
         ownership,
         is_privileged: remote.is_privileged(),
         privileged_client_name,
+        connection_status,
+        client_name,
+        connected_clients,
     });
 }

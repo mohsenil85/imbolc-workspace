@@ -539,6 +539,9 @@ pub(crate) fn handle_global_action(
                 pending_audio_dirty.merge(r.audio_dirty);
                 apply_dispatch_result(r, dispatcher, panes, app_frame, audio);
             }
+            GlobalActionId::RequestPrivilege => {
+                // No-op in standalone mode (handled in network client loop)
+            }
         },
         _ => return GlobalResult::NotHandled,
     }

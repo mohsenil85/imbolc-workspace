@@ -130,6 +130,23 @@ impl Default for OwnershipDisplayStatus {
     }
 }
 
+/// Connection status for network mode display.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum NetworkConnectionStatus {
+    #[default]
+    Connected,
+    Reconnecting,
+    Disconnected,
+}
+
+/// Display info for a connected client.
+#[derive(Debug, Clone)]
+pub struct ClientDisplayInfo {
+    pub name: String,
+    pub is_privileged: bool,
+    pub owned_instrument_count: usize,
+}
+
 /// Network collaboration context for UI display.
 #[derive(Debug, Clone, Default)]
 pub struct NetworkDisplayContext {
@@ -139,6 +156,12 @@ pub struct NetworkDisplayContext {
     pub is_privileged: bool,
     /// Name of the privileged client (if any).
     pub privileged_client_name: Option<String>,
+    /// Current connection status.
+    pub connection_status: NetworkConnectionStatus,
+    /// This client's name.
+    pub client_name: String,
+    /// All connected clients.
+    pub connected_clients: Vec<ClientDisplayInfo>,
 }
 
 impl IoGeneration {

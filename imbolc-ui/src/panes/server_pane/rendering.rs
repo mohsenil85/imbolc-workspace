@@ -116,6 +116,59 @@ impl ServerPane {
             }
         }
 
+        // Network section (only in network mode)
+        if let Some(ref net) = state.network {
+            use crate::state::NetworkConnectionStatus;
+            let section_style = Style::new().fg(Color::DARK_GRAY);
+            buf.draw_line(Rect::new(x, y, w, 1), &[("── Network ──", section_style)]);
+            y += 1;
+
+            let (status_text, status_color) = match net.connection_status {
+                NetworkConnectionStatus::Connected => ("Connected", Color::METER_LOW),
+                NetworkConnectionStatus::Reconnecting => ("Reconnecting...", Color::SOLO_COLOR),
+                NetworkConnectionStatus::Disconnected => ("Disconnected", Color::MUTE_COLOR),
+            };
+            buf.draw_line(
+                Rect::new(x, y, w, 1),
+                &[("Status:     ", label_style), (status_text, Style::new().fg(status_color).bold())],
+            );
+            y += 1;
+
+            if let Some(ref priv_name) = net.privileged_client_name {
+                buf.draw_line(
+                    Rect::new(x, y, w, 1),
+                    &[("Privilege:  ", label_style), (priv_name, Style::new().fg(Color::METER_LOW))],
+                );
+            } else {
+                buf.draw_line(
+                    Rect::new(x, y, w, 1),
+                    &[("Privilege:  ", label_style), ("(none)", Style::new().fg(Color::DARK_GRAY))],
+                );
+            }
+            y += 1;
+
+            if !net.connected_clients.is_empty() {
+                buf.draw_line(Rect::new(x, y, w, 1), &[("Clients:", label_style)]);
+                y += 1;
+                for client in &net.connected_clients {
+                    if y >= rect.y + rect.height - 2 {
+                        break;
+                    }
+                    let priv_marker = if client.is_privileged { " [P]" } else { "" };
+                    let info = format!(
+                        "  {} ({} instr){}",
+                        client.name, client.owned_instrument_count, priv_marker
+                    );
+                    buf.draw_line(
+                        Rect::new(x, y, w, 1),
+                        &[(&info, Style::new().fg(Color::WHITE))],
+                    );
+                    y += 1;
+                }
+            }
+            y += 1;
+        }
+
         // Diagnostics section
         buf.draw_line(
             Rect::new(x, y, w, 1),

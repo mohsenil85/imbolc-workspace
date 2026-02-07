@@ -118,6 +118,16 @@ pub struct NetworkState {
     pub privileged_client: Option<(ClientId, String)>,
 }
 
+/// A partial state update containing only changed subsystems.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StatePatch {
+    pub session: Option<SessionState>,
+    pub instruments: Option<InstrumentState>,
+    pub ownership: Option<HashMap<InstrumentId, OwnerInfo>>,
+    pub privileged_client: Option<Option<(ClientId, String)>>,
+    pub seq: u64,
+}
+
 /// Messages sent from client to server.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ClientMessage {
@@ -135,10 +145,14 @@ pub enum ClientMessage {
     Action(NetworkAction),
     /// Clean disconnection.
     Goodbye,
-    /// Keepalive ping.
+    /// Keepalive ping (client-initiated).
     Ping,
+    /// Response to server-initiated heartbeat ping.
+    Pong,
     /// Request privileged status.
     RequestPrivilege,
+    /// Request a full state sync (desync recovery).
+    RequestFullSync,
 }
 
 /// Messages sent from server to clients.
@@ -167,7 +181,9 @@ pub enum ServerMessage {
     },
     /// Server is shutting down.
     Shutdown,
-    /// Response to Ping.
+    /// Server-initiated heartbeat ping.
+    Ping,
+    /// Response to client-initiated Ping.
     Pong,
     /// Error message.
     Error { message: String },
@@ -187,4 +203,8 @@ pub enum ServerMessage {
     },
     /// Reconnection failed (token expired or invalid).
     ReconnectFailed { reason: String },
+    /// Partial state update (only changed subsystems).
+    StatePatchUpdate { patch: StatePatch },
+    /// Full state sync (periodic fallback or on request).
+    FullStateSync { state: NetworkState, seq: u64 },
 }

@@ -170,6 +170,16 @@ impl Frame {
             cursor = inst_start;
         }
 
+        // PRIV indicator (when privileged in network mode)
+        if let Some(ref net) = state.network {
+            if net.is_privileged {
+                let priv_text = " PRIV ";
+                let priv_start = cursor.saturating_sub(priv_text.len() as u16);
+                buf.draw_str(priv_start, area.y, priv_text, Style::new().fg(Color::METER_LOW).bold());
+                cursor = priv_start;
+            }
+        }
+
         // Help hint (leftmost right-aligned item)
         let help_hint = " ? ";
         let help_start = cursor.saturating_sub(help_hint.len() as u16);
@@ -246,7 +256,7 @@ impl Frame {
 
             let label_style = Style::new().fg(Color::GRAY);
 
-            // Draw from right to left: "● SC  ● MIDI "
+            // Draw from right to left: "● NET  ● SC  ● MIDI "
             // MIDI indicator
             let midi_label = " MIDI ";
             let midi_label_x = right_edge.saturating_sub(midi_label.len() as u16);
@@ -260,6 +270,21 @@ impl Frame {
             buf.draw_str(sc_label_x, bottom_y, sc_label, label_style);
             let sc_dot_x = sc_label_x.saturating_sub(1);
             buf.set_cell(sc_dot_x, bottom_y, '●', Style::new().fg(sc_dot_color));
+
+            // NET indicator (only when in network mode)
+            if let Some(ref net) = state.network {
+                use crate::state::NetworkConnectionStatus;
+                let net_dot_color = match net.connection_status {
+                    NetworkConnectionStatus::Connected => Color::METER_LOW,
+                    NetworkConnectionStatus::Reconnecting => Color::SOLO_COLOR,
+                    NetworkConnectionStatus::Disconnected => Color::MUTE_COLOR,
+                };
+                let net_label = " NET  ";
+                let net_label_x = sc_dot_x.saturating_sub(net_label.len() as u16);
+                buf.draw_str(net_label_x, bottom_y, net_label, label_style);
+                let net_dot_x = net_label_x.saturating_sub(1);
+                buf.set_cell(net_dot_x, bottom_y, '●', Style::new().fg(net_dot_color));
+            }
         }
     }
 

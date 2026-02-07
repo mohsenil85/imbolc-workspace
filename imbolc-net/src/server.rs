@@ -4,7 +4,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::io::{self, BufReader, BufWriter};
-use std::net::{TcpListener, TcpStream};
+use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 use std::time::Instant;
@@ -16,7 +16,7 @@ use imbolc_types::InstrumentId;
 use crate::framing::{read_message, write_message};
 use crate::protocol::{
     ClientId, ClientMessage, NetworkAction, NetworkState, OwnerInfo,
-    PrivilegeLevel, ServerMessage, SessionToken,
+    PrivilegeLevel, ServerMessage, SessionToken, StatePatch,
 };
 
 /// A connected client with its write half.
@@ -27,6 +27,8 @@ struct ClientConnection {
     owned_instruments: HashSet<InstrumentId>,
     /// Session token for reconnection.
     session_token: SessionToken,
+    /// Last time we received any message from this client.
+    last_seen: Instant,
 }
 
 /// A suspended session awaiting reconnection.
@@ -39,6 +41,57 @@ struct SuspendedSession {
 
 /// How long to keep a suspended session before expiring it.
 const RECONNECT_WINDOW_SECS: u64 = 60;
+
+/// Tracks which subsystems have changed since last broadcast.
+#[derive(Debug, Default)]
+pub struct DirtyFlags {
+    pub session: bool,
+    pub instruments: bool,
+    pub ownership: bool,
+    pub privileged_client: bool,
+}
+
+impl DirtyFlags {
+    /// Mark dirty flags based on the action variant.
+    pub fn mark_from_action(&mut self, action: &NetworkAction) {
+        match action {
+            NetworkAction::Instrument(_)
+            | NetworkAction::Sequencer(_)
+            | NetworkAction::VstParam(_) => {
+                self.instruments = true;
+            }
+            NetworkAction::PianoRoll(_)
+            | NetworkAction::Arrangement(_)
+            | NetworkAction::Automation(_)
+            | NetworkAction::Session(_)
+            | NetworkAction::Server(_)
+            | NetworkAction::Bus(_)
+            | NetworkAction::Chopper(_) => {
+                self.session = true;
+            }
+            NetworkAction::Mixer(_) | NetworkAction::Midi(_) => {
+                self.session = true;
+                self.instruments = true;
+            }
+            NetworkAction::Undo | NetworkAction::Redo => {
+                self.session = true;
+                self.instruments = true;
+            }
+            NetworkAction::None | NetworkAction::Quit => {}
+        }
+    }
+
+    fn any(&self) -> bool {
+        self.session || self.instruments || self.ownership || self.privileged_client
+    }
+
+    fn clear(&mut self) {
+        self.session = false;
+        self.instruments = false;
+        self.ownership = false;
+        self.privileged_client = false;
+    }
+}
 
 impl ClientConnection {
     fn send(&mut self, msg: &ServerMessage) -> io::Result<()> {
@@ -68,6 +121,16 @@ pub struct NetServer {
     privileged_client: Option<ClientId>,
     /// Suspended sessions awaiting reconnection.
     suspended_sessions: HashMap<SessionToken, SuspendedSession>,
+    /// Last time we sent heartbeat pings.
+    last_heartbeat: Instant,
+    /// Dirty flags for state diffing.
+    dirty: DirtyFlags,
+    /// Sequence number for state patches.
+    seq: u64,
+    /// Force a full sync on next broadcast.
+    force_full_sync: bool,
+    /// Last time a full sync was sent.
+    last_full_sync: Instant,
 }
 
 impl NetServer {
@@ -90,6 +153,11 @@ impl NetServer {
             ownership: HashMap::new(),
             privileged_client: None,
             suspended_sessions: HashMap::new(),
+            last_heartbeat: Instant::now(),
+            dirty: DirtyFlags::default(),
+            seq: 0,
+            force_full_sync: false,
+            last_full_sync: Instant::now(),
         })
     }
 
@@ -99,6 +167,13 @@ impl NetServer {
             match self.listener.accept() {
                 Ok((stream, addr)) => {
                     info!("Client connecting from {}", addr);
+
+                    // Accepted streams may inherit nonblocking from the listener (macOS/BSD).
+                    // The reader thread needs blocking I/O.
+                    if let Err(e) = stream.set_nonblocking(false) {
+                        error!("Failed to set stream to blocking: {}", e);
+                        continue;
+                    }
 
                     let client_id = ClientId::new(self.next_client_id);
                     self.next_client_id += 1;
@@ -143,10 +218,12 @@ impl NetServer {
     pub fn poll_actions(&mut self, state: &NetworkState) -> Vec<(ClientId, NetworkAction)> {
         let mut actions = Vec::new();
 
-        // Clean up expired suspended sessions
-        self.cleanup_expired_sessions();
-
         while let Ok((client_id, msg)) = self.action_rx.try_recv() {
+            // Update last_seen for any message from a connected client
+            if let Some(client) = self.clients.get_mut(&client_id) {
+                client.last_seen = Instant::now();
+            }
+
             match msg {
                 ClientMessage::Hello {
                     client_name,
@@ -188,6 +265,7 @@ impl NetServer {
                                     writer: pending.writer,
                                     owned_instruments: suspended.owned_instruments,
                                     session_token,
+                                    last_seen: Instant::now(),
                                 });
 
                                 info!("Client {:?} reconnected successfully", client_id);
@@ -254,6 +332,7 @@ impl NetServer {
                             writer: pending.writer,
                             owned_instruments: granted.iter().copied().collect(),
                             session_token,
+                            last_seen: Instant::now(),
                         });
 
                         info!(
@@ -293,8 +372,16 @@ impl NetServer {
                         }
                     }
                 }
+                ClientMessage::Pong => {
+                    // Client responded to server heartbeat — last_seen updated below
+                }
                 ClientMessage::RequestPrivilege => {
                     self.handle_privilege_request(client_id);
+                }
+                ClientMessage::RequestFullSync => {
+                    // Will be handled by the caller (server loop sends full state)
+                    info!("Client {:?} requested full sync", client_id);
+                    self.force_full_sync = true;
                 }
             }
         }
@@ -369,6 +456,45 @@ impl NetServer {
                 client.owned_instruments.len()
             );
         }
+    }
+
+    /// Heartbeat tick: ping clients, detect dead connections, clean up expired sessions.
+    /// Call this from the main loop (e.g. at ~30Hz or on each iteration).
+    pub fn tick_heartbeat(&mut self) {
+        let now = Instant::now();
+
+        // Send pings every 5 seconds
+        if now.duration_since(self.last_heartbeat).as_secs() >= 5 {
+            self.last_heartbeat = now;
+
+            // Collect dead clients (no response for 15s = 3 missed beats)
+            let dead: Vec<ClientId> = self.clients
+                .iter()
+                .filter(|(_, c)| now.duration_since(c.last_seen).as_secs() > 15)
+                .map(|(&id, _)| id)
+                .collect();
+
+            for id in dead {
+                warn!("Client {:?} timed out (no heartbeat response), suspending", id);
+                self.suspend_client(id);
+            }
+
+            // Ping remaining clients
+            let ping = ServerMessage::Ping;
+            let mut disconnected = Vec::new();
+            for (&id, client) in &mut self.clients {
+                if let Err(e) = client.send(&ping) {
+                    warn!("Failed to ping client {:?}: {}", id, e);
+                    disconnected.push(id);
+                }
+            }
+            for id in disconnected {
+                self.suspend_client(id);
+            }
+        }
+
+        // Clean up expired suspended sessions
+        self.cleanup_expired_sessions();
     }
 
     /// Clean up expired suspended sessions.
@@ -480,7 +606,74 @@ impl NetServer {
         self.ownership.get(&instrument_id).copied()
     }
 
-    /// Broadcast a state update to all connected clients.
+    /// Mark dirty flags for a dispatched action.
+    pub fn mark_dirty(&mut self, action: &NetworkAction) {
+        self.dirty.mark_from_action(action);
+    }
+
+    /// Mark ownership as dirty (call on connect/disconnect).
+    pub fn mark_ownership_dirty(&mut self) {
+        self.dirty.ownership = true;
+        self.dirty.privileged_client = true;
+    }
+
+    /// Broadcast only changed subsystems as a patch.
+    pub fn broadcast_state_patch(&mut self, state: &NetworkState) {
+        if !self.dirty.any() {
+            return;
+        }
+
+        self.seq += 1;
+
+        let patch = StatePatch {
+            session: if self.dirty.session {
+                Some(state.session.clone())
+            } else {
+                None
+            },
+            instruments: if self.dirty.instruments {
+                Some(state.instruments.clone())
+            } else {
+                None
+            },
+            ownership: if self.dirty.ownership {
+                Some(state.ownership.clone())
+            } else {
+                None
+            },
+            privileged_client: if self.dirty.privileged_client {
+                Some(state.privileged_client.clone())
+            } else {
+                None
+            },
+            seq: self.seq,
+        };
+
+        let msg = ServerMessage::StatePatchUpdate { patch };
+        self.broadcast(&msg);
+        self.dirty.clear();
+    }
+
+    /// Broadcast full state to all clients (periodic fallback).
+    pub fn broadcast_full_sync(&mut self, state: &NetworkState) {
+        self.seq += 1;
+        let msg = ServerMessage::FullStateSync {
+            state: state.clone(),
+            seq: self.seq,
+        };
+        self.broadcast(&msg);
+        self.dirty.clear();
+        self.last_full_sync = Instant::now();
+        self.force_full_sync = false;
+    }
+
+    /// Check if a full sync should be sent (every 30s or on request).
+    pub fn needs_full_sync(&self) -> bool {
+        self.force_full_sync
+            || Instant::now().duration_since(self.last_full_sync).as_secs() >= 30
+    }
+
+    /// Broadcast a state update to all connected clients (legacy full broadcast).
     pub fn broadcast_state(&mut self, state: &NetworkState) {
         let msg = ServerMessage::StateUpdate {
             state: state.clone(),
@@ -506,6 +699,16 @@ impl NetServer {
     /// Get the number of connected clients.
     pub fn client_count(&self) -> usize {
         self.clients.len()
+    }
+
+    /// Get the number of pending (not yet handshaked) connections.
+    pub fn pending_count(&self) -> usize {
+        self.pending.len()
+    }
+
+    /// Get the local address the server is bound to.
+    pub fn local_addr(&self) -> io::Result<SocketAddr> {
+        self.listener.local_addr()
     }
 
     /// Build the ownership map for NetworkState.
@@ -541,9 +744,9 @@ impl NetServer {
             }
         }
 
-        // Remove disconnected clients
+        // Suspend disconnected clients (preserves ownership for reconnection)
         for id in disconnected {
-            self.clients.remove(&id);
+            self.suspend_client(id);
         }
     }
 }
