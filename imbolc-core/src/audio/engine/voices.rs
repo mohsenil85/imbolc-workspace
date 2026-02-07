@@ -594,15 +594,23 @@ impl AudioEngine {
     }
 
     /// Free a voice with a brief anti-click fade: send gate=0, then /n_free after 5ms.
-    /// For already-released voices, skip gate=0 (already fading) and free immediately.
+    /// For already-released voices, skip gate=0 (already fading) but still delay the free.
     fn anti_click_free(
         backend: &dyn AudioBackend,
         voice: &VoiceChain,
     ) -> Result<(), String> {
         if voice.release_state.is_some() {
-            // Already releasing -- just free immediately (deferred /n_free already scheduled,
-            // but SC silently ignores double-frees)
-            backend.free_node(voice.group_id).map_err(|e| e.to_string())?;
+            // Already releasing -- use delayed free to avoid cutting the release tail
+            // (the scheduled /n_free may not have executed yet if voice is being stolen)
+            backend
+                .send_bundle(
+                    vec![BackendMessage {
+                        addr: "/n_free".to_string(),
+                        args: vec![RawArg::Int(voice.group_id)],
+                    }],
+                    0.005,
+                )
+                .map_err(|e| e.to_string())?;
         } else {
             // Active voice: send gate=0 for a brief fade, then free after 5ms
             backend
