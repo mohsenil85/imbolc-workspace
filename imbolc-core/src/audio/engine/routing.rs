@@ -2,7 +2,7 @@ use super::AudioEngine;
 use super::{InstrumentNodes, GROUP_SOURCES, GROUP_PROCESSING, GROUP_OUTPUT, VST_UGEN_INDEX};
 use super::backend::RawArg;
 use std::collections::HashMap;
-use crate::state::{CustomSynthDefRegistry, EffectId, EffectType, FilterType, Instrument, InstrumentId, InstrumentState, ParameterTarget, ParamValue, SessionState, SourceType, SourceTypeExt};
+use crate::state::{CustomSynthDefRegistry, EffectId, EffectType, FilterType, Instrument, InstrumentId, InstrumentState, ParameterTarget, ParamValue, SendTapPoint, SessionState, SourceType, SourceTypeExt};
 
 impl AudioEngine {
     pub(super) fn source_synth_def(source: SourceType, registry: &CustomSynthDefRegistry, mono: bool) -> String {
@@ -377,7 +377,7 @@ impl AudioEngine {
         &mut self,
         instrument: &Instrument,
     ) -> Result<(), String> {
-        let instrument_audio_bus = self.bus_allocator.get_audio_bus(instrument.id, "source_out").unwrap_or(16);
+        let source_out_bus = self.bus_allocator.get_audio_bus(instrument.id, "source_out").unwrap_or(16);
         let is_mono = instrument.channel_config.is_mono();
 
         let send_lfo_bus = if instrument.lfo.enabled && matches!(instrument.lfo.target, ParameterTarget::SendLevel(_)) {
@@ -393,10 +393,18 @@ impl AudioEngine {
                 continue;
             }
             if let Some(&bus_audio) = self.bus_audio_buses.get(&send.bus_id) {
+                let tap_bus = match send.tap_point {
+                    SendTapPoint::PreInsert => source_out_bus,
+                    SendTapPoint::PostInsert => {
+                        self.instrument_final_buses.get(&instrument.id)
+                            .copied()
+                            .unwrap_or(source_out_bus)
+                    }
+                };
                 let node_id = self.next_node_id;
                 self.next_node_id += 1;
                 let mut params = vec![
-                    ("in".to_string(), instrument_audio_bus as f32),
+                    ("in".to_string(), tap_bus as f32),
                     ("out".to_string(), bus_audio as f32),
                     ("level".to_string(), send.level),
                 ];

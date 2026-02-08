@@ -1,7 +1,7 @@
 use rusqlite::{Connection, Result as SqlResult};
 
 /// Schema version for the relational format.
-pub const SCHEMA_VERSION: i32 = 7;
+pub const SCHEMA_VERSION: i32 = 8;
 
 /// Create all tables for the relational schema.
 pub fn create_tables(conn: &Connection) -> SqlResult<()> {
@@ -178,6 +178,7 @@ CREATE TABLE IF NOT EXISTS instrument_sends (
     bus_id INTEGER NOT NULL,
     level REAL NOT NULL,
     enabled INTEGER NOT NULL,
+    tap_point TEXT NOT NULL DEFAULT 'PostInsert',
     PRIMARY KEY (instrument_id, bus_id)
 );
 
@@ -272,6 +273,7 @@ CREATE TABLE IF NOT EXISTS layer_group_sends (
     bus_id INTEGER NOT NULL,
     level REAL NOT NULL,
     enabled INTEGER NOT NULL,
+    tap_point TEXT NOT NULL DEFAULT 'PostInsert',
     PRIMARY KEY (group_id, bus_id)
 );
 

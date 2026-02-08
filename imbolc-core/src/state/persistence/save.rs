@@ -253,9 +253,9 @@ fn save_instruments(conn: &Connection, instruments: &InstrumentState) -> SqlResu
         // Sends
         for send in &inst.sends {
             conn.execute(
-                "INSERT INTO instrument_sends (instrument_id, bus_id, level, enabled)
-                 VALUES (?1, ?2, ?3, ?4)",
-                params![inst.id, send.bus_id, send.level, send.enabled as i32],
+                "INSERT INTO instrument_sends (instrument_id, bus_id, level, enabled, tap_point)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![inst.id, send.bus_id, send.level, send.enabled as i32, encode_tap_point(send.tap_point)],
             )?;
         }
 
@@ -587,9 +587,9 @@ fn save_layer_group_mixers(conn: &Connection, session: &SessionState) -> SqlResu
 
         for send in &gm.sends {
             conn.execute(
-                "INSERT INTO layer_group_sends (group_id, bus_id, level, enabled)
-                 VALUES (?1, ?2, ?3, ?4)",
-                params![gm.group_id as i32, send.bus_id as i32, send.level, send.enabled as i32],
+                "INSERT INTO layer_group_sends (group_id, bus_id, level, enabled, tap_point)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![gm.group_id as i32, send.bus_id as i32, send.level, send.enabled as i32, encode_tap_point(send.tap_point)],
             )?;
         }
     }
@@ -889,6 +889,14 @@ fn encode_effect_type(effect: &crate::state::instrument::EffectType) -> String {
     match effect {
         EffectType::Vst(id) => format!("Vst:{}", id),
         other => format!("{:?}", other),
+    }
+}
+
+fn encode_tap_point(tap_point: crate::state::instrument::SendTapPoint) -> &'static str {
+    use crate::state::instrument::SendTapPoint;
+    match tap_point {
+        SendTapPoint::PreInsert => "PreInsert",
+        SendTapPoint::PostInsert => "PostInsert",
     }
 }
 

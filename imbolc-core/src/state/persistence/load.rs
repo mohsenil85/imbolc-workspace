@@ -233,14 +233,24 @@ fn load_layer_group_mixers(conn: &Connection, session: &mut SessionState) -> Sql
         let output_target = decode_output_target(&output_target_str);
 
         // Load sends
-        let mut send_stmt = conn.prepare(
+        let has_group_tap_point = conn.prepare("SELECT tap_point FROM layer_group_sends LIMIT 0").is_ok();
+        let group_send_query = if has_group_tap_point {
+            "SELECT bus_id, level, enabled, tap_point FROM layer_group_sends WHERE group_id = ?1 ORDER BY bus_id"
+        } else {
             "SELECT bus_id, level, enabled FROM layer_group_sends WHERE group_id = ?1 ORDER BY bus_id"
-        )?;
+        };
+        let mut send_stmt = conn.prepare(group_send_query)?;
         let sends: Vec<MixerSend> = send_stmt.query_map(params![group_id as i32], |row| {
+            let tap_point = if has_group_tap_point {
+                decode_tap_point(&row.get::<_, String>(3)?)
+            } else {
+                Default::default()
+            };
             Ok(MixerSend {
                 bus_id: row.get::<_, i32>(0)? as u8,
                 level: row.get(1)?,
                 enabled: row.get::<_, i32>(2)? != 0,
+                tap_point,
             })
         })?.collect::<SqlResult<_>>()?;
 
@@ -803,14 +813,25 @@ fn load_effect_params(conn: &Connection, instrument_id: u32, effect_id: u32) -> 
 fn load_sends(conn: &Connection, instrument_id: u32) -> SqlResult<Vec<crate::state::instrument::MixerSend>> {
     use crate::state::instrument::MixerSend;
 
-    let mut stmt = conn.prepare(
+    // Try with tap_point column first; fall back for old schemas
+    let has_tap_point = conn.prepare("SELECT tap_point FROM instrument_sends LIMIT 0").is_ok();
+    let query = if has_tap_point {
+        "SELECT bus_id, level, enabled, tap_point FROM instrument_sends WHERE instrument_id = ?1 ORDER BY bus_id"
+    } else {
         "SELECT bus_id, level, enabled FROM instrument_sends WHERE instrument_id = ?1 ORDER BY bus_id"
-    )?;
+    };
+    let mut stmt = conn.prepare(query)?;
     let sends: Vec<MixerSend> = stmt.query_map(params![instrument_id], |row| {
+        let tap_point = if has_tap_point {
+            decode_tap_point(&row.get::<_, String>(3)?)
+        } else {
+            Default::default()
+        };
         Ok(MixerSend {
             bus_id: row.get::<_, i32>(0)? as u8,
             level: row.get(1)?,
             enabled: row.get::<_, i32>(2)? != 0,
+            tap_point,
         })
     })?.collect::<SqlResult<_>>()?;
 
@@ -1559,6 +1580,14 @@ fn decode_output_target(s: &str) -> crate::state::instrument::OutputTarget {
         }
     }
     OutputTarget::Master
+}
+
+fn decode_tap_point(s: &str) -> crate::state::instrument::SendTapPoint {
+    use crate::state::instrument::SendTapPoint;
+    match s {
+        "PreInsert" => SendTapPoint::PreInsert,
+        _ => SendTapPoint::PostInsert,
+    }
 }
 
 fn decode_channel_config(s: &str) -> imbolc_types::ChannelConfig {

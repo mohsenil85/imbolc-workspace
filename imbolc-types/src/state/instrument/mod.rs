@@ -72,11 +72,39 @@ impl Default for OutputTarget {
     }
 }
 
+/// Where a send taps the instrument signal chain.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum SendTapPoint {
+    /// Before filter and effects
+    PreInsert,
+    /// After all insert effects, before fader (industry-standard "pre-fader send")
+    #[default]
+    PostInsert,
+}
+
+impl SendTapPoint {
+    pub fn cycle(&self) -> Self {
+        match self {
+            SendTapPoint::PreInsert => SendTapPoint::PostInsert,
+            SendTapPoint::PostInsert => SendTapPoint::PreInsert,
+        }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            SendTapPoint::PreInsert => "PRE",
+            SendTapPoint::PostInsert => "POST",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MixerSend {
     pub bus_id: u8,
     pub level: f32,
     pub enabled: bool,
+    #[serde(default)]
+    pub tap_point: SendTapPoint,
 }
 
 impl MixerSend {
@@ -85,6 +113,7 @@ impl MixerSend {
             bus_id,
             level: 0.0,
             enabled: false,
+            tap_point: SendTapPoint::default(),
         }
     }
 }

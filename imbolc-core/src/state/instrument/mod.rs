@@ -6,7 +6,7 @@ pub use imbolc_types::{
     instrument_row_count, instrument_row_info, instrument_section_for_row, EnvConfig, EqBand,
     EqBandType, EqConfig, FilterConfig, FilterType, GrooveConfig, Instrument, InstrumentSection,
     LfoConfig, LfoShape, MixerBus, MixerSend, ModSource, ModulatedParam, OutputTarget, ParameterTarget,
-    SwingGrid,
+    SendTapPoint, SwingGrid,
 };
 
 // Re-export from local modules (adds extension traits)

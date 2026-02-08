@@ -377,6 +377,7 @@ pub enum MixerAction {
     CycleOutputReverse,
     AdjustSend(u8, f32),
     ToggleSend(u8),
+    CycleSendTapPoint(u8),
     AdjustPan(f32),
 }
 

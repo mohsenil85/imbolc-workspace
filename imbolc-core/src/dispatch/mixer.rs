@@ -182,9 +182,31 @@ pub(super) fn dispatch_mixer(
         }
         MixerAction::CycleOutput => {
             state.mixer_cycle_output();
+            match state.session.mixer.selection {
+                MixerSelection::Instrument(idx) => {
+                    if let Some(inst) = state.instruments.instruments.get(idx) {
+                        result.audio_dirty.routing_instrument = Some(inst.id);
+                    }
+                }
+                MixerSelection::LayerGroup(_) => {
+                    result.audio_dirty.routing = true;
+                }
+                _ => {}
+            }
         }
         MixerAction::CycleOutputReverse => {
             state.mixer_cycle_output_reverse();
+            match state.session.mixer.selection {
+                MixerSelection::Instrument(idx) => {
+                    if let Some(inst) = state.instruments.instruments.get(idx) {
+                        result.audio_dirty.routing_instrument = Some(inst.id);
+                    }
+                }
+                MixerSelection::LayerGroup(_) => {
+                    result.audio_dirty.routing = true;
+                }
+                _ => {}
+            }
         }
         MixerAction::AdjustSend(bus_id, delta) => {
             let bus_id = *bus_id;
@@ -288,6 +310,30 @@ pub(super) fn dispatch_mixer(
                             if send.enabled && send.level <= 0.0 {
                                 send.level = 0.5;
                             }
+                            result.audio_dirty.session = true;
+                            result.audio_dirty.routing = true;
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        MixerAction::CycleSendTapPoint(bus_id) => {
+            let bus_id = *bus_id;
+            match state.session.mixer.selection {
+                MixerSelection::Instrument(idx) => {
+                    if let Some(instrument) = state.instruments.instruments.get_mut(idx) {
+                        if let Some(send) = instrument.sends.iter_mut().find(|s| s.bus_id == bus_id) {
+                            send.tap_point = send.tap_point.cycle();
+                            result.audio_dirty.instruments = true;
+                            result.audio_dirty.routing_instrument = Some(instrument.id);
+                        }
+                    }
+                }
+                MixerSelection::LayerGroup(group_id) => {
+                    if let Some(gm) = state.session.mixer.layer_group_mixer_mut(group_id) {
+                        if let Some(send) = gm.sends.iter_mut().find(|s| s.bus_id == bus_id) {
+                            send.tap_point = send.tap_point.cycle();
                             result.audio_dirty.session = true;
                             result.audio_dirty.routing = true;
                         }
