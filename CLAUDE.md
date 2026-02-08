@@ -92,10 +92,15 @@ All docs live at workspace root in `./docs/`:
 - [docs/custom-synthdef-plan.md](docs/custom-synthdef-plan.md) — custom SynthDef system
 - [docs/network-scenarios.md](docs/network-scenarios.md) — deployment scenarios (local, LAN, pro setup)
 
+## Scratch Space
+
+[SCRATCH.md](SCRATCH.md) is your working scratchpad. Feel free to overwrite it with whatever you need — notes, analysis, intermediate results, code sketches. It's yours to use as additional thinking space.
+
 ## Task Tracking
 
 - [TASKS.md](TASKS.md) — current bugs, features, and refactors
 - [TASKS_DONE.md](TASKS_DONE.md) — completed work history
+- [TASKS_ARCH.md](TASKS_ARCH.md) — architecture-level tasks (from `plans/questions.md`)
 
 ## Plans
 
