@@ -546,6 +546,10 @@ pub(crate) fn handle_global_action(
                 pending_audio_dirty.merge(r.audio_dirty);
                 apply_dispatch_result(r, dispatcher, panes, app_frame, audio);
             }
+            GlobalActionId::OpenCheckpointList => {
+                panes.push_to("checkpoint_list", dispatcher.state());
+                sync_pane_layer(panes, layer_stack);
+            }
             GlobalActionId::RequestPrivilege => {
                 // No-op in standalone mode (handled in network client loop)
             }

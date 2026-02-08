@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 imbolc-types = { path = "../imbolc-types" }
 log = "0.4"
-rusqlite = { version = "0.31", features = ["bundled"] }
+rusqlite = { version = "0.31", features = ["bundled", "session", "buildtime_bindgen"] }
 rosc = "0.10"
 midir = "0.9"
 regex = "1"
@@ -23,3 +23,6 @@ cpal = "0.15"
 
 [dev-dependencies]
 tempfile = "3"
+
+[dependencies.tempfile]
+version = "3"

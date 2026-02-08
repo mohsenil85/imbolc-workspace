@@ -84,6 +84,7 @@ pub enum GlobalActionId {
     PaneSwitcher,
     CycleTheme,
     RequestPrivilege,
+    OpenCheckpointList,
     SwitchPane(PaneId),
     SelectInstrument(u8), // 1-10
 }
@@ -123,6 +124,7 @@ impl GlobalActionId {
             GlobalActionId::PaneSwitcher => "pane_switcher",
             GlobalActionId::CycleTheme => "cycle_theme",
             GlobalActionId::RequestPrivilege => "request_privilege",
+            GlobalActionId::OpenCheckpointList => "open_checkpoint_list",
             GlobalActionId::SwitchPane(pane) => match pane {
                 PaneId::InstrumentEdit => "switch:instrument",
                 PaneId::InstrumentList => "switch:instrument_list",
@@ -187,6 +189,7 @@ impl GlobalActionId {
             "pane_switcher" => Some(GlobalActionId::PaneSwitcher),
             "cycle_theme" => Some(GlobalActionId::CycleTheme),
             "request_privilege" => Some(GlobalActionId::RequestPrivilege),
+            "open_checkpoint_list" => Some(GlobalActionId::OpenCheckpointList),
             "switch:instrument" => Some(GlobalActionId::SwitchPane(PaneId::InstrumentEdit)),
             "switch:instrument_list" => Some(GlobalActionId::SwitchPane(PaneId::InstrumentList)),
             "switch:piano_roll_or_sequencer" => {
@@ -754,6 +757,17 @@ define_action_enum! {
     }
 }
 
+define_action_enum! {
+    /// Checkpoint list layer actions
+    pub enum CheckpointListActionId {
+        Select => "select",
+        Close => "close",
+        Up => "up",
+        Down => "down",
+        Delete => "delete",
+    }
+}
+
 /// Top-level action identifier wrapping all layer-specific action enums
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ActionId {
@@ -781,6 +795,7 @@ pub enum ActionId {
     MidiSettings(MidiSettingsActionId),
     Confirm(ConfirmActionId),
     ProjectBrowser(ProjectBrowserActionId),
+    CheckpointList(CheckpointListActionId),
     Tuner(TunerActionId),
 }
 
@@ -811,6 +826,7 @@ impl ActionId {
             ActionId::MidiSettings(a) => a.as_str(),
             ActionId::Confirm(a) => a.as_str(),
             ActionId::ProjectBrowser(a) => a.as_str(),
+            ActionId::CheckpointList(a) => a.as_str(),
             ActionId::Tuner(a) => a.as_str(),
         }
     }
@@ -848,6 +864,9 @@ pub fn parse_action_id(layer: &str, action: &str) -> Option<ActionId> {
         "confirm" => ConfirmActionId::from_str(action).map(ActionId::Confirm),
         "project_browser" => {
             ProjectBrowserActionId::from_str(action).map(ActionId::ProjectBrowser)
+        }
+        "checkpoint_list" => {
+            CheckpointListActionId::from_str(action).map(ActionId::CheckpointList)
         }
         "piano_mode" | "pad_mode" | "text_edit" | "command_palette" | "pane_switcher" => {
             ModeActionId::from_str(action).map(ActionId::Mode)

@@ -272,6 +272,48 @@ pub(super) fn dispatch_session(
             };
             result.push_status(audio.status(), &format!("Theme: {}", state.session.theme.name));
         }
+        SessionAction::CreateCheckpoint(ref label) => {
+            let path = state.project.path.clone().unwrap_or_else(default_rack_path);
+            match crate::state::persistence::checkpoint::create_checkpoint(
+                &path,
+                label,
+                &state.session,
+                &state.instruments,
+            ) {
+                Ok(id) => {
+                    result.push_status(audio.status(), &format!("Checkpoint '{}' created ({})", label, id));
+                }
+                Err(e) => {
+                    result.push_status(audio.status(), &format!("Checkpoint failed: {}", e));
+                }
+            }
+        }
+        SessionAction::RestoreCheckpoint(checkpoint_id) => {
+            let path = state.project.path.clone().unwrap_or_else(default_rack_path);
+            match crate::state::persistence::checkpoint::restore_checkpoint(&path, *checkpoint_id) {
+                Ok((session, instruments)) => {
+                    state.session = session;
+                    state.instruments = instruments;
+                    state.undo_history.clear();
+                    result.audio_dirty = crate::action::AudioDirty::all();
+                    result.push_status(audio.status(), "Checkpoint restored");
+                }
+                Err(e) => {
+                    result.push_status(audio.status(), &format!("Restore failed: {}", e));
+                }
+            }
+        }
+        SessionAction::DeleteCheckpoint(checkpoint_id) => {
+            let path = state.project.path.clone().unwrap_or_else(default_rack_path);
+            match crate::state::persistence::checkpoint::delete_checkpoint(&path, *checkpoint_id) {
+                Ok(()) => {
+                    result.push_status(audio.status(), "Checkpoint deleted");
+                }
+                Err(e) => {
+                    result.push_status(audio.status(), &format!("Delete failed: {}", e));
+                }
+            }
+        }
     }
 
     result

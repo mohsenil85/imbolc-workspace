@@ -27,6 +27,7 @@ mod vst_param_pane;
 mod waveform_pane;
 mod pane_switcher_pane;
 mod tuner_pane;
+mod checkpoint_list_pane;
 
 pub use add_effect_pane::AddEffectPane;
 pub use add_pane::AddPane;
@@ -57,3 +58,4 @@ pub use vst_param_pane::VstParamPane;
 pub use waveform_pane::WaveformPane;
 pub use pane_switcher_pane::PaneSwitcherPane;
 pub use tuner_pane::TunerPane;
+pub use checkpoint_list_pane::CheckpointListPane;

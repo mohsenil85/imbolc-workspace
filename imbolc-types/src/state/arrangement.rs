@@ -370,6 +370,21 @@ impl ArrangementState {
         self.selected_placement = None;
     }
 
+    /// Get the next clip ID counter (for persistence)
+    pub fn next_clip_id(&self) -> ClipId {
+        self.next_clip_id
+    }
+
+    /// Get the next placement ID counter (for persistence)
+    pub fn next_placement_id(&self) -> PlacementId {
+        self.next_placement_id
+    }
+
+    /// Get the next clip automation lane ID counter (for persistence)
+    pub fn next_clip_automation_lane_id(&self) -> AutomationLaneId {
+        self.next_clip_automation_lane_id
+    }
+
     pub fn recalculate_next_ids(&mut self) {
         self.next_clip_id = self.clips.iter().map(|c| c.id).max().unwrap_or(0) + 1;
         self.next_placement_id = self.placements.iter().map(|p| p.id).max().unwrap_or(0) + 1;

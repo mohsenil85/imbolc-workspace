@@ -56,6 +56,7 @@ bindings = [
   { key = "Ctrl+L", action = "refresh_screen", description = "Refresh screen" },
   { key = "T", action = "cycle_theme", description = "Cycle UI theme" },
   { key = "Ctrl+p", action = "request_privilege", description = "Request network privilege" },
+  { key = "Ctrl+k", action = "open_checkpoint_list", description = "Checkpoint list" },
 ]
 
 [layers.instrument]
@@ -600,6 +601,17 @@ bindings = [
   { key = "Down", action = "down", description = "Next project" },
   { key = "k", action = "up", description = "Previous project" },
   { key = "j", action = "down", description = "Next project" },
+]
+
+[layers.checkpoint_list]
+bindings = [
+  { key = "Enter", action = "select", description = "Restore checkpoint" },
+  { key = "Escape", action = "close", description = "Close" },
+  { key = "Up", action = "up", description = "Previous" },
+  { key = "Down", action = "down", description = "Next" },
+  { key = "k", action = "up", description = "Previous" },
+  { key = "j", action = "down", description = "Next" },
+  { key = "d", action = "delete", description = "Delete checkpoint" },
 ]
 
 [layers.command_palette]

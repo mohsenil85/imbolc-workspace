@@ -398,6 +398,12 @@ pub enum SessionAction {
     ToggleMasterMute,
     /// Cycle through available themes (dark -> light -> high contrast)
     CycleTheme,
+    /// Create a named checkpoint (persistent restore point)
+    CreateCheckpoint(String),
+    /// Restore project state to a checkpoint
+    RestoreCheckpoint(i64),
+    /// Delete a checkpoint
+    DeleteCheckpoint(i64),
 }
 
 /// MIDI configuration actions.
