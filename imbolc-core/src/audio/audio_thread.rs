@@ -268,7 +268,8 @@ impl AudioThread {
             // Routing & mixing parameters
             RebuildRouting | RebuildInstrumentRouting { .. } | UpdateMixerParams |
             SetMasterParams { .. } | SetInstrumentMixerParams { .. } |
-            SetBusMixerParams { .. } | SetSourceParam { .. } | SetEqParam { .. } |
+            SetBusMixerParams { .. } | SetLayerGroupMixerParams { .. } |
+            SetSourceParam { .. } | SetEqParam { .. } |
             SetFilterParam { .. } | SetEffectParam { .. } | SetLfoParam { .. } |
             ApplyAutomation { .. } => self.handle_mixer_cmd(cmd),
 
@@ -482,6 +483,9 @@ impl AudioThread {
             }
             AudioCmd::SetBusMixerParams { bus_id, level, mute, pan } => {
                 let _ = self.engine.set_bus_mixer_params(bus_id, level, mute, pan);
+            }
+            AudioCmd::SetLayerGroupMixerParams { group_id, level, mute, pan } => {
+                let _ = self.engine.set_layer_group_mixer_params(group_id, level, mute, pan);
             }
             AudioCmd::SetSourceParam { instrument_id, param, value } => {
                 let _ = self.engine.set_source_param(instrument_id, &param, value);

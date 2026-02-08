@@ -324,8 +324,21 @@ impl AudioEngine {
                 -1.0
             };
 
+            // Determine output destination: layer group bus, mixer bus, or master (0)
+            let output_bus = if let Some(group_id) = instrument.layer_group {
+                self.layer_group_audio_buses.get(&group_id).copied().unwrap_or(0) as f32
+            } else {
+                match instrument.output_target {
+                    crate::state::instrument::OutputTarget::Bus(id) => {
+                        self.bus_audio_buses.get(&id).copied().unwrap_or(0) as f32
+                    }
+                    crate::state::instrument::OutputTarget::Master => 0.0,
+                }
+            };
+
             let params = vec![
                 ("in".to_string(), current_bus as f32),
+                ("out".to_string(), output_bus),
                 ("level".to_string(), instrument.level * session.mixer.master_level),
                 ("mute".to_string(), if mute { 1.0 } else { 0.0 }),
                 ("pan".to_string(), instrument.pan),
@@ -468,6 +481,12 @@ impl AudioEngine {
             for &node_id in self.bus_node_map.values() {
                 let _ = client.free_node(node_id);
             }
+            for &node_id in self.layer_group_node_map.values() {
+                let _ = client.free_node(node_id);
+            }
+            for &node_id in self.layer_group_send_node_map.values() {
+                let _ = client.free_node(node_id);
+            }
             for chain in self.voice_allocator.drain_all() {
                 let _ = client.free_node(chain.group_id);
             }
@@ -475,6 +494,9 @@ impl AudioEngine {
         self.node_map.clear();
         self.send_node_map.clear();
         self.bus_node_map.clear();
+        self.layer_group_audio_buses.clear();
+        self.layer_group_node_map.clear();
+        self.layer_group_send_node_map.clear();
         self.bus_audio_buses.clear();
         self.instrument_final_buses.clear();
         self.bus_allocator.reset();
@@ -487,6 +509,15 @@ impl AudioEngine {
                 "bus_out",
             );
             self.bus_audio_buses.insert(bus.id, bus_audio);
+        }
+
+        // Allocate audio buses for each active layer group
+        for group_id in state.active_layer_groups() {
+            let group_bus = self.bus_allocator.get_or_alloc_audio_bus(
+                u32::MAX - 256 - group_id,
+                "layer_group_out",
+            );
+            self.layer_group_audio_buses.insert(group_id, group_bus);
         }
 
         // Build signal chain for each instrument
@@ -522,6 +553,62 @@ impl AudioEngine {
                 }
                 self.node_registry.register(node_id);
                 self.bus_node_map.insert(bus.id, node_id);
+            }
+        }
+
+        // Create layer group output synths
+        for group_mixer in &session.mixer.layer_group_mixers {
+            if let Some(&group_bus) = self.layer_group_audio_buses.get(&group_mixer.group_id) {
+                let node_id = self.next_node_id;
+                self.next_node_id += 1;
+                let mute = session.mixer.effective_layer_group_mute(group_mixer);
+
+                // Group output destination
+                let group_out = match group_mixer.output_target {
+                    crate::state::instrument::OutputTarget::Bus(id) => {
+                        self.bus_audio_buses.get(&id).copied().unwrap_or(0) as f32
+                    }
+                    crate::state::instrument::OutputTarget::Master => 0.0,
+                };
+
+                let params = vec![
+                    ("in".to_string(), group_bus as f32),
+                    ("out".to_string(), group_out),
+                    ("level".to_string(), group_mixer.level),
+                    ("mute".to_string(), if mute { 1.0 } else { 0.0 }),
+                    ("pan".to_string(), group_mixer.pan),
+                ];
+                if let Some(ref client) = self.backend {
+                    client
+                        .create_synth("imbolc_bus_out", node_id, GROUP_OUTPUT, &params)
+                        .map_err(|e| e.to_string())?;
+                }
+                self.node_registry.register(node_id);
+                self.layer_group_node_map.insert(group_mixer.group_id, node_id);
+
+                // Create group-level sends
+                for send in &group_mixer.sends {
+                    if !send.enabled || send.level <= 0.0 {
+                        continue;
+                    }
+                    if let Some(&bus_audio) = self.bus_audio_buses.get(&send.bus_id) {
+                        let send_node_id = self.next_node_id;
+                        self.next_node_id += 1;
+                        let send_params = vec![
+                            ("in".to_string(), group_bus as f32),
+                            ("out".to_string(), bus_audio as f32),
+                            ("level".to_string(), send.level),
+                        ];
+                        if let Some(ref client) = self.backend {
+                            client
+                                .create_synth("imbolc_send", send_node_id, GROUP_OUTPUT, &send_params)
+                                .map_err(|e| e.to_string())?;
+                        }
+                        self.node_registry.register(send_node_id);
+                        self.layer_group_send_node_map
+                            .insert((group_mixer.group_id, send.bus_id), send_node_id);
+                    }
+                }
             }
         }
 
@@ -609,6 +696,18 @@ impl AudioEngine {
         let node_id = self.bus_node_map
             .get(&bus_id)
             .ok_or_else(|| format!("No bus output node for bus{}", bus_id))?;
+        client.set_param(*node_id, "level", level).map_err(|e| e.to_string())?;
+        client.set_param(*node_id, "mute", if mute { 1.0 } else { 0.0 }).map_err(|e| e.to_string())?;
+        client.set_param(*node_id, "pan", pan).map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    /// Set layer group output mixer params (level, mute, pan) in real-time
+    pub fn set_layer_group_mixer_params(&self, group_id: u32, level: f32, mute: bool, pan: f32) -> Result<(), String> {
+        let client = self.backend.as_ref().ok_or("Not connected")?;
+        let node_id = self.layer_group_node_map
+            .get(&group_id)
+            .ok_or_else(|| format!("No layer group output node for group {}", group_id))?;
         client.set_param(*node_id, "level", level).map_err(|e| e.to_string())?;
         client.set_param(*node_id, "mute", if mute { 1.0 } else { 0.0 }).map_err(|e| e.to_string())?;
         client.set_param(*node_id, "pan", pan).map_err(|e| e.to_string())?;

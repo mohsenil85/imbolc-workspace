@@ -86,6 +86,12 @@ pub enum AudioCmd {
         mute: bool,
         pan: f32,
     },
+    SetLayerGroupMixerParams {
+        group_id: u32,
+        level: f32,
+        mute: bool,
+        pan: f32,
+    },
     SetSourceParam {
         instrument_id: InstrumentId,
         param: String,

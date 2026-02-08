@@ -23,6 +23,7 @@ pub fn save_relational(
     save_theme(conn, session)?;
     save_instruments(conn, instruments)?;
     save_mixer(conn, session)?;
+    save_layer_group_mixers(conn, session)?;
     save_musical_settings(conn, session)?;
     save_piano_roll(conn, session)?;
     save_automation(conn, session)?;
@@ -569,6 +570,29 @@ fn save_mixer(conn: &Connection, session: &SessionState) -> SqlResult<()> {
         "INSERT INTO mixer_master (id, level, mute) VALUES (1, ?1, ?2)",
         params![session.mixer.master_level, session.mixer.master_mute as i32],
     )?;
+    Ok(())
+}
+
+fn save_layer_group_mixers(conn: &Connection, session: &SessionState) -> SqlResult<()> {
+    for gm in &session.mixer.layer_group_mixers {
+        let output_target = encode_output_target(&gm.output_target);
+        conn.execute(
+            "INSERT INTO layer_group_mixers (group_id, name, level, pan, mute, solo, output_target)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                gm.group_id as i32, gm.name, gm.level, gm.pan,
+                gm.mute as i32, gm.solo as i32, output_target,
+            ],
+        )?;
+
+        for send in &gm.sends {
+            conn.execute(
+                "INSERT INTO layer_group_sends (group_id, bus_id, level, enabled)
+                 VALUES (?1, ?2, ?3, ?4)",
+                params![gm.group_id as i32, send.bus_id as i32, send.level, send.enabled as i32],
+            )?;
+        }
+    }
     Ok(())
 }
 

@@ -13,6 +13,7 @@ pub fn load_relational(conn: &Connection) -> SqlResult<(SessionState, Instrument
     load_session(conn, &mut session, &mut instruments)?;
     load_theme(conn, &mut session)?;
     load_mixer(conn, &mut session)?;
+    load_layer_group_mixers(conn, &mut session)?;
     load_musical_settings(conn, &mut session)?;
     load_piano_roll(conn, &mut session)?;
     load_custom_synthdefs(conn, &mut session)?;
@@ -202,6 +203,57 @@ fn load_mixer(conn: &Connection, session: &mut SessionState) -> SqlResult<()> {
     if let Some((level, mute)) = result {
         session.mixer.master_level = level;
         session.mixer.master_mute = mute != 0;
+    }
+
+    Ok(())
+}
+
+fn load_layer_group_mixers(conn: &Connection, session: &mut SessionState) -> SqlResult<()> {
+    use imbolc_types::LayerGroupMixer;
+    use crate::state::instrument::MixerSend;
+
+    session.mixer.layer_group_mixers.clear();
+
+    let mut stmt = conn.prepare(
+        "SELECT group_id, name, level, pan, mute, solo, output_target FROM layer_group_mixers ORDER BY group_id"
+    )?;
+    let rows: Vec<(u32, String, f32, f32, i32, i32, String)> = stmt.query_map([], |row| {
+        Ok((
+            row.get::<_, i32>(0)? as u32,
+            row.get(1)?,
+            row.get(2)?,
+            row.get(3)?,
+            row.get(4)?,
+            row.get(5)?,
+            row.get(6)?,
+        ))
+    })?.collect::<SqlResult<_>>()?;
+
+    for (group_id, name, level, pan, mute, solo, output_target_str) in rows {
+        let output_target = decode_output_target(&output_target_str);
+
+        // Load sends
+        let mut send_stmt = conn.prepare(
+            "SELECT bus_id, level, enabled FROM layer_group_sends WHERE group_id = ?1 ORDER BY bus_id"
+        )?;
+        let sends: Vec<MixerSend> = send_stmt.query_map(params![group_id as i32], |row| {
+            Ok(MixerSend {
+                bus_id: row.get::<_, i32>(0)? as u8,
+                level: row.get(1)?,
+                enabled: row.get::<_, i32>(2)? != 0,
+            })
+        })?.collect::<SqlResult<_>>()?;
+
+        session.mixer.layer_group_mixers.push(LayerGroupMixer {
+            group_id,
+            name,
+            level,
+            pan,
+            mute: mute != 0,
+            solo: solo != 0,
+            output_target,
+            sends,
+        });
     }
 
     Ok(())

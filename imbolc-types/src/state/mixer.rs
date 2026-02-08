@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::instrument::MixerBus;
+use super::instrument::{LayerGroupMixer, MixerBus};
 use super::session::MixerSelection;
 
 /// Maximum number of buses allowed
@@ -21,6 +21,9 @@ pub struct MixerState {
     pub master_mute: bool,
     #[serde(skip)]
     pub selection: MixerSelection,
+    /// Per-layer-group sub-mixers
+    #[serde(default)]
+    pub layer_group_mixers: Vec<LayerGroupMixer>,
 }
 
 impl MixerState {
@@ -38,6 +41,7 @@ impl MixerState {
             master_level: 1.0,
             master_mute: false,
             selection: MixerSelection::default(),
+            layer_group_mixers: Vec::new(),
         }
     }
 
@@ -91,11 +95,20 @@ impl MixerState {
         }
     }
 
-    /// Cycle between instrument/bus/master sections
+    /// Cycle between instrument/layer-group/bus/master sections
     pub fn cycle_section(&mut self) {
         self.selection = match self.selection {
             MixerSelection::Instrument(_) => {
-                // Select first bus if any exist, otherwise skip to master
+                // Select first layer group if any exist, otherwise skip to buses/master
+                if let Some(first) = self.layer_group_mixers.first() {
+                    MixerSelection::LayerGroup(first.group_id)
+                } else if let Some(first_id) = self.buses.first().map(|b| b.id) {
+                    MixerSelection::Bus(first_id)
+                } else {
+                    MixerSelection::Master
+                }
+            }
+            MixerSelection::LayerGroup(_) => {
                 if let Some(first_id) = self.buses.first().map(|b| b.id) {
                     MixerSelection::Bus(first_id)
                 } else {
@@ -110,6 +123,49 @@ impl MixerState {
     /// Recompute next_bus_id from current buses (call after loading from persistence)
     pub fn recompute_next_bus_id(&mut self) {
         self.next_bus_id = self.buses.iter().map(|b| b.id).max().unwrap_or(0).saturating_add(1);
+    }
+
+    /// Get a layer group mixer by group ID
+    pub fn layer_group_mixer(&self, group_id: u32) -> Option<&LayerGroupMixer> {
+        self.layer_group_mixers.iter().find(|g| g.group_id == group_id)
+    }
+
+    /// Get a mutable layer group mixer by group ID
+    pub fn layer_group_mixer_mut(&mut self, group_id: u32) -> Option<&mut LayerGroupMixer> {
+        self.layer_group_mixers.iter_mut().find(|g| g.group_id == group_id)
+    }
+
+    /// Add a layer group mixer. Returns false if it already exists.
+    pub fn add_layer_group_mixer(&mut self, group_id: u32, bus_ids: &[u8]) -> bool {
+        if self.layer_group_mixer(group_id).is_some() {
+            return false;
+        }
+        self.layer_group_mixers.push(LayerGroupMixer::new(group_id, bus_ids));
+        true
+    }
+
+    /// Remove a layer group mixer by group ID. Returns true if found and removed.
+    pub fn remove_layer_group_mixer(&mut self, group_id: u32) -> bool {
+        if let Some(idx) = self.layer_group_mixers.iter().position(|g| g.group_id == group_id) {
+            self.layer_group_mixers.remove(idx);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Check if any layer group is soloed
+    pub fn any_layer_group_solo(&self) -> bool {
+        self.layer_group_mixers.iter().any(|g| g.solo)
+    }
+
+    /// Compute effective mute for a layer group, considering solo state
+    pub fn effective_layer_group_mute(&self, group: &LayerGroupMixer) -> bool {
+        if self.any_layer_group_solo() {
+            !group.solo
+        } else {
+            group.mute
+        }
     }
 }
 

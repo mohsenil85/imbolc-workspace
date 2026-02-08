@@ -10,10 +10,17 @@ use crate::ui::action_id::ActionId;
 const CHANNEL_WIDTH: u16 = 8;
 const METER_HEIGHT: u16 = 12;
 const NUM_VISIBLE_CHANNELS: usize = 8;
+const NUM_VISIBLE_GROUPS: usize = 2;
 const NUM_VISIBLE_BUSES: usize = 2;
 
 /// Block characters for vertical meter
 const BLOCK_CHARS: [char; 8] = ['\u{2581}', '\u{2582}', '\u{2583}', '\u{2584}', '\u{2585}', '\u{2586}', '\u{2587}', '\u{2588}'];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DetailTarget {
+    Instrument(usize),
+    LayerGroup(u32),
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum MixerSection {
@@ -59,7 +66,7 @@ impl MixerSection {
 pub struct MixerPane {
     keymap: Keymap,
     send_target: Option<u8>,
-    detail_mode: Option<usize>,
+    detail_mode: Option<DetailTarget>,
     detail_section: MixerSection,
     detail_cursor: usize,
     effect_scroll: usize,
@@ -82,14 +89,26 @@ impl MixerPane {
         self.send_target
     }
 
-    /// Get the instrument index and ID for the current detail mode target
+    /// Get the instrument index and ID for the current detail mode target (instrument only)
     fn detail_instrument<'a>(&self, state: &'a AppState) -> Option<(usize, &'a crate::state::Instrument)> {
-        let idx = self.detail_mode?;
-        state.instruments.instruments.get(idx).map(|inst| (idx, inst))
+        match self.detail_mode? {
+            DetailTarget::Instrument(idx) => {
+                state.instruments.instruments.get(idx).map(|inst| (idx, inst))
+            }
+            DetailTarget::LayerGroup(_) => None,
+        }
     }
 
     fn detail_instrument_id(&self, state: &AppState) -> Option<InstrumentId> {
         self.detail_instrument(state).map(|(_, inst)| inst.id)
+    }
+
+    /// Get the layer group ID if in group detail mode
+    fn detail_group_id(&self) -> Option<u32> {
+        match self.detail_mode? {
+            DetailTarget::LayerGroup(gid) => Some(gid),
+            _ => None,
+        }
     }
 
     /// Max cursor position for current section
@@ -150,10 +169,10 @@ impl Pane for MixerPane {
     }
 
     fn render(&mut self, area: Rect, buf: &mut RenderBuf, state: &AppState) {
-        if self.detail_mode.is_some() {
-            self.render_detail_buf(buf, area, state);
-        } else {
-            self.render_mixer_buf(buf, area, state);
+        match self.detail_mode {
+            Some(DetailTarget::Instrument(_)) => self.render_detail_buf(buf, area, state),
+            Some(DetailTarget::LayerGroup(gid)) => self.render_group_detail_buf(buf, area, state, gid),
+            None => self.render_mixer_buf(buf, area, state),
         }
     }
 

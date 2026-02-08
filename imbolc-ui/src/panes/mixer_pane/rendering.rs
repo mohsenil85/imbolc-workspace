@@ -1,5 +1,5 @@
 use super::{MixerPane, MixerSection};
-use super::{CHANNEL_WIDTH, METER_HEIGHT, NUM_VISIBLE_CHANNELS, NUM_VISIBLE_BUSES, BLOCK_CHARS};
+use super::{CHANNEL_WIDTH, METER_HEIGHT, NUM_VISIBLE_CHANNELS, NUM_VISIBLE_GROUPS, NUM_VISIBLE_BUSES, BLOCK_CHARS};
 use crate::state::{AppState, MixerSelection, OutputTarget};
 use crate::ui::{Rect, RenderBuf, Color, Style};
 use crate::ui::layout_helpers::center_rect;
@@ -47,7 +47,15 @@ impl MixerPane {
     }
 
     pub(super) fn render_mixer_buf(&self, buf: &mut RenderBuf, area: Rect, state: &AppState) {
+        let active_groups = state.instruments.active_layer_groups();
+        let num_group_slots = active_groups.len().min(NUM_VISIBLE_GROUPS);
+        let group_section_width = if num_group_slots > 0 {
+            num_group_slots as u16 * CHANNEL_WIDTH + 2  // +2 for separator
+        } else {
+            0
+        };
         let box_width = (NUM_VISIBLE_CHANNELS as u16 * CHANNEL_WIDTH) + 2 +
+                        group_section_width +
                         (NUM_VISIBLE_BUSES as u16 * CHANNEL_WIDTH) + 2 +
                         CHANNEL_WIDTH + 4;
         let box_height = METER_HEIGHT + 8;
@@ -69,6 +77,14 @@ impl MixerPane {
         let instrument_scroll = match state.session.mixer.selection {
             MixerSelection::Instrument(idx) => {
                 Self::calc_scroll_offset(idx, state.instruments.instruments.len(), NUM_VISIBLE_CHANNELS)
+            }
+            _ => 0,
+        };
+
+        let group_scroll = match state.session.mixer.selection {
+            MixerSelection::LayerGroup(gid) => {
+                let group_idx = active_groups.iter().position(|&g| g == gid).unwrap_or(0);
+                Self::calc_scroll_offset(group_idx, active_groups.len(), NUM_VISIBLE_GROUPS)
             }
             _ => 0,
         };
@@ -107,6 +123,36 @@ impl MixerPane {
             }
 
             x += CHANNEL_WIDTH;
+        }
+
+        // Separator before groups (if any) or buses
+        let teal_style = Style::new().fg(Color::TEAL);
+        if !active_groups.is_empty() {
+            for y in label_y..=output_y {
+                buf.set_cell(x, y, '│', teal_style);
+            }
+            x += 2;
+
+            // Render layer group channels
+            for i in 0..NUM_VISIBLE_GROUPS {
+                let gidx = group_scroll + i;
+                if gidx >= active_groups.len() {
+                    break;
+                }
+                let group_id = active_groups[gidx];
+                let is_selected = matches!(state.session.mixer.selection, MixerSelection::LayerGroup(g) if g == group_id);
+
+                if let Some(gm) = state.session.mixer.layer_group_mixer(group_id) {
+                    let label = format!("G{}", group_id);
+                    Self::render_channel_buf(
+                        buf, x, &label, &gm.name,
+                        gm.level, gm.mute, gm.solo, Some(gm.output_target), is_selected,
+                        label_y, name_y, meter_top_y, db_y, indicator_y, output_y,
+                    );
+                }
+
+                x += CHANNEL_WIDTH;
+            }
         }
 
         // Separator before buses
@@ -152,17 +198,30 @@ impl MixerPane {
         // Send info line
         let send_y = output_y + 1;
         if let Some(bus_id) = self.send_target {
-            if let MixerSelection::Instrument(idx) = state.session.mixer.selection {
-                if let Some(instrument) = state.instruments.instruments.get(idx) {
-                    if let Some(send) = instrument.sends.iter().find(|s| s.bus_id == bus_id) {
-                        let status = if send.enabled { "ON" } else { "OFF" };
-                        let info = format!("Send→B{}: {:.0}% [{}]", bus_id, send.level * 100.0, status);
-                        buf.draw_line(
-                            Rect::new(base_x, send_y, rect.width.saturating_sub(4), 1),
-                            &[(&info, Style::new().fg(Color::TEAL).bold())],
-                        );
-                    }
+            let send_info = match state.session.mixer.selection {
+                MixerSelection::Instrument(idx) => {
+                    state.instruments.instruments.get(idx).and_then(|instrument| {
+                        instrument.sends.iter().find(|s| s.bus_id == bus_id).map(|send| {
+                            let status = if send.enabled { "ON" } else { "OFF" };
+                            format!("Send→B{}: {:.0}% [{}]", bus_id, send.level * 100.0, status)
+                        })
+                    })
                 }
+                MixerSelection::LayerGroup(gid) => {
+                    state.session.mixer.layer_group_mixer(gid).and_then(|gm| {
+                        gm.sends.iter().find(|s| s.bus_id == bus_id).map(|send| {
+                            let status = if send.enabled { "ON" } else { "OFF" };
+                            format!("G{} Send→B{}: {:.0}% [{}]", gid, bus_id, send.level * 100.0, status)
+                        })
+                    })
+                }
+                _ => None,
+            };
+            if let Some(info) = send_info {
+                buf.draw_line(
+                    Rect::new(base_x, send_y, rect.width.saturating_sub(4), 1),
+                    &[(&info, Style::new().fg(Color::TEAL).bold())],
+                );
             }
         }
 
@@ -442,6 +501,81 @@ impl MixerPane {
         }
     }
 
+    pub(super) fn render_group_detail_buf(&self, buf: &mut RenderBuf, area: Rect, state: &AppState, group_id: u32) {
+        let gm = match state.session.mixer.layer_group_mixer(group_id) {
+            Some(gm) => gm,
+            None => return,
+        };
+
+        let title = format!(" MIXER --- Group {} [{}] ", group_id, gm.name);
+
+        let members: Vec<&crate::state::Instrument> = state.instruments.instruments.iter()
+            .filter(|i| i.layer_group == Some(group_id))
+            .collect();
+
+        let num_member_slots = members.len().min(6);
+        let box_width = area.width.min(((num_member_slots + 1) as u16 * CHANNEL_WIDTH) + 6 + CHANNEL_WIDTH);
+        let box_height = METER_HEIGHT + 8;
+        let rect = center_rect(area, box_width, box_height);
+
+        buf.draw_block(rect, &title, Style::new().fg(Color::TEAL), Style::new().fg(Color::TEAL));
+
+        let base_x = rect.x + 2;
+        let base_y = rect.y + 1;
+
+        let label_y = base_y;
+        let name_y = base_y + 1;
+        let meter_top_y = base_y + 2;
+        let db_y = meter_top_y + METER_HEIGHT;
+        let indicator_y = db_y + 1;
+        let output_y = indicator_y + 1;
+
+        let mut x = base_x;
+
+        // Render member instrument channels
+        for inst in &members {
+            let label = format!("I{}", inst.id);
+            Self::render_channel_buf(
+                buf, x, &label, &inst.name,
+                inst.level, inst.mute, inst.solo, Some(inst.output_target), false,
+                label_y, name_y, meter_top_y, db_y, indicator_y, output_y,
+            );
+            x += CHANNEL_WIDTH;
+        }
+
+        // Separator before group master
+        let teal_style = Style::new().fg(Color::TEAL);
+        for y in label_y..=output_y {
+            buf.set_cell(x, y, '│', teal_style);
+        }
+        x += 2;
+
+        // Group master strip
+        let group_label = format!("G{}", group_id);
+        Self::render_channel_buf(
+            buf, x, &group_label, &gm.name,
+            gm.level, gm.mute, gm.solo, Some(gm.output_target), true,
+            label_y, name_y, meter_top_y, db_y, indicator_y, output_y,
+        );
+
+        // Sends info below
+        let send_y = output_y + 1;
+        let dim = Style::new().fg(Color::DARK_GRAY);
+        let mut sx = base_x;
+        for send in &gm.sends {
+            if sx >= rect.x + rect.width - 8 { break; }
+            let status = if send.enabled { "ON" } else { "OFF" };
+            let send_text = format!("→B{}:{:.0}%{}", send.bus_id, send.level * 100.0, status);
+            let send_style = if send.enabled {
+                Style::new().fg(Color::TEAL)
+            } else {
+                dim
+            };
+            Self::write_str(buf, sx, send_y, &send_text, send_style);
+            sx += send_text.len() as u16 + 1;
+        }
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn render_channel_buf(
         buf: &mut RenderBuf,
@@ -464,6 +598,8 @@ impl MixerPane {
 
         let label_style = if selected {
             Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG).bold()
+        } else if label.starts_with("G") && label.len() <= 3 && label[1..].chars().all(|c| c.is_ascii_digit()) {
+            Style::new().fg(Color::TEAL).bold()
         } else if label.starts_with("BUS") {
             Style::new().fg(Color::PURPLE).bold()
         } else if label == "MASTER" {

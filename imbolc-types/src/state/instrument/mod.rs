@@ -113,6 +113,49 @@ impl MixerBus {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LayerGroupMixer {
+    pub group_id: u32,
+    pub name: String,
+    pub level: f32,
+    pub pan: f32,
+    pub mute: bool,
+    pub solo: bool,
+    pub output_target: OutputTarget,
+    pub sends: Vec<MixerSend>,
+}
+
+impl LayerGroupMixer {
+    pub fn new(group_id: u32, bus_ids: &[u8]) -> Self {
+        let sends = bus_ids.iter().map(|&id| MixerSend::new(id)).collect();
+        Self {
+            group_id,
+            name: format!("Group {}", group_id),
+            level: 0.8,
+            pan: 0.0,
+            mute: false,
+            solo: false,
+            output_target: OutputTarget::Master,
+            sends,
+        }
+    }
+
+    pub fn sync_sends_with_buses(&mut self, bus_ids: &[u8]) {
+        for &bus_id in bus_ids {
+            if !self.sends.iter().any(|s| s.bus_id == bus_id) {
+                self.sends.push(MixerSend::new(bus_id));
+            }
+        }
+        self.sends.sort_by_key(|s| s.bus_id);
+    }
+
+    pub fn disable_send_for_bus(&mut self, bus_id: u8) {
+        if let Some(send) = self.sends.iter_mut().find(|s| s.bus_id == bus_id) {
+            send.enabled = false;
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModulatedParam {
     pub value: f32,
     pub min: f32,

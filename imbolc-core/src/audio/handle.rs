@@ -675,6 +675,21 @@ impl AudioHandle {
         self.send_cmd(AudioCmd::UpdateMixerParams)
     }
 
+    pub fn set_layer_group_mixer_params(
+        &self,
+        group_id: u32,
+        level: f32,
+        mute: bool,
+        pan: f32,
+    ) -> Result<(), String> {
+        self.send_cmd(AudioCmd::SetLayerGroupMixerParams {
+            group_id,
+            level,
+            mute,
+            pan,
+        })
+    }
+
     pub fn set_source_param(
         &self,
         instrument_id: InstrumentId,

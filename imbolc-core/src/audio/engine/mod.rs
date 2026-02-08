@@ -108,6 +108,12 @@ pub struct AudioEngine {
     send_node_map: HashMap<(InstrumentId, u8), i32>,
     /// Bus output synth nodes: bus_id -> node_id
     bus_node_map: HashMap<u8, i32>,
+    /// Layer group audio buses: group_id -> SC audio bus index
+    layer_group_audio_buses: HashMap<u32, i32>,
+    /// Layer group output synth nodes: group_id -> node_id
+    layer_group_node_map: HashMap<u32, i32>,
+    /// Layer group send synth nodes: (group_id, bus_id) -> node_id
+    layer_group_send_node_map: HashMap<(u32, u8), i32>,
     /// Instrument final buses: instrument_id -> SC audio bus index (post-effects, pre-mixer)
     pub(crate) instrument_final_buses: HashMap<InstrumentId, i32>,
     /// Voice allocation, tracking, stealing, and control bus pooling
@@ -153,6 +159,9 @@ impl AudioEngine {
             bus_audio_buses: HashMap::new(),
             send_node_map: HashMap::new(),
             bus_node_map: HashMap::new(),
+            layer_group_audio_buses: HashMap::new(),
+            layer_group_node_map: HashMap::new(),
+            layer_group_send_node_map: HashMap::new(),
             instrument_final_buses: HashMap::new(),
             voice_allocator: VoiceAllocator::new(),
             safety_node_id: None,

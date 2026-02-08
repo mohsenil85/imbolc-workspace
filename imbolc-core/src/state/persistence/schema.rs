@@ -257,6 +257,24 @@ CREATE TABLE IF NOT EXISTS mixer_master (
     mute INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS layer_group_mixers (
+    group_id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    level REAL NOT NULL,
+    pan REAL NOT NULL,
+    mute INTEGER NOT NULL,
+    solo INTEGER NOT NULL,
+    output_target TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS layer_group_sends (
+    group_id INTEGER NOT NULL,
+    bus_id INTEGER NOT NULL,
+    level REAL NOT NULL,
+    enabled INTEGER NOT NULL,
+    PRIMARY KEY (group_id, bus_id)
+);
+
 -- ============================================================
 -- Piano Roll & Musical Settings
 -- ============================================================
@@ -605,6 +623,8 @@ DELETE FROM instrument_vst_params;
 DELETE FROM effect_vst_params;
 DELETE FROM mixer_buses;
 DELETE FROM mixer_master;
+DELETE FROM layer_group_mixers;
+DELETE FROM layer_group_sends;
 DELETE FROM musical_settings;
 DELETE FROM piano_roll_tracks;
 DELETE FROM piano_roll_notes;

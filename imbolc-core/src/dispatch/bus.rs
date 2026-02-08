@@ -14,6 +14,10 @@ pub fn dispatch_bus(action: &BusAction, state: &mut AppState, _audio: &mut Audio
                 for inst in &mut state.instruments.instruments {
                     inst.sync_sends_with_buses(&bus_ids);
                 }
+                // Sync layer group mixers with the new bus
+                for gm in &mut state.session.mixer.layer_group_mixers {
+                    gm.sync_sends_with_buses(&bus_ids);
+                }
                 result.audio_dirty.routing = true;
                 result.audio_dirty.session = true;
             }
@@ -34,6 +38,14 @@ pub fn dispatch_bus(action: &BusAction, state: &mut AppState, _audio: &mut Audio
                 }
                 // Disable sends to this bus
                 inst.disable_send_for_bus(bus_id);
+            }
+
+            // Reset layer group mixers that output to this bus and disable their sends
+            for gm in &mut state.session.mixer.layer_group_mixers {
+                if gm.output_target == OutputTarget::Bus(bus_id) {
+                    gm.output_target = OutputTarget::Master;
+                }
+                gm.disable_send_for_bus(bus_id);
             }
 
             // Remove automation lanes for this bus

@@ -140,6 +140,18 @@ impl InstrumentState {
         id
     }
 
+    /// Returns sorted unique group IDs from instruments that have a layer_group set.
+    pub fn active_layer_groups(&self) -> Vec<u32> {
+        let mut groups: Vec<u32> = self
+            .instruments
+            .iter()
+            .filter_map(|i| i.layer_group)
+            .collect();
+        groups.sort_unstable();
+        groups.dedup();
+        groups
+    }
+
     /// Returns all instrument IDs in the same layer group as `id` (including `id` itself).
     /// If the instrument has no layer group, returns just `vec![id]`.
     pub fn layer_group_members(&self, id: InstrumentId) -> Vec<InstrumentId> {

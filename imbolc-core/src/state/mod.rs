@@ -190,6 +190,16 @@ impl AppState {
                     as usize;
                 MixerSelection::Instrument(new_idx)
             }
+            MixerSelection::LayerGroup(current_id) => {
+                let group_ids: Vec<u32> = self.session.mixer.layer_group_mixers.iter().map(|g| g.group_id).collect();
+                if group_ids.is_empty() {
+                    return;
+                }
+                let current_pos = group_ids.iter().position(|&id| id == current_id).unwrap_or(0);
+                let new_pos = (current_pos as i32 + delta as i32)
+                    .clamp(0, group_ids.len().saturating_sub(1) as i32) as usize;
+                MixerSelection::LayerGroup(group_ids[new_pos])
+            }
             MixerSelection::Bus(current_id) => {
                 // Find current position and move by delta
                 let bus_ids: Vec<u8> = self.session.bus_ids().collect();
@@ -215,6 +225,17 @@ impl AppState {
                     MixerSelection::Instrument(self.instruments.instruments.len().saturating_sub(1))
                 }
             }
+            MixerSelection::LayerGroup(_) => {
+                let group_ids: Vec<u32> = self.session.mixer.layer_group_mixers.iter().map(|g| g.group_id).collect();
+                if group_ids.is_empty() {
+                    return;
+                }
+                if direction > 0 {
+                    MixerSelection::LayerGroup(group_ids[0])
+                } else {
+                    MixerSelection::LayerGroup(*group_ids.last().unwrap())
+                }
+            }
             MixerSelection::Bus(_) => {
                 let bus_ids: Vec<u8> = self.session.bus_ids().collect();
                 if bus_ids.is_empty() {
@@ -230,49 +251,83 @@ impl AppState {
         };
     }
 
-    /// Cycle output target for the selected instrument
+    /// Cycle output target for the selected instrument or layer group
     pub fn mixer_cycle_output(&mut self) {
         let bus_ids: Vec<u8> = self.session.bus_ids().collect();
-        if let MixerSelection::Instrument(idx) = self.session.mixer.selection {
-            if let Some(inst) = self.instruments.instruments.get_mut(idx) {
-                inst.output_target = match inst.output_target {
-                    OutputTarget::Master => {
-                        // Go to first bus, or stay at Master if no buses
-                        bus_ids.first().map(|&id| OutputTarget::Bus(id)).unwrap_or(OutputTarget::Master)
-                    }
-                    OutputTarget::Bus(current_id) => {
-                        // Find next bus, or wrap to Master
-                        let pos = bus_ids.iter().position(|&id| id == current_id);
-                        match pos {
-                            Some(p) if p + 1 < bus_ids.len() => OutputTarget::Bus(bus_ids[p + 1]),
-                            _ => OutputTarget::Master,
+        match self.session.mixer.selection {
+            MixerSelection::Instrument(idx) => {
+                if let Some(inst) = self.instruments.instruments.get_mut(idx) {
+                    inst.output_target = match inst.output_target {
+                        OutputTarget::Master => {
+                            bus_ids.first().map(|&id| OutputTarget::Bus(id)).unwrap_or(OutputTarget::Master)
                         }
-                    }
-                };
+                        OutputTarget::Bus(current_id) => {
+                            let pos = bus_ids.iter().position(|&id| id == current_id);
+                            match pos {
+                                Some(p) if p + 1 < bus_ids.len() => OutputTarget::Bus(bus_ids[p + 1]),
+                                _ => OutputTarget::Master,
+                            }
+                        }
+                    };
+                }
             }
+            MixerSelection::LayerGroup(group_id) => {
+                if let Some(gm) = self.session.mixer.layer_group_mixer_mut(group_id) {
+                    gm.output_target = match gm.output_target {
+                        OutputTarget::Master => {
+                            bus_ids.first().map(|&id| OutputTarget::Bus(id)).unwrap_or(OutputTarget::Master)
+                        }
+                        OutputTarget::Bus(current_id) => {
+                            let pos = bus_ids.iter().position(|&id| id == current_id);
+                            match pos {
+                                Some(p) if p + 1 < bus_ids.len() => OutputTarget::Bus(bus_ids[p + 1]),
+                                _ => OutputTarget::Master,
+                            }
+                        }
+                    };
+                }
+            }
+            _ => {}
         }
     }
 
-    /// Cycle output target backwards for the selected instrument
+    /// Cycle output target backwards for the selected instrument or layer group
     pub fn mixer_cycle_output_reverse(&mut self) {
         let bus_ids: Vec<u8> = self.session.bus_ids().collect();
-        if let MixerSelection::Instrument(idx) = self.session.mixer.selection {
-            if let Some(inst) = self.instruments.instruments.get_mut(idx) {
-                inst.output_target = match inst.output_target {
-                    OutputTarget::Master => {
-                        // Go to last bus, or stay at Master if no buses
-                        bus_ids.last().map(|&id| OutputTarget::Bus(id)).unwrap_or(OutputTarget::Master)
-                    }
-                    OutputTarget::Bus(current_id) => {
-                        // Find previous bus, or wrap to Master
-                        let pos = bus_ids.iter().position(|&id| id == current_id);
-                        match pos {
-                            Some(0) | None => OutputTarget::Master,
-                            Some(p) => OutputTarget::Bus(bus_ids[p - 1]),
+        match self.session.mixer.selection {
+            MixerSelection::Instrument(idx) => {
+                if let Some(inst) = self.instruments.instruments.get_mut(idx) {
+                    inst.output_target = match inst.output_target {
+                        OutputTarget::Master => {
+                            bus_ids.last().map(|&id| OutputTarget::Bus(id)).unwrap_or(OutputTarget::Master)
                         }
-                    }
-                };
+                        OutputTarget::Bus(current_id) => {
+                            let pos = bus_ids.iter().position(|&id| id == current_id);
+                            match pos {
+                                Some(0) | None => OutputTarget::Master,
+                                Some(p) => OutputTarget::Bus(bus_ids[p - 1]),
+                            }
+                        }
+                    };
+                }
             }
+            MixerSelection::LayerGroup(group_id) => {
+                if let Some(gm) = self.session.mixer.layer_group_mixer_mut(group_id) {
+                    gm.output_target = match gm.output_target {
+                        OutputTarget::Master => {
+                            bus_ids.last().map(|&id| OutputTarget::Bus(id)).unwrap_or(OutputTarget::Master)
+                        }
+                        OutputTarget::Bus(current_id) => {
+                            let pos = bus_ids.iter().position(|&id| id == current_id);
+                            match pos {
+                                Some(0) | None => OutputTarget::Master,
+                                Some(p) => OutputTarget::Bus(bus_ids[p - 1]),
+                            }
+                        }
+                    };
+                }
+            }
+            _ => {}
         }
     }
 }

@@ -94,6 +94,15 @@ pub fn apply_bus_update(audio: &mut AudioHandle, update: Option<(u8, f32, bool, 
     }
 }
 
+/// Send layer group mixer params to audio if running.
+pub fn apply_layer_group_update(audio: &mut AudioHandle, update: Option<(u32, f32, bool, f32)>) {
+    if let Some((group_id, level, mute, pan)) = update {
+        if audio.is_running() {
+            let _ = audio.set_layer_group_mixer_params(group_id, level, mute, pan);
+        }
+    }
+}
+
 /// Compute waveform peaks from a WAV file for display
 pub fn compute_waveform_peaks(path: &str) -> (Vec<f32>, f32) {
     let reader = match hound::WavReader::open(path) {

@@ -22,7 +22,16 @@ pub(super) fn handle_link_layer(
     if let Some(inst) = state.instruments.instrument_mut(b) {
         inst.layer_group = Some(group_id);
     }
-    DispatchResult::none()
+    // Auto-create LayerGroupMixer if new group
+    let bus_ids: Vec<u8> = state.session.mixer.bus_ids().collect();
+    if state.session.mixer.layer_group_mixer(group_id).is_none() {
+        state.session.mixer.add_layer_group_mixer(group_id, &bus_ids);
+    }
+    let mut result = DispatchResult::none();
+    result.audio_dirty.routing = true;
+    result.audio_dirty.session = true;
+    result.audio_dirty.instruments = true;
+    result
 }
 
 pub(super) fn handle_unlink_layer(
@@ -33,17 +42,26 @@ pub(super) fn handle_unlink_layer(
     if let Some(inst) = state.instruments.instrument_mut(id) {
         inst.layer_group = None;
     }
-    // If old group now has only 1 member, clear that member too
+    let mut result = DispatchResult::none();
+    // If old group now has only 1 member, clear that member too and remove group mixer
     if let Some(g) = old_group {
         let remaining: Vec<crate::state::InstrumentId> = state.instruments.instruments.iter()
             .filter(|i| i.layer_group == Some(g))
             .map(|i| i.id)
             .collect();
-        if remaining.len() == 1 {
-            if let Some(inst) = state.instruments.instrument_mut(remaining[0]) {
-                inst.layer_group = None;
+        if remaining.len() <= 1 {
+            // Clear any remaining singleton
+            if remaining.len() == 1 {
+                if let Some(inst) = state.instruments.instrument_mut(remaining[0]) {
+                    inst.layer_group = None;
+                }
             }
+            // Remove the group mixer
+            state.session.mixer.remove_layer_group_mixer(g);
         }
+        result.audio_dirty.routing = true;
+        result.audio_dirty.session = true;
+        result.audio_dirty.instruments = true;
     }
-    DispatchResult::none()
+    result
 }
