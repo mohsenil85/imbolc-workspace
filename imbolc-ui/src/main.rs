@@ -22,7 +22,7 @@ use audio::commands::AudioCmd;
 use audio::AudioHandle;
 use action::{AudioDirty, IoFeedback};
 use dispatch::LocalDispatcher;
-use panes::{AddEffectPane, AddPane, AutomationPane, CommandPalettePane, ConfirmPane, DocsPane, EqPane, FileBrowserPane, FrameEditPane, GroovePane, HelpPane, HomePane, InstrumentEditPane, InstrumentPane, InstrumentPickerPane, MidiSettingsPane, MixerPane, PaneSwitcherPane, PianoRollPane, ProjectBrowserPane, QuitPromptPane, SaveAsPane, SampleChopperPane, SequencerPane, ServerPane, TrackPane, VstParamPane, WaveformPane};
+use panes::{AddEffectPane, AddPane, AutomationPane, CommandPalettePane, ConfirmPane, DocsPane, EqPane, FileBrowserPane, FrameEditPane, GroovePane, HelpPane, HomePane, InstrumentEditPane, InstrumentPane, InstrumentPickerPane, MidiSettingsPane, MixerPane, PaneSwitcherPane, PianoRollPane, ProjectBrowserPane, QuitPromptPane, SaveAsPane, SampleChopperPane, SequencerPane, ServerPane, TrackPane, TunerPane, VstParamPane, WaveformPane};
 use state::AppState;
 use ui::{
     Action, AppEvent, Frame, InputSource, KeyCode, Keymap, LayerResult,
@@ -149,6 +149,7 @@ pub(crate) fn register_all_panes(keymaps: &mut std::collections::HashMap<String,
     panes.add_pane(Box::new(CommandPalettePane::new(pane_keymap(keymaps, "command_palette"))));
     panes.add_pane(Box::new(PaneSwitcherPane::new(pane_keymap(keymaps, "pane_switcher"))));
     panes.add_pane(Box::new(MidiSettingsPane::new(pane_keymap(keymaps, "midi_settings"))));
+    panes.add_pane(Box::new(TunerPane::new(pane_keymap(keymaps, "tuner"))));
     panes.add_pane(Box::new(DocsPane::new(pane_keymap(keymaps, "docs"))));
     panes
 }

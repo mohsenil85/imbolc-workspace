@@ -913,6 +913,16 @@ impl AudioHandle {
         })
     }
 
+    // ── Tuner Tone ───────────────────────────────────────────────
+
+    pub fn start_tuner_tone(&self, freq: f32) {
+        self.send(AudioCmd::StartTunerTone { freq });
+    }
+
+    pub fn stop_tuner_tone(&self) {
+        self.send(AudioCmd::StopTunerTone);
+    }
+
     // ── Click Track ──────────────────────────────────────────────
 
     pub fn set_click_enabled(&self, enabled: bool) -> Result<(), String> {

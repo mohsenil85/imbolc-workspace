@@ -16,6 +16,7 @@ bindings = [
   { key = "F7", action = "switch:automation", description = "Automation" },
   { key = "F8", action = "switch:eq", description = "Parametric EQ" },
   { key = "F9", action = "switch:groove", description = "Groove settings" },
+  { key = "F10", action = "switch:tuner", description = "Reference tuner" },
   { key = "Ctrl+o", action = "open_project_browser", description = "Project browser" },
   { key = "Ctrl+S", action = "save_as", description = "Save project as..." },
   { key = "Ctrl+f", action = "switch:frame_edit", description = "Frame edit" },
@@ -387,6 +388,19 @@ bindings = [
   { key = "Ctrl+Down", action = "decrease_tiny", description = "Fine decrease" },
   { key = "e", action = "toggle_eq", description = "Toggle EQ on/off" },
   { key = "b", action = "toggle_band", description = "Toggle band on/off" },
+]
+
+[layers.tuner]
+bindings = [
+  { key = "Up", action = "prev_string", description = "Previous string" },
+  { key = "Down", action = "next_string", description = "Next string" },
+  { key = "k", action = "prev_string", description = "Previous string" },
+  { key = "j", action = "next_string", description = "Next string" },
+  { key = "Left", action = "prev_instrument", description = "Previous instrument" },
+  { key = "Right", action = "next_instrument", description = "Next instrument" },
+  { key = "h", action = "prev_instrument", description = "Previous instrument" },
+  { key = "l", action = "next_instrument", description = "Next instrument" },
+  { key = "Enter", action = "play_stop", description = "Play / Stop tone" },
 ]
 
 [layers.groove]

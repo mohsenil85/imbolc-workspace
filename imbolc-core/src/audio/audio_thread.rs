@@ -81,6 +81,8 @@ pub(crate) struct AudioThread {
     pending_server_connect: Option<PendingServerConnect>,
     /// In-flight VST parameter queries awaiting OSC replies
     pending_vst_queries: Vec<PendingVstQuery>,
+    /// Tuner tone node ID (if currently playing)
+    tuner_node_id: Option<i32>,
     /// Click track state (enabled, volume, muted)
     click_state: imbolc_types::ClickTrackState,
     /// Click track beat accumulator (fractional beats since last click)
@@ -125,6 +127,7 @@ impl AudioThread {
             last_status_poll: Instant::now(),
             pending_server_connect: None,
             pending_vst_queries: Vec::new(),
+            tuner_node_id: None,
             click_state: imbolc_types::ClickTrackState::default(),
             click_accumulator: 0.0,
             telemetry: AudioTelemetry::new(),
@@ -258,7 +261,8 @@ impl AudioThread {
 
             // Playback control
             SetPlaying { .. } | ResetPlayhead | SetBpm { .. } |
-            SetClickEnabled { .. } | SetClickVolume { .. } | SetClickMuted { .. }
+            SetClickEnabled { .. } | SetClickVolume { .. } | SetClickMuted { .. } |
+            StartTunerTone { .. } | StopTunerTone
                 => self.handle_playback_cmd(cmd),
 
             // Routing & mixing parameters
@@ -430,6 +434,20 @@ impl AudioThread {
             }
             AudioCmd::SetClickMuted { muted } => {
                 self.click_state.muted = muted;
+            }
+            AudioCmd::StartTunerTone { freq } => {
+                if let Some(node_id) = self.tuner_node_id {
+                    // Tone already playing — just update frequency
+                    self.engine.set_node_param(node_id, "freq", freq);
+                } else if let Some(node_id) = self.engine.create_tuner_synth(freq) {
+                    self.tuner_node_id = Some(node_id);
+                }
+            }
+            AudioCmd::StopTunerTone => {
+                if let Some(node_id) = self.tuner_node_id.take() {
+                    // Set gate=0 for graceful release (doneAction:2 will self-free)
+                    self.engine.set_node_param(node_id, "gate", 0.0);
+                }
             }
             _ => {}
         }

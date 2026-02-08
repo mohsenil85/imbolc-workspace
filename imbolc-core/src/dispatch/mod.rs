@@ -21,7 +21,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::audio::AudioHandle;
 use crate::state::AppState;
-use crate::action::{Action, AudioDirty, ClickAction, DispatchResult, IoFeedback};
+use crate::action::{Action, AudioDirty, ClickAction, DispatchResult, IoFeedback, TunerAction};
 use crate::state::undo::is_undoable;
 
 pub use helpers::{
@@ -85,6 +85,7 @@ pub fn dispatch_action(
         Action::Bus(a) => bus::dispatch_bus(a, state, audio),
         Action::VstParam(a) => vst_param::dispatch_vst_param(a, state, audio),
         Action::Click(a) => dispatch_click(a, state, audio),
+        Action::Tuner(a) => dispatch_tuner(a, audio),
         Action::AudioFeedback(f) => audio_feedback::dispatch_audio_feedback(f, state, audio),
         Action::None => DispatchResult::none(),
         // Layer management actions — handled in main.rs before dispatch
@@ -118,6 +119,19 @@ pub fn dispatch_action(
     };
 
     result
+}
+
+/// Dispatch tuner actions.
+fn dispatch_tuner(action: &TunerAction, audio: &mut AudioHandle) -> DispatchResult {
+    match action {
+        TunerAction::PlayTone(freq) => {
+            audio.start_tuner_tone(*freq);
+        }
+        TunerAction::StopTone => {
+            audio.stop_tuner_tone();
+        }
+    }
+    DispatchResult::none()
 }
 
 /// Dispatch click track actions.

@@ -178,7 +178,7 @@ mod tests {
         assert_eq!(defaults.bpm, 120);
         assert_eq!(defaults.key, Key::C);
         assert_eq!(defaults.scale, Scale::Major);
-        assert!((defaults.tuning_a4 - 440.0).abs() < f32::EPSILON);
+        assert!((defaults.tuning_a4 - 432.0).abs() < f32::EPSILON);
         assert_eq!(defaults.time_signature, (4, 4));
         assert!(!defaults.snap);
         assert_eq!(config.keyboard_layout(), KeyboardLayout::Colemak);

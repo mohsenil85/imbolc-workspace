@@ -2,7 +2,7 @@
 bpm = 120
 key = "C"
 scale = "Major"
-tuning_a4 = 440.0
+tuning_a4 = 432.0
 time_signature = [4, 4]
 snap = false
 keyboard_layout = "colemak"

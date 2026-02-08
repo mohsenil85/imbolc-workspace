@@ -740,6 +740,15 @@ impl InstrumentAction {
     }
 }
 
+/// Reference tuner actions.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum TunerAction {
+    /// Play a reference tone at the given frequency
+    PlayTone(f32),
+    /// Stop the currently playing reference tone
+    StopTone,
+}
+
 /// Click track (metronome) actions.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ClickAction {
@@ -776,6 +785,7 @@ pub enum Action {
     Bus(BusAction),
     VstParam(VstParamAction),
     Click(ClickAction),
+    Tuner(TunerAction),
     AudioFeedback(crate::AudioFeedback),
     /// Pane signals: pop piano_mode/pad_mode layer
     ExitPerformanceMode,

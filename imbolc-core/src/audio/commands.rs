@@ -218,6 +218,12 @@ pub enum AudioCmd {
         path: PathBuf,
     },
 
+    // ── Tuner tone ────────────────────────────────────────────────
+    StartTunerTone {
+        freq: f32,
+    },
+    StopTunerTone,
+
     // ── Click track ──────────────────────────────────────────────
     SetClickEnabled {
         enabled: bool,

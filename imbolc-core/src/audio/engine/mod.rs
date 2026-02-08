@@ -185,6 +185,28 @@ impl AudioEngine {
     pub fn is_compiling(&self) -> bool {
         self.is_compiling
     }
+
+    /// Create a simple synth on bus 0 (hardware out) for the tuner reference tone.
+    /// Returns the allocated node ID, or None if not connected.
+    pub fn create_tuner_synth(&mut self, freq: f32) -> Option<i32> {
+        let backend = self.backend.as_ref()?;
+        let node_id = self.next_node_id;
+        self.next_node_id += 1;
+        let params = vec![
+            ("freq".to_string(), freq),
+            ("amp".to_string(), 0.3),
+            ("gate".to_string(), 1.0),
+        ];
+        let _ = backend.create_synth("imbolc_tuner_tone", node_id, 0, &params);
+        Some(node_id)
+    }
+
+    /// Update a parameter on a node (e.g. tuner freq or gate).
+    pub fn set_node_param(&self, node_id: i32, param: &str, value: f32) {
+        if let Some(ref backend) = self.backend {
+            let _ = backend.set_param(node_id, param, value);
+        }
+    }
 }
 
 impl Drop for AudioEngine {

@@ -15,7 +15,7 @@ pub use imbolc_types::{
     ChopperAction, ClickAction, DispatchResult, FileSelectAction, FilterParamKind, InstrumentAction,
     InstrumentUpdate, LfoParamKind, MidiAction, MixerAction, NavAction, NavIntent,
     PianoRollAction, SequencerAction, ServerAction, SessionAction, StatusEvent,
-    ToggleResult, VstParamAction, VstTarget,
+    ToggleResult, TunerAction, VstParamAction, VstTarget,
 };
 
 /// Feedback from async I/O operations to the main thread.

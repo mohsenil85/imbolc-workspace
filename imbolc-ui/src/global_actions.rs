@@ -157,6 +157,10 @@ pub(crate) fn handle_global_action(
 
     // Helper for pane switching with view history
     let switch_to_pane = |target: &str, panes: &mut PaneManager, dispatcher: &mut LocalDispatcher, audio: &mut AudioHandle, app_frame: &mut Frame, layer_stack: &mut LayerStack| {
+        // Stop tuner tone when leaving tuner pane
+        if panes.active().id() == "tuner" {
+            audio.stop_tuner_tone();
+        }
         let current = capture_view(panes, dispatcher.state());
         if app_frame.view_history.is_empty() {
             app_frame.view_history.push(current);
@@ -332,6 +336,9 @@ pub(crate) fn handle_global_action(
             }
             GlobalActionId::SwitchPane(PaneId::Groove) => {
                 switch_to_pane("groove", panes, dispatcher, audio, app_frame, layer_stack);
+            }
+            GlobalActionId::SwitchPane(PaneId::Tuner) => {
+                switch_to_pane("tuner", panes, dispatcher, audio, app_frame, layer_stack);
             }
             GlobalActionId::SwitchPane(PaneId::FrameEdit) => {
                 if panes.active().id() == "frame_edit" {

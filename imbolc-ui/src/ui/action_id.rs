@@ -17,6 +17,7 @@ pub enum PaneId {
     FrameEdit,
     MidiSettings,
     Groove,
+    Tuner,
 }
 
 /// Macro to generate action enums with string conversion methods
@@ -134,6 +135,7 @@ impl GlobalActionId {
                 PaneId::FrameEdit => "switch:frame_edit",
                 PaneId::MidiSettings => "switch:midi_settings",
                 PaneId::Groove => "switch:groove",
+                PaneId::Tuner => "switch:tuner",
             },
             GlobalActionId::SelectInstrument(n) => match n {
                 1 => "select:1",
@@ -198,6 +200,7 @@ impl GlobalActionId {
             "switch:frame_edit" => Some(GlobalActionId::SwitchPane(PaneId::FrameEdit)),
             "switch:midi_settings" => Some(GlobalActionId::SwitchPane(PaneId::MidiSettings)),
             "switch:groove" => Some(GlobalActionId::SwitchPane(PaneId::Groove)),
+            "switch:tuner" => Some(GlobalActionId::SwitchPane(PaneId::Tuner)),
             "select:1" => Some(GlobalActionId::SelectInstrument(1)),
             "select:2" => Some(GlobalActionId::SelectInstrument(2)),
             "select:3" => Some(GlobalActionId::SelectInstrument(3)),
@@ -608,6 +611,17 @@ define_action_enum! {
 }
 
 define_action_enum! {
+    /// Tuner layer actions
+    pub enum TunerActionId {
+        PrevInstrument => "prev_instrument",
+        NextInstrument => "next_instrument",
+        PrevString => "prev_string",
+        NextString => "next_string",
+        PlayStop => "play_stop",
+    }
+}
+
+define_action_enum! {
     /// Groove layer actions
     pub enum GrooveActionId {
         PrevParam => "prev_param",
@@ -767,6 +781,7 @@ pub enum ActionId {
     MidiSettings(MidiSettingsActionId),
     Confirm(ConfirmActionId),
     ProjectBrowser(ProjectBrowserActionId),
+    Tuner(TunerActionId),
 }
 
 impl ActionId {
@@ -796,6 +811,7 @@ impl ActionId {
             ActionId::MidiSettings(a) => a.as_str(),
             ActionId::Confirm(a) => a.as_str(),
             ActionId::ProjectBrowser(a) => a.as_str(),
+            ActionId::Tuner(a) => a.as_str(),
         }
     }
 }
@@ -824,6 +840,7 @@ pub fn parse_action_id(layer: &str, action: &str) -> Option<ActionId> {
         "automation" => AutomationActionId::from_str(action).map(ActionId::Automation),
         "eq" => EqActionId::from_str(action).map(ActionId::Eq),
         "groove" => GrooveActionId::from_str(action).map(ActionId::Groove),
+        "tuner" => TunerActionId::from_str(action).map(ActionId::Tuner),
         "track" => TrackActionId::from_str(action).map(ActionId::Track),
         "vst_params" => VstParamsActionId::from_str(action).map(ActionId::VstParams),
         "waveform" => WaveformActionId::from_str(action).map(ActionId::Waveform),
