@@ -958,7 +958,13 @@ impl AudioThread {
     }
 
     fn poll_engine(&mut self) {
-        // Rate-limit voice cleanup to every 100ms (reduces overhead)
+        // Process /n_end notifications for authoritative voice cleanup
+        let ended_nodes = self.monitor.drain_node_ends();
+        if !ended_nodes.is_empty() {
+            self.engine.process_node_ends(&ended_nodes);
+        }
+
+        // Rate-limit timer-based voice cleanup to every 100ms (fallback safety net)
         if self.last_voice_cleanup.elapsed() >= Duration::from_millis(100) {
             self.last_voice_cleanup = Instant::now();
             self.engine.cleanup_expired_voices();

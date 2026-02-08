@@ -58,6 +58,7 @@ impl VoiceAllocator {
 
     /// Determine which voices to steal before spawning a new voice.
     /// Returns removed voices that the caller should free via OSC.
+    /// Control buses of stolen voices are returned to the pool.
     ///
     /// Handles:
     /// 1. Same-pitch retrigger (always steal matching pitch)
@@ -73,7 +74,9 @@ impl VoiceAllocator {
         if let Some(pos) = self.chains.iter().position(|v| {
             v.instrument_id == instrument_id && v.pitch == pitch
         }) {
-            stolen.push(self.chains.remove(pos));
+            let voice = self.chains.remove(pos);
+            self.control_bus_pool.push(voice.control_buses);
+            stolen.push(voice);
         }
 
         // 2. Count active (non-released) voices for this instrument
@@ -85,7 +88,9 @@ impl VoiceAllocator {
 
         if active_count >= MAX_VOICES_PER_INSTRUMENT {
             if let Some(pos) = self.find_steal_candidate(instrument_id) {
-                stolen.push(self.chains.remove(pos));
+                let voice = self.chains.remove(pos);
+                self.control_bus_pool.push(voice.control_buses);
+                stolen.push(voice);
             }
         }
 
@@ -154,19 +159,26 @@ impl VoiceAllocator {
         }
     }
 
-    /// Drain all voices. Returns an iterator over removed voices
-    /// for the caller to free via OSC.
-    pub fn drain_all(&mut self) -> std::vec::Drain<'_, VoiceChain> {
-        self.chains.drain(..)
+    /// Drain all voices. Returns removed voices for the caller to free via OSC.
+    /// Control buses of all drained voices are returned to the pool.
+    pub fn drain_all(&mut self) -> Vec<VoiceChain> {
+        let drained: Vec<VoiceChain> = self.chains.drain(..).collect();
+        for voice in &drained {
+            self.control_bus_pool.push(voice.control_buses);
+        }
+        drained
     }
 
     /// Remove and return all voices for a specific instrument.
+    /// Control buses of removed voices are returned to the pool.
     pub fn drain_instrument(&mut self, instrument_id: InstrumentId) -> Vec<VoiceChain> {
         let mut drained = Vec::new();
         let mut i = 0;
         while i < self.chains.len() {
             if self.chains[i].instrument_id == instrument_id {
-                drained.push(self.chains.remove(i));
+                let voice = self.chains.remove(i);
+                self.control_bus_pool.push(voice.control_buses);
+                drained.push(voice);
             } else {
                 i += 1;
             }
@@ -175,15 +187,39 @@ impl VoiceAllocator {
     }
 
     /// Remove voices whose release envelope has fully expired.
-    pub fn cleanup_expired(&mut self) {
+    /// Returns expired voices so the caller can unregister their nodes.
+    /// Control buses of expired voices are returned to the pool.
+    pub fn cleanup_expired(&mut self) -> Vec<VoiceChain> {
         let now = Instant::now();
-        self.chains.retain(|v| {
-            if let Some((released_at, release_dur)) = v.release_state {
-                now.duration_since(released_at).as_secs_f32() < release_dur + 1.5
+        let mut expired = Vec::new();
+        let mut i = 0;
+        while i < self.chains.len() {
+            let is_expired = if let Some((released_at, release_dur)) = self.chains[i].release_state {
+                now.duration_since(released_at).as_secs_f32() >= release_dur + 1.5
             } else {
-                true
+                false
+            };
+            if is_expired {
+                let voice = self.chains.remove(i);
+                self.control_bus_pool.push(voice.control_buses);
+                expired.push(voice);
+            } else {
+                i += 1;
             }
-        });
+        }
+        expired
+    }
+
+    /// Remove a voice by its group_id. Returns it if found.
+    /// Control buses are returned to the pool.
+    pub fn remove_by_group_id(&mut self, group_id: i32) -> Option<VoiceChain> {
+        if let Some(pos) = self.chains.iter().position(|v| v.group_id == group_id) {
+            let voice = self.chains.remove(pos);
+            self.control_bus_pool.push(voice.control_buses);
+            Some(voice)
+        } else {
+            None
+        }
     }
 
     /// Iterate over all voices for a given instrument.
@@ -196,6 +232,11 @@ impl VoiceAllocator {
         &self.chains
     }
 
+    /// Number of control bus triples in the reuse pool.
+    pub fn control_bus_pool_size(&self) -> usize {
+        self.control_bus_pool.len()
+    }
+
     /// Sync bus watermarks from the bus allocator after a routing rebuild.
     pub fn sync_bus_watermarks(&mut self, audio_bus: i32, control_bus: i32) {
         self.next_audio_bus = audio_bus;
@@ -203,5 +244,129 @@ impl VoiceAllocator {
         if control_bus > self.next_control_bus {
             self.next_control_bus = control_bus;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    fn make_voice(inst_id: InstrumentId, pitch: u8, group_id: i32, buses: (i32, i32, i32)) -> VoiceChain {
+        VoiceChain {
+            instrument_id: inst_id,
+            pitch,
+            velocity: 0.8,
+            group_id,
+            midi_node_id: group_id + 1,
+            source_node: group_id + 2,
+            spawn_time: Instant::now(),
+            release_state: None,
+            control_buses: buses,
+        }
+    }
+
+    fn make_expired_voice(inst_id: InstrumentId, pitch: u8, group_id: i32, buses: (i32, i32, i32)) -> VoiceChain {
+        VoiceChain {
+            instrument_id: inst_id,
+            pitch,
+            velocity: 0.8,
+            group_id,
+            midi_node_id: group_id + 1,
+            source_node: group_id + 2,
+            spawn_time: Instant::now() - Duration::from_secs(10),
+            release_state: Some((Instant::now() - Duration::from_secs(5), 0.5)),
+            control_buses: buses,
+        }
+    }
+
+    #[test]
+    fn test_control_buses_returned_on_cleanup_expired() {
+        let mut alloc = VoiceAllocator::new();
+        let buses = alloc.alloc_control_buses();
+        alloc.add(make_expired_voice(1, 60, 100, buses));
+        // Also add a live voice that should NOT be cleaned up
+        let buses2 = alloc.alloc_control_buses();
+        alloc.add(make_voice(1, 72, 200, buses2));
+
+        assert_eq!(alloc.control_bus_pool_size(), 0);
+        let expired = alloc.cleanup_expired();
+        assert_eq!(expired.len(), 1);
+        assert_eq!(expired[0].group_id, 100);
+        assert_eq!(alloc.control_bus_pool_size(), 1);
+        assert_eq!(alloc.chains().len(), 1);
+    }
+
+    #[test]
+    fn test_control_buses_returned_on_drain_all() {
+        let mut alloc = VoiceAllocator::new();
+        let buses1 = alloc.alloc_control_buses();
+        let buses2 = alloc.alloc_control_buses();
+        alloc.add(make_voice(1, 60, 100, buses1));
+        alloc.add(make_voice(1, 72, 200, buses2));
+
+        assert_eq!(alloc.control_bus_pool_size(), 0);
+        let drained = alloc.drain_all();
+        assert_eq!(drained.len(), 2);
+        assert_eq!(alloc.control_bus_pool_size(), 2);
+        assert!(alloc.chains().is_empty());
+    }
+
+    #[test]
+    fn test_control_buses_returned_on_steal() {
+        let mut alloc = VoiceAllocator::new();
+        let buses = alloc.alloc_control_buses();
+        alloc.add(make_voice(1, 60, 100, buses));
+
+        assert_eq!(alloc.control_bus_pool_size(), 0);
+        // Same-pitch retrigger should steal and return buses
+        let stolen = alloc.steal_voices(1, 60);
+        assert_eq!(stolen.len(), 1);
+        assert_eq!(alloc.control_bus_pool_size(), 1);
+    }
+
+    #[test]
+    fn test_remove_by_group_id() {
+        let mut alloc = VoiceAllocator::new();
+        let buses = alloc.alloc_control_buses();
+        alloc.add(make_voice(1, 60, 100, buses));
+        let buses2 = alloc.alloc_control_buses();
+        alloc.add(make_voice(1, 72, 200, buses2));
+
+        assert_eq!(alloc.control_bus_pool_size(), 0);
+        let removed = alloc.remove_by_group_id(100);
+        assert!(removed.is_some());
+        assert_eq!(removed.unwrap().pitch, 60);
+        assert_eq!(alloc.control_bus_pool_size(), 1);
+        assert_eq!(alloc.chains().len(), 1);
+    }
+
+    #[test]
+    fn test_remove_by_group_id_not_found() {
+        let mut alloc = VoiceAllocator::new();
+        let buses = alloc.alloc_control_buses();
+        alloc.add(make_voice(1, 60, 100, buses));
+
+        let removed = alloc.remove_by_group_id(999);
+        assert!(removed.is_none());
+        assert_eq!(alloc.control_bus_pool_size(), 0);
+        assert_eq!(alloc.chains().len(), 1);
+    }
+
+    #[test]
+    fn test_control_buses_returned_on_drain_instrument() {
+        let mut alloc = VoiceAllocator::new();
+        let buses1 = alloc.alloc_control_buses();
+        let buses2 = alloc.alloc_control_buses();
+        let buses3 = alloc.alloc_control_buses();
+        alloc.add(make_voice(1, 60, 100, buses1));
+        alloc.add(make_voice(2, 72, 200, buses2)); // different instrument
+        alloc.add(make_voice(1, 84, 300, buses3));
+
+        assert_eq!(alloc.control_bus_pool_size(), 0);
+        let drained = alloc.drain_instrument(1);
+        assert_eq!(drained.len(), 2);
+        assert_eq!(alloc.control_bus_pool_size(), 2);
+        assert_eq!(alloc.chains().len(), 1); // instrument 2 voice remains
     }
 }

@@ -94,6 +94,9 @@ pub struct AudioMonitor {
     vst_param_tx: Sender<(i32, VstParamReply)>,
     /// Accumulated VST param replies per node (populated by audio thread from channel)
     vst_params_accumulated: Arc<Mutex<HashMap<i32, Vec<VstParamReply>>>>,
+    /// Channel for /n_end notifications from SuperCollider (node freed)
+    node_end_tx: Sender<i32>,
+    node_end_rx: Receiver<i32>,
 }
 
 impl Default for AudioMonitor {
@@ -107,6 +110,7 @@ impl AudioMonitor {
         let mut scope = VecDeque::with_capacity(SCOPE_BUFFER_SIZE);
         scope.resize(SCOPE_BUFFER_SIZE, 0.0);
         let (vst_param_tx, vst_param_rx) = unbounded();
+        let (node_end_tx, node_end_rx) = unbounded();
         Self {
             meter_data: Arc::new(AtomicU64::new(pack_f32_pair(0.0, 0.0))),
             audio_in_waveforms: TripleBufferHandle::new(),
@@ -120,6 +124,8 @@ impl AudioMonitor {
             vst_param_rx,
             vst_param_tx,
             vst_params_accumulated: Arc::new(Mutex::new(HashMap::new())),
+            node_end_tx,
+            node_end_rx,
         }
     }
 
@@ -212,6 +218,15 @@ impl AudioMonitor {
         let map = self.vst_params_accumulated.lock().unwrap();
         map.get(&node_id).map(|v| v.len()).unwrap_or(0)
     }
+
+    /// Drain all pending /n_end node IDs from the channel.
+    pub fn drain_node_ends(&self) -> Vec<i32> {
+        let mut ids = Vec::new();
+        while let Ok(id) = self.node_end_rx.try_recv() {
+            ids.push(id);
+        }
+        ids
+    }
 }
 
 pub struct OscClient {
@@ -231,6 +246,8 @@ pub struct OscClient {
     vst_param_tx: Sender<(i32, VstParamReply)>,
     vst_param_rx: Receiver<(i32, VstParamReply)>,
     vst_params_accumulated: Arc<Mutex<HashMap<i32, Vec<VstParamReply>>>>,
+    node_end_tx: Sender<i32>,
+    node_end_rx: Receiver<i32>,
     _recv_thread: Option<JoinHandle<()>>,
 }
 
@@ -245,6 +262,7 @@ struct OscRefs {
     osc_latency_ms: Arc<AtomicU32>,
     status_sent_at: Arc<AtomicU64>,
     vst_param_tx: Sender<(i32, VstParamReply)>,
+    node_end_tx: Sender<i32>,
 }
 
 fn handle_osc_packet(packet: &OscPacket, refs: &OscRefs) {
@@ -370,6 +388,13 @@ fn handle_osc_packet(packet: &OscPacket, refs: &OscRefs) {
                     value,
                     display,
                 }));
+            } else if msg.addr == "/n_end" && !msg.args.is_empty() {
+                // /n_end nodeID [prev_node_id, ...] — SC notifies when a node is freed
+                let node_id = match msg.args.first() {
+                    Some(OscType::Int(v)) => *v,
+                    _ => return,
+                };
+                let _ = refs.node_end_tx.send(node_id);
             }
         }
         OscPacket::Bundle(bundle) => {
@@ -400,11 +425,14 @@ impl OscClient {
         let vst_param_tx = monitor.vst_param_tx.clone();
         let vst_param_rx = monitor.vst_param_rx.clone();
         let vst_params_accumulated = Arc::clone(&monitor.vst_params_accumulated);
+        let node_end_tx = monitor.node_end_tx.clone();
+        let node_end_rx = monitor.node_end_rx.clone();
 
         // Clone socket for receive thread
         let recv_socket = socket.try_clone()?;
         recv_socket.set_read_timeout(Some(Duration::from_millis(50)))?;
         let osc_vst_param_tx = vst_param_tx.clone();
+        let osc_node_end_tx = node_end_tx.clone();
         let refs = OscRefs {
             meter: Arc::clone(&meter_data),
             waveforms: audio_in_waveforms.clone(),
@@ -415,6 +443,7 @@ impl OscClient {
             osc_latency_ms: Arc::clone(&osc_latency_ms),
             status_sent_at: Arc::clone(&status_sent_at),
             vst_param_tx: osc_vst_param_tx,
+            node_end_tx: osc_node_end_tx,
         };
 
         let handle = thread::spawn(move || {
@@ -447,6 +476,8 @@ impl OscClient {
             vst_param_tx,
             vst_param_rx,
             vst_params_accumulated,
+            node_end_tx,
+            node_end_rx,
             _recv_thread: Some(handle),
         })
     }
@@ -466,6 +497,8 @@ impl OscClient {
             vst_param_tx: self.vst_param_tx.clone(),
             vst_param_rx: self.vst_param_rx.clone(),
             vst_params_accumulated: Arc::clone(&self.vst_params_accumulated),
+            node_end_tx: self.node_end_tx.clone(),
+            node_end_rx: self.node_end_rx.clone(),
         }
     }
 

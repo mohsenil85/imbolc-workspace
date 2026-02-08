@@ -244,6 +244,7 @@ impl AudioEngine {
             source_node: source_node_id,
             spawn_time: Instant::now(),
             release_state: None,
+            control_buses: (voice_freq_bus, voice_gate_bus, voice_vel_bus),
         });
 
         Ok(())
@@ -497,6 +498,7 @@ impl AudioEngine {
             source_node: sampler_node_id,
             spawn_time: Instant::now(),
             release_state: None,
+            control_buses: (voice_freq_bus, voice_gate_bus, voice_vel_bus),
         });
 
         Ok(())
@@ -568,7 +570,12 @@ impl AudioEngine {
     /// Remove voices whose release envelope has fully expired.
     /// Called periodically from the audio thread to prevent unbounded growth.
     pub fn cleanup_expired_voices(&mut self) {
-        self.voice_allocator.cleanup_expired();
+        let expired = self.voice_allocator.cleanup_expired();
+        for voice in &expired {
+            self.node_registry.unregister(voice.group_id);
+            self.node_registry.unregister(voice.midi_node_id);
+            self.node_registry.unregister(voice.source_node);
+        }
     }
 
     /// Steal a voice if needed before spawning a new one.
@@ -881,9 +888,35 @@ impl AudioEngine {
             )
             .map_err(|e| e.to_string())?;
 
-        // Note: We don't add this to voice_allocator since it's a one-shot
-        // that will auto-free. No need for voice stealing or tracking.
+        // Track control buses for return when /n_end arrives
+        self.oneshot_buses.insert(group_id, (voice_freq_bus, voice_gate_bus, voice_vel_bus));
+
+        // Register nodes for the node registry
+        self.node_registry.register(group_id);
+        self.node_registry.register(midi_node_id);
+        self.node_registry.register(source_node_id);
 
         Ok(())
+    }
+
+    /// Process /n_end notifications from SuperCollider.
+    /// For each ended node, remove it from voice tracking, return control buses,
+    /// and unregister from the node registry.
+    pub fn process_node_ends(&mut self, ended_node_ids: &[i32]) {
+        for &node_id in ended_node_ids {
+            if let Some(voice) = self.voice_allocator.remove_by_group_id(node_id) {
+                // Polyphonic voice freed — buses already returned by remove_by_group_id
+                self.node_registry.unregister(voice.group_id);
+                self.node_registry.unregister(voice.midi_node_id);
+                self.node_registry.unregister(voice.source_node);
+            } else if let Some(buses) = self.oneshot_buses.remove(&node_id) {
+                // One-shot voice freed — return buses manually
+                self.voice_allocator.return_control_buses(buses.0, buses.1, buses.2);
+                self.node_registry.unregister(node_id);
+            } else {
+                // Unknown node (routing synth, meter, etc.) — just unregister
+                self.node_registry.unregister(node_id);
+            }
+        }
     }
 }

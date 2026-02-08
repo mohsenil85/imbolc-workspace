@@ -188,3 +188,18 @@ Added master level meter rendering in the frame border.
 Server pane displays connection status and messages; frame no longer renders a bottom console.
 
 **Files:** `src/panes/server_pane.rs`, `src/ui/frame.rs`
+
+---
+
+## Architecture Tasks (from TASKS_ARCH.md)
+
+### OutputTarget Bus Routing [Q12] — DONE
+`OutputTarget::Bus(n)` routes instrument output synth to that bus's audio bus.
+`OutputTarget::Master` routes to hardware bus 0. Layer groups also support output target routing.
+
+**Files:** `imbolc-core/src/audio/engine/routing.rs`, `imbolc-core/synthdefs/defs/output/imbolc_output.scd`, `imbolc_output_mono.scd`, `imbolc_bus_out.scd`, `imbolc-core/src/dispatch/mixer.rs`
+
+### Selectable Send Tap Points [Q13] — DONE
+Per-send `SendTapPoint` enum: `PreInsert` (pre-filter/FX) and `PostInsert` (post-effects, pre-fader, default). `MixerAction::CycleSendTapPoint` action for UI cycling.
+
+**Files:** `imbolc-types/src/state/instrument/mod.rs`, `imbolc-core/src/audio/engine/routing.rs`, `imbolc-core/src/dispatch/mixer.rs`, `imbolc-types/src/action.rs`
