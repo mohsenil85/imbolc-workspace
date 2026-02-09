@@ -48,10 +48,16 @@ impl LocalDispatcher {
 
     /// Dispatch an action using the provided audio handle.
     /// This method allows passing audio separately to avoid borrow conflicts.
+    ///
+    /// After dispatch, forwards the action to the audio thread for incremental
+    /// state projection (Phase 2). The audio thread applies the action's state
+    /// mutations to its local copies, avoiding full-state clones.
     pub fn dispatch_with_audio(&mut self, action: &Action, audio: &mut AudioHandle) -> DispatchResult {
         let mut effects: Vec<AudioSideEffect> = Vec::new();
         let result = dispatch_action(action, &mut self.state, &*audio, &mut effects, &self.io_tx);
         apply_side_effects(&effects, audio);
+        // Forward action to audio thread for incremental state projection
+        audio.forward_action(action, &self.state, result.audio_dirty);
         result
     }
 }

@@ -285,7 +285,8 @@ impl AudioThread {
 
             // State synchronization
             UpdateState { .. } | UpdatePianoRollData { .. } |
-            UpdateAutomationLanes { .. } => self.handle_state_cmd(cmd),
+            UpdateAutomationLanes { .. } |
+            ForwardAction { .. } | FullStateSync { .. } => self.handle_state_cmd(cmd),
 
             // Playback control
             SetPlaying { .. } | ResetPlayhead | SetBpm { .. } |
@@ -432,6 +433,46 @@ impl AudioThread {
             }
             AudioCmd::UpdateAutomationLanes { lanes } => {
                 self.automation_lanes = lanes;
+            }
+            AudioCmd::ForwardAction { action, rebuild_routing: _, rebuild_instrument_routing: _, mixer_dirty: _ } => {
+                let projected = super::action_projection::project_action(
+                    &action,
+                    &mut self.instruments,
+                    &mut self.session,
+                );
+                if !projected {
+                    // Action wasn't projectable — main thread also sends
+                    // UpdateState via flush_dirty (shadow validation path).
+                    log::debug!(target: "audio::projection", "unprojectable action: {:?}", std::mem::discriminant(&*action));
+                }
+
+                // During shadow validation: routing/mixer handled by flush_dirty's
+                // RebuildRouting/UpdateMixerParams commands. Skip here to avoid
+                // double-processing. When flush_dirty is removed, uncomment:
+                // if rebuild_routing {
+                //     self.routing_rebuild = Some(RoutingRebuildPhase::TearDown);
+                // } else if let Some(id) = rebuild_instrument_routing {
+                //     let _ = self.engine.rebuild_single_instrument_routing(id, &self.instruments, &self.session);
+                // }
+                // if mixer_dirty {
+                //     let _ = self.engine.update_all_instrument_mixer_params(&self.instruments, &self.session);
+                // }
+            }
+            AudioCmd::FullStateSync { instruments, session, piano_roll, automation_lanes, rebuild_routing } => {
+                self.instruments = instruments;
+                self.session = session;
+                // Preserve runtime state (playhead, playing)
+                let playhead = self.piano_roll.playhead;
+                let playing = self.piano_roll.playing;
+                self.piano_roll = piano_roll;
+                self.piano_roll.playhead = playhead;
+                self.piano_roll.playing = playing;
+                self.automation_lanes = automation_lanes;
+                if rebuild_routing {
+                    self.routing_rebuild = Some(
+                        super::engine::routing::RoutingRebuildPhase::TearDown,
+                    );
+                }
             }
             _ => {}
         }

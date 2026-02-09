@@ -97,6 +97,13 @@ or select grid resolution.
 
 ## Long-term
 
+### Scaling Bottlenecks
+
+See [docs/scaling-analysis.md](docs/scaling-analysis.md) for ranked analysis
+of local and network scaling issues.
+
+---
+
 ### Multi-track Audio Recording
 
 **Sources:** NEXT_STEPS #8

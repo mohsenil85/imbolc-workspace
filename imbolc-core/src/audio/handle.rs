@@ -11,6 +11,8 @@ use std::time::Duration;
 
 use crossbeam_channel::Sender as CrossbeamSender;
 
+use imbolc_types::Action;
+
 use super::commands::{AudioCmd, AudioFeedback};
 use super::osc_client::AudioMonitor;
 use super::snapshot::{AutomationSnapshot, InstrumentSnapshot, PianoRollSnapshot, SessionSnapshot};
@@ -248,7 +250,142 @@ impl AudioHandle {
     }
 
     pub fn sync_state(&mut self, state: &AppState) {
-        self.flush_dirty(state, AudioDirty::all());
+        self.send_full_sync(state, true);
+    }
+
+    /// Forward an action to the audio thread for incremental state projection.
+    ///
+    /// During shadow validation: sends only the ForwardAction command so the audio
+    /// thread can project state changes. flush_dirty() still handles all routing,
+    /// params, and state sync via the old path. Once shadow validation confirms
+    /// correctness, this method will replace flush_dirty() entirely.
+    ///
+    /// Skips undo/redo (not incrementally projectable — handled by flush_dirty).
+    pub fn forward_action(&mut self, action: &Action, _state: &AppState, dirty: AudioDirty) {
+        if !dirty.any() {
+            return;
+        }
+
+        // Undo/Redo: not projectable, skip. flush_dirty() handles full sync.
+        if matches!(action, Action::Undo | Action::Redo) {
+            return;
+        }
+
+        // Send ForwardAction for the audio thread to project state incrementally.
+        // During shadow validation, flush_dirty() also sends UpdateState which
+        // overwrites the projected state — the audio thread can compare before overwrite.
+        self.send(AudioCmd::ForwardAction {
+            action: Box::new(action.clone()),
+            rebuild_routing: dirty.routing,
+            rebuild_instrument_routing: dirty.routing_instrument,
+            mixer_dirty: dirty.mixer_params,
+        });
+    }
+
+    /// Send full state replacement to the audio thread (for undo/redo/load).
+    /// Currently unused during shadow validation — will replace flush_dirty's UpdateState path.
+    #[allow(dead_code)]
+    fn send_full_sync(&mut self, state: &AppState, rebuild_routing: bool) {
+        // Compute piano roll and automation snapshots
+        let piano_roll = if state.session.arrangement.play_mode == PlayMode::Song
+            && state.session.arrangement.editing_clip.is_none()
+        {
+            let mut flat_pr = state.session.piano_roll.clone();
+            let (flattened, arr_len, _) = self.arrangement_cache.get_or_compute(&state.session.arrangement);
+            for (&instrument_id, track) in &mut flat_pr.tracks {
+                track.notes = flattened.get(&instrument_id).cloned().unwrap_or_default();
+            }
+            if arr_len > 0 {
+                flat_pr.loop_end = arr_len;
+                flat_pr.looping = false;
+            }
+            flat_pr
+        } else {
+            state.session.piano_roll.clone()
+        };
+
+        let automation_lanes = if state.session.arrangement.play_mode == PlayMode::Song
+            && state.session.arrangement.editing_clip.is_none()
+        {
+            let (_, _, flattened_auto) = self.arrangement_cache.get_or_compute(&state.session.arrangement);
+            let mut merged = state.session.automation.lanes.clone();
+            merged.extend(flattened_auto.iter().cloned());
+            merged
+        } else {
+            state.session.automation.lanes.clone()
+        };
+
+        self.send(AudioCmd::FullStateSync {
+            instruments: state.instruments.clone(),
+            session: state.session.clone(),
+            piano_roll,
+            automation_lanes,
+            rebuild_routing,
+        });
+    }
+
+    /// Send flattened piano roll / automation for Song mode if dirty.
+    /// Currently unused during shadow validation — will replace flush_dirty's flattening path.
+    #[allow(dead_code)]
+    fn send_flattened_if_needed(&mut self, state: &AppState, dirty: &AudioDirty) {
+        if dirty.piano_roll {
+            if state.session.arrangement.play_mode == PlayMode::Song
+                && state.session.arrangement.editing_clip.is_none()
+            {
+                let mut flat_pr = state.session.piano_roll.clone();
+                let (flattened, arr_len, _) = self.arrangement_cache.get_or_compute(&state.session.arrangement);
+                for (&instrument_id, track) in &mut flat_pr.tracks {
+                    track.notes = flattened.get(&instrument_id).cloned().unwrap_or_default();
+                }
+                if arr_len > 0 {
+                    flat_pr.loop_end = arr_len;
+                    flat_pr.looping = false;
+                }
+                self.update_piano_roll_data(&flat_pr);
+            }
+            // In Live/clip-edit mode, ForwardAction updates session.piano_roll directly
+        }
+        if dirty.automation {
+            if state.session.arrangement.play_mode == PlayMode::Song
+                && state.session.arrangement.editing_clip.is_none()
+            {
+                let (_, _, flattened_auto) = self.arrangement_cache.get_or_compute(&state.session.arrangement);
+                let mut merged = state.session.automation.lanes.clone();
+                merged.extend(flattened_auto.iter().cloned());
+                self.update_automation_lanes(&merged);
+            }
+            // In Live/clip-edit mode, ForwardAction updates session.automation directly
+        }
+    }
+
+    /// Send routing rebuild triggers and targeted param updates.
+    /// Currently unused during shadow validation — will replace flush_dirty's routing/param path.
+    #[allow(dead_code)]
+    fn send_routing_and_params(&self, state: &AppState, dirty: &AudioDirty) {
+        // Note: routing and mixer_params are handled by ForwardAction metadata fields
+        // (rebuild_routing, rebuild_instrument_routing, mixer_dirty).
+        // Targeted param updates bypass ForwardAction entirely via priority channel:
+        if let Some((instrument_id, param_kind, value)) = dirty.filter_param {
+            if let Err(e) = self.set_filter_param(instrument_id, param_kind.as_str(), value) {
+                log::warn!(target: "audio", "set_filter_param dropped: {}", e);
+            }
+        }
+        if let Some((instrument_id, effect_id, param_idx, value)) = dirty.effect_param {
+            if let Some(inst) = state.instruments.instrument(instrument_id) {
+                if let Some(effect) = inst.effect_by_id(effect_id) {
+                    if let Some(param) = effect.params.get(param_idx) {
+                        if let Err(e) = self.set_effect_param(instrument_id, effect_id, &param.name, value) {
+                            log::warn!(target: "audio", "set_effect_param dropped: {}", e);
+                        }
+                    }
+                }
+            }
+        }
+        if let Some((instrument_id, param_kind, value)) = dirty.lfo_param {
+            if let Err(e) = self.set_lfo_param(instrument_id, param_kind.as_str(), value) {
+                log::warn!(target: "audio", "set_lfo_param dropped: {}", e);
+            }
+        }
     }
 
     pub fn flush_dirty(&mut self, state: &AppState, dirty: AudioDirty) {

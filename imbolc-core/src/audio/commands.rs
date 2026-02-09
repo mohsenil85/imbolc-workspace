@@ -6,6 +6,8 @@
 use std::path::PathBuf;
 use std::sync::mpsc::Sender;
 
+use imbolc_types::Action;
+
 use crate::action::VstTarget;
 use crate::audio::snapshot::{AutomationSnapshot, InstrumentSnapshot, PianoRollSnapshot, SessionSnapshot};
 use crate::state::automation::AutomationTarget;
@@ -61,6 +63,26 @@ pub enum AudioCmd {
     },
     UpdateAutomationLanes {
         lanes: AutomationSnapshot,
+    },
+
+    // ── Action-based state sync (Phase 2) ────────────────────────
+    /// Incremental state update: audio thread applies the action to its local copies.
+    ForwardAction {
+        action: Box<Action>,
+        /// Full routing rebuild needed
+        rebuild_routing: bool,
+        /// Single-instrument routing rebuild
+        rebuild_instrument_routing: Option<InstrumentId>,
+        /// Mixer params changed (trigger engine apply)
+        mixer_dirty: bool,
+    },
+    /// Full state replacement (fallback for undo/redo/load).
+    FullStateSync {
+        instruments: InstrumentSnapshot,
+        session: SessionSnapshot,
+        piano_roll: PianoRollSnapshot,
+        automation_lanes: AutomationSnapshot,
+        rebuild_routing: bool,
     },
 
     // ── Playback control ──────────────────────────────────────────

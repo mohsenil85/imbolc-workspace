@@ -1,3 +1,4 @@
+pub mod action_projection;
 pub mod audio_thread;
 pub mod bus_allocator;
 pub mod click_tick;

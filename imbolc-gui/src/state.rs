@@ -50,7 +50,10 @@ impl SharedState {
         );
         apply_side_effects(&effects, &mut self.audio);
 
-        // Handle audio dirty flags
+        // Forward action to audio thread for incremental state projection (Phase 2)
+        self.audio.forward_action(&action, &self.app, result.audio_dirty);
+
+        // Handle audio dirty flags (shadow validation: old path still active)
         if result.audio_dirty.any() {
             self.audio.flush_dirty(&self.app, result.audio_dirty);
         }

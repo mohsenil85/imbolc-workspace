@@ -119,6 +119,7 @@ buffer_size/sample_rate. Replaces the hardcoded 15ms
 
 ### 7. Modular routing [Q11]
 
+new version planned at targeted-routing-loosening.md
 Instruments, effects, and buses as nodes in a signal graph. Arbitrary
 routing (instrument A output -> instrument B sidechain). Breaks the
 monolithic Instrument model. Current bus system handles shared FX for
