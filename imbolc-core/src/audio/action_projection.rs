@@ -389,6 +389,12 @@ fn project_instrument(
             project_unlink_layer(instruments, session, *id);
             true
         }
+        InstrumentAction::AdjustLayerOctaveOffset(id, delta) => {
+            if let Some(inst) = instruments.instrument_mut(*id) {
+                inst.layer_octave_offset = (inst.layer_octave_offset + delta).clamp(-4, 4);
+            }
+            true
+        }
         // Groove settings
         InstrumentAction::SetTrackSwing(id, value) => {
             if let Some(inst) = instruments.instrument_mut(*id) {

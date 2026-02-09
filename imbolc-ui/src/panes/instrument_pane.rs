@@ -159,6 +159,20 @@ impl Pane for InstrumentPane {
                     Action::None
                 }
             }
+            ActionId::InstrumentList(InstrumentListActionId::LayerOctaveUp) => {
+                if let Some(instrument) = state.instruments.selected_instrument() {
+                    Action::Instrument(InstrumentAction::AdjustLayerOctaveOffset(instrument.id, 1))
+                } else {
+                    Action::None
+                }
+            }
+            ActionId::InstrumentList(InstrumentListActionId::LayerOctaveDown) => {
+                if let Some(instrument) = state.instruments.selected_instrument() {
+                    Action::Instrument(InstrumentAction::AdjustLayerOctaveOffset(instrument.id, -1))
+                } else {
+                    Action::None
+                }
+            }
 
             // Piano layer actions
             ActionId::Mode(ModeActionId::PianoEscape) => {
@@ -275,6 +289,9 @@ impl Pane for InstrumentPane {
             let source_c = source_color(instrument.source);
 
             let layer_str = match instrument.layer_group {
+                Some(g) if instrument.layer_octave_offset != 0 => {
+                    format!(" [L{}:{:+}]", g, instrument.layer_octave_offset)
+                }
                 Some(g) => format!(" [L{}]", g),
                 None => String::new(),
             };
@@ -616,5 +633,47 @@ mod tests {
         // Any non-nav, non-link action should cancel
         pane.handle_action(ActionId::InstrumentList(InstrumentListActionId::Delete), &dummy_event(), &state);
         assert!(pane.linking_from.is_none());
+    }
+
+    #[test]
+    fn layer_octave_up_returns_adjust_action() {
+        use crate::ui::action_id::{ActionId, InstrumentListActionId};
+        let mut state = AppState::new();
+        let id = state.add_instrument(SourceType::Saw);
+        let mut pane = InstrumentPane::new(Keymap::new());
+
+        let action = pane.handle_action(
+            ActionId::InstrumentList(InstrumentListActionId::LayerOctaveUp),
+            &dummy_event(),
+            &state,
+        );
+        match action {
+            Action::Instrument(InstrumentAction::AdjustLayerOctaveOffset(got_id, delta)) => {
+                assert_eq!(got_id, id);
+                assert_eq!(delta, 1);
+            }
+            _ => panic!("Expected AdjustLayerOctaveOffset(+1), got {:?}", action),
+        }
+    }
+
+    #[test]
+    fn layer_octave_down_returns_adjust_action() {
+        use crate::ui::action_id::{ActionId, InstrumentListActionId};
+        let mut state = AppState::new();
+        let id = state.add_instrument(SourceType::Saw);
+        let mut pane = InstrumentPane::new(Keymap::new());
+
+        let action = pane.handle_action(
+            ActionId::InstrumentList(InstrumentListActionId::LayerOctaveDown),
+            &dummy_event(),
+            &state,
+        );
+        match action {
+            Action::Instrument(InstrumentAction::AdjustLayerOctaveOffset(got_id, delta)) => {
+                assert_eq!(got_id, id);
+                assert_eq!(delta, -1);
+            }
+            _ => panic!("Expected AdjustLayerOctaveOffset(-1), got {:?}", action),
+        }
     }
 }

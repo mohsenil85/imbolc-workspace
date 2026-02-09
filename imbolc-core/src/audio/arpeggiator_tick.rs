@@ -29,7 +29,12 @@ pub fn tick_arpeggiator(
             // Release any currently sounding note
             if let Some(pitch) = arp.current_pitch.take() {
                 if engine.is_running() {
-                    let _ = engine.release_voice(instrument_id, pitch, 0.0, instruments);
+                    let targets = instruments.layer_group_members(instrument_id);
+                    for &target_id in &targets {
+                        let release_pitch = instruments.instrument(target_id)
+                            .map_or(pitch, |i| i.offset_pitch(pitch));
+                        let _ = engine.release_voice(target_id, release_pitch, 0.0, instruments);
+                    }
                 }
             }
             continue;
@@ -62,7 +67,12 @@ pub fn tick_arpeggiator(
             // Release previous note
             if let Some(pitch) = arp.current_pitch.take() {
                 if engine.is_running() {
-                    let _ = engine.release_voice(instrument_id, pitch, step_offset, instruments);
+                    let targets = instruments.layer_group_members(instrument_id);
+                    for &target_id in &targets {
+                        let release_pitch = instruments.instrument(target_id)
+                            .map_or(pitch, |i| i.offset_pitch(pitch));
+                        let _ = engine.release_voice(target_id, release_pitch, step_offset, instruments);
+                    }
                 }
             }
 
@@ -116,11 +126,13 @@ pub fn tick_arpeggiator(
                 let any_solo = instruments.any_instrument_solo();
                 let targets = instruments.layer_group_members(instrument_id);
                 for &target_id in &targets {
-                    let skip = instruments.instrument(target_id).map_or(true, |inst| {
+                    let inst = instruments.instrument(target_id);
+                    let skip = inst.map_or(true, |inst| {
                         !inst.active || if any_solo { !inst.solo } else { inst.mute }
                     });
                     if skip { continue; }
-                    let _ = engine.spawn_voice(target_id, pitch, vel_f, step_offset, instruments, session);
+                    let target_pitch = inst.map_or(pitch, |i| i.offset_pitch(pitch));
+                    let _ = engine.spawn_voice(target_id, target_pitch, vel_f, step_offset, instruments, session);
                 }
             }
             arp.current_pitch = Some(pitch);
@@ -140,7 +152,12 @@ pub fn tick_arpeggiator(
             // Release any sounding note before removing
             if let Some(pitch) = state.current_pitch {
                 if engine.is_running() {
-                    let _ = engine.release_voice(*id, pitch, 0.0, instruments);
+                    let targets = instruments.layer_group_members(*id);
+                    for &target_id in &targets {
+                        let release_pitch = instruments.instrument(target_id)
+                            .map_or(pitch, |i| i.offset_pitch(pitch));
+                        let _ = engine.release_voice(target_id, release_pitch, 0.0, instruments);
+                    }
                 }
             }
             false

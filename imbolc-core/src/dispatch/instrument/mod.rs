@@ -95,6 +95,9 @@ pub(super) fn dispatch_instrument(
         }
         InstrumentAction::LinkLayer(a, b) => layer::handle_link_layer(state, *a, *b),
         InstrumentAction::UnlinkLayer(id) => layer::handle_unlink_layer(state, *id),
+        InstrumentAction::AdjustLayerOctaveOffset(id, delta) => {
+            layer::handle_adjust_layer_octave_offset(state, *id, *delta)
+        }
         // Per-track groove settings
         InstrumentAction::SetTrackSwing(id, value) => {
             groove::handle_set_track_swing(state, *id, *value)

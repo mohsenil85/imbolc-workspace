@@ -244,6 +244,8 @@ pub fn tick_playback(
                     vel_f = (vel_f + jitter).clamp(0.01, 1.0);
                 }
 
+                let pitch = instruments.instrument(instrument_id)
+                    .map_or(pitch, |inst| inst.offset_pitch(pitch));
                 let _ = engine.spawn_voice(instrument_id, pitch, vel_f, offset, instruments, session);
                 active_notes.push((instrument_id, pitch, duration));
             }

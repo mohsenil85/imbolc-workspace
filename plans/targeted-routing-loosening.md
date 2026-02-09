@@ -260,18 +260,23 @@ tests (`round_trip_bus_effects`,
 **Files:** `imbolc-core/src/state/persistence/schema.rs`, `save.rs`,
 `load.rs`, `tests.rs`.
 
-### B6. UI (`imbolc-ui/src/panes/mixer_pane/`)
+### ~~B6. UI (`imbolc-ui/src/panes/mixer_pane/`)~~ ✓
 
-- Add bus detail view: when bus is selected and user presses Enter,
-  show effects list with params (simpler than instrument detail — no
-  filter/LFO/sends sections)
-- Input handling: navigate effect params, add/remove/move effects,
-  toggle bypass, adjust params
-- Emit `Action::Bus(BusAction::...)` instead of
-  `Action::Instrument(InstrumentAction::...)`
-- Extend add-effect pane to accept an `EffectTarget` context
-  (`Instrument(id)`, `Bus(id)`, `LayerGroup(id)`) so it returns the
-  right action type
+**Done.** Three detail views (instrument, bus, layer group) with full
+effect chain editing. Mixer pane split into `mod.rs` / `input.rs` /
+`rendering.rs`. Each detail view has section cycling (Tab/Shift+Tab),
+effect CRUD (`a` add, `d` remove, `e` bypass, `<`/`>` move),
+parameter adjustment (`+/-` fine, `Shift+/-` coarse), and cursor
+tracking via `decode_effect_cursor()` helpers. Added `EffectTarget`
+enum to `add_effect_pane.rs` — main.rs bridges mixer's current target
+to the modal. Instrument pane link mode refined (press `l` twice to
+confirm). 8 new mixer tests + 4 new instrument pane tests. 114 UI
+tests pass.
+
+**Files:** `imbolc-ui/src/panes/mixer_pane/{mod,input,rendering}.rs`,
+`imbolc-ui/src/panes/add_effect_pane.rs`,
+`imbolc-ui/src/panes/instrument_pane.rs`, `imbolc-ui/src/main.rs`,
+`imbolc-types/src/state/instrument/mod.rs` (cursor helpers).
 
 ---
 
@@ -303,7 +308,7 @@ Recommended: Phase B first — it's self-contained, doesn't touch the
 Instrument struct, and delivers the highest-value feature
 (reverb/compression buses). Phase A is larger and more invasive.
 
-1. ~~Phase B (bus effects)~~ — **B1–B5 done.** Only **B6 (UI)** remains.
+1. ~~Phase B (bus effects)~~ — **Complete.** All B1–B6 done.
 2. Phase A (flexible chain) — ~5 working sessions
 
 They share no code dependencies, so Phase A can't break Phase B. Bus

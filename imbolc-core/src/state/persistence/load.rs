@@ -470,6 +470,8 @@ fn load_instruments(conn: &Connection, instruments: &mut InstrumentState) -> Sql
 
     instruments.instruments.clear();
 
+    let has_layer_octave_offset = conn.prepare("SELECT layer_octave_offset FROM instruments LIMIT 0").is_ok();
+
     let mut stmt = conn.prepare(
         "SELECT id, name, source_type,
             filter_type, filter_cutoff, filter_cutoff_min, filter_cutoff_max,
@@ -658,6 +660,16 @@ fn load_instruments(conn: &Connection, instruments: &mut InstrumentState) -> Sql
         inst.chord_shape = chord_shape;
         inst.vst_state_path = r.vst_state_path.map(PathBuf::from);
         inst.groove = groove;
+
+        // Layer octave offset (backward compat: column may not exist in old databases)
+        if has_layer_octave_offset {
+            let offset: i32 = conn.query_row(
+                "SELECT layer_octave_offset FROM instruments WHERE id = ?1",
+                params![r.id],
+                |row| row.get(0),
+            ).unwrap_or(0);
+            inst.layer_octave_offset = offset.clamp(-4, 4) as i8;
+        }
 
         // Source params
         inst.source_params = load_params(conn, "instrument_source_params", "instrument_id", r.id)?;

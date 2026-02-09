@@ -234,6 +234,8 @@ define_action_enum! {
         Load => "load",
         LinkLayer => "link_layer",
         UnlinkLayer => "unlink_layer",
+        LayerOctaveUp => "layer_octave_up",
+        LayerOctaveDown => "layer_octave_down",
     }
 }
 
@@ -954,6 +956,8 @@ mod tests {
             InstrumentListActionId::Load,
             InstrumentListActionId::LinkLayer,
             InstrumentListActionId::UnlinkLayer,
+            InstrumentListActionId::LayerOctaveUp,
+            InstrumentListActionId::LayerOctaveDown,
         ];
 
         for action in actions {

@@ -1,7 +1,7 @@
 use rusqlite::{Connection, Result as SqlResult};
 
 /// Schema version for the relational format.
-pub const SCHEMA_VERSION: i32 = 9;
+pub const SCHEMA_VERSION: i32 = 10;
 
 /// Create all tables for the relational schema.
 pub fn create_tables(conn: &Connection) -> SqlResult<()> {
@@ -133,7 +133,8 @@ CREATE TABLE IF NOT EXISTS instruments (
     groove_humanize_timing REAL,
     groove_timing_offset_ms REAL NOT NULL DEFAULT 0.0,
     groove_time_sig_num INTEGER,
-    groove_time_sig_denom INTEGER
+    groove_time_sig_denom INTEGER,
+    layer_octave_offset INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS instrument_source_params (

@@ -165,8 +165,9 @@ fn save_instruments(conn: &Connection, instruments: &InstrumentState) -> SqlResu
             chord_shape, vst_state_path,
             groove_swing_amount, groove_swing_grid,
             groove_humanize_velocity, groove_humanize_timing,
-            groove_timing_offset_ms, groove_time_sig_num, groove_time_sig_denom)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24,?25,?26,?27,?28,?29,?30,?31,?32,?33,?34,?35,?36,?37,?38,?39,?40,?41,?42,?43,?44,?45,?46,?47)",
+            groove_timing_offset_ms, groove_time_sig_num, groove_time_sig_denom,
+            layer_octave_offset)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24,?25,?26,?27,?28,?29,?30,?31,?32,?33,?34,?35,?36,?37,?38,?39,?40,?41,?42,?43,?44,?45,?46,?47,?48)",
     )?;
 
     for (pos, inst) in instruments.instruments.iter().enumerate() {
@@ -242,6 +243,7 @@ fn save_instruments(conn: &Connection, instruments: &InstrumentState) -> SqlResu
             groove.timing_offset_ms,
             groove_time_sig_num,
             groove_time_sig_denom,
+            inst.layer_octave_offset as i32,
         ])?;
 
         // Source params

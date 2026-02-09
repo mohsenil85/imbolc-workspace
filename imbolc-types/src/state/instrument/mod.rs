@@ -518,6 +518,8 @@ pub struct Instrument {
     pub convolution_ir_path: Option<String>,
     /// Layer group ID: instruments sharing the same group sound together
     pub layer_group: Option<u32>,
+    /// Per-instrument octave offset for layer groups (-4 to +4, default 0)
+    pub layer_octave_offset: i8,
     /// Counter for allocating unique EffectIds
     pub next_effect_id: EffectId,
     /// Per-track groove settings (swing, humanization, timing offset)
@@ -567,6 +569,7 @@ impl Instrument {
             chord_shape: None,
             convolution_ir_path: None,
             layer_group: None,
+            layer_octave_offset: 0,
             next_effect_id: 0,
             groove: GrooveConfig::default(),
         }
@@ -615,6 +618,11 @@ impl Instrument {
             }
         }
         false
+    }
+
+    /// Apply layer octave offset to a pitch, clamping to MIDI range 0..=127.
+    pub fn offset_pitch(&self, pitch: u8) -> u8 {
+        ((pitch as i16) + (self.layer_octave_offset as i16 * 12)).clamp(0, 127) as u8
     }
 
     /// Recalculate next_effect_id from existing effects (used after loading)
@@ -874,5 +882,45 @@ mod tests {
         inst.add_effect(EffectType::Reverb);
         let total: usize = inst.effects.iter().map(|e| 1 + e.params.len()).sum();
         assert_eq!(effects_max_cursor(&inst.effects), total - 1);
+    }
+
+    #[test]
+    fn offset_pitch_identity_at_zero() {
+        let inst = Instrument::new(1, SourceType::Saw);
+        assert_eq!(inst.layer_octave_offset, 0);
+        assert_eq!(inst.offset_pitch(60), 60);
+        assert_eq!(inst.offset_pitch(0), 0);
+        assert_eq!(inst.offset_pitch(127), 127);
+    }
+
+    #[test]
+    fn offset_pitch_positive() {
+        let mut inst = Instrument::new(1, SourceType::Saw);
+        inst.layer_octave_offset = 2;
+        assert_eq!(inst.offset_pitch(60), 84); // C4 → C6
+        assert_eq!(inst.offset_pitch(48), 72); // C3 → C5
+    }
+
+    #[test]
+    fn offset_pitch_negative() {
+        let mut inst = Instrument::new(1, SourceType::Saw);
+        inst.layer_octave_offset = -3;
+        assert_eq!(inst.offset_pitch(60), 24); // C4 → C1
+    }
+
+    #[test]
+    fn offset_pitch_clamps_high() {
+        let mut inst = Instrument::new(1, SourceType::Saw);
+        inst.layer_octave_offset = 4;
+        // 120 + 48 = 168 → clamped to 127
+        assert_eq!(inst.offset_pitch(120), 127);
+    }
+
+    #[test]
+    fn offset_pitch_clamps_low() {
+        let mut inst = Instrument::new(1, SourceType::Saw);
+        inst.layer_octave_offset = -4;
+        // 10 - 48 = -38 → clamped to 0
+        assert_eq!(inst.offset_pitch(10), 0);
     }
 }

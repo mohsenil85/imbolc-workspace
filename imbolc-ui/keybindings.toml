@@ -73,6 +73,8 @@ bindings = [
   { key = "o", action = "load", description = "Load" },
   { key = "l", action = "link_layer", description = "Link layer (select target)" },
   { key = "L", action = "unlink_layer", description = "Unlink from layer group" },
+  { key = "+", action = "layer_octave_up", description = "Layer octave offset +1" },
+  { key = "-", action = "layer_octave_down", description = "Layer octave offset -1" },
 ]
 
 [layers.mixer]

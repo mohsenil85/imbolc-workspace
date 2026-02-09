@@ -124,6 +124,7 @@ pub(super) fn dispatch_piano_roll(
                             None => vec![pitch],
                         };
                         for &p in &expanded {
+                            let p = inst.offset_pitch(p);
                             effects.push(AudioSideEffect::SpawnVoice {
                                 instrument_id: target_id,
                                 pitch: p,
@@ -178,6 +179,7 @@ pub(super) fn dispatch_piano_roll(
                                 None => vec![pitch],
                             };
                             for &p in &expanded {
+                                let p = inst.offset_pitch(p);
                                 effects.push(AudioSideEffect::SpawnVoice {
                                     instrument_id: target_id,
                                     pitch: p,
@@ -441,10 +443,10 @@ pub(super) fn dispatch_piano_roll(
 
             if audio.is_running() {
                 for &target_id in &targets {
-                    if state.instruments.instrument(target_id).is_some() {
+                    if let Some(inst) = state.instruments.instrument(target_id) {
                         effects.push(AudioSideEffect::ReleaseVoice {
                             instrument_id: target_id,
-                            pitch: *pitch,
+                            pitch: inst.offset_pitch(*pitch),
                             offset_secs: 0.0,
                         });
                     }
@@ -458,11 +460,11 @@ pub(super) fn dispatch_piano_roll(
 
             if audio.is_running() {
                 for &target_id in &targets {
-                    if state.instruments.instrument(target_id).is_some() {
+                    if let Some(inst) = state.instruments.instrument(target_id) {
                         for &pitch in pitches {
                             effects.push(AudioSideEffect::ReleaseVoice {
                                 instrument_id: target_id,
-                                pitch,
+                                pitch: inst.offset_pitch(pitch),
                                 offset_secs: 0.0,
                             });
                         }

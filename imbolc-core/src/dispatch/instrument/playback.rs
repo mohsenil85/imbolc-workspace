@@ -24,15 +24,16 @@ pub(super) fn handle_play_note(
                         None => vec![pitch],
                     };
                     for p in &pitches {
+                        let p = inst.offset_pitch(*p);
                         effects.push(AudioSideEffect::SpawnVoice {
                             instrument_id: target_id,
-                            pitch: *p,
+                            pitch: p,
                             velocity: vel_f,
                             offset_secs: 0.0,
                         });
                         effects.push(AudioSideEffect::PushActiveNote {
                             instrument_id: target_id,
-                            pitch: *p,
+                            pitch: p,
                             duration_ticks: 240,
                         });
                     }
@@ -65,15 +66,16 @@ pub(super) fn handle_play_notes(
                             None => vec![pitch],
                         };
                         for p in &expanded {
+                            let p = inst.offset_pitch(*p);
                             effects.push(AudioSideEffect::SpawnVoice {
                                 instrument_id: target_id,
-                                pitch: *p,
+                                pitch: p,
                                 velocity: vel_f,
                                 offset_secs: 0.0,
                             });
                             effects.push(AudioSideEffect::PushActiveNote {
                                 instrument_id: target_id,
-                                pitch: *p,
+                                pitch: p,
                                 duration_ticks: 240,
                             });
                         }

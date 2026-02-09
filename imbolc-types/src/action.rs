@@ -688,6 +688,7 @@ pub enum InstrumentAction {
     ToggleEq(InstrumentId),
     LinkLayer(InstrumentId, InstrumentId),
     UnlinkLayer(InstrumentId),
+    AdjustLayerOctaveOffset(InstrumentId, i8),
     // Per-track groove settings
     SetTrackSwing(InstrumentId, Option<f32>),
     SetTrackSwingGrid(InstrumentId, Option<crate::SwingGrid>),
@@ -760,6 +761,7 @@ impl InstrumentAction {
             | Self::ToggleEq(id)
             | Self::LinkLayer(id, _)
             | Self::UnlinkLayer(id)
+            | Self::AdjustLayerOctaveOffset(id, _)
             | Self::SetTrackSwing(id, _)
             | Self::SetTrackSwingGrid(id, _)
             | Self::AdjustTrackSwing(id, _)

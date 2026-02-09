@@ -781,4 +781,32 @@ mod tests {
 
         std::fs::remove_file(&path).ok();
     }
+
+    #[test]
+    fn round_trip_layer_octave_offset() {
+        let mut session = SessionState::new();
+        let mut instruments = InstrumentState::new();
+        let id1 = instruments.add_instrument(SourceType::Saw);
+        let id2 = instruments.add_instrument(SourceType::Sin);
+
+        // Set non-default offsets
+        if let Some(inst) = instruments.instrument_mut(id1) {
+            inst.layer_octave_offset = 3;
+        }
+        if let Some(inst) = instruments.instrument_mut(id2) {
+            inst.layer_octave_offset = -2;
+        }
+
+        session.piano_roll.add_track(id1);
+        session.piano_roll.add_track(id2);
+
+        let path = temp_db_path();
+        save_project(&path, &session, &instruments).expect("save");
+        let (_, loaded_instruments) = load_project(&path).expect("load");
+
+        assert_eq!(loaded_instruments.instrument(id1).unwrap().layer_octave_offset, 3);
+        assert_eq!(loaded_instruments.instrument(id2).unwrap().layer_octave_offset, -2);
+
+        std::fs::remove_file(&path).ok();
+    }
 }
