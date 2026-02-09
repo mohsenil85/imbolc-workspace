@@ -374,6 +374,12 @@ impl RemoteDispatcher {
                             }
                             if let Some(instruments) = patch.instruments {
                                 self.state.instruments = instruments;
+                            } else if let Some(patches) = patch.instrument_patches {
+                                for (id, new_instrument) in patches {
+                                    if let Some(existing) = self.state.instruments.instrument_mut(id) {
+                                        *existing = new_instrument;
+                                    }
+                                }
                             }
                             if let Some(ownership) = patch.ownership {
                                 self.state.ownership = ownership;

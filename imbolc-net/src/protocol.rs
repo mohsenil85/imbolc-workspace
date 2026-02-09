@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 use imbolc_types::{
-    ArrangementAction, AutomationAction, BusAction, ChopperAction, InstrumentAction,
+    ArrangementAction, AutomationAction, BusAction, ChopperAction, Instrument, InstrumentAction,
     InstrumentId, InstrumentState, MidiAction, MixerAction, PianoRollAction, SequencerAction,
     ServerAction, SessionAction, SessionState, VstParamAction,
 };
@@ -123,6 +123,9 @@ pub struct NetworkState {
 pub struct StatePatch {
     pub session: Option<SessionState>,
     pub instruments: Option<InstrumentState>,
+    /// Per-instrument delta patches (mutually exclusive with `instruments`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub instrument_patches: Option<HashMap<InstrumentId, Instrument>>,
     pub ownership: Option<HashMap<InstrumentId, OwnerInfo>>,
     #[serde(default, skip_serializing_if = "Option::is_none", with = "double_option")]
     pub privileged_client: Option<Option<(ClientId, String)>>,

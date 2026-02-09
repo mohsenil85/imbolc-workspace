@@ -267,6 +267,7 @@ fn test_roundtrip_state_patch_update() {
     let patch = StatePatch {
         session: Some(SessionState::new()),
         instruments: None,
+        instrument_patches: None,
         ownership: None,
         privileged_client: Some(Some((ClientId::new(1), "Alice".into()))),
         seq: 42,
@@ -325,6 +326,7 @@ fn test_roundtrip_state_patch_all_none() {
     let patch = StatePatch {
         session: None,
         instruments: None,
+        instrument_patches: None,
         ownership: None,
         privileged_client: None,
         seq: 0,
@@ -344,6 +346,7 @@ fn test_roundtrip_state_patch_privileged_client_cleared() {
     let patch = StatePatch {
         session: None,
         instruments: None,
+        instrument_patches: None,
         ownership: None,
         privileged_client: Some(None), // "changed to: nobody"
         seq: 5,
@@ -358,24 +361,75 @@ fn test_roundtrip_state_patch_privileged_client_cleared() {
 #[test]
 fn test_roundtrip_state_patch_privileged_client_all_variants() {
     // None = no change
-    let p1 = StatePatch { session: None, instruments: None, ownership: None, privileged_client: None, seq: 1 };
+    let p1 = StatePatch { session: None, instruments: None, instrument_patches: None, ownership: None, privileged_client: None, seq: 1 };
     let j1 = serde_json::to_string(&p1).unwrap();
     let r1: StatePatch = serde_json::from_str(&j1).unwrap();
     assert_eq!(r1.privileged_client, None);
 
     // Some(None) = changed to nobody
-    let p2 = StatePatch { session: None, instruments: None, ownership: None, privileged_client: Some(None), seq: 2 };
+    let p2 = StatePatch { session: None, instruments: None, instrument_patches: None, ownership: None, privileged_client: Some(None), seq: 2 };
     let j2 = serde_json::to_string(&p2).unwrap();
     let r2: StatePatch = serde_json::from_str(&j2).unwrap();
     assert_eq!(r2.privileged_client, Some(None));
 
     // Some(Some(...)) = changed to Alice
     let p3 = StatePatch {
-        session: None, instruments: None, ownership: None,
+        session: None, instruments: None, instrument_patches: None, ownership: None,
         privileged_client: Some(Some((ClientId::new(1), "Alice".into()))),
         seq: 3,
     };
     let j3 = serde_json::to_string(&p3).unwrap();
     let r3: StatePatch = serde_json::from_str(&j3).unwrap();
     assert!(matches!(r3.privileged_client, Some(Some(_))));
+}
+
+// --- instrument_patches roundtrip ---
+
+#[test]
+fn test_roundtrip_state_patch_with_instrument_patches() {
+    let mut instruments = InstrumentState::new();
+    instruments.add_instrument(SourceType::Saw);
+    instruments.add_instrument(SourceType::Saw);
+    let inst = instruments.instrument(0).unwrap().clone();
+
+    let mut patches = HashMap::new();
+    patches.insert(0, inst);
+
+    let patch = StatePatch {
+        session: None,
+        instruments: None,
+        instrument_patches: Some(patches),
+        ownership: None,
+        privileged_client: None,
+        seq: 10,
+    };
+
+    let json = serde_json::to_string(&patch).unwrap();
+    let rt: StatePatch = serde_json::from_str(&json).unwrap();
+    assert!(rt.instruments.is_none());
+    let rt_patches = rt.instrument_patches.unwrap();
+    assert_eq!(rt_patches.len(), 1);
+    assert!(rt_patches.contains_key(&0));
+    assert_eq!(rt.seq, 10);
+}
+
+#[test]
+fn test_roundtrip_state_patch_instrument_patches_absent() {
+    // When instrument_patches is None, the field should be absent from JSON
+    let patch = StatePatch {
+        session: None,
+        instruments: None,
+        instrument_patches: None,
+        ownership: None,
+        privileged_client: None,
+        seq: 1,
+    };
+    let json = serde_json::to_string(&patch).unwrap();
+    assert!(
+        !json.contains("instrument_patches"),
+        "instrument_patches should be skipped when None: {}",
+        json
+    );
+    let rt: StatePatch = serde_json::from_str(&json).unwrap();
+    assert!(rt.instrument_patches.is_none());
 }

@@ -3,7 +3,7 @@ mod common;
 use std::time::Duration;
 use imbolc_net::server::NetServer;
 use imbolc_net::protocol::{NetworkAction, ServerMessage};
-use imbolc_types::{InstrumentAction, MixerAction, ServerAction, SourceType};
+use imbolc_types::{InstrumentAction, MixerAction, ServerAction, SourceType, VstParamAction, VstTarget};
 
 #[test]
 fn test_metering_broadcast() {
@@ -218,6 +218,7 @@ fn test_seq_increments() {
     let mut prev_seq = 0u64;
     for _ in 0..3 {
         server.mark_dirty(&NetworkAction::Server(ServerAction::Connect));
+        server.reset_rate_limit();
         let state = common::make_test_state(&server);
         server.broadcast_state_patch(&state);
 
@@ -253,6 +254,7 @@ fn test_dirty_clears_after_patch() {
 
     // Second broadcast: session dirty (instruments should be clean now)
     server.mark_dirty(&NetworkAction::Server(ServerAction::Connect));
+    server.reset_rate_limit();
     let state = common::make_test_state(&server);
     server.broadcast_state_patch(&state);
 
@@ -396,6 +398,199 @@ fn test_accumulated_actions_combined_patch() {
             assert!(patch.instruments.is_some(), "instruments should be present");
             assert!(patch.ownership.is_some(), "ownership should be present");
             assert!(patch.privileged_client.is_some(), "privileged_client should be present");
+        }
+        other => panic!("Expected StatePatchUpdate, got {:?}", other),
+    }
+}
+
+// ── Per-instrument delta patches ────────────────────────────────
+
+#[test]
+fn test_patch_single_instrument_change() {
+    let mut server = NetServer::bind("127.0.0.1:0").unwrap();
+    let addr = server.local_addr().unwrap().to_string();
+
+    // State with 4 instruments so targeted threshold isn't hit
+    let state = common::make_test_state_with_instruments(&server, 4);
+
+    let mut alice = common::RawClient::connect(&addr).unwrap();
+    alice.send_hello("Alice", vec![], false).unwrap();
+    common::drive_until_clients(&mut server, &state, 1, Duration::from_secs(2));
+    let _welcome = alice.recv().unwrap();
+
+    // Targeted action on instrument 1
+    server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::AdjustFilterCutoff(1, 0.1)));
+    let state = common::make_test_state_with_instruments(&server, 4);
+    server.broadcast_state_patch(&state);
+
+    let msg = alice.recv().unwrap();
+    match msg {
+        ServerMessage::StatePatchUpdate { patch } => {
+            assert!(patch.instruments.is_none(), "full instruments should NOT be sent for targeted change");
+            let patches = patch.instrument_patches.expect("instrument_patches should be present");
+            assert!(patches.contains_key(&1), "instrument 1 should be in patches");
+            assert_eq!(patches.len(), 1);
+        }
+        other => panic!("Expected StatePatchUpdate, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_patch_structural_sends_full_instruments() {
+    let mut server = NetServer::bind("127.0.0.1:0").unwrap();
+    let addr = server.local_addr().unwrap().to_string();
+    let state = common::make_test_state_with_instruments(&server, 4);
+
+    let mut alice = common::RawClient::connect(&addr).unwrap();
+    alice.send_hello("Alice", vec![], false).unwrap();
+    common::drive_until_clients(&mut server, &state, 1, Duration::from_secs(2));
+    let _welcome = alice.recv().unwrap();
+
+    // Structural action (Add)
+    server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::Add(SourceType::Saw)));
+    let state = common::make_test_state_with_instruments(&server, 4);
+    server.broadcast_state_patch(&state);
+
+    let msg = alice.recv().unwrap();
+    match msg {
+        ServerMessage::StatePatchUpdate { patch } => {
+            assert!(patch.instruments.is_some(), "full instruments should be sent for structural");
+            assert!(patch.instrument_patches.is_none(), "instrument_patches should be absent for structural");
+        }
+        other => panic!("Expected StatePatchUpdate, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_patch_targeted_then_structural() {
+    let mut server = NetServer::bind("127.0.0.1:0").unwrap();
+    let addr = server.local_addr().unwrap().to_string();
+    let state = common::make_test_state_with_instruments(&server, 4);
+
+    let mut alice = common::RawClient::connect(&addr).unwrap();
+    alice.send_hello("Alice", vec![], false).unwrap();
+    common::drive_until_clients(&mut server, &state, 1, Duration::from_secs(2));
+    let _welcome = alice.recv().unwrap();
+
+    // Targeted + structural in same tick → structural wins
+    server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::AdjustFilterCutoff(1, 0.1)));
+    server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::Add(SourceType::Saw)));
+    let state = common::make_test_state_with_instruments(&server, 4);
+    server.broadcast_state_patch(&state);
+
+    let msg = alice.recv().unwrap();
+    match msg {
+        ServerMessage::StatePatchUpdate { patch } => {
+            assert!(patch.instruments.is_some(), "structural should override to full instruments");
+            assert!(patch.instrument_patches.is_none(), "instrument_patches absent when full instruments sent");
+        }
+        other => panic!("Expected StatePatchUpdate, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_instrument_patches_roundtrip() {
+    // Verify instrument_patches survive JSON serialization over the wire
+    let mut server = NetServer::bind("127.0.0.1:0").unwrap();
+    let addr = server.local_addr().unwrap().to_string();
+    let state = common::make_test_state_with_instruments(&server, 4);
+
+    let mut alice = common::RawClient::connect(&addr).unwrap();
+    alice.send_hello("Alice", vec![], false).unwrap();
+    common::drive_until_clients(&mut server, &state, 1, Duration::from_secs(2));
+    let _welcome = alice.recv().unwrap();
+
+    // Two targeted changes on different instruments
+    server.mark_dirty(&NetworkAction::VstParam(VstParamAction::SetParam(0, VstTarget::Source, 0, 0.5)));
+    server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::AdjustFilterCutoff(2, 0.3)));
+    let state = common::make_test_state_with_instruments(&server, 4);
+    server.broadcast_state_patch(&state);
+
+    let msg = alice.recv().unwrap();
+    match msg {
+        ServerMessage::StatePatchUpdate { patch } => {
+            let patches = patch.instrument_patches.expect("instrument_patches should be present");
+            assert!(patches.contains_key(&0), "instrument 0 should be in patches");
+            assert!(patches.contains_key(&2), "instrument 2 should be in patches");
+            assert_eq!(patches.len(), 2);
+        }
+        other => panic!("Expected StatePatchUpdate, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_patch_rate_limiting() {
+    let mut server = NetServer::bind("127.0.0.1:0").unwrap();
+    let addr = server.local_addr().unwrap().to_string();
+    let state = common::make_test_state(&server);
+
+    let mut alice = common::RawClient::connect(&addr).unwrap();
+    alice.send_hello("Alice", vec![], true).unwrap();
+    common::drive_until_clients(&mut server, &state, 1, Duration::from_secs(2));
+    let _welcome = alice.recv().unwrap();
+
+    // First broadcast should go through
+    server.mark_dirty(&NetworkAction::Server(ServerAction::Connect));
+    let state = common::make_test_state(&server);
+    server.broadcast_state_patch(&state);
+    let msg = alice.recv().unwrap();
+    assert!(matches!(msg, ServerMessage::StatePatchUpdate { .. }));
+
+    // Second broadcast immediately after should be rate-limited (no reset_rate_limit)
+    server.mark_dirty(&NetworkAction::Server(ServerAction::RecordMaster));
+    let state = common::make_test_state(&server);
+    server.broadcast_state_patch(&state);
+
+    // Should not receive anything (rate-limited)
+    alice.reader.get_ref().set_read_timeout(Some(Duration::from_millis(200))).unwrap();
+    let result = alice.recv();
+    assert!(result.is_err(), "Second broadcast should be rate-limited");
+
+    // After reset, the accumulated dirty flags should produce a broadcast
+    server.reset_rate_limit();
+    let state = common::make_test_state(&server);
+    server.broadcast_state_patch(&state);
+
+    alice.reader.get_ref().set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+    let msg = alice.recv().unwrap();
+    match msg {
+        ServerMessage::StatePatchUpdate { patch } => {
+            assert!(patch.session.is_some(), "accumulated session should be present after rate-limit passes");
+        }
+        other => panic!("Expected StatePatchUpdate, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_patch_threshold_coalescing() {
+    let mut server = NetServer::bind("127.0.0.1:0").unwrap();
+    let addr = server.local_addr().unwrap().to_string();
+    // 4 instruments, threshold is >2
+    let state = common::make_test_state_with_instruments(&server, 4);
+
+    let mut alice = common::RawClient::connect(&addr).unwrap();
+    alice.send_hello("Alice", vec![], false).unwrap();
+    common::drive_until_clients(&mut server, &state, 1, Duration::from_secs(2));
+    let _welcome = alice.recv().unwrap();
+
+    // Dirty 3 out of 4 instruments (> half) → should coalesce to full instruments
+    server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::AdjustFilterCutoff(0, 0.1)));
+    server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::AdjustFilterCutoff(1, 0.2)));
+    server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::AdjustFilterCutoff(2, 0.3)));
+    let state = common::make_test_state_with_instruments(&server, 4);
+    server.broadcast_state_patch(&state);
+
+    let msg = alice.recv().unwrap();
+    match msg {
+        ServerMessage::StatePatchUpdate { patch } => {
+            assert!(
+                patch.instruments.is_some(),
+                "should coalesce to full instruments when >half are dirty"
+            );
+            assert!(
+                patch.instrument_patches.is_none(),
+                "instrument_patches should be absent when coalesced"
+            );
         }
         other => panic!("Expected StatePatchUpdate, got {:?}", other),
     }

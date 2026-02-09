@@ -11,7 +11,7 @@ use std::time::Instant;
 
 use log::{error, info, warn};
 
-use imbolc_types::InstrumentId;
+use imbolc_types::{InstrumentAction, InstrumentId, VstParamAction};
 
 use crate::framing::{read_message, write_message};
 use crate::protocol::{
@@ -42,11 +42,17 @@ struct SuspendedSession {
 /// How long to keep a suspended session before expiring it.
 const RECONNECT_WINDOW_SECS: u64 = 60;
 
+/// Minimum interval between patch broadcasts (~30 Hz).
+const PATCH_BROADCAST_INTERVAL_MS: u128 = 33;
+
 /// Tracks which subsystems have changed since last broadcast.
 #[derive(Debug, Default)]
 pub struct DirtyFlags {
     pub session: bool,
-    pub instruments: bool,
+    /// Per-instrument targeted edits (e.g. filter cutoff on instrument 5).
+    pub dirty_instruments: HashSet<InstrumentId>,
+    /// Structural instrument changes: add, delete, select, undo/redo, mixer, etc.
+    pub instruments_structural: bool,
     pub ownership: bool,
     pub privileged_client: bool,
 }
@@ -55,10 +61,34 @@ impl DirtyFlags {
     /// Mark dirty flags based on the action variant.
     pub fn mark_from_action(&mut self, action: &NetworkAction) {
         match action {
-            NetworkAction::Instrument(_)
-            | NetworkAction::Sequencer(_)
-            | NetworkAction::VstParam(_) => {
-                self.instruments = true;
+            NetworkAction::Instrument(a) => {
+                match a.target_instrument_id() {
+                    Some(id) => {
+                        // Delete changes the instrument Vec structurally
+                        if matches!(a, InstrumentAction::Delete(_)) {
+                            self.instruments_structural = true;
+                        } else {
+                            self.dirty_instruments.insert(id);
+                        }
+                    }
+                    None => {
+                        // Add, Select*, PlayNote, PlayDrumPad — structural
+                        self.instruments_structural = true;
+                    }
+                }
+            }
+            NetworkAction::VstParam(a) => {
+                let id = match a {
+                    VstParamAction::SetParam(id, ..)
+                    | VstParamAction::AdjustParam(id, ..)
+                    | VstParamAction::ResetParam(id, ..)
+                    | VstParamAction::DiscoverParams(id, ..)
+                    | VstParamAction::SaveState(id, ..) => *id,
+                };
+                self.dirty_instruments.insert(id);
+            }
+            NetworkAction::Sequencer(_) => {
+                self.instruments_structural = true;
             }
             NetworkAction::PianoRoll(_)
             | NetworkAction::Arrangement(_)
@@ -71,23 +101,28 @@ impl DirtyFlags {
             }
             NetworkAction::Mixer(_) | NetworkAction::Midi(_) => {
                 self.session = true;
-                self.instruments = true;
+                self.instruments_structural = true;
             }
             NetworkAction::Undo | NetworkAction::Redo => {
                 self.session = true;
-                self.instruments = true;
+                self.instruments_structural = true;
             }
             NetworkAction::None | NetworkAction::Quit => {}
         }
     }
 
     fn any(&self) -> bool {
-        self.session || self.instruments || self.ownership || self.privileged_client
+        self.session
+            || !self.dirty_instruments.is_empty()
+            || self.instruments_structural
+            || self.ownership
+            || self.privileged_client
     }
 
     fn clear(&mut self) {
         self.session = false;
-        self.instruments = false;
+        self.dirty_instruments.clear();
+        self.instruments_structural = false;
         self.ownership = false;
         self.privileged_client = false;
     }
@@ -131,6 +166,8 @@ pub struct NetServer {
     force_full_sync: bool,
     /// Last time a full sync was sent.
     last_full_sync: Instant,
+    /// Last time a patch broadcast was sent (for rate limiting).
+    last_patch_broadcast: Instant,
 }
 
 impl NetServer {
@@ -158,6 +195,7 @@ impl NetServer {
             seq: 0,
             force_full_sync: false,
             last_full_sync: Instant::now(),
+            last_patch_broadcast: Instant::now() - std::time::Duration::from_secs(1),
         })
     }
 
@@ -618,12 +656,53 @@ impl NetServer {
     }
 
     /// Broadcast only changed subsystems as a patch.
+    ///
+    /// Uses per-instrument delta patches when only a few instruments changed,
+    /// falling back to full `InstrumentState` for structural changes or when
+    /// more than half the instruments are dirty. Rate-limited to ~30 Hz.
     pub fn broadcast_state_patch(&mut self, state: &NetworkState) {
         if !self.dirty.any() {
             return;
         }
 
+        // Rate limit: skip if last broadcast was too recent (dirty flags persist)
+        let now = Instant::now();
+        if now.duration_since(self.last_patch_broadcast).as_millis()
+            < PATCH_BROADCAST_INTERVAL_MS
+        {
+            return;
+        }
+
         self.seq += 1;
+
+        // Threshold coalescing: if structural or >half of instruments are dirty, send full state
+        let total = state.instruments.instruments.len();
+        let use_full_instruments = self.dirty.instruments_structural
+            || (total > 0 && self.dirty.dirty_instruments.len() > total / 2);
+
+        let instruments = if use_full_instruments {
+            Some(state.instruments.clone())
+        } else {
+            None
+        };
+
+        let instrument_patches = if !use_full_instruments
+            && !self.dirty.dirty_instruments.is_empty()
+        {
+            let mut patches = HashMap::new();
+            for &id in &self.dirty.dirty_instruments {
+                if let Some(inst) = state.instruments.instrument(id) {
+                    patches.insert(id, inst.clone());
+                }
+            }
+            if patches.is_empty() {
+                None
+            } else {
+                Some(patches)
+            }
+        } else {
+            None
+        };
 
         let patch = StatePatch {
             session: if self.dirty.session {
@@ -631,11 +710,8 @@ impl NetServer {
             } else {
                 None
             },
-            instruments: if self.dirty.instruments {
-                Some(state.instruments.clone())
-            } else {
-                None
-            },
+            instruments,
+            instrument_patches,
             ownership: if self.dirty.ownership {
                 Some(state.ownership.clone())
             } else {
@@ -652,6 +728,7 @@ impl NetServer {
         let msg = ServerMessage::StatePatchUpdate { patch };
         self.broadcast(&msg);
         self.dirty.clear();
+        self.last_patch_broadcast = now;
     }
 
     /// Broadcast full state to all clients (periodic fallback).
@@ -733,6 +810,11 @@ impl NetServer {
         })
     }
 
+    /// Reset the rate limiter so the next `broadcast_state_patch` is not throttled.
+    pub fn reset_rate_limit(&mut self) {
+        self.last_patch_broadcast = Instant::now() - std::time::Duration::from_millis(100);
+    }
+
     /// Send a message to all connected clients.
     fn broadcast(&mut self, msg: &ServerMessage) {
         let mut disconnected = Vec::new();
@@ -796,19 +878,44 @@ mod tests {
         VstParamAction, VstTarget,
     };
 
+    /// Helper: check that dirty flags indicate instruments are dirty in some way
+    /// (either targeted or structural).
+    fn instruments_dirty(d: &DirtyFlags) -> bool {
+        !d.dirty_instruments.is_empty() || d.instruments_structural
+    }
+
     // ── DirtyFlags::mark_from_action ────────────────────────────────
 
     #[test]
-    fn dirty_instrument_actions() {
+    fn dirty_instrument_structural_actions() {
+        // Add and Sequencer are structural
         let cases: Vec<NetworkAction> = vec![
             NetworkAction::Instrument(InstrumentAction::Add(SourceType::Saw)),
             NetworkAction::Sequencer(SequencerAction::ToggleStep(0, 0)),
-            NetworkAction::VstParam(VstParamAction::SetParam(0, VstTarget::Source, 0, 0.5)),
         ];
         for action in &cases {
             let mut d = DirtyFlags::default();
             d.mark_from_action(action);
-            assert!(d.instruments, "instruments dirty for {:?}", action);
+            assert!(d.instruments_structural, "instruments_structural for {:?}", action);
+            assert!(!d.session, "session clean for {:?}", action);
+        }
+    }
+
+    #[test]
+    fn dirty_instrument_targeted_actions() {
+        // VstParam and targeted InstrumentAction go into dirty_instruments
+        let cases: Vec<NetworkAction> = vec![
+            NetworkAction::VstParam(VstParamAction::SetParam(0, VstTarget::Source, 0, 0.5)),
+            NetworkAction::Instrument(InstrumentAction::AdjustFilterCutoff(5, 0.1)),
+        ];
+        for action in &cases {
+            let mut d = DirtyFlags::default();
+            d.mark_from_action(action);
+            assert!(
+                !d.dirty_instruments.is_empty(),
+                "dirty_instruments should be non-empty for {:?}", action
+            );
+            assert!(!d.instruments_structural, "instruments_structural false for {:?}", action);
             assert!(!d.session, "session clean for {:?}", action);
         }
     }
@@ -830,7 +937,7 @@ mod tests {
             let mut d = DirtyFlags::default();
             d.mark_from_action(action);
             assert!(d.session, "session dirty for {:?}", action);
-            assert!(!d.instruments, "instruments clean for {:?}", action);
+            assert!(!instruments_dirty(&d), "instruments clean for {:?}", action);
         }
     }
 
@@ -844,7 +951,7 @@ mod tests {
             let mut d = DirtyFlags::default();
             d.mark_from_action(action);
             assert!(d.session, "session dirty for {:?}", action);
-            assert!(d.instruments, "instruments dirty for {:?}", action);
+            assert!(d.instruments_structural, "instruments_structural for {:?}", action);
         }
     }
 
@@ -854,7 +961,7 @@ mod tests {
             let mut d = DirtyFlags::default();
             d.mark_from_action(action);
             assert!(d.session, "session dirty for {:?}", action);
-            assert!(d.instruments, "instruments dirty for {:?}", action);
+            assert!(d.instruments_structural, "instruments_structural for {:?}", action);
         }
     }
 
@@ -867,6 +974,65 @@ mod tests {
         }
     }
 
+    // ── Targeted vs structural ──────────────────────────────────────
+
+    #[test]
+    fn dirty_instrument_targeted_vs_structural() {
+        let mut d = DirtyFlags::default();
+        d.mark_from_action(&NetworkAction::Instrument(
+            InstrumentAction::AdjustFilterCutoff(5, 0.1),
+        ));
+        assert_eq!(d.dirty_instruments, HashSet::from([5]));
+        assert!(!d.instruments_structural);
+    }
+
+    #[test]
+    fn dirty_instrument_delete_is_structural() {
+        let mut d = DirtyFlags::default();
+        d.mark_from_action(&NetworkAction::Instrument(InstrumentAction::Delete(5)));
+        assert!(d.instruments_structural);
+    }
+
+    #[test]
+    fn dirty_instrument_add_is_structural() {
+        let mut d = DirtyFlags::default();
+        d.mark_from_action(&NetworkAction::Instrument(
+            InstrumentAction::Add(SourceType::Saw),
+        ));
+        assert!(d.instruments_structural);
+        assert!(d.dirty_instruments.is_empty());
+    }
+
+    #[test]
+    fn dirty_vst_param_is_targeted() {
+        let mut d = DirtyFlags::default();
+        d.mark_from_action(&NetworkAction::VstParam(
+            VstParamAction::SetParam(3, VstTarget::Source, 0, 0.5),
+        ));
+        assert_eq!(d.dirty_instruments, HashSet::from([3]));
+        assert!(!d.instruments_structural);
+    }
+
+    #[test]
+    fn dirty_undo_is_structural() {
+        let mut d = DirtyFlags::default();
+        d.mark_from_action(&NetworkAction::Undo);
+        assert!(d.instruments_structural);
+    }
+
+    #[test]
+    fn dirty_accumulated_instruments() {
+        let mut d = DirtyFlags::default();
+        d.mark_from_action(&NetworkAction::Instrument(
+            InstrumentAction::AdjustFilterCutoff(2, 0.1),
+        ));
+        d.mark_from_action(&NetworkAction::Instrument(
+            InstrumentAction::AdjustFilterCutoff(7, 0.2),
+        ));
+        assert_eq!(d.dirty_instruments, HashSet::from([2, 7]));
+        assert!(!d.instruments_structural);
+    }
+
     // ── DirtyFlags::any / clear ─────────────────────────────────────
 
     #[test]
@@ -877,8 +1043,9 @@ mod tests {
     #[test]
     fn any_true_for_each_flag() {
         for setter in [
-            |d: &mut DirtyFlags| d.session = true,
-            |d: &mut DirtyFlags| d.instruments = true,
+            (|d: &mut DirtyFlags| d.session = true) as fn(&mut DirtyFlags),
+            |d: &mut DirtyFlags| { d.dirty_instruments.insert(0); },
+            |d: &mut DirtyFlags| d.instruments_structural = true,
             |d: &mut DirtyFlags| d.ownership = true,
             |d: &mut DirtyFlags| d.privileged_client = true,
         ] {
@@ -892,14 +1059,16 @@ mod tests {
     fn clear_resets_all() {
         let mut d = DirtyFlags {
             session: true,
-            instruments: true,
+            dirty_instruments: HashSet::from([0, 1, 2]),
+            instruments_structural: true,
             ownership: true,
             privileged_client: true,
         };
         d.clear();
         assert!(!d.any());
         assert!(!d.session);
-        assert!(!d.instruments);
+        assert!(d.dirty_instruments.is_empty());
+        assert!(!d.instruments_structural);
         assert!(!d.ownership);
         assert!(!d.privileged_client);
     }
@@ -912,11 +1081,11 @@ mod tests {
         // First: session only
         d.mark_from_action(&NetworkAction::Server(ServerAction::Connect));
         assert!(d.session);
-        assert!(!d.instruments);
-        // Second: instruments only — session stays dirty
+        assert!(!instruments_dirty(&d));
+        // Second: instruments (structural) — session stays dirty
         d.mark_from_action(&NetworkAction::Instrument(InstrumentAction::Add(SourceType::Saw)));
         assert!(d.session);
-        assert!(d.instruments);
+        assert!(d.instruments_structural);
     }
 
     #[test]
