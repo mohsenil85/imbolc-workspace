@@ -14,6 +14,8 @@ pub struct AudioFeedbackState {
     pub playhead: u32,
     /// Audio-owned BPM
     pub bpm: f32,
+    /// Audio-owned playing state
+    pub playing: bool,
 }
 
 impl Default for AudioFeedbackState {
@@ -23,6 +25,7 @@ impl Default for AudioFeedbackState {
             server_status: ServerStatus::Stopped,
             playhead: 0,
             bpm: 120.0,
+            playing: false,
         }
     }
 }

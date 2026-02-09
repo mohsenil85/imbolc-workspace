@@ -80,7 +80,7 @@ Persistence unaffected (undo history is never persisted).
 
 ## Long-term (architectural rewrites)
 
-### 5. Event-log architecture [Q1+Q7+Q8] — Phase 1 done
+### 5. Event-log architecture [Q1+Q7+Q8] — Phases 1-3 done
 
 **Phase 1 (Factor Dispatch) done.** All dispatch functions separated
 into pure state mutation + `AudioSideEffect` enum. Dispatchers no
@@ -95,18 +95,37 @@ from `&mut AudioHandle` to `&AudioHandle` (read-only for
 management, transport, samples, mixer, click track, tuner, drums,
 automation, EQ, server lifecycle, recording, VST.
 
-**Files:** `imbolc-core/src/dispatch/side_effects.rs` (new),
-all sub-dispatchers updated (`mod.rs`, `local.rs`, `helpers.rs`,
-`mixer.rs`, `piano_roll.rs`, `arrangement.rs`, `automation.rs`,
-`server.rs`, `session.rs`, `sequencer.rs`, `bus.rs`, `vst_param.rs`,
-`audio_feedback.rs`, `instrument/*.rs`),
-`imbolc-gui/src/state.rs`.
+**Phase 2 (Action Projection) done.** Audio thread receives
+`ForwardAction` commands and applies incremental state mutations via
+`action_projection.rs` instead of full-state cloning.
+
+**Phase 3 (Audio Timing Authority) done.** Audio thread is sole
+authority on `playing` state (alongside existing `playhead`/`bpm`).
+Main thread maintains read-only mirror in `state.audio.playing`
+updated via `PlayingChanged` feedback. Dispatch dual-writes both
+`state.session.piano_roll.playing` and `state.audio.playing` for
+immediate consistency. All dispatch reads migrated to
+`state.audio.playing`. UI reads migrated similarly.
+
+**Files (Phase 3):** `imbolc-types/src/audio.rs` (PlayingChanged variant),
+`imbolc-core/src/state/audio_feedback.rs`,
+`imbolc-core/src/audio/handle.rs`, `imbolc-core/src/audio/audio_thread.rs`,
+`imbolc-core/src/dispatch/audio_feedback.rs`,
+`imbolc-core/src/dispatch/piano_roll.rs`,
+`imbolc-core/src/dispatch/arrangement.rs`,
+`imbolc-core/src/dispatch/helpers.rs`,
+`imbolc-core/src/dispatch/mixer.rs`,
+`imbolc-core/src/dispatch/automation.rs`,
+`imbolc-core/src/dispatch/vst_param.rs`,
+`imbolc-core/src/dispatch/instrument/crud.rs`,
+`imbolc-core/src/dispatch/instrument/effects.rs`,
+`imbolc-core/src/dispatch/instrument/eq.rs`,
+`imbolc-ui/src/main.rs`,
+`imbolc-ui/src/panes/piano_roll_pane/rendering.rs`,
+`imbolc-ui/src/panes/waveform_pane.rs`.
 594 tests pass.
 
 **Remaining phases:**
-- Phase 2: Action-based audio sync (forward `Action` enums to audio
-  thread instead of cloning state)
-- Phase 3: Audio timing authority (audio thread owns transport state)
 - Phase 4: Shared event log (retained cursor-readable log)
 
 ### 6. Event scheduler with dynamic lookahead [Q5+Q6]
@@ -120,11 +139,7 @@ buffer_size/sample_rate. Replaces the hardcoded 15ms
 ### 7. Modular routing [Q11]
 
 new version planned at targeted-routing-loosening.md
-Instruments, effects, and buses as nodes in a signal graph. Arbitrary
-routing (instrument A output -> instrument B sidechain). Breaks the
-monolithic Instrument model. Current bus system handles shared FX for
-now.
-
+not fullly modular but supporting some/most use cases
 ---
 
 ## Housekeeping

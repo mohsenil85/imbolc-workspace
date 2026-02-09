@@ -100,7 +100,7 @@ pub(super) fn dispatch_automation(
                 effects.push(AudioSideEffect::ApplyAutomation { target: target.clone(), value: actual_value });
             }
             // Only record to automation lane when recording + playing
-            if state.recording.automation_recording && state.session.piano_roll.playing {
+            if state.recording.automation_recording && state.audio.playing {
                 record_automation_point(state, target.clone(), *value);
                 result.audio_dirty.automation = true;
             }
@@ -337,6 +337,7 @@ mod tests {
         // Not recording — RecordValue should NOT add any points
         state.recording.automation_recording = false;
         state.session.piano_roll.playing = true;
+        state.audio.playing = true;
         let target = AutomationTarget::level(0);
         dispatch_automation(&AutomationAction::RecordValue(target.clone(), 0.5), &mut state, &audio, &mut effects);
         // No lane should be created
@@ -361,6 +362,7 @@ mod tests {
         let mut effects = Vec::new();
         state.recording.automation_recording = true;
         state.session.piano_roll.playing = true;
+        state.audio.playing = true;
         state.audio.playhead = 100;
         let target = AutomationTarget::level(0);
         let result = dispatch_automation(&AutomationAction::RecordValue(target.clone(), 0.5), &mut state, &audio, &mut effects);
@@ -376,6 +378,7 @@ mod tests {
         let mut effects = Vec::new();
         state.recording.automation_recording = true;
         state.session.piano_roll.playing = true;
+        state.audio.playing = true;
         let target = AutomationTarget::level(0);
 
         // First point

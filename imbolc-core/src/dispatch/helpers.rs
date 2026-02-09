@@ -14,7 +14,7 @@ pub fn maybe_record_automation(
     target: AutomationTarget,
     value: f32,
 ) {
-    if state.recording.automation_recording && state.session.piano_roll.playing {
+    if state.recording.automation_recording && state.audio.playing {
         record_automation_point(state, target, value);
         result.audio_dirty.automation = true;
     }
@@ -45,7 +45,7 @@ where
         let new_value = (old_value + delta * scale).clamp(min, max);
         set_value(instrument, new_value);
 
-        if state.recording.automation_recording && state.session.piano_roll.playing {
+        if state.recording.automation_recording && state.audio.playing {
             let target = make_target(instrument.id);
             record_target = Some((target, normalize(new_value)));
         }

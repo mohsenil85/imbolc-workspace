@@ -107,7 +107,7 @@ pub(super) fn dispatch_vst_param(
                 });
             }
             // Record automation when recording + playing
-            if state.recording.automation_recording && state.session.piano_roll.playing {
+            if state.recording.automation_recording && state.audio.playing {
                 record_automation_point(
                     state,
                     AutomationTarget::vst_param(*instrument_id, *param_index),
@@ -259,6 +259,7 @@ mod tests {
         let id = state.instruments.add_instrument(SourceType::Saw);
         state.recording.automation_recording = true;
         state.session.piano_roll.playing = true;
+        state.audio.playing = true;
         state.audio.playhead = 100;
 
         dispatch_vst_param(
@@ -281,6 +282,7 @@ mod tests {
         let id = state.instruments.add_instrument(SourceType::Saw);
         state.recording.automation_recording = false;
         state.session.piano_roll.playing = true;
+        state.audio.playing = true;
 
         dispatch_vst_param(
             &VstParamAction::SetParam(id, VstTarget::Source, 0, 0.7),

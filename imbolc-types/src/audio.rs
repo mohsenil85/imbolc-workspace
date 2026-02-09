@@ -30,6 +30,7 @@ pub enum ExportKind {
 pub enum AudioFeedback {
     PlayheadPosition(u32),
     BpmUpdate(f32),
+    PlayingChanged(bool),
     DrumSequencerStep {
         instrument_id: InstrumentId,
         step: usize,

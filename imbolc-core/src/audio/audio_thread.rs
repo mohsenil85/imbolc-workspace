@@ -493,6 +493,7 @@ impl AudioThread {
         match cmd {
             AudioCmd::SetPlaying { playing } => {
                 self.piano_roll.playing = playing;
+                let _ = self.feedback_tx.send(AudioFeedback::PlayingChanged(playing));
                 if playing {
                     self.tick_accumulator = 0.0;
                     self.click_accumulator = 0.0;
@@ -710,6 +711,7 @@ impl AudioThread {
                     let _ = self.engine.stop_export();
                     self.export_state = None;
                     self.piano_roll.playing = false;
+                    let _ = self.feedback_tx.send(AudioFeedback::PlayingChanged(false));
                     self.engine.release_all_voices();
                 }
             }
@@ -954,6 +956,7 @@ impl AudioThread {
         if render_finished {
             let path = self.engine.stop_recording();
             self.piano_roll.playing = false;
+            let _ = self.feedback_tx.send(AudioFeedback::PlayingChanged(false));
             self.engine.release_all_voices();
             if let Some(render) = self.render_state.take() {
                 if let Some(wav_path) = path {
@@ -987,6 +990,7 @@ impl AudioThread {
         if export_finished {
             let paths = self.engine.stop_export();
             self.piano_roll.playing = false;
+            let _ = self.feedback_tx.send(AudioFeedback::PlayingChanged(false));
             self.engine.release_all_voices();
             if let Some(export) = self.export_state.take() {
                 let _ = self.feedback_tx.send(AudioFeedback::ExportComplete {

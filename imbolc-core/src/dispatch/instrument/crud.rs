@@ -73,7 +73,7 @@ pub(super) fn handle_update(
     update: &crate::action::InstrumentUpdate,
 ) -> DispatchResult {
     // Capture old values for automation recording before applying
-    let old_values = if state.recording.automation_recording && state.session.piano_roll.playing {
+    let old_values = if state.recording.automation_recording && state.audio.playing {
         state.instruments.instrument(update.id).map(|inst| {
             (inst.lfo.rate, inst.lfo.depth,
              inst.amp_envelope.attack, inst.amp_envelope.decay,
@@ -177,6 +177,7 @@ mod tests {
         let (mut state, id) = setup_with_instrument();
         state.recording.automation_recording = true;
         state.session.piano_roll.playing = true;
+        state.audio.playing = true;
         state.audio.playhead = 100;
 
         let mut update = default_update(&state, id);
@@ -194,6 +195,7 @@ mod tests {
         let (mut state, id) = setup_with_instrument();
         state.recording.automation_recording = true;
         state.session.piano_roll.playing = true;
+        state.audio.playing = true;
         state.audio.playhead = 200;
 
         let mut update = default_update(&state, id);
@@ -215,6 +217,7 @@ mod tests {
         let (mut state, id) = setup_with_instrument();
         state.recording.automation_recording = false;
         state.session.piano_roll.playing = true;
+        state.audio.playing = true;
 
         let mut update = default_update(&state, id);
         update.lfo.rate = 10.0;
@@ -236,6 +239,7 @@ mod tests {
         let (mut state, id) = setup_with_instrument();
         state.recording.automation_recording = true;
         state.session.piano_roll.playing = true;
+        state.audio.playing = true;
 
         // Send update with same values — no automation should be recorded
         let update = default_update(&state, id);

@@ -32,6 +32,7 @@ pub struct AudioReadState {
     pub recording_elapsed: Option<Duration>,
     pub server_status: ServerStatus,
     pub server_running: bool,
+    pub playing: bool,
 }
 
 impl Default for AudioReadState {
@@ -43,6 +44,7 @@ impl Default for AudioReadState {
             recording_elapsed: None,
             server_status: ServerStatus::Stopped,
             server_running: false,
+            playing: false,
         }
     }
 }
@@ -215,6 +217,9 @@ impl AudioHandle {
             }
             AudioFeedback::BpmUpdate(bpm) => {
                 self.audio_state.bpm = *bpm;
+            }
+            AudioFeedback::PlayingChanged(playing) => {
+                self.audio_state.playing = *playing;
             }
             AudioFeedback::DrumSequencerStep { .. } => {}
             AudioFeedback::ServerStatus { status, server_running, .. } => {

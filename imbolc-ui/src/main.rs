@@ -731,6 +731,7 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
                 let state = dispatcher.state_mut();
                 state.audio.playhead = ars.playhead;
                 state.audio.bpm = ars.bpm;
+                state.audio.playing = ars.playing;
                 state.audio.server_status = ars.server_status;
             }
 

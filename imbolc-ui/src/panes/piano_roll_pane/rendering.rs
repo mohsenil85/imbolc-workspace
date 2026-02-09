@@ -162,7 +162,7 @@ impl PianoRollPane {
 
         // Header: transport info
         let header_y = rect.y + 1;
-        let play_icon = if piano_roll.playing { "||" } else { "> " };
+        let play_icon = if state.audio.playing { "||" } else { "> " };
         let loop_icon = if piano_roll.looping { "L" } else { " " };
         let header_text = format!(
             " {}  {}  Beat:{:.1}",
@@ -261,7 +261,7 @@ impl PianoRollPane {
                 });
 
                 let is_cursor = pitch == self.cursor_pitch && tick == self.cursor_tick;
-                let is_playhead = piano_roll.playing
+                let is_playhead = state.audio.playing
                     && tick <= state.audio.playhead
                     && state.audio.playhead < tick + self.ticks_per_cell();
 

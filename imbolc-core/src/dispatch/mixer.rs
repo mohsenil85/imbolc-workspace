@@ -41,7 +41,7 @@ pub(super) fn dispatch_mixer(
                         instrument.level = (instrument.level + delta).clamp(0.0, 1.0);
                         result.audio_dirty.instruments = true;
                         result.audio_dirty.mixer_params = true;
-                        if state.recording.automation_recording && state.session.piano_roll.playing {
+                        if state.recording.automation_recording && state.audio.playing {
                             record_target = Some((
                                 AutomationTarget::level(instrument.id),
                                 instrument.level,
@@ -69,7 +69,7 @@ pub(super) fn dispatch_mixer(
                     if let Some(bus) = state.session.bus(id) {
                         let mute = state.session.effective_bus_mute(bus);
                         bus_update = Some((id, bus.level, mute, bus.pan));
-                        if state.recording.automation_recording && state.session.piano_roll.playing {
+                        if state.recording.automation_recording && state.audio.playing {
                             record_target = Some((
                                 AutomationTarget::bus_level(id),
                                 bus.level,
@@ -220,7 +220,7 @@ pub(super) fn dispatch_mixer(
                         if let Some((send_idx, send)) = instrument.sends.iter_mut().enumerate().find(|(_, s)| s.bus_id == bus_id) {
                             send.level = (send.level + delta).clamp(0.0, 1.0);
                             result.audio_dirty.instruments = true;
-                            if state.recording.automation_recording && state.session.piano_roll.playing {
+                            if state.recording.automation_recording && state.audio.playing {
                                 record_target = Some((
                                     AutomationTarget::send_level(instrument.id, send_idx),
                                     send.level,
@@ -252,7 +252,7 @@ pub(super) fn dispatch_mixer(
                         instrument.pan = (instrument.pan + delta).clamp(-1.0, 1.0);
                         result.audio_dirty.instruments = true;
                         result.audio_dirty.mixer_params = true;
-                        if state.recording.automation_recording && state.session.piano_roll.playing {
+                        if state.recording.automation_recording && state.audio.playing {
                             let target = AutomationTarget::pan(instrument.id);
                             record_target = Some((target.clone(), target.normalize_value(instrument.pan)));
                         }

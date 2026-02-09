@@ -500,9 +500,8 @@ impl WaveformPane {
     }
 
     fn render_header(&self, rect: Rect, buf: &mut RenderBuf, state: &AppState, mode_name: &str) {
-        let piano_roll = &state.session.piano_roll;
         let header_y = rect.y + 1;
-        let play_icon = if piano_roll.playing { "||" } else { "> " };
+        let play_icon = if state.audio.playing { "||" } else { "> " };
         let header_text = format!(
             " BPM:{:.0}  {}  {}",
             state.audio.bpm, play_icon, mode_name,

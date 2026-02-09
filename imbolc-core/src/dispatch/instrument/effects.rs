@@ -83,7 +83,7 @@ pub(super) fn handle_adjust_effect_param(
                         *v = (*v + delta * range * 0.02).clamp(param.min, param.max);
                         // Targeted param update for float params
                         targeted_value = Some(*v);
-                        if state.recording.automation_recording && state.session.piano_roll.playing {
+                        if state.recording.automation_recording && state.audio.playing {
                             let target = AutomationTarget::effect_param(inst_id, effect_id, param_idx);
                             record_target = Some((target.clone(), target.normalize_value(*v)));
                         }

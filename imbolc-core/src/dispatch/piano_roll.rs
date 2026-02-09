@@ -25,6 +25,7 @@ pub(super) fn dispatch_piano_roll(
             }
             let pr = &mut state.session.piano_roll;
             pr.playing = !pr.playing;
+            state.audio.playing = pr.playing;
             effects.push(AudioSideEffect::SetPlaying { playing: pr.playing });
             if !pr.playing {
                 state.audio.playhead = 0;
@@ -39,17 +40,19 @@ pub(super) fn dispatch_piano_roll(
             return DispatchResult::none();
         }
         PianoRollAction::PlayStopRecord => {
-            let is_playing = state.session.piano_roll.playing;
+            let is_playing = state.audio.playing;
 
             if !is_playing {
                 // Start playing + recording
                 state.session.piano_roll.playing = true;
+                state.audio.playing = true;
                 effects.push(AudioSideEffect::SetPlaying { playing: true });
                 state.session.piano_roll.recording = true;
             } else {
                 // Stop playing + recording
                 let pr = &mut state.session.piano_roll;
                 pr.playing = false;
+                state.audio.playing = false;
                 state.audio.playhead = 0;
                 effects.push(AudioSideEffect::SetPlaying { playing: false });
                 effects.push(AudioSideEffect::ResetPlayhead);
@@ -247,6 +250,7 @@ pub(super) fn dispatch_piano_roll(
 
             pr.playhead = pr.loop_start;
             pr.playing = true;
+            state.audio.playing = true;
             pr.looping = false;
 
             effects.push(AudioSideEffect::StartInstrumentRender {
@@ -322,6 +326,7 @@ pub(super) fn dispatch_piano_roll(
 
             pr.playhead = pr.loop_start;
             pr.playing = true;
+            state.audio.playing = true;
             pr.looping = false;
 
             effects.push(AudioSideEffect::StartMasterBounce { path });
@@ -375,6 +380,7 @@ pub(super) fn dispatch_piano_roll(
 
             pr.playhead = pr.loop_start;
             pr.playing = true;
+            state.audio.playing = true;
             pr.looping = false;
 
             effects.push(AudioSideEffect::StartStemExport { stems });
@@ -394,6 +400,7 @@ pub(super) fn dispatch_piano_roll(
                     pr.looping = export.was_looping;
                 }
                 pr.playing = false;
+                state.audio.playing = false;
                 state.audio.playhead = 0;
                 state.io.export_progress = 0.0;
                 effects.push(AudioSideEffect::ResetPlayhead);

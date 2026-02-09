@@ -19,6 +19,9 @@ pub fn dispatch_audio_feedback(
         AudioFeedback::BpmUpdate(bpm) => {
             state.audio.bpm = *bpm;
         }
+        AudioFeedback::PlayingChanged(playing) => {
+            state.audio.playing = *playing;
+        }
         AudioFeedback::DrumSequencerStep { instrument_id, step } => {
             if let Some(inst) = state.instruments.instrument_mut(*instrument_id) {
                 if let Some(seq) = inst.drum_sequencer.as_mut() {
@@ -40,6 +43,7 @@ pub fn dispatch_audio_feedback(
         AudioFeedback::RenderComplete { instrument_id, path } => {
             // Stop playback and restore looping
             state.session.piano_roll.playing = false;
+            state.audio.playing = false;
             state.audio.playhead = 0;
             if let Some(render) = state.io.pending_render.take() {
                 state.session.piano_roll.looping = render.was_looping;
@@ -119,6 +123,7 @@ pub fn dispatch_audio_feedback(
         }
         AudioFeedback::ExportComplete { kind, paths } => {
             state.session.piano_roll.playing = false;
+            state.audio.playing = false;
             state.audio.playhead = 0;
             if let Some(export) = state.io.pending_export.take() {
                 state.session.piano_roll.looping = export.was_looping;
@@ -157,6 +162,7 @@ pub fn dispatch_audio_feedback(
         AudioFeedback::ServerCrashed { message } => {
             result.push_status(crate::audio::ServerStatus::Error, format!("SERVER CRASHED: {}", message));
             state.session.piano_roll.playing = false;
+            state.audio.playing = false;
             result.stop_playback = true;
         }
         AudioFeedback::TelemetrySummary { avg_tick_us, max_tick_us, p95_tick_us, overruns } => {

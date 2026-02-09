@@ -322,6 +322,7 @@ pub(super) fn dispatch_arrangement(
         ArrangementAction::PlayStop => {
             let pr = &mut state.session.piano_roll;
             pr.playing = !pr.playing;
+            state.audio.playing = pr.playing;
             effects.push(AudioSideEffect::SetPlaying { playing: pr.playing });
             if !pr.playing {
                 state.audio.playhead = 0;
