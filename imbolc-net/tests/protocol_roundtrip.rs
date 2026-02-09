@@ -337,3 +337,45 @@ fn test_roundtrip_state_patch_all_none() {
     assert!(rt.privileged_client.is_none());
     assert_eq!(rt.seq, 0);
 }
+
+/// `Some(None)` = "privilege revoked" must survive JSON roundtrip.
+#[test]
+fn test_roundtrip_state_patch_privileged_client_cleared() {
+    let patch = StatePatch {
+        session: None,
+        instruments: None,
+        ownership: None,
+        privileged_client: Some(None), // "changed to: nobody"
+        seq: 5,
+    };
+    let json = serde_json::to_string(&patch).unwrap();
+    let rt: StatePatch = serde_json::from_str(&json).unwrap();
+    assert_eq!(rt.privileged_client, Some(None), "Some(None) must roundtrip");
+    assert_eq!(rt.seq, 5);
+}
+
+/// All three privileged_client states must be distinguishable after roundtrip.
+#[test]
+fn test_roundtrip_state_patch_privileged_client_all_variants() {
+    // None = no change
+    let p1 = StatePatch { session: None, instruments: None, ownership: None, privileged_client: None, seq: 1 };
+    let j1 = serde_json::to_string(&p1).unwrap();
+    let r1: StatePatch = serde_json::from_str(&j1).unwrap();
+    assert_eq!(r1.privileged_client, None);
+
+    // Some(None) = changed to nobody
+    let p2 = StatePatch { session: None, instruments: None, ownership: None, privileged_client: Some(None), seq: 2 };
+    let j2 = serde_json::to_string(&p2).unwrap();
+    let r2: StatePatch = serde_json::from_str(&j2).unwrap();
+    assert_eq!(r2.privileged_client, Some(None));
+
+    // Some(Some(...)) = changed to Alice
+    let p3 = StatePatch {
+        session: None, instruments: None, ownership: None,
+        privileged_client: Some(Some((ClientId::new(1), "Alice".into()))),
+        seq: 3,
+    };
+    let j3 = serde_json::to_string(&p3).unwrap();
+    let r3: StatePatch = serde_json::from_str(&j3).unwrap();
+    assert!(matches!(r3.privileged_client, Some(Some(_))));
+}

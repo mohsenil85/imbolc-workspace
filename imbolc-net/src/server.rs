@@ -784,3 +784,155 @@ fn client_reader_thread(
 
     info!("Client {:?} reader thread exiting", client_id);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::protocol::NetworkAction;
+    use imbolc_types::{
+        ArrangementAction, AutomationAction, AutomationTarget, BusAction, ChopperAction,
+        InstrumentAction, InstrumentParameter, MidiAction, MixerAction, ParameterTarget,
+        PianoRollAction, SequencerAction, ServerAction, SessionAction, SourceType,
+        VstParamAction, VstTarget,
+    };
+
+    // ── DirtyFlags::mark_from_action ────────────────────────────────
+
+    #[test]
+    fn dirty_instrument_actions() {
+        let cases: Vec<NetworkAction> = vec![
+            NetworkAction::Instrument(InstrumentAction::Add(SourceType::Saw)),
+            NetworkAction::Sequencer(SequencerAction::ToggleStep(0, 0)),
+            NetworkAction::VstParam(VstParamAction::SetParam(0, VstTarget::Source, 0, 0.5)),
+        ];
+        for action in &cases {
+            let mut d = DirtyFlags::default();
+            d.mark_from_action(action);
+            assert!(d.instruments, "instruments dirty for {:?}", action);
+            assert!(!d.session, "session clean for {:?}", action);
+        }
+    }
+
+    #[test]
+    fn dirty_session_actions() {
+        let cases: Vec<NetworkAction> = vec![
+            NetworkAction::PianoRoll(PianoRollAction::PlayStop),
+            NetworkAction::Arrangement(ArrangementAction::TogglePlayMode),
+            NetworkAction::Automation(AutomationAction::AddLane(
+                AutomationTarget::Instrument(0, InstrumentParameter::Standard(ParameterTarget::Level)),
+            )),
+            NetworkAction::Session(SessionAction::Save),
+            NetworkAction::Server(ServerAction::Connect),
+            NetworkAction::Bus(BusAction::Add),
+            NetworkAction::Chopper(ChopperAction::LoadSample),
+        ];
+        for action in &cases {
+            let mut d = DirtyFlags::default();
+            d.mark_from_action(action);
+            assert!(d.session, "session dirty for {:?}", action);
+            assert!(!d.instruments, "instruments clean for {:?}", action);
+        }
+    }
+
+    #[test]
+    fn dirty_mixer_and_midi_mark_both() {
+        let cases: Vec<NetworkAction> = vec![
+            NetworkAction::Mixer(MixerAction::Move(1)),
+            NetworkAction::Midi(MidiAction::ConnectPort(0)),
+        ];
+        for action in &cases {
+            let mut d = DirtyFlags::default();
+            d.mark_from_action(action);
+            assert!(d.session, "session dirty for {:?}", action);
+            assert!(d.instruments, "instruments dirty for {:?}", action);
+        }
+    }
+
+    #[test]
+    fn dirty_undo_redo_mark_both() {
+        for action in &[NetworkAction::Undo, NetworkAction::Redo] {
+            let mut d = DirtyFlags::default();
+            d.mark_from_action(action);
+            assert!(d.session, "session dirty for {:?}", action);
+            assert!(d.instruments, "instruments dirty for {:?}", action);
+        }
+    }
+
+    #[test]
+    fn dirty_noop_actions() {
+        for action in &[NetworkAction::None, NetworkAction::Quit] {
+            let mut d = DirtyFlags::default();
+            d.mark_from_action(action);
+            assert!(!d.any(), "no flags dirty for {:?}", action);
+        }
+    }
+
+    // ── DirtyFlags::any / clear ─────────────────────────────────────
+
+    #[test]
+    fn any_false_when_default() {
+        assert!(!DirtyFlags::default().any());
+    }
+
+    #[test]
+    fn any_true_for_each_flag() {
+        for setter in [
+            |d: &mut DirtyFlags| d.session = true,
+            |d: &mut DirtyFlags| d.instruments = true,
+            |d: &mut DirtyFlags| d.ownership = true,
+            |d: &mut DirtyFlags| d.privileged_client = true,
+        ] {
+            let mut d = DirtyFlags::default();
+            setter(&mut d);
+            assert!(d.any());
+        }
+    }
+
+    #[test]
+    fn clear_resets_all() {
+        let mut d = DirtyFlags {
+            session: true,
+            instruments: true,
+            ownership: true,
+            privileged_client: true,
+        };
+        d.clear();
+        assert!(!d.any());
+        assert!(!d.session);
+        assert!(!d.instruments);
+        assert!(!d.ownership);
+        assert!(!d.privileged_client);
+    }
+
+    // ── Accumulation (OR semantics) ─────────────────────────────────
+
+    #[test]
+    fn multiple_actions_accumulate() {
+        let mut d = DirtyFlags::default();
+        // First: session only
+        d.mark_from_action(&NetworkAction::Server(ServerAction::Connect));
+        assert!(d.session);
+        assert!(!d.instruments);
+        // Second: instruments only — session stays dirty
+        d.mark_from_action(&NetworkAction::Instrument(InstrumentAction::Add(SourceType::Saw)));
+        assert!(d.session);
+        assert!(d.instruments);
+    }
+
+    #[test]
+    fn ownership_not_set_by_actions() {
+        // ownership is only set by mark_ownership_dirty(), never by mark_from_action()
+        let all: Vec<NetworkAction> = vec![
+            NetworkAction::Instrument(InstrumentAction::Add(SourceType::Saw)),
+            NetworkAction::Mixer(MixerAction::Move(1)),
+            NetworkAction::Undo,
+            NetworkAction::Server(ServerAction::Connect),
+        ];
+        let mut d = DirtyFlags::default();
+        for a in &all {
+            d.mark_from_action(a);
+        }
+        assert!(!d.ownership);
+        assert!(!d.privileged_client);
+    }
+}

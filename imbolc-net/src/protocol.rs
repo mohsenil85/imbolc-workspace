@@ -124,8 +124,43 @@ pub struct StatePatch {
     pub session: Option<SessionState>,
     pub instruments: Option<InstrumentState>,
     pub ownership: Option<HashMap<InstrumentId, OwnerInfo>>,
+    #[serde(default, skip_serializing_if = "Option::is_none", with = "double_option")]
     pub privileged_client: Option<Option<(ClientId, String)>>,
     pub seq: u64,
+}
+
+/// Serde helper for `Option<Option<T>>` over JSON.
+///
+/// Plain JSON cannot distinguish `None` (field absent = "no change") from
+/// `Some(None)` (field present as `null` = "changed to nothing").
+/// This module uses field-skipping to preserve the distinction:
+///   - outer `None`        → field omitted from JSON
+///   - `Some(None)`        → `"field": null`
+///   - `Some(Some(value))` → `"field": value`
+mod double_option {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    pub fn serialize<S, T>(value: &Option<Option<T>>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+        T: Serialize,
+    {
+        match value {
+            Some(inner) => inner.serialize(serializer),
+            None => serializer.serialize_none(),
+        }
+    }
+
+    pub fn deserialize<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
+    where
+        D: Deserializer<'de>,
+        T: Deserialize<'de>,
+    {
+        // This is only called when the field is present in JSON.
+        // Missing fields get `None` via #[serde(default)].
+        let inner = Option::<T>::deserialize(deserializer)?;
+        Ok(Some(inner))
+    }
 }
 
 /// Messages sent from client to server.
