@@ -13,7 +13,7 @@
 
 use imbolc_types::{
     Action, InstrumentAction, MixerAction, PianoRollAction, AutomationAction,
-    BusAction, VstParamAction, SessionAction, ClickAction, VstTarget,
+    BusAction, LayerGroupAction, VstParamAction, SessionAction, ClickAction, VstTarget,
     InstrumentId, MixerSelection, FilterConfig, FilterType, OutputTarget, EqConfig,
 };
 use crate::state::instrument::Instrument;
@@ -36,6 +36,7 @@ pub fn is_action_projectable(action: &Action) -> bool {
         Action::Instrument(_) => true,
         Action::Mixer(_) => true,
         Action::Bus(_) => true,
+        Action::LayerGroup(_) => true,
         Action::Click(_) => true,
 
         Action::PianoRoll(a) => !matches!(a,
@@ -94,6 +95,7 @@ pub fn project_action(
         Action::PianoRoll(a) => project_piano_roll(a, session),
         Action::Automation(a) => project_automation(a, session),
         Action::Bus(a) => project_bus(a, session, instruments),
+        Action::LayerGroup(a) => project_layer_group(a, session),
         Action::VstParam(a) => project_vst_param(a, instruments, session),
         Action::Session(a) => project_session(a, session, instruments),
         Action::Click(a) => { project_click(a, session); true }
@@ -1220,6 +1222,108 @@ fn project_bus(
         BusAction::Rename(bus_id, name) => {
             if let Some(bus) = session.bus_mut(*bus_id) {
                 bus.name = name.clone();
+            }
+            true
+        }
+        BusAction::AddEffect(bus_id, effect_type) => {
+            if let Some(bus) = session.bus_mut(*bus_id) {
+                bus.add_effect(*effect_type);
+            }
+            true
+        }
+        BusAction::RemoveEffect(bus_id, effect_id) => {
+            if let Some(bus) = session.bus_mut(*bus_id) {
+                bus.remove_effect(*effect_id);
+            }
+            true
+        }
+        BusAction::MoveEffect(bus_id, effect_id, direction) => {
+            if let Some(bus) = session.bus_mut(*bus_id) {
+                bus.move_effect(*effect_id, *direction);
+            }
+            true
+        }
+        BusAction::ToggleEffectBypass(bus_id, effect_id) => {
+            if let Some(bus) = session.bus_mut(*bus_id) {
+                if let Some(effect) = bus.effect_by_id_mut(*effect_id) {
+                    effect.enabled = !effect.enabled;
+                }
+            }
+            true
+        }
+        BusAction::AdjustEffectParam(bus_id, effect_id, param_idx, delta) => {
+            if let Some(bus) = session.bus_mut(*bus_id) {
+                if let Some(effect) = bus.effect_by_id_mut(*effect_id) {
+                    if let Some(param) = effect.params.get_mut(*param_idx) {
+                        let range = param.max - param.min;
+                        match &mut param.value {
+                            crate::state::ParamValue::Float(v) => {
+                                *v = (*v + delta * range * 0.02).clamp(param.min, param.max);
+                            }
+                            crate::state::ParamValue::Int(v) => {
+                                *v = (*v + (delta * range * 0.02) as i32).clamp(param.min as i32, param.max as i32);
+                            }
+                            crate::state::ParamValue::Bool(b) => {
+                                *b = !*b;
+                            }
+                        }
+                    }
+                }
+            }
+            true
+        }
+    }
+}
+
+fn project_layer_group(
+    action: &LayerGroupAction,
+    session: &mut SessionState,
+) -> bool {
+    match action {
+        LayerGroupAction::AddEffect(group_id, effect_type) => {
+            if let Some(gm) = session.mixer.layer_group_mixer_mut(*group_id) {
+                gm.add_effect(*effect_type);
+            }
+            true
+        }
+        LayerGroupAction::RemoveEffect(group_id, effect_id) => {
+            if let Some(gm) = session.mixer.layer_group_mixer_mut(*group_id) {
+                gm.remove_effect(*effect_id);
+            }
+            true
+        }
+        LayerGroupAction::MoveEffect(group_id, effect_id, direction) => {
+            if let Some(gm) = session.mixer.layer_group_mixer_mut(*group_id) {
+                gm.move_effect(*effect_id, *direction);
+            }
+            true
+        }
+        LayerGroupAction::ToggleEffectBypass(group_id, effect_id) => {
+            if let Some(gm) = session.mixer.layer_group_mixer_mut(*group_id) {
+                if let Some(effect) = gm.effect_by_id_mut(*effect_id) {
+                    effect.enabled = !effect.enabled;
+                }
+            }
+            true
+        }
+        LayerGroupAction::AdjustEffectParam(group_id, effect_id, param_idx, delta) => {
+            if let Some(gm) = session.mixer.layer_group_mixer_mut(*group_id) {
+                if let Some(effect) = gm.effect_by_id_mut(*effect_id) {
+                    if let Some(param) = effect.params.get_mut(*param_idx) {
+                        let range = param.max - param.min;
+                        match &mut param.value {
+                            crate::state::ParamValue::Float(v) => {
+                                *v = (*v + delta * range * 0.02).clamp(param.min, param.max);
+                            }
+                            crate::state::ParamValue::Int(v) => {
+                                *v = (*v + (delta * range * 0.02) as i32).clamp(param.min as i32, param.max as i32);
+                            }
+                            crate::state::ParamValue::Bool(b) => {
+                                *b = !*b;
+                            }
+                        }
+                    }
+                }
             }
             true
         }

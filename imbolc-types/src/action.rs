@@ -118,6 +118,31 @@ pub enum BusAction {
     Remove(u8),
     /// Rename a bus
     Rename(u8, String),
+    /// Add an effect to a bus
+    AddEffect(u8, EffectType),
+    /// Remove an effect from a bus
+    RemoveEffect(u8, EffectId),
+    /// Move an effect up/down on a bus
+    MoveEffect(u8, EffectId, i8),
+    /// Toggle bypass on a bus effect
+    ToggleEffectBypass(u8, EffectId),
+    /// Adjust a parameter on a bus effect
+    AdjustEffectParam(u8, EffectId, usize, f32),
+}
+
+/// Layer group actions.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum LayerGroupAction {
+    /// Add an effect to a layer group
+    AddEffect(u32, EffectType),
+    /// Remove an effect from a layer group
+    RemoveEffect(u32, EffectId),
+    /// Move an effect up/down on a layer group
+    MoveEffect(u32, EffectId, i8),
+    /// Toggle bypass on a layer group effect
+    ToggleEffectBypass(u32, EffectId),
+    /// Adjust a parameter on a layer group effect
+    AdjustEffectParam(u32, EffectId, usize, f32),
 }
 
 /// Sample chopper actions.
@@ -204,6 +229,12 @@ pub struct AudioDirty {
     /// Targeted LFO param update: (instrument_id, param_kind, value).
     /// Sends /n_set directly to the LFO node without routing rebuild.
     pub lfo_param: Option<(InstrumentId, LfoParamKind, f32)>,
+    /// Targeted bus effect param update: (bus_id, effect_id, param_index, value).
+    /// Sends /n_set directly to the bus effect node without routing rebuild.
+    pub bus_effect_param: Option<(u8, EffectId, usize, f32)>,
+    /// Targeted layer group effect param update: (group_id, effect_id, param_index, value).
+    /// Sends /n_set directly to the layer group effect node without routing rebuild.
+    pub layer_group_effect_param: Option<(u32, EffectId, usize, f32)>,
 }
 
 impl AudioDirty {
@@ -219,6 +250,8 @@ impl AudioDirty {
             filter_param: None,
             effect_param: None,
             lfo_param: None,
+            bus_effect_param: None,
+            layer_group_effect_param: None,
         }
     }
 
@@ -233,6 +266,8 @@ impl AudioDirty {
             || self.filter_param.is_some()
             || self.effect_param.is_some()
             || self.lfo_param.is_some()
+            || self.bus_effect_param.is_some()
+            || self.layer_group_effect_param.is_some()
     }
 
     pub fn merge(&mut self, other: AudioDirty) {
@@ -264,6 +299,12 @@ impl AudioDirty {
         }
         if other.lfo_param.is_some() {
             self.lfo_param = other.lfo_param;
+        }
+        if other.bus_effect_param.is_some() {
+            self.bus_effect_param = other.bus_effect_param;
+        }
+        if other.layer_group_effect_param.is_some() {
+            self.layer_group_effect_param = other.layer_group_effect_param;
         }
     }
 
@@ -790,6 +831,7 @@ pub enum Action {
     Automation(AutomationAction),
     Midi(MidiAction),
     Bus(BusAction),
+    LayerGroup(LayerGroupAction),
     VstParam(VstParamAction),
     Click(ClickAction),
     Tuner(TunerAction),

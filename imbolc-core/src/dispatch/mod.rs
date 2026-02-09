@@ -90,6 +90,7 @@ pub fn dispatch_action(
         Action::Automation(a) => automation::dispatch_automation(a, state, audio, effects),
         Action::Midi(a) => midi::dispatch_midi(a, state),
         Action::Bus(a) => bus::dispatch_bus(a, state),
+        Action::LayerGroup(a) => bus::dispatch_layer_group(a, state),
         Action::VstParam(a) => vst_param::dispatch_vst_param(a, state, audio, effects),
         Action::Click(a) => dispatch_click(a, state, effects),
         Action::Tuner(a) => dispatch_tuner(a, effects),

@@ -13,7 +13,7 @@ use crate::state::session::SessionState;
 pub use imbolc_types::{
     Action, ArrangementAction, AudioDirty, AudioFeedback, AutomationAction, BusAction,
     ChopperAction, ClickAction, DispatchResult, FileSelectAction, FilterParamKind, InstrumentAction,
-    InstrumentUpdate, LfoParamKind, MidiAction, MixerAction, NavAction, NavIntent,
+    InstrumentUpdate, LayerGroupAction, LfoParamKind, MidiAction, MixerAction, NavAction, NavIntent,
     PianoRollAction, SequencerAction, ServerAction, SessionAction, StatusEvent,
     ToggleResult, TunerAction, VstParamAction, VstTarget,
 };

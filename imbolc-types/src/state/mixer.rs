@@ -276,4 +276,110 @@ mod tests {
         mixer.bus_mut(3).unwrap().solo = true;
         assert!(mixer.any_bus_solo());
     }
+
+    // ========================================================================
+    // Bus effect CRUD tests
+    // ========================================================================
+
+    #[test]
+    fn bus_add_effect() {
+        use crate::state::instrument::EffectType;
+        let mut bus = MixerBus::new(1);
+        let id = bus.add_effect(EffectType::Reverb);
+        assert_eq!(id, 0);
+        assert_eq!(bus.effects.len(), 1);
+        assert_eq!(bus.effects[0].effect_type, EffectType::Reverb);
+        assert_eq!(bus.next_effect_id, 1);
+    }
+
+    #[test]
+    fn bus_add_multiple_effects() {
+        use crate::state::instrument::EffectType;
+        let mut bus = MixerBus::new(1);
+        let id0 = bus.add_effect(EffectType::Reverb);
+        let id1 = bus.add_effect(EffectType::Delay);
+        assert_eq!(id0, 0);
+        assert_eq!(id1, 1);
+        assert_eq!(bus.effects.len(), 2);
+        assert_eq!(bus.next_effect_id, 2);
+    }
+
+    #[test]
+    fn bus_effect_by_id() {
+        use crate::state::instrument::EffectType;
+        let mut bus = MixerBus::new(1);
+        let id = bus.add_effect(EffectType::Reverb);
+        assert!(bus.effect_by_id(id).is_some());
+        assert_eq!(bus.effect_by_id(id).unwrap().effect_type, EffectType::Reverb);
+        assert!(bus.effect_by_id(999).is_none());
+    }
+
+    #[test]
+    fn bus_remove_effect() {
+        use crate::state::instrument::EffectType;
+        let mut bus = MixerBus::new(1);
+        let id = bus.add_effect(EffectType::Reverb);
+        assert!(bus.remove_effect(id));
+        assert!(bus.effects.is_empty());
+        assert!(!bus.remove_effect(id)); // already removed
+    }
+
+    #[test]
+    fn bus_move_effect() {
+        use crate::state::instrument::EffectType;
+        let mut bus = MixerBus::new(1);
+        let id0 = bus.add_effect(EffectType::Reverb);
+        let id1 = bus.add_effect(EffectType::Delay);
+        // Move first effect down
+        assert!(bus.move_effect(id0, 1));
+        assert_eq!(bus.effects[0].id, id1);
+        assert_eq!(bus.effects[1].id, id0);
+        // Move beyond bounds fails
+        assert!(!bus.move_effect(id0, 1));
+    }
+
+    #[test]
+    fn bus_recalculate_next_effect_id() {
+        use crate::state::instrument::EffectType;
+        let mut bus = MixerBus::new(1);
+        bus.add_effect(EffectType::Reverb);
+        bus.add_effect(EffectType::Delay);
+        bus.next_effect_id = 0; // simulate loading
+        bus.recalculate_next_effect_id();
+        assert_eq!(bus.next_effect_id, 2);
+    }
+
+    // ========================================================================
+    // LayerGroupMixer effect CRUD tests
+    // ========================================================================
+
+    #[test]
+    fn layer_group_add_effect() {
+        use crate::state::instrument::{EffectType, LayerGroupMixer};
+        let mut gm = LayerGroupMixer::new(1, &[1, 2]);
+        let id = gm.add_effect(EffectType::TapeComp);
+        assert_eq!(id, 0);
+        assert_eq!(gm.effects.len(), 1);
+        assert_eq!(gm.effects[0].effect_type, EffectType::TapeComp);
+    }
+
+    #[test]
+    fn layer_group_remove_effect() {
+        use crate::state::instrument::{EffectType, LayerGroupMixer};
+        let mut gm = LayerGroupMixer::new(1, &[]);
+        let id = gm.add_effect(EffectType::Limiter);
+        assert!(gm.remove_effect(id));
+        assert!(gm.effects.is_empty());
+    }
+
+    #[test]
+    fn layer_group_move_effect() {
+        use crate::state::instrument::{EffectType, LayerGroupMixer};
+        let mut gm = LayerGroupMixer::new(1, &[]);
+        let id0 = gm.add_effect(EffectType::Reverb);
+        let id1 = gm.add_effect(EffectType::Delay);
+        assert!(gm.move_effect(id0, 1));
+        assert_eq!(gm.effects[0].id, id1);
+        assert_eq!(gm.effects[1].id, id0);
+    }
 }

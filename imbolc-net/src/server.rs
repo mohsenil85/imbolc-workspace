@@ -96,6 +96,7 @@ impl DirtyFlags {
             | NetworkAction::Session(_)
             | NetworkAction::Server(_)
             | NetworkAction::Bus(_)
+            | NetworkAction::LayerGroup(_)
             | NetworkAction::Chopper(_) => {
                 self.session = true;
             }
@@ -609,7 +610,7 @@ impl NetServer {
                     return Err("Session controls require privilege (use 'Request Privilege')".into());
                 }
             }
-            NetworkAction::Bus(_) => {
+            NetworkAction::Bus(_) | NetworkAction::LayerGroup(_) => {
                 if !self.is_privileged(client_id) {
                     return Err("Bus controls require privilege (use 'Request Privilege')".into());
                 }
