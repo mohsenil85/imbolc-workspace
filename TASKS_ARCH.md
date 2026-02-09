@@ -6,7 +6,7 @@ Derived from the 16 architecture questions in `plans/questions.md`.
 
 ## Near-term
 
-### Voice allocator /n_end feedback [Q14+Q15]
+### 1. Voice allocator /n_end feedback [Q14+Q15]
 
 Listen for SC `/n_end` OSC notifications (sent when a node is freed by
 doneAction:2). Remove voices from allocator on receipt. Return control
@@ -17,18 +17,20 @@ guess.
 `imbolc-core/src/audio/osc_client.rs`,
 `imbolc-core/src/audio/engine/voices.rs`.
 
-### Control-plane vs performance-plane separation [Q3]
+### 2. Control-plane vs performance-plane separation [Q3]
 
 Document current blocking behavior. Move load/connect/compile ops off
 the audio thread so playback never stutters during state changes.
 
-### Field-level network delta updates [Q9]
+### 3. Field-level network delta updates [Q9]
 
-Subsystem-level dirty-flag patches already work (`StatePatch` +
-`DirtyFlags`). Next step: send individual param changes as lightweight
-messages instead of full `InstrumentState` blobs.
+Subsystem-level dirty-flag patches verified and tested (`StatePatch` +
+`DirtyFlags`, 21 new tests). Fixed `Option<Option<T>>` JSON roundtrip
+bug for `privileged_client` via `double_option` serde helper. Next
+step: send individual param changes as lightweight messages instead of
+full `InstrumentState` blobs.
 
-### Hybrid undo diffs [Q10]
+### 4. Hybrid undo diffs [Q10]
 
 Move undo from full-state snapshots to command-based diffs (action +
 inverse action). Persistence stays as full MessagePack blob snapshots
@@ -39,14 +41,14 @@ instruments.
 
 ## Long-term (architectural rewrites)
 
-### Event-log architecture [Q1+Q7+Q8]
+### 5. Event-log architecture [Q1+Q7+Q8]
 
 Actions become events in a log. Audio thread is timing authority. UI
 is projection-only. Eliminates clone-based state transfer and
 UI-blocking-audio starvation risk. Subsumes Q7 (starvation) and Q8
 (concurrency/locking).
 
-### Event scheduler with dynamic lookahead [Q5+Q6]
+### 6. Event scheduler with dynamic lookahead [Q5+Q6]
 
 Pre-compute upcoming OSC bundles into a ring buffer. Replace
 synchronous 0.5ms ticking with ahead-of-time scheduling via dedicated
@@ -54,7 +56,7 @@ sender thread. Compute lookahead dynamically from
 buffer_size/sample_rate. Replaces the hardcoded 15ms
 `SCHEDULE_LOOKAHEAD_SECS`.
 
-### Modular routing [Q11]
+### 7. Modular routing [Q11]
 
 Instruments, effects, and buses as nodes in a signal graph. Arbitrary
 routing (instrument A output -> instrument B sidechain). Breaks the
@@ -65,7 +67,7 @@ now.
 
 ## Housekeeping
 
-### Prune docs [Q16]
+### 8. Prune docs [Q16]
 
 Delete stale plan/design docs from `docs/`. Keep reference docs
 (audio-routing, keybindings, sqlite-persistence,

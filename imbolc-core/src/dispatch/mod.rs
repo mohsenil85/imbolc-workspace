@@ -22,7 +22,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crate::audio::AudioHandle;
 use crate::state::AppState;
 use crate::action::{Action, AudioDirty, ClickAction, DispatchResult, IoFeedback, TunerAction};
-use crate::state::undo::is_undoable;
+use crate::state::undo::{is_undoable, undo_scope};
 
 pub use helpers::{
     adjust_groove_param, adjust_instrument_param, apply_bus_update, compute_waveform_peaks,
@@ -63,9 +63,8 @@ pub fn dispatch_action(
 ) -> DispatchResult {
     // Auto-push undo snapshot for undoable actions
     if is_undoable(action) {
-        let s = state.session.clone();
-        let i = state.instruments.clone();
-        state.undo_history.push_from(s, i);
+        let scope = undo_scope(action, &state.session, &state.instruments);
+        state.undo_history.push_scoped(scope, &state.session, &state.instruments);
         state.project.dirty = true;
     }
 
@@ -93,9 +92,7 @@ pub fn dispatch_action(
         // SaveAndQuit is intercepted in main.rs before reaching dispatch
         Action::SaveAndQuit => DispatchResult::none(),
         Action::Undo => {
-            if let Some(snapshot) = state.undo_history.undo(&state.session, &state.instruments) {
-                state.session = snapshot.session;
-                state.instruments = snapshot.instruments;
+            if state.undo_history.undo(&mut state.session, &mut state.instruments) {
                 state.project.dirty = true;
                 let mut r = DispatchResult::none();
                 r.audio_dirty = AudioDirty::all();
@@ -105,9 +102,7 @@ pub fn dispatch_action(
             }
         }
         Action::Redo => {
-            if let Some(snapshot) = state.undo_history.redo(&state.session, &state.instruments) {
-                state.session = snapshot.session;
-                state.instruments = snapshot.instruments;
+            if state.undo_history.redo(&mut state.session, &mut state.instruments) {
                 state.project.dirty = true;
                 let mut r = DispatchResult::none();
                 r.audio_dirty = AudioDirty::all();
