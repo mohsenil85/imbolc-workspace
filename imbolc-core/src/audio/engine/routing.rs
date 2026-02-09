@@ -1,8 +1,8 @@
 use super::AudioEngine;
-use super::{InstrumentNodes, GROUP_SOURCES, GROUP_PROCESSING, GROUP_OUTPUT, VST_UGEN_INDEX};
+use super::{InstrumentNodes, GROUP_SOURCES, GROUP_PROCESSING, GROUP_OUTPUT, GROUP_BUS_PROCESSING, VST_UGEN_INDEX};
 use super::backend::RawArg;
 use std::collections::HashMap;
-use crate::state::{CustomSynthDefRegistry, EffectId, EffectType, FilterType, Instrument, InstrumentId, InstrumentState, ParameterTarget, ParamValue, SendTapPoint, SessionState, SourceType, SourceTypeExt};
+use crate::state::{CustomSynthDefRegistry, EffectId, EffectType, FilterType, Instrument, InstrumentId, InstrumentState, LayerGroupMixer, MixerBus, ParameterTarget, ParamValue, SendTapPoint, SessionState, SourceType, SourceTypeExt};
 
 /// State machine for amortized routing rebuild across multiple ticks.
 /// Each step performs a bounded amount of work so the audio thread is never
@@ -484,6 +484,170 @@ impl AudioEngine {
 
     }
 
+    // ── Bus / layer group effect chain builders ───────────────────
+
+    /// Build an effect chain for a mixer bus. Returns the final audio bus after effects.
+    /// If no enabled effects, returns `bus_audio` unchanged.
+    fn build_bus_effect_chain(
+        &mut self,
+        bus: &MixerBus,
+        bus_audio: i32,
+        session: &SessionState,
+    ) -> Result<i32, String> {
+        let mut current_bus = bus_audio;
+
+        for effect in &bus.effects {
+            if !effect.enabled {
+                continue;
+            }
+            let node_id = self.next_node_id;
+            self.next_node_id += 1;
+            let effect_out_bus = self.bus_allocator.get_or_alloc_audio_bus(
+                u32::MAX - bus.id as u32,
+                &format!("bus_fx_{}_out", effect.id),
+            );
+
+            let mut params: Vec<(String, f32)> = vec![
+                ("in".to_string(), current_bus as f32),
+                ("out".to_string(), effect_out_bus as f32),
+            ];
+            for p in &effect.params {
+                if effect.effect_type == EffectType::SidechainComp && p.name == "sc_bus" {
+                    let sc_bus_id = match &p.value {
+                        ParamValue::Int(v) => *v as u8,
+                        _ => 0,
+                    };
+                    let sidechain_in = if sc_bus_id == 0 {
+                        0.0
+                    } else {
+                        self.bus_audio_buses.get(&sc_bus_id).copied().unwrap_or(0) as f32
+                    };
+                    params.push(("sidechain_in".to_string(), sidechain_in));
+                    continue;
+                }
+                if effect.effect_type == EffectType::ConvolutionReverb && p.name == "ir_buffer" {
+                    let buffer_id = match &p.value {
+                        ParamValue::Int(v) => *v,
+                        _ => -1,
+                    };
+                    let sc_bufnum = if buffer_id >= 0 {
+                        self.buffer_map.get(&(buffer_id as u32)).copied().unwrap_or(-1) as f32
+                    } else {
+                        -1.0
+                    };
+                    params.push(("ir_buffer".to_string(), sc_bufnum));
+                    continue;
+                }
+                params.push((p.name.clone(), p.value.to_f32()));
+            }
+
+            let client = self.backend.as_ref().ok_or("Not connected")?;
+            client.create_synth(
+                Self::effect_synth_def(effect.effect_type, false),
+                node_id,
+                GROUP_BUS_PROCESSING,
+                &params,
+            ).map_err(|e| e.to_string())?;
+
+            // For VST effects, open the plugin after creating the node
+            if let EffectType::Vst(vst_id) = effect.effect_type {
+                if let Some(plugin) = session.vst_plugins.get(vst_id) {
+                    let _ = client.send_unit_cmd(
+                        node_id, VST_UGEN_INDEX, "/open",
+                        vec![RawArg::Str(plugin.plugin_path.to_string_lossy().to_string())],
+                    );
+                }
+            }
+
+            self.node_registry.register(node_id);
+            self.bus_effect_node_map.insert((bus.id, effect.id), node_id);
+            current_bus = effect_out_bus;
+        }
+
+        Ok(current_bus)
+    }
+
+    /// Build an effect chain for a layer group mixer. Returns the final audio bus after effects.
+    /// If no enabled effects, returns `group_bus` unchanged.
+    fn build_layer_group_effect_chain(
+        &mut self,
+        gm: &LayerGroupMixer,
+        group_bus: i32,
+        session: &SessionState,
+    ) -> Result<i32, String> {
+        let mut current_bus = group_bus;
+
+        for effect in &gm.effects {
+            if !effect.enabled {
+                continue;
+            }
+            let node_id = self.next_node_id;
+            self.next_node_id += 1;
+            let effect_out_bus = self.bus_allocator.get_or_alloc_audio_bus(
+                u32::MAX - 256 - gm.group_id,
+                &format!("group_fx_{}_out", effect.id),
+            );
+
+            let mut params: Vec<(String, f32)> = vec![
+                ("in".to_string(), current_bus as f32),
+                ("out".to_string(), effect_out_bus as f32),
+            ];
+            for p in &effect.params {
+                if effect.effect_type == EffectType::SidechainComp && p.name == "sc_bus" {
+                    let sc_bus_id = match &p.value {
+                        ParamValue::Int(v) => *v as u8,
+                        _ => 0,
+                    };
+                    let sidechain_in = if sc_bus_id == 0 {
+                        0.0
+                    } else {
+                        self.bus_audio_buses.get(&sc_bus_id).copied().unwrap_or(0) as f32
+                    };
+                    params.push(("sidechain_in".to_string(), sidechain_in));
+                    continue;
+                }
+                if effect.effect_type == EffectType::ConvolutionReverb && p.name == "ir_buffer" {
+                    let buffer_id = match &p.value {
+                        ParamValue::Int(v) => *v,
+                        _ => -1,
+                    };
+                    let sc_bufnum = if buffer_id >= 0 {
+                        self.buffer_map.get(&(buffer_id as u32)).copied().unwrap_or(-1) as f32
+                    } else {
+                        -1.0
+                    };
+                    params.push(("ir_buffer".to_string(), sc_bufnum));
+                    continue;
+                }
+                params.push((p.name.clone(), p.value.to_f32()));
+            }
+
+            let client = self.backend.as_ref().ok_or("Not connected")?;
+            client.create_synth(
+                Self::effect_synth_def(effect.effect_type, false),
+                node_id,
+                GROUP_BUS_PROCESSING,
+                &params,
+            ).map_err(|e| e.to_string())?;
+
+            // For VST effects, open the plugin after creating the node
+            if let EffectType::Vst(vst_id) = effect.effect_type {
+                if let Some(plugin) = session.vst_plugins.get(vst_id) {
+                    let _ = client.send_unit_cmd(
+                        node_id, VST_UGEN_INDEX, "/open",
+                        vec![RawArg::Str(plugin.plugin_path.to_string_lossy().to_string())],
+                    );
+                }
+            }
+
+            self.node_registry.register(node_id);
+            self.layer_group_effect_node_map.insert((gm.group_id, effect.id), node_id);
+            current_bus = effect_out_bus;
+        }
+
+        Ok(current_bus)
+    }
+
     // ── Public routing methods ────────────────────────────────────
 
     /// Rebuild all routing based on instrument state.
@@ -519,6 +683,12 @@ impl AudioEngine {
             for &node_id in self.layer_group_send_node_map.values() {
                 let _ = client.free_node(node_id);
             }
+            for &node_id in self.bus_effect_node_map.values() {
+                let _ = client.free_node(node_id);
+            }
+            for &node_id in self.layer_group_effect_node_map.values() {
+                let _ = client.free_node(node_id);
+            }
             for chain in self.voice_allocator.drain_all() {
                 let _ = client.free_node(chain.group_id);
             }
@@ -526,6 +696,8 @@ impl AudioEngine {
         self.node_map.clear();
         self.send_node_map.clear();
         self.bus_node_map.clear();
+        self.bus_effect_node_map.clear();
+        self.layer_group_effect_node_map.clear();
         self.layer_group_audio_buses.clear();
         self.layer_group_node_map.clear();
         self.layer_group_send_node_map.clear();
@@ -566,31 +738,13 @@ impl AudioEngine {
             self.build_instrument_sends(instrument)?;
         }
 
-        // Create bus output synths
-        for bus in &session.mixer.buses {
-            if let Some(&bus_audio) = self.bus_audio_buses.get(&bus.id) {
-                let node_id = self.next_node_id;
-                self.next_node_id += 1;
-                let mute = session.effective_bus_mute(bus);
-                let params = vec![
-                    ("in".to_string(), bus_audio as f32),
-                    ("level".to_string(), bus.level),
-                    ("mute".to_string(), if mute { 1.0 } else { 0.0 }),
-                    ("pan".to_string(), bus.pan),
-                ];
-                if let Some(ref client) = self.backend {
-                    client
-                        .create_synth("imbolc_bus_out", node_id, GROUP_OUTPUT, &params)
-                        .map_err(|e| e.to_string())?;
-                }
-                self.node_registry.register(node_id);
-                self.bus_node_map.insert(bus.id, node_id);
-            }
-        }
-
-        // Create layer group output synths
+        // Create layer group effects + outputs + sends (before buses so group outputs
+        // mix into bus_audio before bus effects read it)
         for group_mixer in &session.mixer.layer_group_mixers {
             if let Some(&group_bus) = self.layer_group_audio_buses.get(&group_mixer.group_id) {
+                // Build effect chain for this layer group
+                let post_effect_bus = self.build_layer_group_effect_chain(group_mixer, group_bus, session)?;
+
                 let node_id = self.next_node_id;
                 self.next_node_id += 1;
                 let mute = session.mixer.effective_layer_group_mute(group_mixer);
@@ -604,7 +758,7 @@ impl AudioEngine {
                 };
 
                 let params = vec![
-                    ("in".to_string(), group_bus as f32),
+                    ("in".to_string(), post_effect_bus as f32),
                     ("out".to_string(), group_out),
                     ("level".to_string(), group_mixer.level),
                     ("mute".to_string(), if mute { 1.0 } else { 0.0 }),
@@ -612,7 +766,7 @@ impl AudioEngine {
                 ];
                 if let Some(ref client) = self.backend {
                     client
-                        .create_synth("imbolc_bus_out", node_id, GROUP_OUTPUT, &params)
+                        .create_synth("imbolc_bus_out", node_id, GROUP_BUS_PROCESSING, &params)
                         .map_err(|e| e.to_string())?;
                 }
                 self.node_registry.register(node_id);
@@ -633,7 +787,7 @@ impl AudioEngine {
                         ];
                         if let Some(ref client) = self.backend {
                             client
-                                .create_synth("imbolc_send", send_node_id, GROUP_OUTPUT, &send_params)
+                                .create_synth("imbolc_send", send_node_id, GROUP_BUS_PROCESSING, &send_params)
                                 .map_err(|e| e.to_string())?;
                         }
                         self.node_registry.register(send_node_id);
@@ -641,6 +795,31 @@ impl AudioEngine {
                             .insert((group_mixer.group_id, send.bus_id), send_node_id);
                     }
                 }
+            }
+        }
+
+        // Create bus effects + output synths
+        for bus in &session.mixer.buses {
+            if let Some(&bus_audio) = self.bus_audio_buses.get(&bus.id) {
+                // Build effect chain for this bus
+                let post_effect_bus = self.build_bus_effect_chain(bus, bus_audio, session)?;
+
+                let node_id = self.next_node_id;
+                self.next_node_id += 1;
+                let mute = session.effective_bus_mute(bus);
+                let params = vec![
+                    ("in".to_string(), post_effect_bus as f32),
+                    ("level".to_string(), bus.level),
+                    ("mute".to_string(), if mute { 1.0 } else { 0.0 }),
+                    ("pan".to_string(), bus.pan),
+                ];
+                if let Some(ref client) = self.backend {
+                    client
+                        .create_synth("imbolc_bus_out", node_id, GROUP_BUS_PROCESSING, &params)
+                        .map_err(|e| e.to_string())?;
+                }
+                self.node_registry.register(node_id);
+                self.bus_node_map.insert(bus.id, node_id);
             }
         }
 
@@ -760,6 +939,12 @@ impl AudioEngine {
                     for &node_id in self.layer_group_send_node_map.values() {
                         let _ = client.free_node(node_id);
                     }
+                    for &node_id in self.bus_effect_node_map.values() {
+                        let _ = client.free_node(node_id);
+                    }
+                    for &node_id in self.layer_group_effect_node_map.values() {
+                        let _ = client.free_node(node_id);
+                    }
                     for chain in self.voice_allocator.drain_all() {
                         let _ = client.free_node(chain.group_id);
                     }
@@ -767,6 +952,8 @@ impl AudioEngine {
                 self.node_map.clear();
                 self.send_node_map.clear();
                 self.bus_node_map.clear();
+                self.bus_effect_node_map.clear();
+                self.layer_group_effect_node_map.clear();
                 self.layer_group_audio_buses.clear();
                 self.layer_group_node_map.clear();
                 self.layer_group_send_node_map.clear();
@@ -822,31 +1009,12 @@ impl AudioEngine {
             }
 
             RoutingRebuildPhase::BuildOutputs => {
-                // Create bus output synths
-                for bus in &session.mixer.buses {
-                    if let Some(&bus_audio) = self.bus_audio_buses.get(&bus.id) {
-                        let node_id = self.next_node_id;
-                        self.next_node_id += 1;
-                        let mute = session.effective_bus_mute(bus);
-                        let params = vec![
-                            ("in".to_string(), bus_audio as f32),
-                            ("level".to_string(), bus.level),
-                            ("mute".to_string(), if mute { 1.0 } else { 0.0 }),
-                            ("pan".to_string(), bus.pan),
-                        ];
-                        if let Some(ref client) = self.backend {
-                            client
-                                .create_synth("imbolc_bus_out", node_id, GROUP_OUTPUT, &params)
-                                .map_err(|e| e.to_string())?;
-                        }
-                        self.node_registry.register(node_id);
-                        self.bus_node_map.insert(bus.id, node_id);
-                    }
-                }
-
-                // Create layer group output synths
+                // Create layer group effects + outputs + sends (before buses so group
+                // outputs mix into bus_audio before bus effects read it)
                 for group_mixer in &session.mixer.layer_group_mixers {
                     if let Some(&group_bus) = self.layer_group_audio_buses.get(&group_mixer.group_id) {
+                        let post_effect_bus = self.build_layer_group_effect_chain(group_mixer, group_bus, session)?;
+
                         let node_id = self.next_node_id;
                         self.next_node_id += 1;
                         let mute = session.mixer.effective_layer_group_mute(group_mixer);
@@ -859,7 +1027,7 @@ impl AudioEngine {
                         };
 
                         let params = vec![
-                            ("in".to_string(), group_bus as f32),
+                            ("in".to_string(), post_effect_bus as f32),
                             ("out".to_string(), group_out),
                             ("level".to_string(), group_mixer.level),
                             ("mute".to_string(), if mute { 1.0 } else { 0.0 }),
@@ -867,7 +1035,7 @@ impl AudioEngine {
                         ];
                         if let Some(ref client) = self.backend {
                             client
-                                .create_synth("imbolc_bus_out", node_id, GROUP_OUTPUT, &params)
+                                .create_synth("imbolc_bus_out", node_id, GROUP_BUS_PROCESSING, &params)
                                 .map_err(|e| e.to_string())?;
                         }
                         self.node_registry.register(node_id);
@@ -887,7 +1055,7 @@ impl AudioEngine {
                                 ];
                                 if let Some(ref client) = self.backend {
                                     client
-                                        .create_synth("imbolc_send", send_node_id, GROUP_OUTPUT, &send_params)
+                                        .create_synth("imbolc_send", send_node_id, GROUP_BUS_PROCESSING, &send_params)
                                         .map_err(|e| e.to_string())?;
                                 }
                                 self.node_registry.register(send_node_id);
@@ -895,6 +1063,30 @@ impl AudioEngine {
                                     .insert((group_mixer.group_id, send.bus_id), send_node_id);
                             }
                         }
+                    }
+                }
+
+                // Create bus effects + output synths
+                for bus in &session.mixer.buses {
+                    if let Some(&bus_audio) = self.bus_audio_buses.get(&bus.id) {
+                        let post_effect_bus = self.build_bus_effect_chain(bus, bus_audio, session)?;
+
+                        let node_id = self.next_node_id;
+                        self.next_node_id += 1;
+                        let mute = session.effective_bus_mute(bus);
+                        let params = vec![
+                            ("in".to_string(), post_effect_bus as f32),
+                            ("level".to_string(), bus.level),
+                            ("mute".to_string(), if mute { 1.0 } else { 0.0 }),
+                            ("pan".to_string(), bus.pan),
+                        ];
+                        if let Some(ref client) = self.backend {
+                            client
+                                .create_synth("imbolc_bus_out", node_id, GROUP_BUS_PROCESSING, &params)
+                                .map_err(|e| e.to_string())?;
+                        }
+                        self.node_registry.register(node_id);
+                        self.bus_node_map.insert(bus.id, node_id);
                     }
                 }
 
@@ -1051,6 +1243,30 @@ impl AudioEngine {
             if let Some(lfo_node) = nodes.lfo {
                 let _ = client.set_param(lfo_node, param, value);
             }
+        }
+
+        Ok(())
+    }
+
+    /// Set a bus effect parameter in real-time (targeted /n_set, no rebuild).
+    pub fn set_bus_effect_param(&self, bus_id: u8, effect_id: EffectId, param: &str, value: f32) -> Result<(), String> {
+        if !self.is_running { return Ok(()); }
+        let client = self.backend.as_ref().ok_or("Not connected")?;
+
+        if let Some(&node_id) = self.bus_effect_node_map.get(&(bus_id, effect_id)) {
+            let _ = client.set_param(node_id, param, value);
+        }
+
+        Ok(())
+    }
+
+    /// Set a layer group effect parameter in real-time (targeted /n_set, no rebuild).
+    pub fn set_layer_group_effect_param(&self, group_id: u32, effect_id: EffectId, param: &str, value: f32) -> Result<(), String> {
+        if !self.is_running { return Ok(()); }
+        let client = self.backend.as_ref().ok_or("Not connected")?;
+
+        if let Some(&node_id) = self.layer_group_effect_node_map.get(&(group_id, effect_id)) {
+            let _ = client.set_param(node_id, param, value);
         }
 
         Ok(())

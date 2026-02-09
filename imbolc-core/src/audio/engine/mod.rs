@@ -29,6 +29,7 @@ pub type ModuleId = u32;
 pub const GROUP_SOURCES: i32 = 100;
 pub const GROUP_PROCESSING: i32 = 200;
 pub const GROUP_OUTPUT: i32 = 300;
+pub const GROUP_BUS_PROCESSING: i32 = 350;
 pub const GROUP_RECORD: i32 = 400;
 pub const GROUP_SAFETY: i32 = 999;
 
@@ -134,6 +135,10 @@ pub struct AudioEngine {
     layer_group_node_map: HashMap<u32, i32>,
     /// Layer group send synth nodes: (group_id, bus_id) -> node_id
     layer_group_send_node_map: HashMap<(u32, u8), i32>,
+    /// Bus effect synth nodes: (bus_id, effect_id) -> node_id
+    bus_effect_node_map: HashMap<(u8, EffectId), i32>,
+    /// Layer group effect synth nodes: (group_id, effect_id) -> node_id
+    layer_group_effect_node_map: HashMap<(u32, EffectId), i32>,
     /// Instrument final buses: instrument_id -> SC audio bus index (post-effects, pre-mixer)
     pub(crate) instrument_final_buses: HashMap<InstrumentId, i32>,
     /// Voice allocation, tracking, stealing, and control bus pooling
@@ -193,6 +198,8 @@ impl AudioEngine {
             layer_group_audio_buses: HashMap::new(),
             layer_group_node_map: HashMap::new(),
             layer_group_send_node_map: HashMap::new(),
+            bus_effect_node_map: HashMap::new(),
+            layer_group_effect_node_map: HashMap::new(),
             instrument_final_buses: HashMap::new(),
             voice_allocator: VoiceAllocator::new(),
             safety_node_id: None,
@@ -939,10 +946,11 @@ mod tests {
             state.add_instrument(SourceType::Saw);
             engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild routing");
             let group_count = backend.count(|op| matches!(op, TestOp::CreateGroup { .. }));
-            assert_eq!(group_count, 5, "five execution groups");
+            assert_eq!(group_count, 6, "six execution groups");
             assert!(backend.find(|op| matches!(op, TestOp::CreateGroup { group_id, .. } if *group_id == GROUP_SOURCES)).is_some());
             assert!(backend.find(|op| matches!(op, TestOp::CreateGroup { group_id, .. } if *group_id == GROUP_PROCESSING)).is_some());
             assert!(backend.find(|op| matches!(op, TestOp::CreateGroup { group_id, .. } if *group_id == GROUP_OUTPUT)).is_some());
+            assert!(backend.find(|op| matches!(op, TestOp::CreateGroup { group_id, .. } if *group_id == GROUP_BUS_PROCESSING)).is_some());
             assert!(backend.find(|op| matches!(op, TestOp::CreateGroup { group_id, .. } if *group_id == GROUP_RECORD)).is_some());
             assert!(backend.find(|op| matches!(op, TestOp::CreateGroup { group_id, .. } if *group_id == GROUP_SAFETY)).is_some());
         }
@@ -1061,6 +1069,177 @@ mod tests {
                 None
             }).expect("delay synth out param");
             assert_eq!(send_in, delay_out, "PostInsert send should tap from instrument final bus (after effects)");
+        }
+
+        #[test]
+        fn bus_effect_chain_creates_synths_in_bus_processing_group() {
+            let (mut engine, backend) = engine_with_test_backend();
+            let mut state = AppState::new();
+            state.add_instrument(SourceType::Saw);
+            // Add reverb + delay to bus 1
+            let bus = &mut state.session.mixer.buses[0];
+            assert_eq!(bus.id, 1);
+            let reverb_id = bus.add_effect(EffectType::Reverb);
+            let delay_id = bus.add_effect(EffectType::Delay);
+            engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild");
+            // Verify synths created in GROUP_BUS_PROCESSING
+            let synths = backend.synths_created();
+            let reverb_synth = synths.iter().find(|op| matches!(op, TestOp::CreateSynth { def_name, group_id, .. } if def_name == "imbolc_reverb" && *group_id == GROUP_BUS_PROCESSING));
+            assert!(reverb_synth.is_some(), "bus reverb must be created in GROUP_BUS_PROCESSING");
+            let delay_synth = synths.iter().find(|op| matches!(op, TestOp::CreateSynth { def_name, group_id, .. } if def_name == "imbolc_delay" && *group_id == GROUP_BUS_PROCESSING));
+            assert!(delay_synth.is_some(), "bus delay must be created in GROUP_BUS_PROCESSING");
+            // Verify tracked in bus_effect_node_map
+            assert!(engine.bus_effect_node_map.contains_key(&(1, reverb_id)), "reverb tracked in bus_effect_node_map");
+            assert!(engine.bus_effect_node_map.contains_key(&(1, delay_id)), "delay tracked in bus_effect_node_map");
+        }
+
+        #[test]
+        fn bus_effect_chain_wiring() {
+            let (mut engine, backend) = engine_with_test_backend();
+            let mut state = AppState::new();
+            state.add_instrument(SourceType::Saw);
+            let bus = &mut state.session.mixer.buses[0];
+            bus.add_effect(EffectType::Reverb);
+            engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild");
+            let synths = backend.synths_created();
+            // Reverb should read from bus_audio
+            let bus_audio = *engine.bus_audio_buses.get(&1).expect("bus 1 audio bus");
+            let reverb_in = synths.iter().find_map(|op| {
+                if let TestOp::CreateSynth { def_name, params, group_id, .. } = op {
+                    if def_name == "imbolc_reverb" && *group_id == GROUP_BUS_PROCESSING {
+                        return params.iter().find(|(k, _)| k == "in").map(|(_, v)| *v);
+                    }
+                }
+                None
+            }).expect("reverb in param");
+            assert_eq!(reverb_in, bus_audio as f32, "reverb should read from bus_audio");
+            // Bus out should read from reverb's out (the post-effect bus)
+            let reverb_out = synths.iter().find_map(|op| {
+                if let TestOp::CreateSynth { def_name, params, group_id, .. } = op {
+                    if def_name == "imbolc_reverb" && *group_id == GROUP_BUS_PROCESSING {
+                        return params.iter().find(|(k, _)| k == "out").map(|(_, v)| *v);
+                    }
+                }
+                None
+            }).expect("reverb out param");
+            // Find the bus_out synth for bus 1 (in GROUP_BUS_PROCESSING)
+            let bus_out_in = synths.iter().find_map(|op| {
+                if let TestOp::CreateSynth { def_name, params, group_id, .. } = op {
+                    if def_name == "imbolc_bus_out" && *group_id == GROUP_BUS_PROCESSING {
+                        return params.iter().find(|(k, _)| k == "in").map(|(_, v)| *v);
+                    }
+                }
+                None
+            }).expect("bus_out in param");
+            assert_eq!(bus_out_in, reverb_out, "bus_out should read from reverb's output bus");
+        }
+
+        #[test]
+        fn bus_no_effects_passthrough() {
+            let (mut engine, backend) = engine_with_test_backend();
+            let mut state = AppState::new();
+            state.add_instrument(SourceType::Saw);
+            // No effects on bus 1
+            engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild");
+            let synths = backend.synths_created();
+            let bus_audio = *engine.bus_audio_buses.get(&1).expect("bus 1 audio bus");
+            // bus_out should read directly from bus_audio when no effects
+            let bus_out_in = synths.iter().find_map(|op| {
+                if let TestOp::CreateSynth { def_name, params, group_id, .. } = op {
+                    if def_name == "imbolc_bus_out" && *group_id == GROUP_BUS_PROCESSING {
+                        return params.iter().find(|(k, _)| k == "in").map(|(_, v)| *v);
+                    }
+                }
+                None
+            }).expect("bus_out in param");
+            assert_eq!(bus_out_in, bus_audio as f32, "bus_out reads directly from bus_audio when no effects");
+        }
+
+        #[test]
+        fn layer_group_effect_creates_synth_in_bus_processing() {
+            let (mut engine, backend) = engine_with_test_backend();
+            let mut state = AppState::new();
+            let inst_id = state.add_instrument(SourceType::Saw);
+            // Assign instrument to layer group 1 so the group bus gets allocated
+            if let Some(inst) = state.instruments.instrument_mut(inst_id) {
+                inst.layer_group = Some(1);
+            }
+            // Create a layer group mixer and add a reverb effect
+            state.session.mixer.add_layer_group_mixer(1, &[1]);
+            let gm = state.session.mixer.layer_group_mixer_mut(1).unwrap();
+            let effect_id = gm.add_effect(EffectType::Reverb);
+            engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild");
+            let synths = backend.synths_created();
+            let group_reverb = synths.iter().find(|op| matches!(op, TestOp::CreateSynth { def_name, group_id, .. } if def_name == "imbolc_reverb" && *group_id == GROUP_BUS_PROCESSING));
+            assert!(group_reverb.is_some(), "layer group reverb must be in GROUP_BUS_PROCESSING");
+            assert!(engine.layer_group_effect_node_map.contains_key(&(1, effect_id)), "tracked in layer_group_effect_node_map");
+        }
+
+        #[test]
+        fn set_bus_effect_param_records_operation() {
+            let (mut engine, backend) = engine_with_test_backend();
+            let mut state = AppState::new();
+            state.add_instrument(SourceType::Saw);
+            let bus = &mut state.session.mixer.buses[0];
+            let effect_id = bus.add_effect(EffectType::Reverb);
+            engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild");
+            backend.clear();
+            engine.set_bus_effect_param(1, effect_id, "mix", 0.6).expect("set param");
+            let set_op = backend.find(|op| matches!(op, TestOp::SetParam { param, value, .. } if param == "mix" && (*value - 0.6).abs() < 0.001));
+            assert!(set_op.is_some(), "set_bus_effect_param should record SetParam");
+        }
+
+        #[test]
+        fn set_layer_group_effect_param_records_operation() {
+            let (mut engine, backend) = engine_with_test_backend();
+            let mut state = AppState::new();
+            let inst_id = state.add_instrument(SourceType::Saw);
+            if let Some(inst) = state.instruments.instrument_mut(inst_id) {
+                inst.layer_group = Some(1);
+            }
+            state.session.mixer.add_layer_group_mixer(1, &[1]);
+            let gm = state.session.mixer.layer_group_mixer_mut(1).unwrap();
+            let effect_id = gm.add_effect(EffectType::Delay);
+            engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild");
+            backend.clear();
+            engine.set_layer_group_effect_param(1, effect_id, "time", 0.4).expect("set param");
+            let set_op = backend.find(|op| matches!(op, TestOp::SetParam { param, value, .. } if param == "time" && (*value - 0.4).abs() < 0.001));
+            assert!(set_op.is_some(), "set_layer_group_effect_param should record SetParam");
+        }
+
+        #[test]
+        fn teardown_frees_bus_effect_nodes() {
+            let (mut engine, backend) = engine_with_test_backend();
+            let mut state = AppState::new();
+            state.add_instrument(SourceType::Saw);
+            let bus = &mut state.session.mixer.buses[0];
+            bus.add_effect(EffectType::Reverb);
+            engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("first build");
+            let first_node = *engine.bus_effect_node_map.values().next().expect("has bus effect node");
+            backend.clear();
+            engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("second build");
+            let freed = backend.nodes_freed();
+            assert!(freed.contains(&first_node), "old bus effect node should be freed on rebuild");
+            let new_node = *engine.bus_effect_node_map.values().next().expect("has new bus effect node");
+            assert_ne!(first_node, new_node, "new bus effect node should be a different ID");
+        }
+
+        #[test]
+        fn disabled_bus_effects_not_created() {
+            let (mut engine, backend) = engine_with_test_backend();
+            let mut state = AppState::new();
+            state.add_instrument(SourceType::Saw);
+            let bus = &mut state.session.mixer.buses[0];
+            let delay_id = bus.add_effect(EffectType::Delay);
+            if let Some(effect) = bus.effect_by_id_mut(delay_id) { effect.enabled = false; }
+            bus.add_effect(EffectType::Reverb);
+            engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild");
+            // Count effect synths in GROUP_BUS_PROCESSING (exclude bus_out synths)
+            let delay_count = backend.count(|op| matches!(op, TestOp::CreateSynth { def_name, group_id, .. } if def_name == "imbolc_delay" && *group_id == GROUP_BUS_PROCESSING));
+            let reverb_count = backend.count(|op| matches!(op, TestOp::CreateSynth { def_name, group_id, .. } if def_name == "imbolc_reverb" && *group_id == GROUP_BUS_PROCESSING));
+            assert_eq!(delay_count, 0, "disabled delay should not be created");
+            assert_eq!(reverb_count, 1, "enabled reverb should be created");
+            assert!(!engine.bus_effect_node_map.contains_key(&(1, delay_id)), "disabled effect not in node map");
         }
 
         #[test]

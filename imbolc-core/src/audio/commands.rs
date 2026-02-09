@@ -108,6 +108,20 @@ pub enum AudioCmd {
         param: String,
         value: f32,
     },
+    /// Targeted /n_set to bus effect node (no routing rebuild).
+    SetBusEffectParam {
+        bus_id: u8,
+        effect_id: EffectId,
+        param: String,
+        value: f32,
+    },
+    /// Targeted /n_set to layer group effect node (no routing rebuild).
+    SetLayerGroupEffectParam {
+        group_id: u32,
+        effect_id: EffectId,
+        param: String,
+        value: f32,
+    },
     SetInstrumentMixerParams {
         instrument_id: InstrumentId,
         level: f32,
@@ -258,6 +272,8 @@ impl AudioCmd {
                 | AudioCmd::SetFilterParam { .. }
                 | AudioCmd::SetEffectParam { .. }
                 | AudioCmd::SetLfoParam { .. }
+                | AudioCmd::SetBusEffectParam { .. }
+                | AudioCmd::SetLayerGroupEffectParam { .. }
                 | AudioCmd::SetVstParam { .. }
                 // Playback control
                 | AudioCmd::SetPlaying { .. }

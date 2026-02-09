@@ -308,6 +308,7 @@ impl AudioThread {
             SetBusMixerParams { .. } | SetLayerGroupMixerParams { .. } |
             SetSourceParam { .. } | SetEqParam { .. } |
             SetFilterParam { .. } | SetEffectParam { .. } | SetLfoParam { .. } |
+            SetBusEffectParam { .. } | SetLayerGroupEffectParam { .. } |
             ApplyAutomation { .. } => self.handle_mixer_cmd(cmd),
 
             // Voice management
@@ -615,6 +616,12 @@ impl AudioThread {
             }
             AudioCmd::SetLfoParam { instrument_id, param, value } => {
                 let _ = self.engine.set_lfo_param(instrument_id, &param, value);
+            }
+            AudioCmd::SetBusEffectParam { bus_id, effect_id, param, value } => {
+                let _ = self.engine.set_bus_effect_param(bus_id, effect_id, &param, value);
+            }
+            AudioCmd::SetLayerGroupEffectParam { group_id, effect_id, param, value } => {
+                let _ = self.engine.set_layer_group_effect_param(group_id, effect_id, &param, value);
             }
             AudioCmd::ApplyAutomation { target, value } => {
                 let _ = self.engine.apply_automation(&target, value, &mut self.instruments, &self.session);

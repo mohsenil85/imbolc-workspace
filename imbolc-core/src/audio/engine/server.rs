@@ -7,7 +7,7 @@ use std::thread;
 use std::time::Duration;
 
 use super::backend::{AudioBackend, RawArg, ScBackend};
-use super::{AudioEngine, ServerStatus, GROUP_SOURCES, GROUP_PROCESSING, GROUP_OUTPUT, GROUP_RECORD, GROUP_SAFETY};
+use super::{AudioEngine, ServerStatus, GROUP_SOURCES, GROUP_PROCESSING, GROUP_OUTPUT, GROUP_BUS_PROCESSING, GROUP_RECORD, GROUP_SAFETY};
 use crate::audio::osc_client::{AudioMonitor, OscClient};
 use regex::Regex;
 
@@ -518,6 +518,12 @@ impl AudioEngine {
                     let _ = backend.free_node(node_id);
                 }
             }
+            for &node_id in self.bus_effect_node_map.values() {
+                let _ = backend.free_node(node_id);
+            }
+            for &node_id in self.layer_group_effect_node_map.values() {
+                let _ = backend.free_node(node_id);
+            }
             // Free all loaded sample buffers
             for &bufnum in self.buffer_map.values() {
                 let _ = backend.free_buffer(bufnum);
@@ -526,6 +532,8 @@ impl AudioEngine {
         self.node_map.clear();
         self.send_node_map.clear();
         self.bus_node_map.clear();
+        self.bus_effect_node_map.clear();
+        self.layer_group_effect_node_map.clear();
         self.bus_audio_buses.clear();
         // Drain all voices (no OSC needed since server is disconnecting)
         let _ = self.voice_allocator.drain_all();
@@ -556,6 +564,7 @@ impl AudioEngine {
         backend.create_group(GROUP_SOURCES, 1, 0).map_err(|e| e.to_string())?;
         backend.create_group(GROUP_PROCESSING, 1, 0).map_err(|e| e.to_string())?;
         backend.create_group(GROUP_OUTPUT, 1, 0).map_err(|e| e.to_string())?;
+        backend.create_group(GROUP_BUS_PROCESSING, 1, 0).map_err(|e| e.to_string())?;
         backend.create_group(GROUP_RECORD, 1, 0).map_err(|e| e.to_string())?;
         backend.create_group(GROUP_SAFETY, 1, 0).map_err(|e| e.to_string())?;
         self.groups_created = true;

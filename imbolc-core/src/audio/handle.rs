@@ -392,6 +392,28 @@ impl AudioHandle {
                 log::warn!(target: "audio", "set_lfo_param dropped: {}", e);
             }
         }
+        if let Some((bus_id, effect_id, param_idx, value)) = dirty.bus_effect_param {
+            if let Some(bus) = state.session.mixer.buses.iter().find(|b| b.id == bus_id) {
+                if let Some(effect) = bus.effect_by_id(effect_id) {
+                    if let Some(param) = effect.params.get(param_idx) {
+                        if let Err(e) = self.set_bus_effect_param(bus_id, effect_id, &param.name, value) {
+                            log::warn!(target: "audio", "set_bus_effect_param dropped: {}", e);
+                        }
+                    }
+                }
+            }
+        }
+        if let Some((group_id, effect_id, param_idx, value)) = dirty.layer_group_effect_param {
+            if let Some(gm) = state.session.mixer.layer_group_mixer(group_id) {
+                if let Some(effect) = gm.effect_by_id(effect_id) {
+                    if let Some(param) = effect.params.get(param_idx) {
+                        if let Err(e) = self.set_layer_group_effect_param(group_id, effect_id, &param.name, value) {
+                            log::warn!(target: "audio", "set_layer_group_effect_param dropped: {}", e);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// Apply accumulated dirty flags to the audio thread.
@@ -778,6 +800,36 @@ impl AudioHandle {
     ) -> Result<(), String> {
         self.send_cmd(AudioCmd::SetLfoParam {
             instrument_id,
+            param: param.to_string(),
+            value,
+        })
+    }
+
+    pub fn set_bus_effect_param(
+        &self,
+        bus_id: u8,
+        effect_id: EffectId,
+        param: &str,
+        value: f32,
+    ) -> Result<(), String> {
+        self.send_cmd(AudioCmd::SetBusEffectParam {
+            bus_id,
+            effect_id,
+            param: param.to_string(),
+            value,
+        })
+    }
+
+    pub fn set_layer_group_effect_param(
+        &self,
+        group_id: u32,
+        effect_id: EffectId,
+        param: &str,
+        value: f32,
+    ) -> Result<(), String> {
+        self.send_cmd(AudioCmd::SetLayerGroupEffectParam {
+            group_id,
+            effect_id,
             param: param.to_string(),
             value,
         })
