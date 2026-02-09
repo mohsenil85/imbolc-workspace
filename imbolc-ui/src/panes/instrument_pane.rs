@@ -95,36 +95,29 @@ impl Pane for InstrumentPane {
     }
 
     fn handle_action(&mut self, action: ActionId, event: &InputEvent, state: &AppState) -> Action {
-        // If we're in linking mode, intercept navigation to complete the link
+        // If we're in linking mode, handle confirm/cancel/navigate
         if let Some(from_id) = self.linking_from {
             match action {
-                ActionId::InstrumentList(InstrumentListActionId::Next) | ActionId::InstrumentList(InstrumentListActionId::Prev) | ActionId::InstrumentList(InstrumentListActionId::GotoTop) | ActionId::InstrumentList(InstrumentListActionId::GotoBottom) => {
-                    // Find the target instrument based on navigation direction
-                    let target_id = match action {
-                        ActionId::InstrumentList(InstrumentListActionId::Next) => {
-                            let sel = state.instruments.selected.unwrap_or(0);
-                            let next = (sel + 1).min(state.instruments.instruments.len().saturating_sub(1));
-                            state.instruments.instruments.get(next).map(|i| i.id)
-                        }
-                        ActionId::InstrumentList(InstrumentListActionId::Prev) => {
-                            let sel = state.instruments.selected.unwrap_or(0);
-                            let prev = sel.saturating_sub(1);
-                            state.instruments.instruments.get(prev).map(|i| i.id)
-                        }
-                        ActionId::InstrumentList(InstrumentListActionId::GotoTop) => state.instruments.instruments.first().map(|i| i.id),
-                        ActionId::InstrumentList(InstrumentListActionId::GotoBottom) => state.instruments.instruments.last().map(|i| i.id),
-                        _ => None,
-                    };
+                // Press 'l' again to confirm the link
+                ActionId::InstrumentList(InstrumentListActionId::LinkLayer) => {
                     self.linking_from = None;
-                    if let Some(target) = target_id {
-                        if target != from_id {
-                            return Action::Instrument(InstrumentAction::LinkLayer(from_id, target));
+                    if let Some(target) = state.instruments.selected_instrument() {
+                        let target_id = target.id;
+                        if target_id != from_id {
+                            return Action::Instrument(InstrumentAction::LinkLayer(from_id, target_id));
                         }
                     }
                     return Action::None;
                 }
+                // Navigation passes through to normal handling below
+                ActionId::InstrumentList(InstrumentListActionId::Next)
+                | ActionId::InstrumentList(InstrumentListActionId::Prev)
+                | ActionId::InstrumentList(InstrumentListActionId::GotoTop)
+                | ActionId::InstrumentList(InstrumentListActionId::GotoBottom) => {
+                    // Let navigation proceed normally
+                }
+                // Any other action cancels linking mode
                 _ => {
-                    // Any other action cancels linking mode
                     self.linking_from = None;
                 }
             }
@@ -357,7 +350,7 @@ impl Pane for InstrumentPane {
 
         // Link mode indicator
         if self.linking_from.is_some() {
-            let link_str = " LINK: select target with \u{2191}/\u{2193} ";
+            let link_str = " LINK: \u{2191}/\u{2193} navigate, l confirm, Esc cancel ";
             let link_x = rect.x + rect.width - link_str.len() as u16 - 1;
             buf.draw_line(
                 Rect::new(link_x, rect.y, link_str.len() as u16, 1),
@@ -541,5 +534,87 @@ mod tests {
 
         let action = pane.handle_action(ActionId::InstrumentList(InstrumentListActionId::Prev), &dummy_event(), &state);
         assert!(matches!(action, Action::Instrument(InstrumentAction::SelectPrev)));
+    }
+
+    #[test]
+    fn link_mode_navigation_passes_through() {
+        use crate::ui::action_id::{ActionId, InstrumentListActionId};
+        let mut state = AppState::new();
+        let id0 = state.add_instrument(SourceType::Saw);
+        let _id1 = state.add_instrument(SourceType::Sin);
+
+        // Select first instrument before entering link mode
+        state.instruments.selected = Some(0);
+
+        let mut pane = InstrumentPane::new(Keymap::new());
+        // Enter linking mode
+        pane.handle_action(ActionId::InstrumentList(InstrumentListActionId::LinkLayer), &dummy_event(), &state);
+        assert_eq!(pane.linking_from, Some(id0));
+
+        // Navigation should pass through (return SelectNext), not complete the link
+        let action = pane.handle_action(ActionId::InstrumentList(InstrumentListActionId::Next), &dummy_event(), &state);
+        assert!(matches!(action, Action::Instrument(InstrumentAction::SelectNext)));
+        // Should still be in linking mode
+        assert_eq!(pane.linking_from, Some(id0));
+    }
+
+    #[test]
+    fn link_mode_confirm_with_different_target() {
+        use crate::ui::action_id::{ActionId, InstrumentListActionId};
+        let mut state = AppState::new();
+        let id0 = state.add_instrument(SourceType::Saw);
+        let id1 = state.add_instrument(SourceType::Sin);
+
+        // Select first instrument, enter linking mode
+        state.instruments.selected = Some(0);
+        let mut pane = InstrumentPane::new(Keymap::new());
+        pane.handle_action(ActionId::InstrumentList(InstrumentListActionId::LinkLayer), &dummy_event(), &state);
+        assert_eq!(pane.linking_from, Some(id0));
+
+        // Move selection to second instrument
+        state.instruments.selected = Some(1);
+
+        // Press 'l' again to confirm
+        let action = pane.handle_action(ActionId::InstrumentList(InstrumentListActionId::LinkLayer), &dummy_event(), &state);
+        match action {
+            Action::Instrument(InstrumentAction::LinkLayer(from, to)) => {
+                assert_eq!(from, id0);
+                assert_eq!(to, id1);
+            }
+            _ => panic!("Expected LinkLayer action, got {:?}", action),
+        }
+        assert!(pane.linking_from.is_none());
+    }
+
+    #[test]
+    fn link_mode_confirm_same_instrument_no_action() {
+        use crate::ui::action_id::{ActionId, InstrumentListActionId};
+        let mut state = AppState::new();
+        let _id0 = state.add_instrument(SourceType::Saw);
+
+        let mut pane = InstrumentPane::new(Keymap::new());
+        // Enter linking mode
+        pane.handle_action(ActionId::InstrumentList(InstrumentListActionId::LinkLayer), &dummy_event(), &state);
+
+        // Press 'l' again without moving — same instrument selected
+        let action = pane.handle_action(ActionId::InstrumentList(InstrumentListActionId::LinkLayer), &dummy_event(), &state);
+        assert!(matches!(action, Action::None));
+        assert!(pane.linking_from.is_none());
+    }
+
+    #[test]
+    fn link_mode_cancelled_by_other_action() {
+        use crate::ui::action_id::{ActionId, InstrumentListActionId};
+        let mut state = AppState::new();
+        let _id0 = state.add_instrument(SourceType::Saw);
+
+        let mut pane = InstrumentPane::new(Keymap::new());
+        // Enter linking mode
+        pane.handle_action(ActionId::InstrumentList(InstrumentListActionId::LinkLayer), &dummy_event(), &state);
+        assert!(pane.linking_from.is_some());
+
+        // Any non-nav, non-link action should cancel
+        pane.handle_action(ActionId::InstrumentList(InstrumentListActionId::Delete), &dummy_event(), &state);
+        assert!(pane.linking_from.is_none());
     }
 }
