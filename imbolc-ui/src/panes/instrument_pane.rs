@@ -56,21 +56,22 @@ impl InstrumentPane {
     }
 
     fn format_filter(instrument: &crate::state::instrument::Instrument) -> String {
-        match &instrument.filter {
+        match instrument.filter() {
             Some(f) => format!("[{}]", f.filter_type.name()),
             None => "---".to_string(),
         }
     }
 
     fn format_eq(instrument: &crate::state::instrument::Instrument) -> &'static str {
-        if instrument.eq.is_some() { "[EQ]" } else { "" }
+        if instrument.eq().is_some() { "[EQ]" } else { "" }
     }
 
     fn format_effects(instrument: &crate::state::instrument::Instrument) -> String {
-        if instrument.effects.is_empty() {
+        let effects: Vec<_> = instrument.effects().collect();
+        if effects.is_empty() {
             return "---".to_string();
         }
-        instrument.effects.iter()
+        effects.iter()
             .map(|e| e.effect_type.name())
             .collect::<Vec<_>>()
             .join(", ")

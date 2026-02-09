@@ -3,7 +3,7 @@ mod tests {
     use crate::state::persistence::{save_project, load_project};
     use crate::state::AutomationTarget;
     use crate::state::custom_synthdef::{CustomSynthDef, CustomSynthDefRegistry, ParamSpec};
-    use crate::state::instrument::{EffectType, FilterConfig, FilterType, LfoConfig, LfoShape, ParameterTarget, ModSource, OutputTarget, SourceType};
+    use crate::state::instrument::{EffectType, FilterType, LfoConfig, LfoShape, ParameterTarget, ModSource, OutputTarget, SourceType};
     use crate::state::instrument_state::InstrumentState;
     use crate::state::param::ParamValue;
     use crate::state::sampler::Slice;
@@ -37,8 +37,8 @@ mod tests {
         let inst_id = instruments.add_instrument(SourceType::Saw);
         let inst = instruments.instrument_mut(inst_id).unwrap();
         inst.name = "Test".to_string();
-        inst.filter = Some(FilterConfig::new(FilterType::Hpf));
-        if let Some(filter) = inst.filter.as_mut() {
+        inst.set_filter(Some(FilterType::Hpf));
+        if let Some(filter) = inst.filter_mut() {
             filter.cutoff.value = 1234.0;
             filter.resonance.value = 0.42;
         }
@@ -77,16 +77,14 @@ mod tests {
         assert!((loaded_inst.level - 0.42).abs() < 0.001);
         assert!((loaded_inst.pan - -0.2).abs() < 0.001);
         assert_eq!(loaded_inst.output_target, OutputTarget::Bus(2));
-        assert!(matches!(
-            loaded_inst.filter,
-            Some(FilterConfig { filter_type: FilterType::Hpf, .. })
-        ));
-        if let Some(filter) = &loaded_inst.filter {
+        assert!(loaded_inst.filter().is_some());
+        assert_eq!(loaded_inst.filter().unwrap().filter_type, FilterType::Hpf);
+        if let Some(filter) = loaded_inst.filter() {
             assert!((filter.cutoff.value - 1234.0).abs() < 0.01);
             assert!((filter.resonance.value - 0.42).abs() < 0.01);
         }
-        assert_eq!(loaded_inst.effects.len(), 1);
-        assert_eq!(loaded_inst.effects[0].effect_type, EffectType::Delay);
+        assert_eq!(loaded_inst.effects().count(), 1);
+        assert_eq!(loaded_inst.effects().next().unwrap().effect_type, EffectType::Delay);
 
         assert_eq!(loaded_session.piano_roll.track_order.len(), 1);
         assert_eq!(loaded_session.piano_roll.track_order[0], inst_id);
@@ -153,8 +151,8 @@ mod tests {
 
         // Saw instrument: filter, mod source, effect, output, send, and source param
         if let Some(inst) = instruments.instrument_mut(saw_id) {
-            inst.filter = Some(FilterConfig::new(FilterType::Hpf));
-            if let Some(filter) = inst.filter.as_mut() {
+            inst.set_filter(Some(FilterType::Hpf));
+            if let Some(filter) = inst.filter_mut() {
                 filter.cutoff.value = 1234.0;
                 filter.cutoff.mod_source = Some(ModSource::Lfo(LfoConfig {
                     enabled: true,
@@ -289,8 +287,8 @@ mod tests {
         assert!((loaded_saw.pan - 0.25).abs() < 0.001);
         assert!(loaded_saw.sends[0].enabled);
         assert!((loaded_saw.sends[0].level - 0.33).abs() < 0.001);
-        assert!(loaded_saw.filter.is_some());
-        if let Some(filter) = &loaded_saw.filter {
+        assert!(loaded_saw.filter().is_some());
+        if let Some(filter) = loaded_saw.filter() {
             assert!((filter.cutoff.value - 1234.0).abs() < 0.01);
             match &filter.cutoff.mod_source {
                 Some(ModSource::Lfo(lfo)) => {
@@ -300,8 +298,9 @@ mod tests {
                 _ => panic!("Expected LFO mod source on cutoff"),
             }
         }
-        assert_eq!(loaded_saw.effects.len(), 1);
-        let loaded_effect = &loaded_saw.effects[0];
+        let loaded_effects: Vec<_> = loaded_saw.effects().collect();
+        assert_eq!(loaded_effects.len(), 1);
+        let loaded_effect = loaded_effects[0];
         assert_eq!(loaded_effect.effect_type, EffectType::Delay);
         let effect_param_name = &loaded_effect.params[0].name;
         let effect_param = loaded_effect

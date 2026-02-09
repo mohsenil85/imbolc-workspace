@@ -18,7 +18,7 @@ pub(super) fn handle_set_eq_param(
     let mut record_target: Option<(AutomationTarget, f32)> = None;
 
     if let Some(instrument) = state.instruments.instrument_mut(instrument_id) {
-        if let Some(ref mut eq) = instrument.eq {
+        if let Some(eq) = instrument.eq_mut() {
             if let Some(band) = eq.bands.get_mut(band_idx) {
                 match param_name {
                     "freq" => band.freq = value.clamp(20.0, 20000.0),
@@ -67,11 +67,7 @@ pub(super) fn handle_toggle_eq(
     instrument_id: crate::state::InstrumentId,
 ) -> DispatchResult {
     if let Some(instrument) = state.instruments.instrument_mut(instrument_id) {
-        if instrument.eq.is_some() {
-            instrument.eq = None;
-        } else {
-            instrument.eq = Some(crate::state::EqConfig::default());
-        }
+        instrument.toggle_eq();
     }
     let mut result = DispatchResult::none();
     result.audio_dirty.instruments = true;

@@ -291,12 +291,12 @@ mod tests {
 
     #[test]
     fn targets_for_instrument_context_with_eq() {
-        use crate::state::instrument::{Instrument, SourceType, EqConfig};
+        use crate::state::instrument::{Instrument, SourceType};
         use crate::state::vst_plugin::VstPluginRegistry;
         use crate::state::automation::target::AutomationTargetExt;
 
         let mut inst = Instrument::new(1, SourceType::Saw);
-        inst.eq = Some(EqConfig::default());
+        inst.toggle_eq(); // adds EQ to processing_chain
         let vst_registry = VstPluginRegistry::new();
         let targets = AutomationTarget::targets_for_instrument_context(&inst, &vst_registry);
         // 16 static + 36 EQ band params (12 bands x 3 params) = 52

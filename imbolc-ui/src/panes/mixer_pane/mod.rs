@@ -188,10 +188,10 @@ impl MixerPane {
         let Some((_, inst)) = self.detail_instrument(state) else { return 0 };
         match self.detail_section {
             MixerSection::Effects => {
-                if inst.effects.is_empty() { 0 }
+                if inst.effects().next().is_none() { 0 }
                 else {
-                    let mut count = 0;
-                    for effect in &inst.effects {
+                    let mut count: usize = 0;
+                    for effect in inst.effects() {
                         count += 1 + effect.params.len();
                     }
                     count.saturating_sub(1)
@@ -199,7 +199,7 @@ impl MixerPane {
             }
             MixerSection::Sends => inst.sends.len().saturating_sub(1),
             MixerSection::Filter => {
-                if inst.filter.is_some() { 2 } else { 0 }
+                if inst.filter().is_some() { 2 } else { 0 }
             }
             MixerSection::Lfo => 2,
             MixerSection::Output => 2,

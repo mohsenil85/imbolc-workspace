@@ -14,7 +14,7 @@
 use imbolc_types::{
     Action, InstrumentAction, MixerAction, PianoRollAction, AutomationAction,
     BusAction, LayerGroupAction, VstParamAction, SessionAction, ClickAction, VstTarget,
-    InstrumentId, MixerSelection, FilterConfig, FilterType, OutputTarget, EqConfig,
+    InstrumentId, MixerSelection, FilterType, OutputTarget,
 };
 use crate::state::instrument::Instrument;
 use crate::state::piano_roll::Note;
@@ -137,9 +137,7 @@ fn project_instrument(
             if let Some(instrument) = instruments.instrument_mut(update.id) {
                 instrument.source = update.source.clone();
                 instrument.source_params = update.source_params.clone();
-                instrument.filter = update.filter.clone();
-                instrument.eq = update.eq.clone();
-                instrument.effects = update.effects.clone();
+                instrument.processing_chain = update.processing_chain.clone();
                 instrument.lfo = update.lfo.clone();
                 instrument.amp_envelope = update.amp_envelope.clone();
                 instrument.polyphonic = update.polyphonic;
@@ -167,13 +165,13 @@ fn project_instrument(
         }
         InstrumentAction::SetFilter(id, filter_type) => {
             if let Some(instrument) = instruments.instrument_mut(*id) {
-                instrument.filter = filter_type.map(FilterConfig::new);
+                instrument.set_filter(*filter_type);
             }
             true
         }
         InstrumentAction::ToggleEffectBypass(id, effect_id) => {
             if let Some(instrument) = instruments.instrument_mut(*id) {
-                if let Some(effect) = instrument.effects.iter_mut().find(|e| e.id == *effect_id) {
+                if let Some(effect) = instrument.effect_by_id_mut(*effect_id) {
                     effect.enabled = !effect.enabled;
                 }
             }
@@ -181,17 +179,13 @@ fn project_instrument(
         }
         InstrumentAction::ToggleFilter(id) => {
             if let Some(instrument) = instruments.instrument_mut(*id) {
-                if instrument.filter.is_some() {
-                    instrument.filter = None;
-                } else {
-                    instrument.filter = Some(FilterConfig::new(FilterType::Lpf));
-                }
+                instrument.toggle_filter();
             }
             true
         }
         InstrumentAction::CycleFilterType(id) => {
             if let Some(instrument) = instruments.instrument_mut(*id) {
-                if let Some(ref mut filter) = instrument.filter {
+                if let Some(filter) = instrument.filter_mut() {
                     filter.filter_type = match filter.filter_type {
                         FilterType::Lpf => FilterType::Hpf,
                         FilterType::Hpf => FilterType::Bpf,
@@ -209,7 +203,7 @@ fn project_instrument(
         }
         InstrumentAction::AdjustFilterCutoff(id, delta) => {
             if let Some(instrument) = instruments.instrument_mut(*id) {
-                if let Some(ref mut filter) = instrument.filter {
+                if let Some(filter) = instrument.filter_mut() {
                     filter.cutoff.value = (filter.cutoff.value + delta * filter.cutoff.max * 0.02)
                         .clamp(filter.cutoff.min, filter.cutoff.max);
                 }
@@ -218,7 +212,7 @@ fn project_instrument(
         }
         InstrumentAction::AdjustFilterResonance(id, delta) => {
             if let Some(instrument) = instruments.instrument_mut(*id) {
-                if let Some(ref mut filter) = instrument.filter {
+                if let Some(filter) = instrument.filter_mut() {
                     filter.resonance.value = (filter.resonance.value + delta * 0.05)
                         .clamp(filter.resonance.min, filter.resonance.max);
                 }
@@ -227,7 +221,7 @@ fn project_instrument(
         }
         InstrumentAction::AdjustEffectParam(id, effect_id, param_idx, delta) => {
             if let Some(instrument) = instruments.instrument_mut(*id) {
-                if let Some(effect) = instrument.effects.iter_mut().find(|e| e.id == *effect_id) {
+                if let Some(effect) = instrument.effect_by_id_mut(*effect_id) {
                     if let Some(param) = effect.params.get_mut(*param_idx) {
                         use imbolc_types::ParamValue;
                         match &mut param.value {
@@ -343,7 +337,7 @@ fn project_instrument(
             let buffer_id = instruments.next_sampler_buffer_id;
             instruments.next_sampler_buffer_id += 1;
             if let Some(instrument) = instruments.instrument_mut(*instrument_id) {
-                if let Some(effect) = instrument.effects.iter_mut().find(|e| e.id == *effect_id) {
+                if let Some(effect) = instrument.effect_by_id_mut(*effect_id) {
                     if let Some(param) = effect.params.iter_mut().find(|p| p.name == "ir_buffer") {
                         param.value = imbolc_types::ParamValue::Int(buffer_id as i32);
                     }
@@ -357,7 +351,7 @@ fn project_instrument(
 
         InstrumentAction::SetEqParam(instrument_id, band_idx, param_name, value) => {
             if let Some(instrument) = instruments.instrument_mut(*instrument_id) {
-                if let Some(ref mut eq) = instrument.eq {
+                if let Some(eq) = instrument.eq_mut() {
                     if let Some(band) = eq.bands.get_mut(*band_idx) {
                         match param_name.as_str() {
                             "freq" => band.freq = value.clamp(20.0, 20000.0),
@@ -373,11 +367,7 @@ fn project_instrument(
         }
         InstrumentAction::ToggleEq(instrument_id) => {
             if let Some(instrument) = instruments.instrument_mut(*instrument_id) {
-                if instrument.eq.is_some() {
-                    instrument.eq = None;
-                } else {
-                    instrument.eq = Some(EqConfig::default());
-                }
+                instrument.toggle_eq();
             }
             true
         }
@@ -548,6 +538,19 @@ fn project_instrument(
         InstrumentAction::ToggleChannelConfig(id) => {
             if let Some(inst) = instruments.instrument_mut(*id) {
                 inst.channel_config = inst.channel_config.toggle();
+            }
+            true
+        }
+        // Processing chain reordering
+        InstrumentAction::MoveStage(id, stage_idx, direction) => {
+            if let Some(inst) = instruments.instrument_mut(*id) {
+                let len = inst.processing_chain.len();
+                if *stage_idx < len {
+                    let new_idx = (*stage_idx as isize + *direction as isize).clamp(0, len as isize - 1) as usize;
+                    if new_idx != *stage_idx {
+                        inst.processing_chain.swap(*stage_idx, new_idx);
+                    }
+                }
             }
             true
         }

@@ -277,7 +277,8 @@ impl MixerPane {
 
         let mut ey = inner_y + 1;
         let mut cursor_pos = 0;
-        for (ei, effect) in inst.effects.iter().enumerate() {
+        let effects: Vec<_> = inst.effects().cloned().collect();
+        for (ei, effect) in effects.iter().enumerate() {
             if ey >= inner_y + inner_h { break; }
 
             let bypass_char = if effect.enabled { '\u{25CF}' } else { '\u{25CB}' };
@@ -310,7 +311,7 @@ impl MixerPane {
                 let _ = pi;
             }
         }
-        if inst.effects.is_empty() {
+        if effects.is_empty() {
             Self::write_str(buf, col1_x, ey, "(no effects)", dim);
         }
 
@@ -354,7 +355,7 @@ impl MixerPane {
         Self::write_str(buf, col2_x, filter_y, "FILTER", filter_header);
 
         let mut fy = filter_y + 1;
-        if let Some(ref filter) = inst.filter {
+        if let Some(filter) = inst.filter() {
             let type_text = format!("{:?}", filter.filter_type);
             let type_style = if self.detail_section == MixerSection::Filter && self.detail_cursor == 0 {
                 selected_style

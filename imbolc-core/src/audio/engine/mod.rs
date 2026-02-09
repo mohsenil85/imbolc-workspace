@@ -83,6 +83,14 @@ pub struct VoiceChain {
     pub control_buses: (i32, i32, i32),
 }
 
+/// Identifies a processing node in the signal chain order.
+#[derive(Debug, Clone)]
+pub enum ProcessingNodeRef {
+    Filter,
+    Eq,
+    Effect(EffectId),
+}
+
 #[derive(Debug, Clone)]
 pub struct InstrumentNodes {
     pub source: Option<i32>,
@@ -90,8 +98,8 @@ pub struct InstrumentNodes {
     pub filter: Option<i32>,
     pub eq: Option<i32>,
     pub effects: HashMap<EffectId, i32>,
-    /// Ordered list of effect IDs matching the signal chain order (only enabled effects)
-    pub effect_order: Vec<EffectId>,
+    /// Ordered list of processing stages matching the actual signal chain order
+    pub processing_order: Vec<ProcessingNodeRef>,
     pub output: i32,
 }
 
@@ -100,11 +108,17 @@ impl InstrumentNodes {
         let mut ids = Vec::new();
         if let Some(id) = self.source { ids.push(id); }
         if let Some(id) = self.lfo { ids.push(id); }
-        if let Some(id) = self.filter { ids.push(id); }
-        if let Some(id) = self.eq { ids.push(id); }
-        for eid in &self.effect_order {
-            if let Some(&nid) = self.effects.get(eid) {
-                ids.push(nid);
+        for pnr in &self.processing_order {
+            match pnr {
+                ProcessingNodeRef::Filter => {
+                    if let Some(id) = self.filter { ids.push(id); }
+                }
+                ProcessingNodeRef::Eq => {
+                    if let Some(id) = self.eq { ids.push(id); }
+                }
+                ProcessingNodeRef::Effect(eid) => {
+                    if let Some(&nid) = self.effects.get(eid) { ids.push(nid); }
+                }
             }
         }
         ids.push(self.output);
@@ -368,7 +382,7 @@ mod tests {
     use super::*;
     use super::voice_allocator::MAX_VOICES_PER_INSTRUMENT;
     use crate::audio::engine::backend::NullBackend;
-    use crate::state::{AppState, AutomationTarget, FilterConfig, ParamValue};
+    use crate::state::{AppState, AutomationTarget, ParamValue};
     use crate::state::instrument::{EffectType, FilterType, SourceType};
 
     fn connect_engine() -> AudioEngine {
@@ -386,7 +400,7 @@ mod tests {
 
         let inst_id = state.add_instrument(SourceType::AudioIn);
         if let Some(inst) = state.instruments.instrument_mut(inst_id) {
-            inst.filter = Some(FilterConfig::new(FilterType::Lpf));
+            inst.set_filter(Some(FilterType::Lpf));
             inst.lfo.enabled = true;
             inst.add_effect(EffectType::Delay);
             inst.sends[0].enabled = true;
@@ -437,7 +451,7 @@ mod tests {
 
         let inst_id = state.add_instrument(SourceType::Saw);
         if let Some(inst) = state.instruments.instrument_mut(inst_id) {
-            inst.filter = Some(FilterConfig::new(FilterType::Hpf));
+            inst.set_filter(Some(FilterType::Hpf));
             let disabled_id = inst.add_effect(EffectType::Delay);
             if let Some(disabled) = inst.effect_by_id_mut(disabled_id) {
                 disabled.enabled = false;
@@ -851,7 +865,7 @@ mod tests {
             let mut state = AppState::new();
             let inst_id = state.add_instrument(SourceType::AudioIn);
             if let Some(inst) = state.instruments.instrument_mut(inst_id) {
-                inst.filter = Some(FilterConfig::new(FilterType::Lpf));
+                inst.set_filter(Some(FilterType::Lpf));
                 inst.add_effect(EffectType::Delay);
                 inst.add_effect(EffectType::Reverb);
             }
@@ -889,7 +903,7 @@ mod tests {
             let mut state = AppState::new();
             let inst_id = state.add_instrument(SourceType::AudioIn);
             if let Some(inst) = state.instruments.instrument_mut(inst_id) {
-                inst.filter = Some(FilterConfig::new(FilterType::Hpf));
+                inst.set_filter(Some(FilterType::Hpf));
                 inst.add_effect(EffectType::Delay);
             }
             engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild routing");
@@ -1051,7 +1065,7 @@ mod tests {
             let mut state = AppState::new();
             let inst_id = state.add_instrument(SourceType::AudioIn);
             if let Some(inst) = state.instruments.instrument_mut(inst_id) {
-                inst.filter = Some(FilterConfig::new(FilterType::Lpf));
+                inst.set_filter(Some(FilterType::Lpf));
                 inst.add_effect(EffectType::Delay);
                 inst.sends[0].enabled = true;
                 inst.sends[0].level = 0.5;
@@ -1257,7 +1271,7 @@ mod tests {
             let mut state = AppState::new();
             let inst_id = state.add_instrument(SourceType::AudioIn);
             if let Some(inst) = state.instruments.instrument_mut(inst_id) {
-                inst.filter = Some(FilterConfig::new(FilterType::Lpf));
+                inst.set_filter(Some(FilterType::Lpf));
                 inst.add_effect(EffectType::Delay);
                 inst.sends[0].enabled = true;
                 inst.sends[0].level = 0.5;

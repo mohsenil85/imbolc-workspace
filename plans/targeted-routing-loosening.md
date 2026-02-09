@@ -43,7 +43,7 @@ multiple filters exist.
   regardless of chain order). Post-insert sends tap the final bus
   after all processing stages.
 
-### A1. Types (`imbolc-types/src/state/instrument/mod.rs`)
+### ~~A1. Types (`imbolc-types/src/state/instrument/mod.rs`)~~ ✓
 
 - Add `ProcessingStage` enum: `Filter(FilterConfig)`, `Eq(EqConfig)`,
   `Effect(EffectSlot)`
@@ -69,7 +69,7 @@ multiple filters exist.
 - Update `add_effect()` to push `ProcessingStage::Effect(...)` to end
   of chain
 
-### A2. Navigation helpers (`imbolc-types/src/state/instrument/mod.rs`)
+### ~~A2. Navigation helpers (`imbolc-types/src/state/instrument/mod.rs`)~~ ✓
 
 - Change `InstrumentSection` enum: `Source`, `Processing(usize)`,
   `Lfo`, `Envelope`
@@ -82,107 +82,128 @@ multiple filters exist.
   `instrument_row_info()` covering chains with different stage orders,
   empty chains, and chains with all three stage types
 
-### A3. Actions (`imbolc-types/src/action.rs`)
+### A3. Actions (`imbolc-types/src/action.rs`) — partially done
 
-- Add `InstrumentAction::MoveStage(InstrumentId, usize, i8)` for
-  moving any stage
-- Update `InstrumentUpdate` to use `processing_chain` instead of
-  separate fields
+- ~~Add `InstrumentAction::MoveStage(InstrumentId, usize, i8)` for
+  moving any stage~~ ✓
+- ~~Update `InstrumentUpdate` to use `processing_chain` instead of
+  separate fields~~ ✓
 - Remove `MoveEffect` — `MoveStage` subsumes it. Having two ways to
   move effects is a maintenance burden with no user-facing benefit;
   callers can find the chain index via `effect_chain_index(id)`.
+  **Blocked on A6:** ~18 call sites in dispatch, action_projection,
+  and UI still use `MoveEffect` (instrument, bus, layer group
+  variants). Remove once instrument_edit_pane is fully refactored to
+  use `MoveStage` and bus/group `MoveEffect` is evaluated for
+  migration.
 
-### A4. Dispatch (`imbolc-core/src/dispatch/instrument/`)
+### ~~A4. Dispatch (`imbolc-core/src/dispatch/instrument/`)~~ ✓
 
-- **filter.rs**: Filter dispatch needs a target index since multiple
-  filters can exist. Current single-filter dispatch uses
-  `instrument.filter` — replace with
-  `instrument.filter_at_mut(chain_idx)` or route through
-  `Processing(idx)` from the action.
-- **eq.rs**: Replace `instrument.eq` with `instrument.eq_mut()`
-- **effects.rs**: `add_effect` pushes to chain; `remove_effect` scans
-  chain
+**Done.** All dispatch handlers migrated from direct field access to
+accessor methods and `processing_chain` manipulation.
+
+- **filter.rs**: `instrument.filter` → `instrument.filter_mut()`,
+  `instrument.set_filter()`, `instrument.toggle_filter()`
+- **eq.rs**: `instrument.eq` → `instrument.eq_mut()`,
+  `instrument.toggle_eq()`
+- **effects.rs**: `add_effect` pushes to chain via
+  `instrument.add_effect()`; `remove_effect` via
+  `instrument.remove_effect()`; `effect_by_id_mut()` for param access
 - **crud.rs**: `handle_update` copies `processing_chain` instead of
   three separate fields
-- Add `handle_move_stage` in effects.rs (or new stage.rs). `MoveStage`
-  is undoable with `UndoScope::Session` (structural change, undo feels
-  natural).
-- **Routing rebuild trigger:** Any stage insert/remove/move must set
-  `routing = true` in dirty flags, same as existing effect
-  add/remove. This is critical for correctness — the audio engine must
-  rebuild the SC node chain to reflect the new order.
+- **action_projection.rs**: Same accessor migration for audio thread
+  state copy
+- **automation.rs**: `inst.effects` → `inst.effects()`, `inst.eq` →
+  `inst.eq()`
 
-### A5. Audio routing (`imbolc-core/src/audio/engine/routing.rs`)
+`MoveStage` dispatch handler already existed (added in A1–A3).
+Routing rebuild triggers unchanged (existing `routing = true` flags).
 
-Replace the three sequential blocks (filter, EQ, effects) in
-`build_instrument_chain` with a single loop:
+### ~~A5. Audio routing (`imbolc-core/src/audio/engine/routing.rs`)~~ ✓
 
-```
+**Done.** Replaced the three sequential blocks (filter, EQ, effects)
+in `build_instrument_chain` with a single `processing_chain` loop:
+
+```rust
 for stage in instrument.processing_chain.iter() {
     match stage {
-        Filter(f) => { /* existing filter routing code, using current_bus */ }
-        Eq(eq)    => { /* existing EQ routing code, using current_bus */ }
-        Effect(e) => { /* existing per-effect routing code, using current_bus */ }
+        ProcessingStage::Filter(f) => { /* filter routing, current_bus chaining */ }
+        ProcessingStage::Eq(eq)    => { /* EQ routing, current_bus chaining */ }
+        ProcessingStage::Effect(e) => { /* per-effect routing, current_bus chaining */ }
     }
 }
 ```
 
-`InstrumentNodes` keeps its existing fields (filter, eq, effects
-maps). Real-time param updates (`set_filter_param`,
-`set_effect_param`) look up nodes by type/id, not position —
-unchanged.
+`InstrumentNodes` keeps existing fields (filter, eq, effects maps).
+Real-time param updates look up nodes by type/id — unchanged.
 
-**Node ordering:** `InstrumentNodes::all_node_ids()` currently returns
-nodes in fixed order (source → lfo → filter → eq → effects →
-output). With flexible ordering, the processing segment must return
-nodes in actual chain order. SC node ordering within a group
-determines signal flow — wrong order means audio glitches. Update
-`all_node_ids()` to iterate `processing_chain` for the middle segment.
+**Node ordering:** Added `ProcessingNodeRef` enum (`Filter`, `Eq`,
+`Effect(EffectId)`) and `processing_order: Vec<ProcessingNodeRef>` to
+`InstrumentNodes`. `all_node_ids()` iterates `processing_order` for
+the middle segment, ensuring SC node ordering matches the actual
+chain.
 
-**Send tap points:** Pre-insert sends tap `source_out_bus`, which is
-before all processing stages regardless of chain order. Add a comment
-in routing.rs confirming this intent so readers don't confuse
-"pre-insert" with "before filter specifically."
+**Send tap points:** Pre-insert sends tap `source_out_bus` (before all
+processing stages regardless of chain order). Post-insert sends tap
+the final bus after all processing.
 
-### A6. UI (`imbolc-ui/src/panes/instrument_edit_pane/`)
+**Files:** `engine/routing.rs` (chain loop, node ordering),
+`engine/mod.rs` (`ProcessingNodeRef`, `InstrumentNodes` update,
+`all_node_ids()`), `engine/mod.rs` tests (updated `set_filter` calls).
 
-- **mod.rs**: Replace `filter`, `eq`, `effects` fields with
-  `processing_chain`; update `set_instrument()`,
-  `refresh_instrument()`
-- **rendering.rs**: Render Source → loop over `processing_chain`
-  stages → LFO → Envelope (dynamic order)
-- **input.rs**: Section nav uses `Processing(idx)` and steps through
-  chain; add Ctrl+Up/Down to move stages; context-sensitive keys based
-  on stage type at cursor
-- **editing.rs**: `adjust_value` matches on `Processing(idx)` then
-  dispatches by stage type
-- **Cursor stability after moves:** When `MoveStage` shifts chain
-  indices, the UI must follow the moved stage. After dispatching the
-  move, recalculate `selected_row` from the stage's new chain index
-  (not old row number). Otherwise the cursor stays on the same row and
-  points at a different stage.
+### A6. UI (`imbolc-ui/src/panes/instrument_edit_pane/`) — compilation done, full refactor pending
 
-### A7. Persistence (`imbolc-core/src/state/persistence/`)
+**Compilation compatibility done.** All UI code compiles and 116 tests
+pass. The pane still stores local `filter`, `eq`, `effects` fields
+internally and uses a local `Section` enum (`Source`, `Filter`,
+`Effects`, `Lfo`, `Envelope`) that maps to/from
+`InstrumentSection::Processing(i)`. Helper methods
+`build_processing_chain()`, `map_section()`, and `map_row_info()`
+bridge between the two representations.
 
+- **mod.rs**: `set_instrument()` / `refresh_instrument()` use accessor
+  methods (`filter()`, `eq()`, `effects()`). `apply_to()` and
+  `emit_update()` build `processing_chain` from local fields.
+  `total_rows()`, `section_for_row()`, `row_info()` delegate to
+  type-level helpers via `build_processing_chain()`.
+- **editing.rs**: `emit_update()` constructs `InstrumentUpdate` with
+  `processing_chain` field.
+- **Other UI files**: `instrument_pane.rs`, `mixer_pane/`, `eq_pane.rs`,
+  `main.rs` — all migrated from field access to accessor methods.
+
+**Remaining full refactor (lower priority):**
+- Replace local `filter`/`eq`/`effects` fields with `processing_chain`
+  to render stages in actual user-defined order
+- Render Source → loop over `processing_chain` stages → LFO → Envelope
+- Section nav uses `Processing(idx)` directly; add Ctrl+Up/Down to
+  move stages
+- Cursor stability after `MoveStage`: recalculate `selected_row` from
+  the stage's new chain index
+
+### A7. Persistence (`imbolc-core/src/state/persistence/`) — compatibility done, new tables pending
+
+**Compilation compatibility done.** Save/load uses accessor methods
+(`filter()`, `eq()`, `effects()`) for saving, and reconstructs
+`processing_chain` from existing filter/eq/effects tables on load
+(filter → EQ → effects order). Blob serialization uses
+`#[serde(default)]` on `processing_chain` for backward compat. All 14
+persistence tests pass.
+
+**Remaining (preserves chain ordering across save/load):**
 - Add `instrument_processing_chain` table: `(instrument_id, position,
-  stage_type, effect_id)`
+  stage_type, effect_id)` — currently chain order is lost on save
+  (always reconstructed as filter → EQ → effects)
 - Add `instrument_eq_bands` table: `(instrument_id, band_index, freq,
   gain, q)` — EQ band data is not currently persisted (only
-  `eq_enabled` flag exists). This plan owns closing that gap.
-- **Save**: Save filter/EQ/effects in their respective tables, plus
-  chain order in `instrument_processing_chain`, plus EQ band data in
-  `instrument_eq_bands`
-- **Load**: If `instrument_processing_chain` exists, assemble chain
-  from order table; otherwise fall back to legacy order (filter → EQ →
-  effects). Use `#[serde(default)]` on `processing_chain` for
-  backward-compatible blob deserialization.
+  `eq_enabled` flag exists)
 - Bump `SCHEMA_VERSION`
 
-### A8. Network (`imbolc-net`)
+### ~~A8. Network (`imbolc-net`)~~ ✓
 
-- `Instrument` serde changes propagate automatically (breaking
-  protocol change, acceptable pre-1.0)
-- `StatePatch` / `DirtyFlags` unchanged (operate at instrument level)
+**Done automatically.** `Instrument` serde changes propagate via
+`#[serde(default)]` on `processing_chain`. Old fields removed from
+struct; network protocol is a breaking change (acceptable pre-1.0).
+`StatePatch` / `DirtyFlags` unchanged (operate at instrument level).
 
 ---
 
@@ -348,7 +369,10 @@ Instrument struct, and delivers the highest-value feature
 (reverb/compression buses). Phase A is larger and more invasive.
 
 1. ~~Phase B (bus effects)~~ — **Complete.** All B1–B7 done (B7 = layer group EQ).
-2. Phase A (flexible chain) — ~5 working sessions
+2. Phase A (flexible chain) — **Core complete.** A1–A5 done, A8 done.
+   Remaining: A3 (MoveEffect removal), A6 (full UI refactor), A7
+   (chain order persistence). The codebase compiles cleanly and all
+   628 tests pass (236 types + 276 core + 116 UI).
 
 They share no code dependencies, so Phase A can't break Phase B. Bus
 effects stay as plain `Vec<EffectSlot>` (buses don't have filter/EQ,

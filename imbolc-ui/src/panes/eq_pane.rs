@@ -59,16 +59,16 @@ impl Pane for EqPane {
                 Action::None
             }
             ActionId::Eq(EqActionId::Increase) | ActionId::Eq(EqActionId::IncreaseBig) | ActionId::Eq(EqActionId::IncreaseTiny) => {
-                adjust_param(instrument_id, &instrument.eq, self.selected_band, self.selected_param, true, action)
+                adjust_param(instrument_id, instrument.eq(), self.selected_band, self.selected_param, true, action)
             }
             ActionId::Eq(EqActionId::Decrease) | ActionId::Eq(EqActionId::DecreaseBig) | ActionId::Eq(EqActionId::DecreaseTiny) => {
-                adjust_param(instrument_id, &instrument.eq, self.selected_band, self.selected_param, false, action)
+                adjust_param(instrument_id, instrument.eq(), self.selected_band, self.selected_param, false, action)
             }
             ActionId::Eq(EqActionId::ToggleEq) => {
                 Action::Instrument(InstrumentAction::ToggleEq(instrument_id))
             }
             ActionId::Eq(EqActionId::ToggleBand) => {
-                if let Some(ref eq) = instrument.eq {
+                if let Some(eq) = instrument.eq() {
                     let band = &eq.bands[self.selected_band];
                     let new_val = if band.enabled { 0.0 } else { 1.0 };
                     Action::Instrument(InstrumentAction::SetEqParam(
@@ -103,7 +103,7 @@ impl Pane for EqPane {
             }
         };
 
-        let eq = match &instrument.eq {
+        let eq = match instrument.eq() {
             Some(eq) => eq,
             None => {
                 render_centered_text(inner, buf, "EQ off — press 'e' to enable", Color::DARK_GRAY);
@@ -176,7 +176,7 @@ fn render_centered_text(area: Rect, buf: &mut RenderBuf, text: &str, color: Colo
 
 fn adjust_param(
     instrument_id: InstrumentId,
-    eq: &Option<EqConfig>,
+    eq: Option<&EqConfig>,
     band_idx: usize,
     param_idx: usize,
     increase: bool,

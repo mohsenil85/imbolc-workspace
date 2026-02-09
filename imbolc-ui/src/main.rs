@@ -568,7 +568,7 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
                                      if let (state::SourceType::Vst(_), Some(ref path)) = (&inst.source, &inst.vst_state_path) {
                                          restores.push((inst.id, action::VstTarget::Source, path.clone()));
                                      }
-                                     for effect in &inst.effects {
+                                     for effect in inst.effects() {
                                          if let (state::EffectType::Vst(_), Some(ref path)) = (&effect.effect_type, &effect.vst_state_path) {
                                              restores.push((inst.id, action::VstTarget::Effect(effect.id), path.clone()));
                                          }

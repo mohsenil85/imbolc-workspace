@@ -177,7 +177,7 @@ fn save_instruments(conn: &Connection, instruments: &InstrumentState) -> SqlResu
 
         let (filter_type, filter_cutoff, filter_cutoff_min, filter_cutoff_max,
              filter_resonance, filter_resonance_min, filter_resonance_max, filter_enabled) =
-            if let Some(ref f) = inst.filter {
+            if let Some(f) = inst.filter() {
                 (
                     Some(format!("{:?}", f.filter_type)),
                     Some(f.cutoff.value), Some(f.cutoff.min), Some(f.cutoff.max),
@@ -188,7 +188,7 @@ fn save_instruments(conn: &Connection, instruments: &InstrumentState) -> SqlResu
                 (None, None, None, None, None, None, None, 1)
             };
 
-        let eq_enabled = inst.eq.as_ref().map(|eq| eq.enabled as i32);
+        let eq_enabled = inst.eq().map(|eq| eq.enabled as i32);
 
         let chord_shape = inst.chord_shape.as_ref().map(|cs| format!("{:?}", cs));
 
@@ -250,7 +250,8 @@ fn save_instruments(conn: &Connection, instruments: &InstrumentState) -> SqlResu
         save_params(conn, "instrument_source_params", "instrument_id", inst.id, &inst.source_params)?;
 
         // Effects
-        save_effects(conn, inst.id, &inst.effects)?;
+        let effects: Vec<_> = inst.effects().cloned().collect();
+        save_effects(conn, inst.id, &effects)?;
 
         // Sends
         for send in &inst.sends {
@@ -262,7 +263,7 @@ fn save_instruments(conn: &Connection, instruments: &InstrumentState) -> SqlResu
         }
 
         // Filter modulations
-        if let Some(ref f) = inst.filter {
+        if let Some(f) = inst.filter() {
             save_modulation(conn, inst.id, "cutoff", &f.cutoff.mod_source)?;
             save_modulation(conn, inst.id, "resonance", &f.resonance.mod_source)?;
 
@@ -271,7 +272,7 @@ fn save_instruments(conn: &Connection, instruments: &InstrumentState) -> SqlResu
         }
 
         // EQ bands
-        if let Some(ref eq) = inst.eq {
+        if let Some(eq) = inst.eq() {
             for (i, band) in eq.bands.iter().enumerate() {
                 conn.execute(
                     "INSERT INTO instrument_eq_bands (instrument_id, band_index, band_type, freq, gain, q, enabled)

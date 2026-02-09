@@ -86,9 +86,7 @@ pub(super) fn handle_update(
     if let Some(instrument) = state.instruments.instrument_mut(update.id) {
         instrument.source = update.source.clone();
         instrument.source_params = update.source_params.clone();
-        instrument.filter = update.filter.clone();
-        instrument.eq = update.eq.clone();
-        instrument.effects = update.effects.clone();
+        instrument.processing_chain = update.processing_chain.clone();
         instrument.lfo = update.lfo.clone();
         instrument.amp_envelope = update.amp_envelope.clone();
         instrument.polyphonic = update.polyphonic;
@@ -150,9 +148,7 @@ mod tests {
             id,
             source: inst.source,
             source_params: inst.source_params.clone(),
-            filter: inst.filter.clone(),
-            eq: inst.eq.clone(),
-            effects: inst.effects.clone(),
+            processing_chain: inst.processing_chain.clone(),
             lfo: inst.lfo.clone(),
             amp_envelope: inst.amp_envelope.clone(),
             polyphonic: inst.polyphonic,

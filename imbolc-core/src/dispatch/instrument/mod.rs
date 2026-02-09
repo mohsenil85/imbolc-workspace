@@ -167,7 +167,27 @@ pub(super) fn dispatch_instrument(
         InstrumentAction::ToggleChannelConfig(id) => {
             handle_toggle_channel_config(state, *id)
         }
+        // Processing chain reordering
+        InstrumentAction::MoveStage(id, stage_idx, direction) => {
+            handle_move_stage(state, *id, *stage_idx, *direction)
+        }
     }
+}
+
+fn handle_move_stage(state: &mut AppState, id: crate::state::InstrumentId, stage_idx: usize, direction: i8) -> DispatchResult {
+    if let Some(inst) = state.instruments.instrument_mut(id) {
+        let len = inst.processing_chain.len();
+        if stage_idx < len {
+            let new_idx = (stage_idx as isize + direction as isize).clamp(0, len as isize - 1) as usize;
+            if new_idx != stage_idx {
+                inst.processing_chain.swap(stage_idx, new_idx);
+            }
+        }
+    }
+    let mut result = DispatchResult::none();
+    result.audio_dirty.instruments = true;
+    result.audio_dirty.routing_instrument = Some(id);
+    result
 }
 
 fn handle_toggle_channel_config(state: &mut AppState, id: crate::state::InstrumentId) -> DispatchResult {

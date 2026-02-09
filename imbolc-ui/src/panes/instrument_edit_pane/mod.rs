@@ -5,7 +5,7 @@ mod rendering;
 use std::any::Any;
 use std::time::Instant;
 
-use imbolc_types::ChannelConfig;
+use imbolc_types::{ChannelConfig, ProcessingStage};
 use crate::state::{
     AppState, EffectSlot, EnvConfig, EqConfig, FilterConfig, Instrument, InstrumentId,
     InstrumentSection, LfoConfig, Param, SourceType,
@@ -15,8 +15,16 @@ use crate::ui::widgets::TextInput;
 use crate::ui::{Rect, RenderBuf, Action, InputEvent, Keymap, MouseEvent, PadKeyboard, Pane, PianoKeyboard, PianoRollAction, ToggleResult};
 use crate::ui::action_id::ActionId;
 
-/// Local alias for pane code compatibility
-type Section = InstrumentSection;
+/// Local section enum that preserves the pane's view of filter/effects as
+/// separate sections, translating to/from InstrumentSection::Processing(i).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Section {
+    Source,
+    Filter,
+    Effects,
+    Lfo,
+    Envelope,
+}
 
 pub struct InstrumentEditPane {
     keymap: Keymap,
@@ -75,9 +83,9 @@ impl InstrumentEditPane {
         self.source = instrument.source;
         self.source_params = instrument.source_params.clone();
         self.sample_name = instrument.sampler_config.as_ref().and_then(|c| c.sample_name.clone());
-        self.filter = instrument.filter.clone();
-        self.eq = instrument.eq.clone();
-        self.effects = instrument.effects.clone();
+        self.filter = instrument.filter().cloned();
+        self.eq = instrument.eq().cloned();
+        self.effects = instrument.effects().cloned().collect();
         self.lfo = instrument.lfo.clone();
         self.amp_envelope = instrument.amp_envelope.clone();
         self.polyphonic = instrument.polyphonic;
@@ -96,9 +104,9 @@ impl InstrumentEditPane {
         self.source = instrument.source;
         self.source_params = instrument.source_params.clone();
         self.sample_name = instrument.sampler_config.as_ref().and_then(|c| c.sample_name.clone());
-        self.filter = instrument.filter.clone();
-        self.eq = instrument.eq.clone();
-        self.effects = instrument.effects.clone();
+        self.filter = instrument.filter().cloned();
+        self.eq = instrument.eq().cloned();
+        self.effects = instrument.effects().cloned().collect();
         self.lfo = instrument.lfo.clone();
         self.amp_envelope = instrument.amp_envelope.clone();
         self.polyphonic = instrument.polyphonic;
@@ -148,17 +156,84 @@ impl InstrumentEditPane {
     pub fn apply_to(&self, instrument: &mut Instrument) {
         instrument.source = self.source;
         instrument.source_params = self.source_params.clone();
-        instrument.filter = self.filter.clone();
-        instrument.effects = self.effects.clone();
+        instrument.processing_chain = self.build_processing_chain();
         instrument.lfo = self.lfo.clone();
         instrument.amp_envelope = self.amp_envelope.clone();
         instrument.polyphonic = self.polyphonic;
         instrument.active = self.active;
     }
 
+    /// Build a processing chain from local filter/eq/effects copies
+    fn build_processing_chain(&self) -> Vec<ProcessingStage> {
+        let mut chain = Vec::new();
+        if let Some(ref f) = self.filter {
+            chain.push(ProcessingStage::Filter(f.clone()));
+        }
+        if let Some(ref e) = self.eq {
+            chain.push(ProcessingStage::Eq(e.clone()));
+        }
+        for effect in &self.effects {
+            chain.push(ProcessingStage::Effect(effect.clone()));
+        }
+        chain
+    }
+
+    /// Map InstrumentSection::Processing(i) to the local Section enum
+    fn map_section(&self, is: InstrumentSection) -> Section {
+        match is {
+            InstrumentSection::Source => Section::Source,
+            InstrumentSection::Processing(i) => {
+                let chain = self.build_processing_chain();
+                if let Some(stage) = chain.get(i) {
+                    match stage {
+                        ProcessingStage::Filter(_) => Section::Filter,
+                        ProcessingStage::Eq(_) => Section::Filter, // EQ grouped with filter section conceptually
+                        ProcessingStage::Effect(_) => Section::Effects,
+                    }
+                } else {
+                    Section::Effects // placeholder row for empty chain
+                }
+            }
+            InstrumentSection::Lfo => Section::Lfo,
+            InstrumentSection::Envelope => Section::Envelope,
+        }
+    }
+
+    /// Map InstrumentSection row_info to local Section with adjusted local_idx
+    fn map_row_info(&self, is: InstrumentSection, local_idx: usize) -> (Section, usize) {
+        match is {
+            InstrumentSection::Source => (Section::Source, local_idx),
+            InstrumentSection::Processing(i) => {
+                let chain = self.build_processing_chain();
+                if let Some(stage) = chain.get(i) {
+                    match stage {
+                        ProcessingStage::Filter(_) => (Section::Filter, local_idx),
+                        ProcessingStage::Eq(_) => (Section::Filter, local_idx), // not used in practice (EQ is pane-level)
+                        ProcessingStage::Effect(_) => {
+                            // Calculate local_idx within effects section:
+                            // sum rows from all prior Effect stages + local_idx
+                            let prior_effect_rows: usize = chain[..i].iter()
+                                .filter_map(|s| match s {
+                                    ProcessingStage::Effect(e) => Some(1 + e.params.len()),
+                                    _ => None,
+                                })
+                                .sum();
+                            (Section::Effects, prior_effect_rows + local_idx)
+                        }
+                    }
+                } else {
+                    (Section::Effects, 0) // placeholder
+                }
+            }
+            InstrumentSection::Lfo => (Section::Lfo, local_idx),
+            InstrumentSection::Envelope => (Section::Envelope, local_idx),
+        }
+    }
+
     /// Total number of selectable rows across all sections
     fn total_rows(&self) -> usize {
-        instrument_row_count(self.source, &self.source_params, &self.filter, &self.effects)
+        let chain = self.build_processing_chain();
+        instrument_row_count(self.source, &self.source_params, &chain)
     }
 
     /// Calculate non-selectable visual lines (headers + separators)
@@ -181,12 +256,16 @@ impl InstrumentEditPane {
 
     /// Which section does a given row belong to?
     fn section_for_row(&self, row: usize) -> Section {
-        instrument_section_for_row(row, self.source, &self.source_params, &self.filter, &self.effects)
+        let chain = self.build_processing_chain();
+        let is = instrument_section_for_row(row, self.source, &self.source_params, &chain);
+        self.map_section(is)
     }
 
     /// Get section and local index for a row
     fn row_info(&self, row: usize) -> (Section, usize) {
-        instrument_row_info(row, self.source, &self.source_params, &self.filter, &self.effects)
+        let chain = self.build_processing_chain();
+        let (is, local_idx) = instrument_row_info(row, self.source, &self.source_params, &chain);
+        self.map_row_info(is, local_idx)
     }
 
     fn current_section(&self) -> Section {

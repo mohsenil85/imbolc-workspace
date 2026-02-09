@@ -94,7 +94,7 @@ impl AudioEngine {
             ParameterTarget::FilterBypass => {
                 let bypassed = value >= 0.5;
                 if let Some(inst) = state.instrument_mut(instrument_id) {
-                    if let Some(ref mut filter) = inst.filter {
+                    if let Some(filter) = inst.filter_mut() {
                         filter.enabled = !bypassed;
                     }
                 }
@@ -399,7 +399,7 @@ impl AudioEngine {
             ParameterTarget::FilterBypass => {
                 let bypassed = value >= 0.5;
                 if let Some(inst) = state.instrument_mut(instrument_id) {
-                    if let Some(ref mut filter) = inst.filter {
+                    if let Some(filter) = inst.filter_mut() {
                         filter.enabled = !bypassed;
                     }
                 }

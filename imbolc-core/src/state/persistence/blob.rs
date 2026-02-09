@@ -23,7 +23,7 @@ mod tests {
     use crate::state::AutomationTarget;
     use crate::state::custom_synthdef::{CustomSynthDef, CustomSynthDefRegistry, ParamSpec};
     use crate::state::instrument::{
-        EffectType, FilterConfig, FilterType, LfoConfig, LfoShape, ParameterTarget, ModSource,
+        EffectType, FilterType, LfoConfig, LfoShape, ParameterTarget, ModSource,
         OutputTarget, SourceType,
     };
     use crate::state::param::ParamValue;
@@ -76,8 +76,8 @@ mod tests {
 
         // Saw instrument: filter, mod source, effect, output, send, and source param
         if let Some(inst) = instruments.instrument_mut(saw_id) {
-            inst.filter = Some(FilterConfig::new(FilterType::Hpf));
-            if let Some(filter) = inst.filter.as_mut() {
+            inst.set_filter(Some(FilterType::Hpf));
+            if let Some(filter) = inst.filter_mut() {
                 filter.cutoff.value = 1234.0;
                 filter.cutoff.mod_source = Some(ModSource::Lfo(LfoConfig {
                     enabled: true,
@@ -278,8 +278,8 @@ mod tests {
         assert!((loaded_saw.pan - 0.25).abs() < 0.001);
         assert!(loaded_saw.sends[0].enabled);
         assert!((loaded_saw.sends[0].level - 0.33).abs() < 0.001);
-        assert!(loaded_saw.filter.is_some());
-        if let Some(filter) = &loaded_saw.filter {
+        assert!(loaded_saw.filter().is_some());
+        if let Some(filter) = loaded_saw.filter() {
             assert!((filter.cutoff.value - 1234.0).abs() < 0.01);
             match &filter.cutoff.mod_source {
                 Some(ModSource::Lfo(lfo)) => {
@@ -289,8 +289,8 @@ mod tests {
                 _ => panic!("Expected LFO mod source on cutoff"),
             }
         }
-        assert_eq!(loaded_saw.effects.len(), 1);
-        assert_eq!(loaded_saw.effects[0].effect_type, EffectType::Delay);
+        assert_eq!(loaded_saw.effects().count(), 1);
+        assert_eq!(loaded_saw.effects().next().unwrap().effect_type, EffectType::Delay);
 
         let loaded_sampler = loaded_instruments
             .instruments

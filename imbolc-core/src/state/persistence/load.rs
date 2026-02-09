@@ -499,6 +499,7 @@ fn load_vst_plugins(conn: &Connection, session: &mut SessionState) -> SqlResult<
 fn load_instruments(conn: &Connection, instruments: &mut InstrumentState) -> SqlResult<()> {
     use crate::state::instrument::*;
     use crate::state::arpeggiator::ArpeggiatorConfig;
+    use imbolc_types::ProcessingStage;
     use imbolc_types::state::groove::GrooveConfig;
 
     instruments.instruments.clear();
@@ -674,8 +675,14 @@ fn load_instruments(conn: &Connection, instruments: &mut InstrumentState) -> Sql
         // Create instrument with defaults, then override
         let mut inst = Instrument::new(r.id, source);
         inst.name = r.name;
-        inst.filter = filter;
-        inst.eq = eq;
+        // Build processing_chain from loaded filter/eq (effects added below)
+        inst.processing_chain.clear();
+        if let Some(f) = filter {
+            inst.processing_chain.push(ProcessingStage::Filter(f));
+        }
+        if let Some(e) = eq {
+            inst.processing_chain.push(ProcessingStage::Eq(e));
+        }
         inst.lfo = lfo;
         inst.amp_envelope = amp_envelope;
         inst.polyphonic = r.polyphonic != 0;
@@ -707,8 +714,10 @@ fn load_instruments(conn: &Connection, instruments: &mut InstrumentState) -> Sql
         // Source params
         inst.source_params = load_params(conn, "instrument_source_params", "instrument_id", r.id)?;
 
-        // Effects
-        inst.effects = load_effects(conn, r.id)?;
+        // Effects (append to processing_chain after filter/eq)
+        for effect in load_effects(conn, r.id)? {
+            inst.processing_chain.push(ProcessingStage::Effect(effect));
+        }
 
         // Sends
         inst.sends = load_sends(conn, r.id)?;

@@ -24,7 +24,7 @@ impl AutomationTargetExt for AutomationTarget {
         let mut targets = AutomationTarget::targets_for_instrument(id);
 
         // EffectParam: one target per param for each non-VST effect
-        for effect in &inst.effects {
+        for effect in inst.effects() {
             if effect.effect_type.is_vst() {
                 continue;
             }
@@ -51,7 +51,7 @@ impl AutomationTargetExt for AutomationTarget {
         }
 
         // EqBandParam: only when EQ is enabled (12 bands x 3 params = 36 targets)
-        if inst.eq.is_some() {
+        if inst.eq().is_some() {
             for band in 0..12 {
                 targets.push(AutomationTarget::eq_band_freq(id, band));
                 targets.push(AutomationTarget::eq_band_gain(id, band));
