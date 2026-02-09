@@ -85,5 +85,9 @@ pub enum AudioFeedback {
         p95_tick_us: u32,
         /// Cumulative count of ticks exceeding budget
         overruns: u64,
+        /// Current dynamic schedule lookahead in milliseconds
+        schedule_lookahead_ms: f32,
+        /// Current OSC sender thread queue depth
+        osc_send_queue_depth: u16,
     },
 }

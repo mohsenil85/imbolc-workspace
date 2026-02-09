@@ -2,7 +2,7 @@ use std::sync::mpsc::Sender;
 use std::time::Duration;
 
 use super::commands::AudioFeedback;
-use super::engine::{AudioEngine, SCHEDULE_LOOKAHEAD_SECS};
+use super::engine::AudioEngine;
 use super::snapshot::{InstrumentSnapshot, SessionSnapshot};
 use crate::state::InstrumentId;
 
@@ -81,14 +81,14 @@ pub fn tick_drum_sequencer(
 
             // Precise offset: time from tick start to this step crossing
             let offset_secs = ((threshold_consumed - old_accum) * secs_per_step_unit).max(0.0)
-                + SCHEDULE_LOOKAHEAD_SECS;
+                + engine.schedule_lookahead_secs;
 
             steps_to_play.push((seq.current_step, seq.current_pattern, offset_secs));
         }
 
         // Handle initial step when sequencer first starts (no threshold crossed yet)
         if steps_to_play.is_empty() && seq.last_played_step != Some(seq.current_step) {
-            steps_to_play.push((seq.current_step, seq.current_pattern, SCHEDULE_LOOKAHEAD_SECS));
+            steps_to_play.push((seq.current_step, seq.current_pattern, engine.schedule_lookahead_secs));
         }
 
         // Play each step with its precise offset

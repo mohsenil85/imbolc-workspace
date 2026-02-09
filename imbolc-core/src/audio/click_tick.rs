@@ -4,7 +4,7 @@
 
 use std::time::Duration;
 
-use super::engine::{AudioEngine, SCHEDULE_LOOKAHEAD_SECS};
+use super::engine::AudioEngine;
 use super::snapshot::{PianoRollSnapshot, SessionSnapshot};
 use imbolc_types::ClickTrackState;
 
@@ -75,7 +75,7 @@ pub fn tick_click(
 
         // Calculate precise offset from tick start
         let offset_secs = ((beat_count as f64 - old_accum) * secs_per_beat).max(0.0)
-            + SCHEDULE_LOOKAHEAD_SECS;
+            + engine.schedule_lookahead_secs;
 
         // Spawn the click sound
         if engine.is_running() {

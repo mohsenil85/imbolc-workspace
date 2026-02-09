@@ -502,6 +502,20 @@ impl OscClient {
         }
     }
 
+    /// Clone the UDP socket for the OSC sender thread.
+    pub fn try_clone_socket(&self) -> std::io::Result<UdpSocket> {
+        self.socket.try_clone()
+    }
+
+    /// Get the server address as a SocketAddr for the OSC sender thread.
+    pub fn server_socket_addr(&self) -> std::io::Result<std::net::SocketAddr> {
+        use std::net::ToSocketAddrs;
+        self.server_addr
+            .to_socket_addrs()?
+            .next()
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "Cannot resolve server address"))
+    }
+
     /// Get current peak levels (left, right) from the meter synth (lock-free atomic read)
     pub fn meter_peak(&self) -> (f32, f32) {
         unpack_f32_pair(self.meter_data.load(Ordering::Relaxed))

@@ -80,7 +80,7 @@ Persistence unaffected (undo history is never persisted).
 
 ## Long-term (architectural rewrites)
 
-### 5. Event-log architecture [Q1+Q7+Q8] — Phases 1-3 done
+### ~~5. Event-log architecture [Q1+Q7+Q8]~~ ✓
 
 **Phase 1 (Factor Dispatch) done.** All dispatch functions separated
 into pure state mutation + `AudioSideEffect` enum. Dispatchers no
@@ -125,8 +125,17 @@ immediate consistency. All dispatch reads migrated to
 `imbolc-ui/src/panes/waveform_pane.rs`.
 594 tests pass.
 
-**Remaining phases:**
-- Phase 4: Shared event log (retained cursor-readable log)
+**Phase 4 (Shared Event Log) done.** Replaced 4 `AudioCmd` state-sync
+variants (`ForwardAction`, `FullStateSync`, `UpdatePianoRollData`,
+`UpdateAutomationLanes`) with a shared retained event log
+(`EventLogWriter`/`EventLogReader`). Main thread appends `Arc<LogEntry>`
+entries; audio thread drains them within a 100µs budget. History retained
+(10k cap) for future network/debug use. 7 unit tests added.
+
+**Files (Phase 4):** `imbolc-core/src/audio/event_log.rs` (new),
+`imbolc-core/src/audio/handle.rs`, `imbolc-core/src/audio/audio_thread.rs`,
+`imbolc-core/src/audio/commands.rs`, `imbolc-core/src/dispatch/side_effects.rs`.
+601 tests pass.
 
 ### 6. Event scheduler with dynamic lookahead [Q5+Q6]
 

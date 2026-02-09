@@ -9,6 +9,7 @@ pub mod event_log;
 pub mod handle;
 pub mod input;
 pub mod osc_client;
+pub mod osc_sender;
 pub mod playback;
 pub mod drum_tick;
 pub mod arpeggiator_tick;

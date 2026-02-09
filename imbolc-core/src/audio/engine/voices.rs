@@ -36,7 +36,9 @@ impl AudioEngine {
         // Smart voice stealing (must precede backend borrow)
         self.steal_voice_if_needed(instrument_id, pitch, velocity)?;
 
-        let backend = self.backend.as_ref().ok_or("Not connected")?;
+        if self.backend.is_none() {
+            return Err("Not connected".to_string());
+        }
 
         // Get the audio bus where voices should write their output
         let source_out_bus = self.bus_allocator.get_audio_bus(instrument_id, "source_out").unwrap_or(16);
@@ -225,10 +227,8 @@ impl AudioEngine {
             });
         }
 
-        // Send all as one timed bundle
-        backend
-            .send_bundle(messages, offset_secs)
-            .map_err(|e| e.to_string())?;
+        // Send all as one timed bundle via the OSC sender thread
+        self.queue_timed_bundle(messages, offset_secs)?;
 
         // Register voice nodes in the node registry
         self.node_registry.register(group_id);
@@ -281,7 +281,9 @@ impl AudioEngine {
         // Smart voice stealing (must precede backend borrow)
         self.steal_voice_if_needed(instrument_id, pitch, velocity)?;
 
-        let backend = self.backend.as_ref().ok_or("Not connected")?;
+        if self.backend.is_none() {
+            return Err("Not connected".to_string());
+        }
 
         // Get the audio bus where voices should write their output
         let source_out_bus = self.bus_allocator.get_audio_bus(instrument_id, "source_out").unwrap_or(16);
@@ -479,10 +481,8 @@ impl AudioEngine {
             });
         }
 
-        // Send all as one timed bundle
-        backend
-            .send_bundle(messages, offset_secs)
-            .map_err(|e| e.to_string())?;
+        // Send all as one timed bundle via the OSC sender thread
+        self.queue_timed_bundle(messages, offset_secs)?;
 
         // Register voice nodes in the node registry
         self.node_registry.register(group_id);
@@ -542,15 +542,14 @@ impl AudioEngine {
 
             // Schedule deferred /n_free after envelope completes (+1s margin)
             let cleanup_offset = offset_secs + release_time as f64 + 1.0;
-            backend
-                .send_bundle(
-                    vec![BackendMessage {
-                        addr: "/n_free".to_string(),
-                        args: vec![RawArg::Int(voice.group_id)],
-                    }],
-                    cleanup_offset,
-                )
-                .map_err(|e| e.to_string())?;
+            let group_id = voice.group_id;
+            self.queue_timed_bundle(
+                vec![BackendMessage {
+                    addr: "/n_free".to_string(),
+                    args: vec![RawArg::Int(group_id)],
+                }],
+                cleanup_offset,
+            )?;
         }
         Ok(())
     }
@@ -644,7 +643,9 @@ impl AudioEngine {
         volume: f32,
         offset_secs: f64,
     ) -> Result<(), String> {
-        let backend = self.backend.as_ref().ok_or("Not connected")?;
+        if self.backend.is_none() {
+            return Err("Not connected".to_string());
+        }
 
         let node_id = self.next_node_id;
         self.next_node_id += 1;
@@ -665,9 +666,7 @@ impl AudioEngine {
                 RawArg::Float(volume),
             ],
         };
-        backend
-            .send_bundle(vec![msg], offset_secs)
-            .map_err(|e| e.to_string())?;
+        self.queue_timed_bundle(vec![msg], offset_secs)?;
 
         Ok(())
     }
@@ -683,7 +682,9 @@ impl AudioEngine {
         rate: f32,
         offset_secs: f64,
     ) -> Result<(), String> {
-        let backend = self.backend.as_ref().ok_or("Not connected")?;
+        if self.backend.is_none() {
+            return Err("Not connected".to_string());
+        }
         let bufnum = *self.buffer_map.get(&buffer_id).ok_or("Buffer not loaded")?;
         let out_bus = self
             .bus_allocator
@@ -714,9 +715,7 @@ impl AudioEngine {
                 RawArg::Int(out_bus), // Route to instrument's source bus
             ],
         };
-        backend
-            .send_bundle(vec![msg], offset_secs)
-            .map_err(|e| e.to_string())?;
+        self.queue_timed_bundle(vec![msg], offset_secs)?;
 
         Ok(())
     }
@@ -748,7 +747,9 @@ impl AudioEngine {
             return Ok(());
         }
 
-        let backend = self.backend.as_ref().ok_or("Not connected")?;
+        if self.backend.is_none() {
+            return Err("Not connected".to_string());
+        }
 
         // Get the audio bus where voices should write their output
         let source_out_bus = self.bus_allocator.get_audio_bus(target_instrument_id, "source_out").unwrap_or(16);
@@ -863,30 +864,35 @@ impl AudioEngine {
             });
         }
 
-        // Send the spawn bundle
-        backend
-            .send_bundle(messages, offset_secs)
-            .map_err(|e| e.to_string())?;
+        // Send the spawn bundle via the OSC sender thread
+        self.queue_timed_bundle(messages, offset_secs)?;
 
         // 4. Schedule gate=0 shortly after spawn to trigger release phase
         //    Small delay (5ms) ensures attack transient is heard
         let release_offset = offset_secs + 0.005;
-        backend
-            .set_params_bundled(midi_node_id, &[("gate", 0.0)], release_offset)
-            .map_err(|e| e.to_string())?;
+        // gate=0 as a timed bundle through the queue
+        self.queue_timed_bundle(
+            vec![BackendMessage {
+                addr: "/n_set".to_string(),
+                args: vec![
+                    RawArg::Int(midi_node_id),
+                    RawArg::Str("gate".to_string()),
+                    RawArg::Float(0.0),
+                ],
+            }],
+            release_offset,
+        )?;
 
         // 5. Schedule cleanup after envelope completes
         let release_time = instrument.amp_envelope.release;
         let cleanup_offset = release_offset + release_time as f64 + 0.5;
-        backend
-            .send_bundle(
-                vec![BackendMessage {
-                    addr: "/n_free".to_string(),
-                    args: vec![RawArg::Int(group_id)],
-                }],
-                cleanup_offset,
-            )
-            .map_err(|e| e.to_string())?;
+        self.queue_timed_bundle(
+            vec![BackendMessage {
+                addr: "/n_free".to_string(),
+                args: vec![RawArg::Int(group_id)],
+            }],
+            cleanup_offset,
+        )?;
 
         // Track control buses for return when /n_end arrives
         self.oneshot_buses.insert(group_id, (voice_freq_bus, voice_gate_bus, voice_vel_bus));

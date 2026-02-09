@@ -115,6 +115,11 @@ pub(crate) struct AudioThread {
     click_state: imbolc_types::ClickTrackState,
     /// Click track beat accumulator (fractional beats since last click)
     click_accumulator: f64,
+    /// High-water mark for piano roll pre-scheduling.
+    /// Tracks the furthest tick already scheduled, so the next tick only
+    /// schedules notes beyond this point. Reset to None on playhead changes
+    /// or piano roll edits.
+    last_scheduled_tick: Option<u32>,
     /// Telemetry collector for tick duration metrics
     telemetry: AudioTelemetry,
     /// Last time telemetry was emitted
@@ -163,6 +168,7 @@ impl AudioThread {
             tuner_node_id: None,
             click_state: imbolc_types::ClickTrackState::default(),
             click_accumulator: 0.0,
+            last_scheduled_tick: None,
             telemetry: AudioTelemetry::new(),
             last_telemetry_emit: Instant::now(),
             last_voice_cleanup: Instant::now(),
@@ -365,6 +371,7 @@ impl AudioThread {
                     );
                     if result.is_ok() {
                         self.monitor.set_audio_latency(buffer_size, sample_rate);
+                        self.engine.set_lookahead(buffer_size, sample_rate);
                     }
                     match &result {
                         Ok(()) => self.send_server_status(ServerStatus::Running, "Server started"),
@@ -488,9 +495,11 @@ impl AudioThread {
                         super::engine::routing::RoutingRebuildPhase::TearDown,
                     );
                 }
+                self.last_scheduled_tick = None;
             }
             LogEntryKind::PianoRollUpdate(piano_roll) => {
                 self.apply_piano_roll_update(piano_roll.clone());
+                self.last_scheduled_tick = None;
             }
             LogEntryKind::AutomationUpdate(lanes) => {
                 self.automation_lanes = lanes.clone();
@@ -507,6 +516,7 @@ impl AudioThread {
             AudioCmd::SetPlaying { playing } => {
                 self.piano_roll.playing = playing;
                 let _ = self.feedback_tx.send(AudioFeedback::PlayingChanged(playing));
+                self.last_scheduled_tick = None;
                 if playing {
                     self.tick_accumulator = 0.0;
                     self.click_accumulator = 0.0;
@@ -516,6 +526,7 @@ impl AudioThread {
                 self.piano_roll.playhead = 0;
                 self.tick_accumulator = 0.0;
                 self.click_accumulator = 0.0;
+                self.last_scheduled_tick = None;
                 let _ = self.feedback_tx.send(AudioFeedback::PlayheadPosition(0));
             }
             AudioCmd::SetBpm { bpm } => {
@@ -957,6 +968,7 @@ impl AudioThread {
             &self.feedback_tx,
             elapsed,
             &mut self.tick_accumulator,
+            &mut self.last_scheduled_tick,
         );
 
         // Check if render-to-WAV should stop
@@ -1089,6 +1101,7 @@ impl AudioThread {
 
                     self.engine.install_server_child(result);
                     self.monitor.set_audio_latency(buffer_size, sample_rate);
+                    self.engine.set_lookahead(buffer_size, sample_rate);
                     self.send_server_status(ServerStatus::Running, "Server started, connecting...");
 
                     // Chain into deferred connect (let scsynth initialize before OSC connect)
@@ -1231,6 +1244,8 @@ impl AudioThread {
                 max_tick_us,
                 p95_tick_us,
                 overruns,
+                schedule_lookahead_ms: (self.engine.schedule_lookahead_secs * 1000.0) as f32,
+                osc_send_queue_depth: self.engine.osc_send_queue_depth() as u16,
             });
         }
 

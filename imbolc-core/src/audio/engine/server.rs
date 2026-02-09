@@ -441,6 +441,7 @@ impl AudioEngine {
         self.backend = Some(backend);
         self.is_running = true;
         self.server_status = ServerStatus::Connected;
+        self.start_osc_sender();
     }
 
     pub(super) fn restart_meter(&mut self) {
@@ -500,6 +501,7 @@ impl AudioEngine {
     }
 
     pub fn disconnect(&mut self) {
+        self.stop_osc_sender();
         self.stop_recording();
         if let Some(ref backend) = self.backend {
             if let Some(node_id) = self.safety_node_id.take() {

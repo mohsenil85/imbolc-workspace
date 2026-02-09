@@ -114,6 +114,14 @@ pub trait AudioBackend: Send {
 
     /// Send a raw message (escape hatch for operations not covered by typed methods).
     fn send_raw(&self, addr: &str, args: Vec<RawArg>) -> BackendResult;
+
+    /// Clone the underlying UDP socket for the OSC sender thread.
+    /// Returns None for test/null backends.
+    fn try_clone_socket(&self) -> Option<std::net::UdpSocket> { None }
+
+    /// Get the server's socket address for the OSC sender thread.
+    /// Returns None for test/null backends.
+    fn server_socket_addr(&self) -> Option<std::net::SocketAddr> { None }
 }
 
 /// A loosely-typed argument for backend messages, so engine code doesn't depend on `rosc`.
@@ -138,6 +146,11 @@ impl ScBackend {
     pub fn new(client: OscClient) -> Self {
         Self { client }
     }
+}
+
+/// Convert `RawArg` to `rosc::OscType` (public, for `queue_timed_bundle` encoding).
+pub fn raw_to_osc_pub(arg: RawArg) -> rosc::OscType {
+    raw_to_osc(arg)
 }
 
 /// Convert `RawArg` to `rosc::OscType`.
@@ -270,6 +283,14 @@ impl AudioBackend for ScBackend {
         self.client
             .send_message(addr, osc_args)
             .map_err(BackendError::from)
+    }
+
+    fn try_clone_socket(&self) -> Option<std::net::UdpSocket> {
+        self.client.try_clone_socket().ok()
+    }
+
+    fn server_socket_addr(&self) -> Option<std::net::SocketAddr> {
+        self.client.server_socket_addr().ok()
     }
 }
 

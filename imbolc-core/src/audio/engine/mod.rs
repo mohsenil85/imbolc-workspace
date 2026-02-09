@@ -36,11 +36,29 @@ pub const GROUP_SAFETY: i32 = 999;
 pub const WAVETABLE_BUFNUM_START: i32 = 100;
 pub const WAVETABLE_NUM_TABLES: i32 = 8;
 
-/// Fixed scheduling lookahead for sequenced playback (15ms).
-/// Events are scheduled this far ahead of "now" to absorb tick jitter.
-/// Only applies to sequenced playback (piano roll, drum sequencer, arpeggiator),
-/// not to live/manual triggers.
-pub const SCHEDULE_LOOKAHEAD_SECS: f64 = 0.015;
+/// Minimum scheduling lookahead (10ms floor).
+pub const MIN_LOOKAHEAD_SECS: f64 = 0.010;
+
+/// Jitter margin added on top of buffer-derived latency (5ms).
+pub const JITTER_MARGIN_SECS: f64 = 0.005;
+
+/// Default scheduling lookahead (15ms) — used when buffer_size/sample_rate unknown.
+pub const DEFAULT_LOOKAHEAD_SECS: f64 = 0.015;
+
+/// Compute the scheduling lookahead from audio buffer parameters.
+///
+/// Formula: `max(buffer_size / sample_rate + JITTER_MARGIN, MIN_LOOKAHEAD)`
+///
+/// This gives enough headroom for the audio driver to consume the current buffer
+/// before the scheduled event's timetag arrives, plus a jitter margin for tick
+/// scheduling variance.
+pub fn compute_lookahead(buffer_size: u32, sample_rate: u32) -> f64 {
+    if sample_rate == 0 {
+        return DEFAULT_LOOKAHEAD_SECS;
+    }
+    let buffer_latency = buffer_size as f64 / sample_rate as f64;
+    (buffer_latency + JITTER_MARGIN_SECS).max(MIN_LOOKAHEAD_SECS)
+}
 
 pub use imbolc_types::ServerStatus;
 
@@ -145,6 +163,15 @@ pub struct AudioEngine {
     pub(crate) node_registry: NodeRegistry,
     /// One-shot voice group_id -> control bus triple (for bus return on /n_end)
     pub(crate) oneshot_buses: HashMap<i32, (i32, i32, i32)>,
+    /// Dynamic scheduling lookahead for sequenced playback.
+    /// Derived from buffer_size/sample_rate via `compute_lookahead()`.
+    pub schedule_lookahead_secs: f64,
+    /// OSC sender thread channel (None when no backend or test backend).
+    osc_send_tx: Option<crossbeam_channel::Sender<super::osc_sender::OscSendEntry>>,
+    /// Atomic queue depth counter for telemetry.
+    osc_queue_depth: Option<std::sync::Arc<std::sync::atomic::AtomicUsize>>,
+    /// Join handle for the OSC sender thread.
+    osc_sender_handle: Option<std::thread::JoinHandle<()>>,
 }
 
 impl AudioEngine {
@@ -180,7 +207,93 @@ impl AudioEngine {
             pending_export_buffer_frees: Vec::new(),
             node_registry: NodeRegistry::new(),
             oneshot_buses: HashMap::new(),
+            schedule_lookahead_secs: DEFAULT_LOOKAHEAD_SECS,
+            osc_send_tx: None,
+            osc_queue_depth: None,
+            osc_sender_handle: None,
         }
+    }
+
+    /// Update the scheduling lookahead based on audio device parameters.
+    pub fn set_lookahead(&mut self, buffer_size: u32, sample_rate: u32) {
+        self.schedule_lookahead_secs = compute_lookahead(buffer_size, sample_rate);
+    }
+
+    /// Start the OSC sender thread using a cloned socket from the backend.
+    pub fn start_osc_sender(&mut self) {
+        if self.osc_send_tx.is_some() {
+            return; // Already running
+        }
+        if let Some(ref backend) = self.backend {
+            if let (Some(socket), Some(addr)) = (backend.try_clone_socket(), backend.server_socket_addr()) {
+                let (tx, depth, handle) = super::osc_sender::spawn_osc_sender(socket, addr);
+                self.osc_send_tx = Some(tx);
+                self.osc_queue_depth = Some(depth);
+                self.osc_sender_handle = Some(handle);
+            }
+        }
+    }
+
+    /// Stop the OSC sender thread (called on disconnect/shutdown).
+    pub fn stop_osc_sender(&mut self) {
+        // Drop the sender to signal the thread to exit
+        self.osc_send_tx = None;
+        self.osc_queue_depth = None;
+        if let Some(handle) = self.osc_sender_handle.take() {
+            let _ = handle.join();
+        }
+    }
+
+    /// Queue a pre-built timed bundle for the OSC sender thread.
+    ///
+    /// Encodes BackendMessages into an OSC bundle with the given offset, then
+    /// pushes to the sender thread. Falls back to direct backend send if no
+    /// sender thread is running or the queue is full.
+    pub fn queue_timed_bundle(&self, messages: Vec<backend::BackendMessage>, offset_secs: f64) -> Result<(), String> {
+        if messages.is_empty() {
+            return Ok(());
+        }
+
+        // Try the sender thread path first
+        if let (Some(tx), Some(depth)) = (&self.osc_send_tx, &self.osc_queue_depth) {
+            // Encode the bundle
+            let time = super::osc_client::osc_time_from_now(offset_secs);
+            let osc_messages: Vec<rosc::OscMessage> = messages
+                .iter()
+                .map(|m| rosc::OscMessage {
+                    addr: m.addr.clone(),
+                    args: m.args.iter().cloned().map(backend::raw_to_osc_pub).collect(),
+                })
+                .collect();
+            let content = osc_messages.into_iter().map(rosc::OscPacket::Message).collect();
+            let bundle = rosc::OscPacket::Bundle(rosc::OscBundle {
+                timetag: time,
+                content,
+            });
+            match rosc::encoder::encode(&bundle) {
+                Ok(encoded) => {
+                    if super::osc_sender::try_queue_bundle(tx, depth, encoded) {
+                        return Ok(());
+                    }
+                    // Fall through to direct send
+                }
+                Err(e) => {
+                    return Err(format!("OSC encode error: {e}"));
+                }
+            }
+        }
+
+        // Fallback: direct send via backend (tests, NullBackend, or queue full)
+        let backend = self.backend.as_ref().ok_or("Not connected")?;
+        backend.send_bundle(messages, offset_secs).map_err(|e| e.to_string())
+    }
+
+    /// Get current OSC send queue depth for telemetry.
+    pub fn osc_send_queue_depth(&self) -> u16 {
+        self.osc_queue_depth
+            .as_ref()
+            .map(|d| d.load(std::sync::atomic::Ordering::Relaxed) as u16)
+            .unwrap_or(0)
     }
 
     pub fn is_running(&self) -> bool {
@@ -229,6 +342,7 @@ impl AudioEngine {
 
 impl Drop for AudioEngine {
     fn drop(&mut self) {
+        self.stop_osc_sender();
         self.stop_server();
     }
 }
@@ -992,6 +1106,115 @@ mod tests {
                 None
             }).expect("delay synth out param");
             assert_ne!(send_in, delay_out, "PreInsert tap should differ from post-effects final bus");
+        }
+    }
+
+    mod lookahead_tests {
+        use super::super::{compute_lookahead, MIN_LOOKAHEAD_SECS, JITTER_MARGIN_SECS, DEFAULT_LOOKAHEAD_SECS};
+
+        #[test]
+        fn compute_lookahead_64_at_44100() {
+            let result = compute_lookahead(64, 44100);
+            // 64/44100 = 1.45ms + 5ms = 6.45ms → clamped to 10ms
+            assert!((result - MIN_LOOKAHEAD_SECS).abs() < 1e-9);
+        }
+
+        #[test]
+        fn compute_lookahead_128_at_44100() {
+            let result = compute_lookahead(128, 44100);
+            // 128/44100 = 2.9ms + 5ms = 7.9ms → clamped to 10ms
+            assert!((result - MIN_LOOKAHEAD_SECS).abs() < 1e-9);
+        }
+
+        #[test]
+        fn compute_lookahead_256_at_44100() {
+            let result = compute_lookahead(256, 44100);
+            // 256/44100 = 5.8ms + 5ms = 10.8ms → above minimum
+            let expected = 256.0 / 44100.0 + JITTER_MARGIN_SECS;
+            assert!((result - expected).abs() < 1e-9);
+            assert!(result > MIN_LOOKAHEAD_SECS);
+        }
+
+        #[test]
+        fn compute_lookahead_512_at_44100() {
+            let result = compute_lookahead(512, 44100);
+            let expected = 512.0 / 44100.0 + JITTER_MARGIN_SECS;
+            assert!((result - expected).abs() < 1e-9);
+        }
+
+        #[test]
+        fn compute_lookahead_1024_at_44100() {
+            let result = compute_lookahead(1024, 44100);
+            let expected = 1024.0 / 44100.0 + JITTER_MARGIN_SECS;
+            assert!((result - expected).abs() < 1e-9);
+        }
+
+        #[test]
+        fn compute_lookahead_2048_at_44100() {
+            let result = compute_lookahead(2048, 44100);
+            let expected = 2048.0 / 44100.0 + JITTER_MARGIN_SECS;
+            assert!((result - expected).abs() < 1e-9);
+        }
+
+        #[test]
+        fn compute_lookahead_64_at_48000() {
+            let result = compute_lookahead(64, 48000);
+            // 64/48000 = 1.3ms + 5ms = 6.3ms → clamped to 10ms
+            assert!((result - MIN_LOOKAHEAD_SECS).abs() < 1e-9);
+        }
+
+        #[test]
+        fn compute_lookahead_128_at_48000() {
+            let result = compute_lookahead(128, 48000);
+            assert!((result - MIN_LOOKAHEAD_SECS).abs() < 1e-9);
+        }
+
+        #[test]
+        fn compute_lookahead_256_at_48000() {
+            let result = compute_lookahead(256, 48000);
+            let expected = 256.0 / 48000.0 + JITTER_MARGIN_SECS;
+            assert!((result - expected).abs() < 1e-9);
+        }
+
+        #[test]
+        fn compute_lookahead_512_at_48000() {
+            let result = compute_lookahead(512, 48000);
+            let expected = 512.0 / 48000.0 + JITTER_MARGIN_SECS;
+            assert!((result - expected).abs() < 1e-9);
+        }
+
+        #[test]
+        fn compute_lookahead_1024_at_48000() {
+            let result = compute_lookahead(1024, 48000);
+            let expected = 1024.0 / 48000.0 + JITTER_MARGIN_SECS;
+            assert!((result - expected).abs() < 1e-9);
+        }
+
+        #[test]
+        fn compute_lookahead_2048_at_48000() {
+            let result = compute_lookahead(2048, 48000);
+            let expected = 2048.0 / 48000.0 + JITTER_MARGIN_SECS;
+            assert!((result - expected).abs() < 1e-9);
+        }
+
+        #[test]
+        fn compute_lookahead_zero_sample_rate() {
+            let result = compute_lookahead(512, 0);
+            assert!((result - DEFAULT_LOOKAHEAD_SECS).abs() < 1e-9);
+        }
+
+        #[test]
+        fn default_engine_uses_default_lookahead() {
+            let engine = super::super::AudioEngine::new();
+            assert!((engine.schedule_lookahead_secs - DEFAULT_LOOKAHEAD_SECS).abs() < 1e-9);
+        }
+
+        #[test]
+        fn set_lookahead_updates_field() {
+            let mut engine = super::super::AudioEngine::new();
+            engine.set_lookahead(1024, 44100);
+            let expected = 1024.0 / 44100.0 + JITTER_MARGIN_SECS;
+            assert!((engine.schedule_lookahead_secs - expected).abs() < 1e-9);
         }
     }
 }

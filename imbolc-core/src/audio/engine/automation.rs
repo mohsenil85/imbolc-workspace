@@ -603,10 +603,6 @@ impl AudioEngine {
 
     /// Send a batch of automation messages as a single timestamped bundle.
     pub fn send_automation_bundle(&self, messages: Vec<BackendMessage>, offset_secs: f64) -> Result<(), String> {
-        if messages.is_empty() {
-            return Ok(());
-        }
-        let backend = self.backend.as_ref().ok_or("Not connected")?;
-        backend.send_bundle(messages, offset_secs).map_err(|e| e.to_string())
+        self.queue_timed_bundle(messages, offset_secs)
     }
 }

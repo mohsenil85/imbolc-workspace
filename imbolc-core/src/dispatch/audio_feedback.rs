@@ -165,11 +165,10 @@ pub fn dispatch_audio_feedback(
             state.audio.playing = false;
             result.stop_playback = true;
         }
-        AudioFeedback::TelemetrySummary { avg_tick_us, max_tick_us, p95_tick_us, overruns } => {
-            // Log telemetry for monitoring; could be exposed to UI in future
+        AudioFeedback::TelemetrySummary { avg_tick_us, max_tick_us, p95_tick_us, overruns, schedule_lookahead_ms, osc_send_queue_depth } => {
             log::debug!(target: "audio",
-                "Telemetry: avg={}us max={}us p95={}us overruns={}",
-                avg_tick_us, max_tick_us, p95_tick_us, overruns
+                "Telemetry: avg={}us max={}us p95={}us overruns={} lookahead={:.1}ms osc_q={}",
+                avg_tick_us, max_tick_us, p95_tick_us, overruns, schedule_lookahead_ms, osc_send_queue_depth
             );
         }
     }
