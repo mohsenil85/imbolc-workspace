@@ -1,6 +1,8 @@
 # imbolc
 
-Imbolc is a terminal-first digital audio workstation (DAW) written in Rust. The audio engine runs on SuperCollider (`scsynth`) over OSC, with a ratatui TUI (`imbolc-ui`) and an experimental Dioxus GUI (`imbolc-gui`) that share the same core engine.
+Imbolc is a complete music studio that runs right in your terminal. Write beats, layer synthesizers, shape sounds with effects, mix tracks, and record finished songs — all without leaving your keyboard. It ships with 55 built-in instruments, 39 effects, a piano roll, a drum sequencer, a mixer, and even real-time collaboration over your local network. It's free, open-source, and yours to keep.
+
+Under the hood it's a Rust application powered by SuperCollider for audio synthesis, with a terminal UI built on ratatui and an experimental Dioxus GUI — both sharing the same core engine.
 
 ## Quick start
 
