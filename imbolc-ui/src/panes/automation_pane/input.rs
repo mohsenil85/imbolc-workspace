@@ -240,7 +240,7 @@ impl AutomationPane {
                     if *cursor + 1 < options.len() { *cursor += 1; }
                     Action::None
                 }
-                ActionId::Automation(AutomationActionId::Confirm) | ActionId::Automation(AutomationActionId::AddLane) => {
+                ActionId::Automation(AutomationActionId::Confirm) | ActionId::Automation(AutomationActionId::AddLane) | ActionId::Automation(AutomationActionId::PlacePoint) => {
                     if let Some(target) = options.get(*cursor).cloned() {
                         self.target_picker = TargetPickerState::Inactive;
                         Action::Automation(AutomationAction::AddLane(target))

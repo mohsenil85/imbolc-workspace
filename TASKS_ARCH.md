@@ -6,16 +6,19 @@ Derived from the 16 architecture questions in `plans/questions.md`.
 
 ## Near-term
 
-### 1. Voice allocator /n_end feedback [Q14+Q15]
+### ~~1. Voice allocator /n_end feedback [Q14+Q15]~~ ✓
 
-Listen for SC `/n_end` OSC notifications (sent when a node is freed by
-doneAction:2). Remove voices from allocator on receipt. Return control
-buses to pool on voice death. Eliminates blind `release_dur + 1.5s`
-guess.
+**Done.** OSC listener receives `/n_end` notifications and feeds them
+via crossbeam channel to the audio thread, which removes voices from
+the allocator and returns control buses to the pool immediately.
+Timer-based `cleanup_expired()` (release_dur + 1.5s) retained as
+safety net. 9 tests cover polyphonic voice removal, oneshot bus
+return, and unknown node handling.
 
-**Files:** `imbolc-core/src/audio/engine/voice_allocator.rs`,
-`imbolc-core/src/audio/osc_client.rs`,
-`imbolc-core/src/audio/engine/voices.rs`.
+**Files:** `imbolc-core/src/audio/osc_client.rs`,
+`imbolc-core/src/audio/engine/voices.rs`,
+`imbolc-core/src/audio/engine/voice_allocator.rs`,
+`imbolc-core/src/audio/audio_thread.rs`.
 
 ### 2. Control-plane vs performance-plane separation [Q3]
 
