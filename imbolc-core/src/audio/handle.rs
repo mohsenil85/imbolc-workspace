@@ -232,6 +232,7 @@ impl AudioHandle {
             AudioFeedback::RecordingStopped(_) => {}
             AudioFeedback::RenderComplete { .. } => {}
             AudioFeedback::CompileResult(_) => {}
+            AudioFeedback::LoadResult(_) => {}
             AudioFeedback::PendingBufferFreed => {}
             AudioFeedback::VstParamsDiscovered { .. } => {}
             AudioFeedback::VstStateSaved { .. } => {}
@@ -606,27 +607,15 @@ impl AudioHandle {
     }
 
     pub fn load_synthdefs(&self, dir: &Path) -> Result<(), String> {
-        let (reply_tx, reply_rx) = mpsc::channel();
         self.send_cmd(AudioCmd::LoadSynthDefs {
             dir: dir.to_path_buf(),
-            reply: reply_tx,
-        })?;
-        match reply_rx.recv() {
-            Ok(result) => result,
-            Err(_) => Err("Audio thread disconnected".to_string()),
-        }
+        })
     }
 
     pub fn load_synthdef_file(&self, path: &Path) -> Result<(), String> {
-        let (reply_tx, reply_rx) = mpsc::channel();
         self.send_cmd(AudioCmd::LoadSynthDefFile {
             path: path.to_path_buf(),
-            reply: reply_tx,
-        })?;
-        match reply_rx.recv() {
-            Ok(result) => result,
-            Err(_) => Err("Audio thread disconnected".to_string()),
-        }
+        })
     }
 
     // ── SynthDefs & samples ───────────────────────────────────────

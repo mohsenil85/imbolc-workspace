@@ -18,7 +18,6 @@ mod network;
 use std::fs::File;
 use std::time::{Duration, Instant};
 
-use audio::commands::AudioCmd;
 use audio::AudioHandle;
 use action::{AudioDirty, IoFeedback};
 use dispatch::LocalDispatcher;
@@ -577,27 +576,9 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
                                      server.set_status(audio.status(), &format!("Loading custom synthdef: {}", synthdef_name));
                                  }
 
-                                 let (reply_tx, reply_rx) = std::sync::mpsc::channel();
-                                 let load_path = scsyndef_path.clone();
-                                 let io_tx_clone = io_tx.clone();
-                                 let load_id = id;
-                                 let name = synthdef_name.clone();
-
-                                 match audio.send_cmd(AudioCmd::LoadSynthDefFile { path: load_path, reply: reply_tx }) {
-                                     Ok(()) => {
-                                         std::thread::spawn(move || {
-                                             let result = match reply_rx.recv() {
-                                                 Ok(Ok(())) => Ok(name),
-                                                 Ok(Err(e)) => Err(e),
-                                                 Err(_) => Err("Audio thread disconnected".to_string()),
-                                             };
-                                             let _ = io_tx_clone.send(IoFeedback::ImportSynthDefLoaded { id: load_id, result });
-                                         });
-                                     }
-                                     Err(e) => {
-                                         if let Some(server) = panes.get_pane_mut::<ServerPane>("server") {
-                                             server.set_status(audio.status(), &format!("Failed to load synthdef: {}", e));
-                                         }
+                                  if let Err(e) = audio.load_synthdef_file(&scsyndef_path) {
+                                     if let Some(server) = panes.get_pane_mut::<ServerPane>("server") {
+                                         server.set_status(audio.status(), &format!("Failed to load synthdef: {}", e));
                                      }
                                  }
                              } else {

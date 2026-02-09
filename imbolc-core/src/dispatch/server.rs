@@ -57,29 +57,17 @@ pub(super) fn dispatch_server(
             }
         }
         ServerAction::LoadSynthDefs => {
-            // Load built-in synthdefs
+            // Load built-in synthdefs (fire-and-forget, result via AudioFeedback)
             let synthdef_dir = crate::paths::synthdefs_dir();
-            let builtin_result = audio.load_synthdefs(&synthdef_dir);
+            let _ = audio.load_synthdefs(&synthdef_dir);
 
             // Also load custom synthdefs from config dir
             let config_dir = crate::paths::custom_synthdefs_dir();
-            let custom_result = if config_dir.exists() {
-                audio.load_synthdefs(&config_dir)
-            } else {
-                Ok(())
-            };
-
-            match (builtin_result, custom_result) {
-                (Ok(()), Ok(())) => {
-                    result.push_status(audio.status(), "Synthdefs loaded (built-in + custom)");
-                }
-                (Err(e), _) => {
-                    result.push_status(audio.status(), &format!("Error loading built-in: {}", e));
-                }
-                (_, Err(e)) => {
-                    result.push_status(audio.status(), &format!("Error loading custom: {}", e));
-                }
+            if config_dir.exists() {
+                let _ = audio.load_synthdefs(&config_dir);
             }
+
+            result.push_status(audio.status(), "Loading synthdefs...");
         }
         ServerAction::RecordMaster => {
             if audio.is_recording() {

@@ -64,7 +64,7 @@ pub fn dispatch_audio_feedback(
             result.audio_dirty.routing_instrument = Some(*instrument_id);
             result.push_status(audio.status(), "Render complete");
         }
-        AudioFeedback::CompileResult(res) => {
+        AudioFeedback::CompileResult(res) | AudioFeedback::LoadResult(res) => {
             match res {
                 Ok(msg) => result.push_status(audio.status(), msg.clone()),
                 Err(e) => result.push_status(audio.status(), e.clone()),

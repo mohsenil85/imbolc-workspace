@@ -49,6 +49,7 @@ pub enum AudioFeedback {
         path: PathBuf,
     },
     CompileResult(Result<String, String>),
+    LoadResult(Result<String, String>),
     PendingBufferFreed,
     VstParamsDiscovered {
         instrument_id: InstrumentId,

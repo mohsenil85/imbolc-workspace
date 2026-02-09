@@ -404,13 +404,15 @@ impl AudioThread {
                 let result = self.engine.compile_synthdefs_async(&scd_path);
                 let _ = reply.send(result);
             }
-            AudioCmd::LoadSynthDefs { dir, reply } => {
-                let result = self.engine.load_synthdefs(&dir);
-                let _ = reply.send(result);
+            AudioCmd::LoadSynthDefs { dir } => {
+                let result = self.engine.load_synthdefs(&dir)
+                    .map(|()| format!("Loaded synthdefs from {}", dir.display()));
+                let _ = self.feedback_tx.send(AudioFeedback::LoadResult(result));
             }
-            AudioCmd::LoadSynthDefFile { path, reply } => {
-                let result = self.engine.load_synthdef_file(&path);
-                let _ = reply.send(result);
+            AudioCmd::LoadSynthDefFile { path } => {
+                let result = self.engine.load_synthdef_file(&path)
+                    .map(|()| format!("Loaded synthdef {}", path.display()));
+                let _ = self.feedback_tx.send(AudioFeedback::LoadResult(result));
             }
             _ => {}
         }

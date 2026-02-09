@@ -46,11 +46,9 @@ pub enum AudioCmd {
     },
     LoadSynthDefs {
         dir: PathBuf,
-        reply: Sender<Result<(), String>>,
     },
     LoadSynthDefFile {
         path: PathBuf,
-        reply: Sender<Result<(), String>>,
     },
 
     // ── State snapshots ───────────────────────────────────────────
