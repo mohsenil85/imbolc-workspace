@@ -6,38 +6,6 @@ See TASKS_DONE.md for completed work.
 
 ---
 
-## Bugs
-
-### Piano roll: remove time signature display
-
-**Sources:** R2 #10
-
-Time signature is shown in the piano roll header. It belongs in the
-session/frame settings (`FrameEditPane`), not cluttering the piano roll.
-Find and remove time signature display from the piano roll header.
-
-**Files:** `imbolc-ui/src/panes/piano_roll_pane.rs`
-
----
-
-## Quick Wins
-
-### Remove help text along bottom
-
-**Sources:** R2 #11
-
-Most panes render a hardcoded help line at the bottom (e.g.,
-`"Left/Right: adjust | Enter: type/confirm | Esc: cancel"`). This
-clutters the UI. The `?` key already opens context-sensitive help via
-`HelpPane`.
-
-1. Remove all inline help text from pane `render()` methods
-2. Optionally add a subtle `? for help` indicator in the frame chrome
-
-**Files:** All panes in `imbolc-ui/src/panes/`, `imbolc-ui/src/ui/frame.rs`
-
----
-
 ## Polish
 
 ### Handle small terminal + resize

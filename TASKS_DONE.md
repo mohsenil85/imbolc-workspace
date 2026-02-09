@@ -203,3 +203,36 @@ Server pane displays connection status and messages; frame no longer renders a b
 Per-send `SendTapPoint` enum: `PreInsert` (pre-filter/FX) and `PostInsert` (post-effects, pre-fader, default). `MixerAction::CycleSendTapPoint` action for UI cycling.
 
 **Files:** `imbolc-types/src/state/instrument/mod.rs`, `imbolc-core/src/audio/engine/routing.rs`, `imbolc-core/src/dispatch/mixer.rs`, `imbolc-types/src/action.rs`
+
+
+## Bugs
+
+### Piano roll: remove time signature display
+
+**Sources:** R2 #10
+
+Time signature is shown in the piano roll header. It belongs in the
+session/frame settings (`FrameEditPane`), not cluttering the piano roll.
+Find and remove time signature display from the piano roll header.
+
+**Files:** `imbolc-ui/src/panes/piano_roll_pane.rs`
+
+---
+
+## Quick Wins
+
+### Remove help text along bottom
+
+**Sources:** R2 #11
+
+Most panes render a hardcoded help line at the bottom (e.g.,
+`"Left/Right: adjust | Enter: type/confirm | Esc: cancel"`). This
+clutters the UI. The `?` key already opens context-sensitive help via
+`HelpPane`.
+
+1. Remove all inline help text from pane `render()` methods
+2. Optionally add a subtle `? for help` indicator in the frame chrome
+
+**Files:** All panes in `imbolc-ui/src/panes/`, `imbolc-ui/src/ui/frame.rs`
+
+---

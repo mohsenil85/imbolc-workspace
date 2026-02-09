@@ -5,6 +5,7 @@ pub mod click_tick;
 pub mod commands;
 pub mod devices;
 pub mod engine;
+pub mod event_log;
 pub mod handle;
 pub mod input;
 pub mod osc_client;

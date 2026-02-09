@@ -260,7 +260,7 @@ fn apply_one(effect: &AudioSideEffect, audio: &mut AudioHandle) {
 
         // Server lifecycle
         AudioSideEffect::UpdateState => {
-            // No-op — state sync is handled by ForwardAction + apply_dirty.
+            // No-op — state sync is handled by the event log + apply_dirty.
             // Variant kept for server.rs side effect enumeration.
         }
         AudioSideEffect::Connect { server_addr } => {

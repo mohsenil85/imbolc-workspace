@@ -8,6 +8,7 @@ use crossbeam_channel::{Receiver, TryRecvError};
 use super::commands::{AudioCmd, AudioFeedback, ExportKind};
 use super::engine::AudioEngine;
 use super::engine::server::ServerSpawnResult;
+use super::event_log::{EventLogReader, LogEntry, LogEntryKind};
 use super::osc_client::AudioMonitor;
 use super::telemetry::AudioTelemetry;
 use super::ServerStatus;
@@ -70,8 +71,10 @@ pub(crate) struct AudioThread {
     engine: AudioEngine,
     /// Priority commands: voice spawn/release, param changes (time-critical)
     priority_rx: Receiver<AudioCmd>,
-    /// Normal commands: state sync, routing rebuilds, recording control
+    /// Normal commands: routing rebuilds, recording control
     normal_rx: Receiver<AudioCmd>,
+    /// Event log reader: state synchronization entries
+    event_log: EventLogReader,
     feedback_tx: Sender<AudioFeedback>,
     monitor: AudioMonitor,
     instruments: InstrumentSnapshot,
@@ -126,6 +129,7 @@ impl AudioThread {
     pub(crate) fn new(
         priority_rx: Receiver<AudioCmd>,
         normal_rx: Receiver<AudioCmd>,
+        event_log: EventLogReader,
         feedback_tx: Sender<AudioFeedback>,
         monitor: AudioMonitor,
     ) -> Self {
@@ -133,6 +137,7 @@ impl AudioThread {
             engine: AudioEngine::new(),
             priority_rx,
             normal_rx,
+            event_log,
             feedback_tx,
             monitor,
             instruments: InstrumentState::new(),
@@ -205,6 +210,8 @@ impl AudioThread {
             if self.drain_priority_commands() {
                 break;
             }
+            // Then drain event log (state synchronization)
+            self.drain_event_log();
             // Then drain normal commands
             if self.drain_normal_commands() {
                 break;
@@ -282,10 +289,6 @@ impl AudioThread {
             Connect { .. } | Disconnect | StartServer { .. } | StopServer |
             RestartServer { .. } | CompileSynthDefs { .. } | LoadSynthDefs { .. } |
             LoadSynthDefFile { .. } => self.handle_server_cmd(cmd),
-
-            // State synchronization
-            UpdatePianoRollData { .. } | UpdateAutomationLanes { .. } |
-            ForwardAction { .. } | FullStateSync { .. } => self.handle_state_cmd(cmd),
 
             // Playback control
             SetPlaying { .. } | ResetPlayhead | SetBpm { .. } |
@@ -419,38 +422,43 @@ impl AudioThread {
     }
 
     // =========================================================================
-    // State synchronization commands
+    // Event log (state synchronization)
     // =========================================================================
 
-    fn handle_state_cmd(&mut self, cmd: AudioCmd) {
-        match cmd {
-            AudioCmd::UpdatePianoRollData { piano_roll } => {
-                self.apply_piano_roll_update(piano_roll);
-            }
-            AudioCmd::UpdateAutomationLanes { lanes } => {
-                self.automation_lanes = lanes;
-            }
-            AudioCmd::ForwardAction { action, rebuild_routing, rebuild_instrument_routing, mixer_dirty } => {
+    /// Drain event log entries within a 100µs budget.
+    fn drain_event_log(&mut self) {
+        const BUDGET: Duration = Duration::from_micros(100);
+        let entries = self.event_log.drain(BUDGET);
+        for entry in &entries {
+            self.apply_log_entry(entry);
+        }
+    }
+
+    /// Apply a single event log entry — same logic as the former handle_state_cmd().
+    fn apply_log_entry(&mut self, entry: &LogEntry) {
+        match &entry.kind {
+            LogEntryKind::Action { action, rebuild_routing, rebuild_instrument_routing, mixer_dirty } => {
                 let projected = super::action_projection::project_action(
-                    &action,
+                    action,
                     &mut self.instruments,
                     &mut self.session,
                 );
                 if !projected {
-                    log::debug!(target: "audio::projection", "unprojectable action: {:?}", std::mem::discriminant(&*action));
+                    log::debug!(target: "audio::projection", "unprojectable action: {:?}", std::mem::discriminant(&**action));
                 }
 
-                if rebuild_routing {
+                if *rebuild_routing {
                     self.routing_rebuild = Some(super::engine::routing::RoutingRebuildPhase::TearDown);
                 } else if let Some(id) = rebuild_instrument_routing {
-                    let _ = self.engine.rebuild_single_instrument_routing(id, &self.instruments, &self.session);
+                    let _ = self.engine.rebuild_single_instrument_routing(*id, &self.instruments, &self.session);
                 }
-                if mixer_dirty {
+                if *mixer_dirty {
                     let _ = self.engine.update_all_instrument_mixer_params(&self.instruments, &self.session);
                 }
             }
-            AudioCmd::FullStateSync { mut instruments, session, piano_roll, automation_lanes, rebuild_routing } => {
+            LogEntryKind::Checkpoint { instruments, session, piano_roll, automation_lanes, rebuild_routing } => {
                 // Preserve drum sequencer playback state from old instruments
+                let mut instruments = instruments.clone();
                 let old_instruments: HashMap<u32, &_> = self.instruments.instruments
                     .iter()
                     .map(|i| (i.id, i))
@@ -467,21 +475,26 @@ impl AudioThread {
                     }
                 }
                 self.instruments = instruments;
-                self.session = session;
+                self.session = session.clone();
                 // Preserve runtime state (playhead, playing)
                 let playhead = self.piano_roll.playhead;
                 let playing = self.piano_roll.playing;
-                self.piano_roll = piano_roll;
+                self.piano_roll = piano_roll.clone();
                 self.piano_roll.playhead = playhead;
                 self.piano_roll.playing = playing;
-                self.automation_lanes = automation_lanes;
-                if rebuild_routing {
+                self.automation_lanes = automation_lanes.clone();
+                if *rebuild_routing {
                     self.routing_rebuild = Some(
                         super::engine::routing::RoutingRebuildPhase::TearDown,
                     );
                 }
             }
-            _ => {}
+            LogEntryKind::PianoRollUpdate(piano_roll) => {
+                self.apply_piano_roll_update(piano_roll.clone());
+            }
+            LogEntryKind::AutomationUpdate(lanes) => {
+                self.automation_lanes = lanes.clone();
+            }
         }
     }
 

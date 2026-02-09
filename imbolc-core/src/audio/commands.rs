@@ -1,23 +1,22 @@
 //! Audio command and feedback types for the audio thread abstraction.
 //!
-//! Phase 3: AudioHandle serializes commands through an MPSC channel to a
-//! dedicated audio thread and consumes feedback updates each frame.
+//! Commands are sent from the main thread to the audio thread via priority and
+//! normal channels. State synchronization (ForwardAction, FullStateSync,
+//! PianoRollUpdate, AutomationUpdate) is handled by the event log instead.
+//! See `event_log.rs` for the log-based state sync mechanism.
 
 use std::path::PathBuf;
 use std::sync::mpsc::Sender;
 
-use imbolc_types::Action;
-
 use crate::action::VstTarget;
-use crate::audio::snapshot::{AutomationSnapshot, InstrumentSnapshot, PianoRollSnapshot, SessionSnapshot};
 use crate::state::automation::AutomationTarget;
 use crate::state::{BufferId, EffectId, InstrumentId};
 
 /// Commands sent from the main thread to the audio engine.
 ///
-/// Steady-state uses ForwardAction for incremental projection. FullStateSync is
-/// the fallback for unprojectable actions (undo/redo/load). UpdatePianoRollData
-/// and UpdateAutomationLanes handle Song-mode flattening.
+/// State synchronization is handled by the event log (EventLogWriter/Reader),
+/// not by AudioCmd variants. These commands cover server lifecycle, playback
+/// control, routing, voice management, samples, recording, automation, and VST.
 #[derive(Debug)]
 #[allow(dead_code)]
 pub enum AudioCmd {
@@ -51,34 +50,6 @@ pub enum AudioCmd {
     },
     LoadSynthDefFile {
         path: PathBuf,
-    },
-
-    // ── State snapshots ───────────────────────────────────────────
-    UpdatePianoRollData {
-        piano_roll: PianoRollSnapshot,
-    },
-    UpdateAutomationLanes {
-        lanes: AutomationSnapshot,
-    },
-
-    // ── Action-based state sync (Phase 2) ────────────────────────
-    /// Incremental state update: audio thread applies the action to its local copies.
-    ForwardAction {
-        action: Box<Action>,
-        /// Full routing rebuild needed
-        rebuild_routing: bool,
-        /// Single-instrument routing rebuild
-        rebuild_instrument_routing: Option<InstrumentId>,
-        /// Mixer params changed (trigger engine apply)
-        mixer_dirty: bool,
-    },
-    /// Full state replacement (fallback for undo/redo/load).
-    FullStateSync {
-        instruments: InstrumentSnapshot,
-        session: SessionSnapshot,
-        piano_roll: PianoRollSnapshot,
-        automation_lanes: AutomationSnapshot,
-        rebuild_routing: bool,
     },
 
     // ── Playback control ──────────────────────────────────────────
@@ -273,7 +244,7 @@ impl AudioCmd {
     /// Normal commands (handled after priority queue is drained):
     /// - Bulk mixer updates (SetInstrumentMixerParams, SetMasterParams, SetBusMixerParams)
     /// - Active note tracking (RegisterActiveNote, ClearActiveNotes, ReleaseAllVoices)
-    /// - State sync, routing rebuilds, recording, server lifecycle
+    /// - Routing rebuilds, recording, server lifecycle
     pub fn is_priority(&self) -> bool {
         matches!(
             self,

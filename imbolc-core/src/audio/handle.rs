@@ -1,7 +1,11 @@
 //! AudioHandle: main-thread interface to the audio engine.
 //!
-//! Owns the command/feedback channels and shared monitor state. The
-//! AudioEngine and playback ticking live on the audio thread.
+//! Owns the command/feedback channels, the event log writer, and shared monitor
+//! state. The AudioEngine and playback ticking live on the audio thread.
+//!
+//! State synchronization uses the event log (EventLogWriter → EventLogReader)
+//! instead of AudioCmd variants. The event log is the canonical record of
+//! dispatched state changes.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -14,6 +18,7 @@ use crossbeam_channel::Sender as CrossbeamSender;
 use imbolc_types::Action;
 
 use super::commands::{AudioCmd, AudioFeedback};
+use super::event_log::{EventLogWriter, LogEntryKind};
 use super::osc_client::AudioMonitor;
 use super::ServerStatus;
 use crate::action::AudioDirty;
@@ -133,18 +138,22 @@ impl ArrangementFlattenCache {
 
 /// Main-thread handle to the audio subsystem.
 ///
-/// Phase 3: communicates with a dedicated audio thread via MPSC channels.
-/// Uses separate priority and normal channels for reduced latency on time-critical commands.
+/// Communicates with a dedicated audio thread via:
+/// - **Priority channel**: voice spawn/release, param changes (time-critical)
+/// - **Normal channel**: routing rebuilds, recording, server lifecycle
+/// - **Event log**: state synchronization (ForwardAction, FullStateSync, Song-mode flattening)
 pub struct AudioHandle {
     /// Priority commands: voice spawn/release, param changes (time-critical)
     priority_tx: CrossbeamSender<AudioCmd>,
-    /// Normal commands: state sync, routing rebuilds, recording control
+    /// Normal commands: routing rebuilds, recording control
     normal_tx: CrossbeamSender<AudioCmd>,
     feedback_rx: Receiver<AudioFeedback>,
     monitor: AudioMonitor,
     audio_state: AudioReadState,
     is_running: bool,
     join_handle: Option<JoinHandle<()>>,
+    /// Event log writer: state sync entries (replaces 4 AudioCmd variants)
+    event_log: EventLogWriter,
     /// Cache for flattened arrangement data (Song mode optimization)
     arrangement_cache: ArrangementFlattenCache,
 }
@@ -153,8 +162,10 @@ impl AudioHandle {
     pub fn new() -> Self {
         // Create priority channel for time-critical commands (voice spawn, param changes)
         let (priority_tx, priority_rx) = crossbeam_channel::unbounded();
-        // Create normal channel for less urgent commands (state sync, routing)
+        // Create normal channel for less urgent commands (routing, recording)
         let (normal_tx, normal_rx) = crossbeam_channel::unbounded();
+        // Create event log for state synchronization
+        let (event_log, event_log_reader) = EventLogWriter::new();
         let (feedback_tx, feedback_rx) = mpsc::channel();
         let monitor = AudioMonitor::new();
         let thread_monitor = monitor.clone();
@@ -163,6 +174,7 @@ impl AudioHandle {
             let thread = super::audio_thread::AudioThread::new(
                 priority_rx,
                 normal_rx,
+                event_log_reader,
                 feedback_tx,
                 thread_monitor,
             );
@@ -177,6 +189,7 @@ impl AudioHandle {
             audio_state: AudioReadState::default(),
             is_running: false,
             join_handle: Some(join_handle),
+            event_log,
             arrangement_cache: ArrangementFlattenCache::new(),
         }
     }
@@ -259,9 +272,10 @@ impl AudioHandle {
 
     /// Forward an action to the audio thread for incremental state projection.
     ///
-    /// The audio thread applies the action's state mutations to its local copies,
-    /// along with routing/mixer rebuild metadata. Skips unprojectable actions
-    /// (undo/redo, etc.) — those are handled via `apply_dirty()` with full sync.
+    /// Appends a LogEntryKind::Action to the event log. The audio thread applies
+    /// the action's state mutations to its local copies, along with routing/mixer
+    /// rebuild metadata. Skips unprojectable actions (undo/redo, etc.) — those
+    /// are handled via `apply_dirty()` with full sync.
     pub fn forward_action(&mut self, action: &Action, dirty: AudioDirty) {
         if !dirty.any() {
             return;
@@ -271,7 +285,7 @@ impl AudioHandle {
             return;
         }
 
-        self.send(AudioCmd::ForwardAction {
+        self.event_log.append(LogEntryKind::Action {
             action: Box::new(action.clone()),
             rebuild_routing: dirty.routing,
             rebuild_instrument_routing: dirty.routing_instrument,
@@ -280,6 +294,7 @@ impl AudioHandle {
     }
 
     /// Send full state replacement to the audio thread (for undo/redo/load/unprojectable actions).
+    /// Appends a LogEntryKind::Checkpoint to the event log.
     fn send_full_sync(&mut self, state: &AppState, rebuild_routing: bool) {
         // Compute piano roll and automation snapshots
         let piano_roll = if state.session.arrangement.play_mode == PlayMode::Song
@@ -310,7 +325,7 @@ impl AudioHandle {
             state.session.automation.lanes.clone()
         };
 
-        self.send(AudioCmd::FullStateSync {
+        self.event_log.append(LogEntryKind::Checkpoint {
             instruments: state.instruments.clone(),
             session: state.session.clone(),
             piano_roll,
@@ -319,7 +334,7 @@ impl AudioHandle {
         });
     }
 
-    /// Send flattened piano roll / automation for Song mode if dirty.
+    /// Append flattened piano roll / automation for Song mode if dirty.
     fn send_flattened_if_needed(&mut self, state: &AppState, dirty: &AudioDirty) {
         if dirty.piano_roll {
             if state.session.arrangement.play_mode == PlayMode::Song
@@ -334,7 +349,7 @@ impl AudioHandle {
                     flat_pr.loop_end = arr_len;
                     flat_pr.looping = false;
                 }
-                self.send(AudioCmd::UpdatePianoRollData { piano_roll: flat_pr });
+                self.event_log.append(LogEntryKind::PianoRollUpdate(flat_pr));
             }
             // In Live/clip-edit mode, ForwardAction updates session.piano_roll directly
         }
@@ -345,7 +360,7 @@ impl AudioHandle {
                 let (_, _, flattened_auto) = self.arrangement_cache.get_or_compute(&state.session.arrangement);
                 let mut merged = state.session.automation.lanes.clone();
                 merged.extend(flattened_auto.iter().cloned());
-                self.send(AudioCmd::UpdateAutomationLanes { lanes: merged });
+                self.event_log.append(LogEntryKind::AutomationUpdate(merged));
             }
             // In Live/clip-edit mode, ForwardAction updates session.automation directly
         }
