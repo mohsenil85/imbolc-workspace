@@ -6,6 +6,7 @@ use crate::state::{AppState, CustomSynthDef, ParamSpec};
 use crate::action::{DispatchResult, IoFeedback, NavIntent, SessionAction};
 
 use super::server::compile_synthdef;
+use super::side_effects::AudioSideEffect;
 use super::default_rack_path;
 
 fn dispatch_save(
@@ -83,7 +84,8 @@ fn dispatch_load(
 pub(super) fn dispatch_session(
     action: &SessionAction,
     state: &mut AppState,
-    audio: &mut AudioHandle,
+    audio: &AudioHandle,
+    _effects: &mut Vec<AudioSideEffect>,
     io_tx: &Sender<IoFeedback>,
 ) -> DispatchResult {
     let mut result = DispatchResult::none();

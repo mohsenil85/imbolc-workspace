@@ -3,11 +3,13 @@ use crate::state::AppState;
 use crate::state::piano_roll::Note;
 use crate::state::{ClipboardContents, ClipboardNote};
 use crate::action::{DispatchResult, PianoRollAction};
+use super::side_effects::AudioSideEffect;
 
 pub(super) fn dispatch_piano_roll(
     action: &PianoRollAction,
     state: &mut AppState,
-    audio: &mut AudioHandle,
+    audio: &AudioHandle,
+    effects: &mut Vec<AudioSideEffect>,
 ) -> DispatchResult {
     match action {
         PianoRollAction::ToggleNote { pitch, tick, duration, velocity, track } => {
@@ -23,14 +25,14 @@ pub(super) fn dispatch_piano_roll(
             }
             let pr = &mut state.session.piano_roll;
             pr.playing = !pr.playing;
-            audio.set_playing(pr.playing);
+            effects.push(AudioSideEffect::SetPlaying { playing: pr.playing });
             if !pr.playing {
                 state.audio.playhead = 0;
-                audio.reset_playhead();
+                effects.push(AudioSideEffect::ResetPlayhead);
                 if audio.is_running() {
-                    audio.release_all_voices();
+                    effects.push(AudioSideEffect::ReleaseAllVoices);
                 }
-                audio.clear_active_notes();
+                effects.push(AudioSideEffect::ClearActiveNotes);
             }
             // Clear recording if stopping via normal play/stop
             state.session.piano_roll.recording = false;
@@ -42,19 +44,19 @@ pub(super) fn dispatch_piano_roll(
             if !is_playing {
                 // Start playing + recording
                 state.session.piano_roll.playing = true;
-                audio.set_playing(true);
+                effects.push(AudioSideEffect::SetPlaying { playing: true });
                 state.session.piano_roll.recording = true;
             } else {
                 // Stop playing + recording
                 let pr = &mut state.session.piano_roll;
                 pr.playing = false;
                 state.audio.playhead = 0;
-                audio.set_playing(false);
-                audio.reset_playhead();
+                effects.push(AudioSideEffect::SetPlaying { playing: false });
+                effects.push(AudioSideEffect::ResetPlayhead);
                 if audio.is_running() {
-                    audio.release_all_voices();
+                    effects.push(AudioSideEffect::ReleaseAllVoices);
                 }
-                audio.clear_active_notes();
+                effects.push(AudioSideEffect::ClearActiveNotes);
                 state.session.piano_roll.recording = false;
             }
             return DispatchResult::none();
@@ -119,8 +121,17 @@ pub(super) fn dispatch_piano_roll(
                             None => vec![pitch],
                         };
                         for &p in &expanded {
-                            let _ = audio.spawn_voice(target_id, p, vel_f, 0.0);
-                            audio.push_active_note(target_id, p, 240);
+                            effects.push(AudioSideEffect::SpawnVoice {
+                                instrument_id: target_id,
+                                pitch: p,
+                                velocity: vel_f,
+                                offset_secs: 0.0,
+                            });
+                            effects.push(AudioSideEffect::PushActiveNote {
+                                instrument_id: target_id,
+                                pitch: p,
+                                duration_ticks: 240,
+                            });
                         }
                     }
                 }
@@ -164,8 +175,17 @@ pub(super) fn dispatch_piano_roll(
                                 None => vec![pitch],
                             };
                             for &p in &expanded {
-                                let _ = audio.spawn_voice(target_id, p, vel_f, 0.0);
-                                audio.push_active_note(target_id, p, 240);
+                                effects.push(AudioSideEffect::SpawnVoice {
+                                    instrument_id: target_id,
+                                    pitch: p,
+                                    velocity: vel_f,
+                                    offset_secs: 0.0,
+                                });
+                                effects.push(AudioSideEffect::PushActiveNote {
+                                    instrument_id: target_id,
+                                    pitch: p,
+                                    duration_ticks: 240,
+                                });
                             }
                         }
                     }
@@ -229,11 +249,10 @@ pub(super) fn dispatch_piano_roll(
             pr.playing = true;
             pr.looping = false;
 
-            if let Err(e) = audio.start_instrument_render(instrument_id, &path) {
-                state.io.pending_render = None;
-                state.session.piano_roll.playing = false;
-                return DispatchResult::with_status(crate::audio::ServerStatus::Error, format!("Render failed: {}", e));
-            }
+            effects.push(AudioSideEffect::StartInstrumentRender {
+                instrument_id,
+                path,
+            });
 
             let mut result = DispatchResult::with_status(crate::audio::ServerStatus::Running, "Rendering...");
             result.audio_dirty.piano_roll = true;
@@ -305,14 +324,7 @@ pub(super) fn dispatch_piano_roll(
             pr.playing = true;
             pr.looping = false;
 
-            if let Err(e) = audio.start_master_bounce(&path) {
-                state.io.pending_export = None;
-                state.session.piano_roll.playing = false;
-                return DispatchResult::with_status(
-                    crate::audio::ServerStatus::Error,
-                    format!("Bounce failed: {}", e),
-                );
-            }
+            effects.push(AudioSideEffect::StartMasterBounce { path });
 
             let mut result = DispatchResult::with_status(
                 crate::audio::ServerStatus::Running,
@@ -365,25 +377,18 @@ pub(super) fn dispatch_piano_roll(
             pr.playing = true;
             pr.looping = false;
 
-            if let Err(e) = audio.start_stem_export(&stems) {
-                state.io.pending_export = None;
-                state.session.piano_roll.playing = false;
-                return DispatchResult::with_status(
-                    crate::audio::ServerStatus::Error,
-                    format!("Stem export failed: {}", e),
-                );
-            }
+            effects.push(AudioSideEffect::StartStemExport { stems });
 
             let mut result = DispatchResult::with_status(
                 crate::audio::ServerStatus::Running,
-                format!("Exporting {} stems...", stems.len()),
+                format!("Exporting stems..."),
             );
             result.audio_dirty.piano_roll = true;
             return result;
         }
         PianoRollAction::CancelExport => {
             if state.io.pending_export.is_some() {
-                let _ = audio.cancel_export();
+                effects.push(AudioSideEffect::CancelExport);
                 let pr = &mut state.session.piano_roll;
                 if let Some(export) = state.io.pending_export.take() {
                     pr.looping = export.was_looping;
@@ -391,7 +396,7 @@ pub(super) fn dispatch_piano_roll(
                 pr.playing = false;
                 state.audio.playhead = 0;
                 state.io.export_progress = 0.0;
-                audio.reset_playhead();
+                effects.push(AudioSideEffect::ResetPlayhead);
                 let mut result = DispatchResult::with_status(
                     crate::audio::ServerStatus::Running,
                     "Export cancelled",
@@ -430,7 +435,11 @@ pub(super) fn dispatch_piano_roll(
             if audio.is_running() {
                 for &target_id in &targets {
                     if state.instruments.instrument(target_id).is_some() {
-                        let _ = audio.release_voice(target_id, *pitch, 0.0);
+                        effects.push(AudioSideEffect::ReleaseVoice {
+                            instrument_id: target_id,
+                            pitch: *pitch,
+                            offset_secs: 0.0,
+                        });
                     }
                 }
             }
@@ -444,7 +453,11 @@ pub(super) fn dispatch_piano_roll(
                 for &target_id in &targets {
                     if state.instruments.instrument(target_id).is_some() {
                         for &pitch in pitches {
-                            let _ = audio.release_voice(target_id, pitch, 0.0);
+                            effects.push(AudioSideEffect::ReleaseVoice {
+                                instrument_id: target_id,
+                                pitch,
+                                offset_secs: 0.0,
+                            });
                         }
                     }
                 }
@@ -460,15 +473,16 @@ mod tests {
     use crate::audio::AudioHandle;
     use crate::state::ClipboardContents;
 
-    fn setup() -> (AppState, AudioHandle) {
+    fn setup() -> (AppState, AudioHandle, Vec<AudioSideEffect>) {
         let state = AppState::new();
         let audio = AudioHandle::new();
-        (state, audio)
+        let effects = Vec::new();
+        (state, audio, effects)
     }
 
     #[test]
     fn toggle_note_adds_note_and_sets_dirty() {
-        let (mut state, mut audio) = setup();
+        let (mut state, audio, mut effects) = setup();
         let _id = state.add_instrument(crate::state::SourceType::Saw);
         let action = PianoRollAction::ToggleNote {
             pitch: 60,
@@ -477,60 +491,60 @@ mod tests {
             velocity: 100,
             track: 0,
         };
-        let result = dispatch_piano_roll(&action, &mut state, &mut audio);
+        let result = dispatch_piano_roll(&action, &mut state, &audio, &mut effects);
         assert!(result.audio_dirty.piano_roll);
         assert_eq!(state.session.piano_roll.track_at(0).unwrap().notes.len(), 1);
 
         // Toggle again removes
-        let result = dispatch_piano_roll(&action, &mut state, &mut audio);
+        let result = dispatch_piano_roll(&action, &mut state, &audio, &mut effects);
         assert!(result.audio_dirty.piano_roll);
         assert!(state.session.piano_roll.track_at(0).unwrap().notes.is_empty());
     }
 
     #[test]
     fn play_stop_toggles_playing_and_clears_recording() {
-        let (mut state, mut audio) = setup();
+        let (mut state, audio, mut effects) = setup();
         state.session.piano_roll.recording = true;
 
         let action = PianoRollAction::PlayStop;
-        dispatch_piano_roll(&action, &mut state, &mut audio);
+        dispatch_piano_roll(&action, &mut state, &audio, &mut effects);
         assert!(state.session.piano_roll.playing);
 
-        dispatch_piano_roll(&action, &mut state, &mut audio);
+        dispatch_piano_roll(&action, &mut state, &audio, &mut effects);
         assert!(!state.session.piano_roll.playing);
         assert!(!state.session.piano_roll.recording);
     }
 
     #[test]
     fn play_stop_noop_while_exporting() {
-        let (mut state, mut audio) = setup();
+        let (mut state, audio, mut effects) = setup();
         state.io.pending_export = Some(crate::state::PendingExport {
             kind: crate::audio::commands::ExportKind::MasterBounce,
             was_looping: false,
             paths: vec![],
         });
         let action = PianoRollAction::PlayStop;
-        dispatch_piano_roll(&action, &mut state, &mut audio);
+        dispatch_piano_roll(&action, &mut state, &audio, &mut effects);
         assert!(!state.session.piano_roll.playing);
     }
 
     #[test]
     fn toggle_loop_flips() {
-        let (mut state, mut audio) = setup();
+        let (mut state, audio, mut effects) = setup();
         // Default is looping=true
         assert!(state.session.piano_roll.looping);
-        dispatch_piano_roll(&PianoRollAction::ToggleLoop, &mut state, &mut audio);
+        dispatch_piano_roll(&PianoRollAction::ToggleLoop, &mut state, &audio, &mut effects);
         assert!(!state.session.piano_roll.looping);
-        dispatch_piano_roll(&PianoRollAction::ToggleLoop, &mut state, &mut audio);
+        dispatch_piano_roll(&PianoRollAction::ToggleLoop, &mut state, &audio, &mut effects);
         assert!(state.session.piano_roll.looping);
     }
 
     #[test]
     fn cycle_time_sig() {
-        let (mut state, mut audio) = setup();
+        let (mut state, audio, mut effects) = setup();
         let expected = vec![(3, 4), (6, 8), (5, 4), (7, 8), (4, 4)];
         for ts in expected {
-            dispatch_piano_roll(&PianoRollAction::CycleTimeSig, &mut state, &mut audio);
+            dispatch_piano_roll(&PianoRollAction::CycleTimeSig, &mut state, &audio, &mut effects);
             assert_eq!(state.session.time_signature, ts);
             assert_eq!(state.session.piano_roll.time_signature, ts);
         }
@@ -538,17 +552,17 @@ mod tests {
 
     #[test]
     fn adjust_swing_clamps() {
-        let (mut state, mut audio) = setup();
-        dispatch_piano_roll(&PianoRollAction::AdjustSwing(2.0), &mut state, &mut audio);
+        let (mut state, audio, mut effects) = setup();
+        dispatch_piano_roll(&PianoRollAction::AdjustSwing(2.0), &mut state, &audio, &mut effects);
         assert!((state.session.piano_roll.swing_amount - 1.0).abs() < f32::EPSILON);
 
-        dispatch_piano_roll(&PianoRollAction::AdjustSwing(-5.0), &mut state, &mut audio);
+        dispatch_piano_roll(&PianoRollAction::AdjustSwing(-5.0), &mut state, &audio, &mut effects);
         assert!((state.session.piano_roll.swing_amount - 0.0).abs() < f32::EPSILON);
     }
 
     #[test]
     fn delete_notes_in_region() {
-        let (mut state, mut audio) = setup();
+        let (mut state, audio, mut effects) = setup();
         let _id = state.add_instrument(crate::state::SourceType::Saw);
         // Add notes
         state.session.piano_roll.toggle_note(0, 60, 0, 480, 100);
@@ -562,7 +576,7 @@ mod tests {
             start_pitch: 60,
             end_pitch: 64,
         };
-        dispatch_piano_roll(&action, &mut state, &mut audio);
+        dispatch_piano_roll(&action, &mut state, &audio, &mut effects);
         let notes = &state.session.piano_roll.track_at(0).unwrap().notes;
         assert_eq!(notes.len(), 1);
         assert_eq!(notes[0].pitch, 72);
@@ -570,7 +584,7 @@ mod tests {
 
     #[test]
     fn paste_notes_skips_duplicates_and_clamps_pitch() {
-        let (mut state, mut audio) = setup();
+        let (mut state, audio, mut effects) = setup();
         let _id = state.add_instrument(crate::state::SourceType::Saw);
         // Pre-existing note at (60, 0)
         state.session.piano_roll.toggle_note(0, 60, 0, 480, 100);
@@ -586,7 +600,7 @@ mod tests {
             anchor_pitch: 60,
             notes: clipboard_notes,
         };
-        dispatch_piano_roll(&action, &mut state, &mut audio);
+        dispatch_piano_roll(&action, &mut state, &audio, &mut effects);
         let notes = &state.session.piano_roll.track_at(0).unwrap().notes;
         // Original + one valid paste (duplicate and out-of-range skipped)
         assert_eq!(notes.len(), 2);
@@ -594,7 +608,7 @@ mod tests {
 
     #[test]
     fn copy_notes_populates_clipboard() {
-        let (mut state, mut audio) = setup();
+        let (mut state, audio, mut effects) = setup();
         let _id = state.add_instrument(crate::state::SourceType::Saw);
         state.session.piano_roll.toggle_note(0, 60, 0, 480, 100);
         state.session.piano_roll.toggle_note(0, 64, 240, 480, 100);
@@ -606,7 +620,7 @@ mod tests {
             start_pitch: 60,
             end_pitch: 64,
         };
-        dispatch_piano_roll(&action, &mut state, &mut audio);
+        dispatch_piano_roll(&action, &mut state, &audio, &mut effects);
         match &state.clipboard.contents {
             Some(ClipboardContents::PianoRollNotes(notes)) => {
                 assert_eq!(notes.len(), 2);

@@ -14,22 +14,24 @@ mod selection;
 use crate::audio::AudioHandle;
 use crate::state::AppState;
 use crate::action::{DispatchResult, InstrumentAction};
+use super::side_effects::AudioSideEffect;
 
 pub(super) fn dispatch_instrument(
     action: &InstrumentAction,
     state: &mut AppState,
-    audio: &mut AudioHandle,
+    audio: &AudioHandle,
+    effects: &mut Vec<AudioSideEffect>,
 ) -> DispatchResult {
     match action {
         InstrumentAction::Add(source_type) => crud::handle_add(state, *source_type),
-        InstrumentAction::Delete(inst_id) => crud::handle_delete(state, audio, *inst_id),
+        InstrumentAction::Delete(inst_id) => crud::handle_delete(state, effects, *inst_id),
         InstrumentAction::Edit(id) => crud::handle_edit(state, *id),
         InstrumentAction::Update(update) => crud::handle_update(state, update),
         InstrumentAction::PlayNote(pitch, velocity) => {
-            playback::handle_play_note(state, audio, *pitch, *velocity)
+            playback::handle_play_note(state, audio, effects, *pitch, *velocity)
         }
         InstrumentAction::PlayNotes(ref pitches, velocity) => {
-            playback::handle_play_notes(state, audio, pitches, *velocity)
+            playback::handle_play_notes(state, audio, effects, pitches, *velocity)
         }
         InstrumentAction::Select(idx) => selection::handle_select(state, *idx),
         InstrumentAction::SelectNext => selection::handle_select_next(state),
@@ -37,10 +39,10 @@ pub(super) fn dispatch_instrument(
         InstrumentAction::SelectFirst => selection::handle_select_first(state),
         InstrumentAction::SelectLast => selection::handle_select_last(state),
         InstrumentAction::PlayDrumPad(pad_idx) => {
-            playback::handle_play_drum_pad(state, audio, *pad_idx)
+            playback::handle_play_drum_pad(state, audio, effects, *pad_idx)
         }
         InstrumentAction::LoadSampleResult(instrument_id, ref path) => {
-            sample::handle_load_sample_result(state, audio, *instrument_id, path)
+            sample::handle_load_sample_result(state, audio, effects, *instrument_id, path)
         }
         InstrumentAction::AddEffect(id, ref effect_type) => {
             effects::handle_add_effect(state, *id, *effect_type)
@@ -80,13 +82,13 @@ pub(super) fn dispatch_instrument(
         InstrumentAction::CycleChordShape(id) => arpeggiator::handle_cycle_chord_shape(state, *id),
         InstrumentAction::ClearChordShape(id) => arpeggiator::handle_clear_chord_shape(state, *id),
         InstrumentAction::LoadIRResult(instrument_id, effect_id, ref path) => {
-            effects::handle_load_ir_result(state, audio, *instrument_id, *effect_id, path)
+            effects::handle_load_ir_result(state, audio, effects, *instrument_id, *effect_id, path)
         }
         InstrumentAction::OpenVstEffectParams(instrument_id, effect_id) => {
             effects::handle_open_vst_effect_params(*instrument_id, *effect_id)
         }
         InstrumentAction::SetEqParam(instrument_id, band_idx, ref param_name, value) => {
-            eq::handle_set_eq_param(state, audio, *instrument_id, *band_idx, param_name, *value)
+            eq::handle_set_eq_param(state, audio, effects, *instrument_id, *band_idx, param_name, *value)
         }
         InstrumentAction::ToggleEq(instrument_id) => {
             eq::handle_toggle_eq(state, *instrument_id)

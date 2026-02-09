@@ -45,13 +45,24 @@ audio thread but is fast enough (<100ms) to not cause audible stutter.
 `imbolc-core/src/audio/handle.rs`.
 220 tests pass.
 
-### 3. Field-level network delta updates [Q9]
+### ~~3. Field-level network delta updates [Q9]~~ ✓
 
-Subsystem-level dirty-flag patches verified and tested (`StatePatch` +
-`DirtyFlags`, 21 new tests). Fixed `Option<Option<T>>` JSON roundtrip
-bug for `privileged_client` via `double_option` serde helper. Next
-step: send individual param changes as lightweight messages instead of
-full `InstrumentState` blobs.
+**Done.** Instrument-level delta updates fully implemented. Server
+tracks per-instrument dirty flags (`DirtyFlags` with
+`dirty_instruments: HashSet<InstrumentId>` for targeted edits,
+`instruments_structural: bool` for add/delete/select/undo).
+`broadcast_state_patch()` sends only changed instruments as
+`InstrumentPatch` entries instead of full `InstrumentState` blobs.
+Rate-limited at ~30Hz with threshold coalescing (falls back to full
+snapshot when >50% of instruments are dirty). Fixed
+`Option<Option<T>>` JSON roundtrip bug via `double_option` serde
+helper.
+
+**Files:** `imbolc-net/src/server.rs`, `imbolc-net/src/protocol.rs`,
+`imbolc-net/src/dirty_flags.rs`, `imbolc-types/src/state/patch.rs`.
+78 tests pass (19 unit + 59 integration), including per-instrument
+dirty tracking, wire-level patch tests, rate limiting, and threshold
+coalescing.
 
 ### ~~4. Hybrid undo diffs [Q10]~~ ✓
 
@@ -69,12 +80,34 @@ Persistence unaffected (undo history is never persisted).
 
 ## Long-term (architectural rewrites)
 
-### 5. Event-log architecture [Q1+Q7+Q8]
+### 5. Event-log architecture [Q1+Q7+Q8] — Phase 1 done
 
-Actions become events in a log. Audio thread is timing authority. UI
-is projection-only. Eliminates clone-based state transfer and
-UI-blocking-audio starvation risk. Subsumes Q7 (starvation) and Q8
-(concurrency/locking).
+**Phase 1 (Factor Dispatch) done.** All dispatch functions separated
+into pure state mutation + `AudioSideEffect` enum. Dispatchers no
+longer call `AudioHandle` methods directly — they push typed effect
+variants into a `Vec<AudioSideEffect>`. The top-level
+`dispatch_with_audio()` collects effects and applies them after
+dispatch returns via `apply_side_effects()`. `audio` param changed
+from `&mut AudioHandle` to `&AudioHandle` (read-only for
+`is_running()`, `status()` queries).
+
+~30 `AudioSideEffect` variants cover all audio operations: voice
+management, transport, samples, mixer, click track, tuner, drums,
+automation, EQ, server lifecycle, recording, VST.
+
+**Files:** `imbolc-core/src/dispatch/side_effects.rs` (new),
+all sub-dispatchers updated (`mod.rs`, `local.rs`, `helpers.rs`,
+`mixer.rs`, `piano_roll.rs`, `arrangement.rs`, `automation.rs`,
+`server.rs`, `session.rs`, `sequencer.rs`, `bus.rs`, `vst_param.rs`,
+`audio_feedback.rs`, `instrument/*.rs`),
+`imbolc-gui/src/state.rs`.
+594 tests pass.
+
+**Remaining phases:**
+- Phase 2: Action-based audio sync (forward `Action` enums to audio
+  thread instead of cloning state)
+- Phase 3: Audio timing authority (audio thread owns transport state)
+- Phase 4: Shared event log (retained cursor-readable log)
 
 ### 6. Event scheduler with dynamic lookahead [Q5+Q6]
 

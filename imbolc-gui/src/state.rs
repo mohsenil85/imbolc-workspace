@@ -7,6 +7,8 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use imbolc_core::action::IoFeedback;
 use imbolc_core::audio::AudioHandle;
 use imbolc_core::config::Config;
+use imbolc_core::dispatch::AudioSideEffect;
+use imbolc_core::dispatch::side_effects::apply_side_effects;
 use imbolc_core::state::AppState;
 use imbolc_types::Action;
 
@@ -38,12 +40,15 @@ impl SharedState {
 
     /// Dispatch an action to the core.
     pub fn dispatch(&mut self, action: Action) {
+        let mut effects: Vec<AudioSideEffect> = Vec::new();
         let result = imbolc_core::dispatch::dispatch_action(
             &action,
             &mut self.app,
-            &mut self.audio,
+            &self.audio,
+            &mut effects,
             &self.io_tx,
         );
+        apply_side_effects(&effects, &mut self.audio);
 
         // Handle audio dirty flags
         if result.audio_dirty.any() {
@@ -63,12 +68,15 @@ impl SharedState {
         for fb in feedback {
             // Convert AudioFeedback to Action and dispatch
             let action = Action::AudioFeedback(fb);
+            let mut effects: Vec<AudioSideEffect> = Vec::new();
             let _ = imbolc_core::dispatch::dispatch_action(
                 &action,
                 &mut self.app,
-                &mut self.audio,
+                &self.audio,
+                &mut effects,
                 &self.io_tx,
             );
+            apply_side_effects(&effects, &mut self.audio);
         }
 
         // Drain I/O feedback

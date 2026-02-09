@@ -1,9 +1,9 @@
-use crate::audio::AudioHandle;
 use crate::state::AppState;
 use crate::state::automation::AutomationTarget;
 use crate::state::BufferId;
 use crate::action::{DispatchResult, NavIntent};
 use crate::dispatch::automation::record_automation_point;
+use crate::dispatch::side_effects::AudioSideEffect;
 
 pub(super) fn handle_add(
     state: &mut AppState,
@@ -19,7 +19,7 @@ pub(super) fn handle_add(
 
 pub(super) fn handle_delete(
     state: &mut AppState,
-    audio: &mut AudioHandle,
+    effects: &mut Vec<AudioSideEffect>,
     inst_id: crate::state::InstrumentId,
 ) -> DispatchResult {
     // Collect buffer IDs from the instrument before removing it
@@ -43,7 +43,9 @@ pub(super) fn handle_delete(
             }
         }
     }
-    audio.free_samples(buffer_ids);
+    if !buffer_ids.is_empty() {
+        effects.push(AudioSideEffect::FreeSamples { buffer_ids });
+    }
 
     state.remove_instrument(inst_id);
     let mut result = if state.instruments.instruments.is_empty() {

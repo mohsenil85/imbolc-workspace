@@ -2,11 +2,13 @@ use crate::action::{DispatchResult, NavIntent, VstTarget};
 use crate::audio::commands::AudioFeedback;
 use crate::audio::AudioHandle;
 use crate::state::AppState;
+use super::side_effects::AudioSideEffect;
 
 pub fn dispatch_audio_feedback(
     feedback: &AudioFeedback,
     state: &mut AppState,
-    audio: &mut AudioHandle,
+    audio: &AudioHandle,
+    effects: &mut Vec<AudioSideEffect>,
 ) -> DispatchResult {
     let mut result = DispatchResult::default();
 
@@ -48,7 +50,10 @@ pub fn dispatch_audio_feedback(
             // Convert instrument to PitchedSampler
             let buffer_id = state.instruments.next_sampler_buffer_id;
             state.instruments.next_sampler_buffer_id += 1;
-            let _ = audio.load_sample(buffer_id, &path.to_string_lossy());
+            effects.push(AudioSideEffect::LoadSample {
+                buffer_id,
+                path: path.to_string_lossy().to_string(),
+            });
 
             if let Some(inst) = state.instruments.instrument_mut(*instrument_id) {
                 use crate::state::{SourceType, ParamValue};
@@ -62,12 +67,12 @@ pub fn dispatch_audio_feedback(
 
             result.audio_dirty.instruments = true;
             result.audio_dirty.routing_instrument = Some(*instrument_id);
-            result.push_status(audio.status(), "Render complete");
+            result.push_status(audio.status(), "Render complete".to_string());
         }
         AudioFeedback::CompileResult(res) | AudioFeedback::LoadResult(res) => {
             match res {
-                Ok(msg) => result.push_status(audio.status(), msg.clone()),
-                Err(e) => result.push_status(audio.status(), e.clone()),
+                Ok(msg) => result.push_status(audio.status(), msg.clone().to_string()),
+                Err(e) => result.push_status(audio.status(), e.clone().to_string()),
             }
         }
         AudioFeedback::PendingBufferFreed => {
@@ -130,7 +135,7 @@ pub fn dispatch_audio_feedback(
                     format!("Stem export complete: {} files", paths.len())
                 }
             };
-            result.push_status(audio.status(), message);
+            result.push_status(audio.status(), message.to_string());
         }
         AudioFeedback::ExportProgress { progress } => {
             state.io.export_progress = *progress;

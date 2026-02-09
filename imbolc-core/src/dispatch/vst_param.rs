@@ -1,13 +1,13 @@
 use std::path::PathBuf;
 
 use crate::audio::AudioHandle;
-use crate::audio::commands::AudioCmd;
 use crate::state::AppState;
 use crate::state::automation::AutomationTarget;
 use crate::action::{DispatchResult, VstParamAction, VstTarget};
 use crate::state::instrument::Instrument;
 use crate::state::vst_plugin::VstPluginId;
 use crate::dispatch::automation::record_automation_point;
+use crate::dispatch::side_effects::AudioSideEffect;
 
 /// Compute VST state file path for an instrument source
 fn vst_state_path(instrument_id: u32, plugin_name: &str) -> PathBuf {
@@ -83,7 +83,8 @@ fn get_param_values_mut(instrument: &mut Instrument, target: VstTarget) -> Optio
 pub(super) fn dispatch_vst_param(
     action: &VstParamAction,
     state: &mut AppState,
-    audio: &mut AudioHandle,
+    audio: &AudioHandle,
+    effects: &mut Vec<AudioSideEffect>,
 ) -> DispatchResult {
     match action {
         VstParamAction::SetParam(instrument_id, target, param_index, value) => {
@@ -98,14 +99,12 @@ pub(super) fn dispatch_vst_param(
                 }
             }
             if audio.is_running() {
-                if let Err(e) = audio.send_cmd(AudioCmd::SetVstParam {
+                effects.push(AudioSideEffect::SetVstParam {
                     instrument_id: *instrument_id,
                     target: *target,
                     param_index: *param_index,
                     value,
-                }) {
-                    log::warn!(target: "dispatch::vst", "SetVstParam dropped: {}", e);
-                }
+                });
             }
             // Record automation when recording + playing
             if state.recording.automation_recording && state.session.piano_roll.playing {
@@ -141,6 +140,7 @@ pub(super) fn dispatch_vst_param(
                 &VstParamAction::SetParam(*instrument_id, *target, *param_index, new_value),
                 state,
                 audio,
+                effects,
             )
         }
         VstParamAction::ResetParam(instrument_id, target, param_index) => {
@@ -156,6 +156,7 @@ pub(super) fn dispatch_vst_param(
                 &VstParamAction::SetParam(*instrument_id, *target, *param_index, default),
                 state,
                 audio,
+                effects,
             )
         }
         VstParamAction::DiscoverParams(instrument_id, target) => {
@@ -189,12 +190,10 @@ pub(super) fn dispatch_vst_param(
             } else {
                 // Fall back to OSC discovery
                 if audio.is_running() {
-                    if let Err(e) = audio.send_cmd(AudioCmd::QueryVstParams {
+                    effects.push(AudioSideEffect::QueryVstParams {
                         instrument_id: *instrument_id,
                         target: *target,
-                    }) {
-                        log::warn!(target: "dispatch::vst", "QueryVstParams dropped: {}", e);
-                    }
+                    });
                 }
             }
             DispatchResult::none()
@@ -230,13 +229,11 @@ pub(super) fn dispatch_vst_param(
                     }
                 }
                 if audio.is_running() {
-                    if let Err(e) = audio.send_cmd(AudioCmd::SaveVstState {
+                    effects.push(AudioSideEffect::SaveVstState {
                         instrument_id: *instrument_id,
                         target: *target,
                         path,
-                    }) {
-                        log::warn!(target: "dispatch::vst", "SaveVstState dropped: {}", e);
-                    }
+                    });
                 }
             }
             DispatchResult::none()
@@ -257,7 +254,8 @@ mod tests {
 
     #[test]
     fn set_param_records_when_recording() {
-        let (mut state, mut audio) = setup();
+        let (mut state, audio) = setup();
+        let mut effects = Vec::new();
         let id = state.instruments.add_instrument(SourceType::Saw);
         state.recording.automation_recording = true;
         state.session.piano_roll.playing = true;
@@ -266,7 +264,8 @@ mod tests {
         dispatch_vst_param(
             &VstParamAction::SetParam(id, VstTarget::Source, 0, 0.7),
             &mut state,
-            &mut audio,
+            &audio,
+            &mut effects,
         );
 
         let target = AutomationTarget::vst_param(id, 0);
@@ -277,7 +276,8 @@ mod tests {
 
     #[test]
     fn set_param_no_record_when_not_recording() {
-        let (mut state, mut audio) = setup();
+        let (mut state, audio) = setup();
+        let mut effects = Vec::new();
         let id = state.instruments.add_instrument(SourceType::Saw);
         state.recording.automation_recording = false;
         state.session.piano_roll.playing = true;
@@ -285,7 +285,8 @@ mod tests {
         dispatch_vst_param(
             &VstParamAction::SetParam(id, VstTarget::Source, 0, 0.7),
             &mut state,
-            &mut audio,
+            &audio,
+            &mut effects,
         );
 
         let target = AutomationTarget::vst_param(id, 0);
@@ -294,14 +295,16 @@ mod tests {
 
     #[test]
     fn set_param_updates_state_regardless() {
-        let (mut state, mut audio) = setup();
+        let (mut state, audio) = setup();
+        let mut effects = Vec::new();
         let id = state.instruments.add_instrument(SourceType::Saw);
         state.recording.automation_recording = false;
 
         dispatch_vst_param(
             &VstParamAction::SetParam(id, VstTarget::Source, 0, 0.7),
             &mut state,
-            &mut audio,
+            &audio,
+            &mut effects,
         );
 
         // State should be updated even without recording

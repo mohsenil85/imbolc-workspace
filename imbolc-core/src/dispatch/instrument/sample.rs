@@ -1,10 +1,12 @@
 use crate::audio::AudioHandle;
 use crate::state::AppState;
 use crate::action::{DispatchResult, NavIntent};
+use crate::dispatch::side_effects::AudioSideEffect;
 
 pub(super) fn handle_load_sample_result(
     state: &mut AppState,
-    audio: &mut AudioHandle,
+    audio: &AudioHandle,
+    effects: &mut Vec<AudioSideEffect>,
     instrument_id: crate::state::InstrumentId,
     path: &std::path::Path,
 ) -> DispatchResult {
@@ -16,7 +18,7 @@ pub(super) fn handle_load_sample_result(
     state.instruments.next_sampler_buffer_id += 1;
 
     if audio.is_running() {
-        let _ = audio.load_sample(buffer_id, &path_str);
+        effects.push(AudioSideEffect::LoadSample { buffer_id, path: path_str });
     }
 
     if let Some(instrument) = state.instruments.instrument_mut(instrument_id) {

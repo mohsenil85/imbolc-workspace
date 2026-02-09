@@ -3,11 +3,13 @@ use crate::audio::AudioHandle;
 use crate::dispatch::helpers::{apply_bus_update, apply_layer_group_update, maybe_record_automation};
 use crate::state::automation::AutomationTarget;
 use crate::state::{AppState, MixerSelection};
+use super::side_effects::AudioSideEffect;
 
 pub(super) fn dispatch_mixer(
     action: &MixerAction,
     state: &mut AppState,
-    audio: &mut AudioHandle,
+    audio: &AudioHandle,
+    effects: &mut Vec<AudioSideEffect>,
 ) -> DispatchResult {
     let mut result = DispatchResult::none();
     match action {
@@ -81,8 +83,8 @@ pub(super) fn dispatch_mixer(
                     result.audio_dirty.mixer_params = true;
                 }
             }
-            apply_bus_update(audio, bus_update);
-            apply_layer_group_update(audio, group_update);
+            apply_bus_update(audio, effects, bus_update);
+            apply_layer_group_update(audio, effects, group_update);
             if let Some((target, value)) = record_target {
                 maybe_record_automation(state, &mut result, target, value);
             }
@@ -126,8 +128,8 @@ pub(super) fn dispatch_mixer(
                     result.audio_dirty.mixer_params = true;
                 }
             }
-            apply_bus_update(audio, bus_update);
-            apply_layer_group_update(audio, group_update);
+            apply_bus_update(audio, effects, bus_update);
+            apply_layer_group_update(audio, effects, group_update);
         }
         MixerAction::ToggleSolo => {
             let mut bus_updates: Vec<(u8, f32, bool, f32)> = Vec::new();
@@ -161,14 +163,14 @@ pub(super) fn dispatch_mixer(
                 bus_updates.push((bus.id, bus.level, mute, bus.pan));
             }
             for update in bus_updates {
-                apply_bus_update(audio, Some(update));
+                apply_bus_update(audio, effects, Some(update));
             }
             for gm in &state.session.mixer.layer_group_mixers {
                 let mute = state.session.mixer.effective_layer_group_mute(gm);
                 group_updates.push((gm.group_id, gm.level, mute, gm.pan));
             }
             for update in group_updates {
-                apply_layer_group_update(audio, Some(update));
+                apply_layer_group_update(audio, effects, Some(update));
             }
         }
         MixerAction::CycleSection => {
@@ -267,7 +269,7 @@ pub(super) fn dispatch_mixer(
                         let mute = state.session.mixer.effective_layer_group_mute(gm);
                         group_update = Some((group_id, gm.level, mute, gm.pan));
                     }
-                    apply_layer_group_update(audio, group_update);
+                    apply_layer_group_update(audio, effects, group_update);
                 }
                 MixerSelection::Bus(id) => {
                     let mut bus_update: Option<(u8, f32, bool, f32)> = None;
@@ -280,7 +282,7 @@ pub(super) fn dispatch_mixer(
                         let mute = state.session.effective_bus_mute(bus);
                         bus_update = Some((id, bus.level, mute, bus.pan));
                     }
-                    apply_bus_update(audio, bus_update);
+                    apply_bus_update(audio, effects, bus_update);
                 }
                 MixerSelection::Master => {}
             }
@@ -361,128 +363,140 @@ mod tests {
 
     #[test]
     fn adjust_level_instrument_clamps() {
-        let (mut state, mut audio) = setup();
+        let (mut state, audio) = setup();
+        let mut effects = Vec::new();
         state.session.mixer.selection = MixerSelection::Instrument(0);
-        dispatch_mixer(&MixerAction::AdjustLevel(2.0), &mut state, &mut audio);
+        dispatch_mixer(&MixerAction::AdjustLevel(2.0), &mut state, &audio, &mut effects);
         assert!((state.instruments.instruments[0].level - 1.0).abs() < f32::EPSILON);
 
-        dispatch_mixer(&MixerAction::AdjustLevel(-5.0), &mut state, &mut audio);
+        dispatch_mixer(&MixerAction::AdjustLevel(-5.0), &mut state, &audio, &mut effects);
         assert!((state.instruments.instruments[0].level - 0.0).abs() < f32::EPSILON);
     }
 
     #[test]
     fn adjust_level_bus_clamps_and_sets_dirty() {
-        let (mut state, mut audio) = setup();
+        let (mut state, audio) = setup();
+        let mut effects = Vec::new();
         state.session.mixer.selection = MixerSelection::Bus(1);
-        let result = dispatch_mixer(&MixerAction::AdjustLevel(2.0), &mut state, &mut audio);
+        let result = dispatch_mixer(&MixerAction::AdjustLevel(2.0), &mut state, &audio, &mut effects);
         assert!(result.audio_dirty.session);
         assert!((state.session.bus(1).unwrap().level - 1.0).abs() < f32::EPSILON);
     }
 
     #[test]
     fn adjust_level_master_clamps() {
-        let (mut state, mut audio) = setup();
+        let (mut state, audio) = setup();
+        let mut effects = Vec::new();
         state.session.mixer.selection = MixerSelection::Master;
-        dispatch_mixer(&MixerAction::AdjustLevel(2.0), &mut state, &mut audio);
+        dispatch_mixer(&MixerAction::AdjustLevel(2.0), &mut state, &audio, &mut effects);
         assert!((state.session.mixer.master_level - 1.0).abs() < f32::EPSILON);
     }
 
     #[test]
     fn toggle_mute_instrument() {
-        let (mut state, mut audio) = setup();
+        let (mut state, audio) = setup();
+        let mut effects = Vec::new();
         state.session.mixer.selection = MixerSelection::Instrument(0);
         assert!(!state.instruments.instruments[0].mute);
-        let result = dispatch_mixer(&MixerAction::ToggleMute, &mut state, &mut audio);
+        let result = dispatch_mixer(&MixerAction::ToggleMute, &mut state, &audio, &mut effects);
         assert!(state.instruments.instruments[0].mute);
         assert!(result.audio_dirty.instruments);
     }
 
     #[test]
     fn toggle_mute_bus() {
-        let (mut state, mut audio) = setup();
+        let (mut state, audio) = setup();
+        let mut effects = Vec::new();
         state.session.mixer.selection = MixerSelection::Bus(1);
         assert!(!state.session.bus(1).unwrap().mute);
-        dispatch_mixer(&MixerAction::ToggleMute, &mut state, &mut audio);
+        dispatch_mixer(&MixerAction::ToggleMute, &mut state, &audio, &mut effects);
         assert!(state.session.bus(1).unwrap().mute);
     }
 
     #[test]
     fn toggle_mute_master() {
-        let (mut state, mut audio) = setup();
+        let (mut state, audio) = setup();
+        let mut effects = Vec::new();
         state.session.mixer.selection = MixerSelection::Master;
         assert!(!state.session.mixer.master_mute);
-        dispatch_mixer(&MixerAction::ToggleMute, &mut state, &mut audio);
+        dispatch_mixer(&MixerAction::ToggleMute, &mut state, &audio, &mut effects);
         assert!(state.session.mixer.master_mute);
     }
 
     #[test]
     fn toggle_solo_instrument() {
-        let (mut state, mut audio) = setup();
+        let (mut state, audio) = setup();
+        let mut effects = Vec::new();
         state.session.mixer.selection = MixerSelection::Instrument(0);
-        let result = dispatch_mixer(&MixerAction::ToggleSolo, &mut state, &mut audio);
+        let result = dispatch_mixer(&MixerAction::ToggleSolo, &mut state, &audio, &mut effects);
         assert!(state.instruments.instruments[0].solo);
         assert!(result.audio_dirty.instruments);
     }
 
     #[test]
     fn toggle_solo_bus() {
-        let (mut state, mut audio) = setup();
+        let (mut state, audio) = setup();
+        let mut effects = Vec::new();
         state.session.mixer.selection = MixerSelection::Bus(1);
-        dispatch_mixer(&MixerAction::ToggleSolo, &mut state, &mut audio);
+        dispatch_mixer(&MixerAction::ToggleSolo, &mut state, &audio, &mut effects);
         assert!(state.session.bus(1).unwrap().solo);
     }
 
     #[test]
     fn adjust_pan_clamps() {
-        let (mut state, mut audio) = setup();
+        let (mut state, audio) = setup();
+        let mut effects = Vec::new();
         state.session.mixer.selection = MixerSelection::Instrument(0);
-        dispatch_mixer(&MixerAction::AdjustPan(5.0), &mut state, &mut audio);
+        dispatch_mixer(&MixerAction::AdjustPan(5.0), &mut state, &audio, &mut effects);
         assert!((state.instruments.instruments[0].pan - 1.0).abs() < f32::EPSILON);
-        dispatch_mixer(&MixerAction::AdjustPan(-5.0), &mut state, &mut audio);
+        dispatch_mixer(&MixerAction::AdjustPan(-5.0), &mut state, &audio, &mut effects);
         assert!((state.instruments.instruments[0].pan - (-1.0)).abs() < f32::EPSILON);
 
         state.session.mixer.selection = MixerSelection::Bus(1);
-        dispatch_mixer(&MixerAction::AdjustPan(5.0), &mut state, &mut audio);
+        dispatch_mixer(&MixerAction::AdjustPan(5.0), &mut state, &audio, &mut effects);
         assert!((state.session.bus(1).unwrap().pan - 1.0).abs() < f32::EPSILON);
     }
 
     #[test]
     fn cycle_section() {
-        let (mut state, mut audio) = setup();
+        let (mut state, audio) = setup();
+        let mut effects = Vec::new();
         state.session.mixer.selection = MixerSelection::Instrument(0);
-        dispatch_mixer(&MixerAction::CycleSection, &mut state, &mut audio);
+        dispatch_mixer(&MixerAction::CycleSection, &mut state, &audio, &mut effects);
         assert!(matches!(state.session.mixer.selection, MixerSelection::Bus(1)));
-        dispatch_mixer(&MixerAction::CycleSection, &mut state, &mut audio);
+        dispatch_mixer(&MixerAction::CycleSection, &mut state, &audio, &mut effects);
         assert!(matches!(state.session.mixer.selection, MixerSelection::Master));
-        dispatch_mixer(&MixerAction::CycleSection, &mut state, &mut audio);
+        dispatch_mixer(&MixerAction::CycleSection, &mut state, &audio, &mut effects);
         assert!(matches!(state.session.mixer.selection, MixerSelection::Instrument(_)));
     }
 
     #[test]
     fn toggle_send_auto_sets_level() {
-        let (mut state, mut audio) = setup();
+        let (mut state, audio) = setup();
+        let mut effects = Vec::new();
         state.session.mixer.selection = MixerSelection::Instrument(0);
         // Send starts disabled with level 0.0
         assert!(!state.instruments.instruments[0].sends[0].enabled);
         assert!((state.instruments.instruments[0].sends[0].level - 0.0).abs() < f32::EPSILON);
 
-        dispatch_mixer(&MixerAction::ToggleSend(1), &mut state, &mut audio);
+        dispatch_mixer(&MixerAction::ToggleSend(1), &mut state, &audio, &mut effects);
         assert!(state.instruments.instruments[0].sends[0].enabled);
         assert!((state.instruments.instruments[0].sends[0].level - 0.5).abs() < f32::EPSILON);
 
-        dispatch_mixer(&MixerAction::ToggleSend(1), &mut state, &mut audio);
+        dispatch_mixer(&MixerAction::ToggleSend(1), &mut state, &audio, &mut effects);
         assert!(!state.instruments.instruments[0].sends[0].enabled);
     }
 
     #[test]
     fn adjust_send_clamps() {
-        let (mut state, mut audio) = setup();
+        let (mut state, audio) = setup();
+        let mut effects = Vec::new();
         state.session.mixer.selection = MixerSelection::Instrument(0);
         state.instruments.instruments[0].sends[0].enabled = true;
         state.instruments.instruments[0].sends[0].level = 0.5;
-        dispatch_mixer(&MixerAction::AdjustSend(1, 2.0), &mut state, &mut audio);
+        dispatch_mixer(&MixerAction::AdjustSend(1, 2.0), &mut state, &audio, &mut effects);
         assert!((state.instruments.instruments[0].sends[0].level - 1.0).abs() < f32::EPSILON);
-        dispatch_mixer(&MixerAction::AdjustSend(1, -5.0), &mut state, &mut audio);
+        dispatch_mixer(&MixerAction::AdjustSend(1, -5.0), &mut state, &audio, &mut effects);
         assert!((state.instruments.instruments[0].sends[0].level - 0.0).abs() < f32::EPSILON);
     }
 }

@@ -2,6 +2,7 @@ use crate::audio::AudioHandle;
 use crate::state::AppState;
 use crate::state::automation::AutomationTarget;
 use crate::action::{DispatchResult, NavIntent, VstTarget};
+use crate::dispatch::side_effects::AudioSideEffect;
 
 use super::super::automation::record_automation_point;
 
@@ -112,7 +113,8 @@ pub(super) fn handle_adjust_effect_param(
 
 pub(super) fn handle_load_ir_result(
     state: &mut AppState,
-    audio: &mut AudioHandle,
+    audio: &AudioHandle,
+    effects: &mut Vec<AudioSideEffect>,
     instrument_id: crate::state::InstrumentId,
     effect_id: crate::state::EffectId,
     path: &std::path::Path,
@@ -123,7 +125,7 @@ pub(super) fn handle_load_ir_result(
     state.instruments.next_sampler_buffer_id += 1;
 
     if audio.is_running() {
-        let _ = audio.load_sample(buffer_id, &path_str);
+        effects.push(AudioSideEffect::LoadSample { buffer_id, path: path_str.clone() });
     }
 
     if let Some(instrument) = state.instruments.instrument_mut(instrument_id) {

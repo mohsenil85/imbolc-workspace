@@ -9,6 +9,7 @@ use crate::audio::AudioHandle;
 use crate::state::AppState;
 
 use super::dispatch_action;
+use super::side_effects::{AudioSideEffect, apply_side_effects};
 
 /// Local dispatcher that executes actions directly on in-process state.
 ///
@@ -48,7 +49,10 @@ impl LocalDispatcher {
     /// Dispatch an action using the provided audio handle.
     /// This method allows passing audio separately to avoid borrow conflicts.
     pub fn dispatch_with_audio(&mut self, action: &Action, audio: &mut AudioHandle) -> DispatchResult {
-        dispatch_action(action, &mut self.state, audio, &self.io_tx)
+        let mut effects: Vec<AudioSideEffect> = Vec::new();
+        let result = dispatch_action(action, &mut self.state, &*audio, &mut effects, &self.io_tx);
+        apply_side_effects(&effects, audio);
+        result
     }
 }
 

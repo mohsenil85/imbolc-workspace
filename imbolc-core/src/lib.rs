@@ -21,7 +21,8 @@
 //! let (io_tx, io_rx) = std::sync::mpsc::channel::<IoFeedback>();
 //!
 //! // 3. Dispatch actions to mutate state (undo snapshots are pushed automatically)
-//! let result = dispatch_action(&action, &mut state, &mut audio, &io_tx);
+//! let mut effects = Vec::new();
+//! let result = dispatch_action(&action, &mut state, &audio, &mut effects, &io_tx);
 //!
 //! // 4. Process DispatchResult: audio_dirty flags, nav intents, status events
 //! if result.audio_dirty.any() {

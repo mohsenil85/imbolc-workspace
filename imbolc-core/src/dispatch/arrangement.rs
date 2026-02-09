@@ -3,10 +3,13 @@ use crate::audio::AudioHandle;
 use crate::state::arrangement::{ClipEditContext, PlayMode};
 use crate::state::AppState;
 
+use super::side_effects::AudioSideEffect;
+
 pub(super) fn dispatch_arrangement(
     action: &ArrangementAction,
     state: &mut AppState,
-    audio: &mut AudioHandle,
+    audio: &AudioHandle,
+    effects: &mut Vec<AudioSideEffect>,
 ) -> DispatchResult {
     match action {
         ArrangementAction::TogglePlayMode => {
@@ -319,14 +322,14 @@ pub(super) fn dispatch_arrangement(
         ArrangementAction::PlayStop => {
             let pr = &mut state.session.piano_roll;
             pr.playing = !pr.playing;
-            audio.set_playing(pr.playing);
+            effects.push(AudioSideEffect::SetPlaying { playing: pr.playing });
             if !pr.playing {
                 state.audio.playhead = 0;
-                audio.reset_playhead();
+                effects.push(AudioSideEffect::ResetPlayhead);
                 if audio.is_running() {
-                    audio.release_all_voices();
+                    effects.push(AudioSideEffect::ReleaseAllVoices);
                 }
-                audio.clear_active_notes();
+                effects.push(AudioSideEffect::ClearActiveNotes);
             }
             pr.recording = false;
             DispatchResult::none()

@@ -1,9 +1,8 @@
 use crate::action::{BusAction, DispatchResult};
-use crate::audio::AudioHandle;
 use crate::state::{AppState, OutputTarget};
 
 /// Dispatch bus management actions
-pub fn dispatch_bus(action: &BusAction, state: &mut AppState, _audio: &mut AudioHandle) -> DispatchResult {
+pub fn dispatch_bus(action: &BusAction, state: &mut AppState) -> DispatchResult {
     let mut result = DispatchResult::none();
 
     match action {
@@ -85,47 +84,45 @@ mod tests {
     use crate::state::SourceType;
     use crate::state::automation::AutomationTarget;
 
-    fn setup() -> (AppState, AudioHandle) {
-        let state = AppState::new();
-        let audio = AudioHandle::new();
-        (state, audio)
+    fn setup() -> AppState {
+        AppState::new()
     }
 
     #[test]
     fn add_bus() {
-        let (mut state, mut audio) = setup();
+        let mut state = setup();
         let initial_count = state.session.mixer.buses.len();
 
-        dispatch_bus(&BusAction::Add, &mut state, &mut audio);
+        dispatch_bus(&BusAction::Add, &mut state);
 
         assert_eq!(state.session.mixer.buses.len(), initial_count + 1);
     }
 
     #[test]
     fn add_bus_syncs_instrument_sends() {
-        let (mut state, mut audio) = setup();
+        let mut state = setup();
         state.add_instrument(SourceType::Saw);
         let initial_sends = state.instruments.instruments[0].sends.len();
 
-        dispatch_bus(&BusAction::Add, &mut state, &mut audio);
+        dispatch_bus(&BusAction::Add, &mut state);
 
         assert_eq!(state.instruments.instruments[0].sends.len(), initial_sends + 1);
     }
 
     #[test]
     fn remove_bus_resets_instrument_output() {
-        let (mut state, mut audio) = setup();
+        let mut state = setup();
         state.add_instrument(SourceType::Saw);
         state.instruments.instruments[0].output_target = OutputTarget::Bus(3);
 
-        dispatch_bus(&BusAction::Remove(3), &mut state, &mut audio);
+        dispatch_bus(&BusAction::Remove(3), &mut state);
 
         assert_eq!(state.instruments.instruments[0].output_target, OutputTarget::Master);
     }
 
     #[test]
     fn remove_bus_disables_sends() {
-        let (mut state, mut audio) = setup();
+        let mut state = setup();
         state.add_instrument(SourceType::Saw);
         // Enable send to bus 3
         if let Some(send) = state.instruments.instruments[0].sends.iter_mut().find(|s| s.bus_id == 3) {
@@ -133,7 +130,7 @@ mod tests {
             send.level = 0.5;
         }
 
-        dispatch_bus(&BusAction::Remove(3), &mut state, &mut audio);
+        dispatch_bus(&BusAction::Remove(3), &mut state);
 
         // Send should be disabled but still exist
         let send = state.instruments.instruments[0].sends.iter().find(|s| s.bus_id == 3);
@@ -143,20 +140,20 @@ mod tests {
 
     #[test]
     fn remove_bus_clears_automation() {
-        let (mut state, mut audio) = setup();
+        let mut state = setup();
         state.session.automation.add_lane(AutomationTarget::bus_level(3));
         assert!(!state.session.automation.lanes.is_empty());
 
-        dispatch_bus(&BusAction::Remove(3), &mut state, &mut audio);
+        dispatch_bus(&BusAction::Remove(3), &mut state);
 
         assert!(state.session.automation.lanes.is_empty());
     }
 
     #[test]
     fn rename_bus() {
-        let (mut state, mut audio) = setup();
+        let mut state = setup();
 
-        dispatch_bus(&BusAction::Rename(1, "Drums".to_string()), &mut state, &mut audio);
+        dispatch_bus(&BusAction::Rename(1, "Drums".to_string()), &mut state);
 
         assert_eq!(state.session.bus(1).unwrap().name, "Drums");
     }

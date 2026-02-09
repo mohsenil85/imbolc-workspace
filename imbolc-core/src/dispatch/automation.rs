@@ -2,6 +2,7 @@ use crate::audio::AudioHandle;
 use crate::state::automation::AutomationTarget;
 use crate::state::{AppState, ClipboardContents};
 use crate::action::{AutomationAction, DispatchResult};
+use super::side_effects::AudioSideEffect;
 
 /// Minimum value change threshold for recording (0.5%)
 const RECORD_VALUE_THRESHOLD: f32 = 0.005;
@@ -11,7 +12,8 @@ const RECORD_MIN_TICK_DELTA: u32 = 48;
 pub(super) fn dispatch_automation(
     action: &AutomationAction,
     state: &mut AppState,
-    audio: &mut AudioHandle,
+    audio: &AudioHandle,
+    effects: &mut Vec<AudioSideEffect>,
 ) -> DispatchResult {
     let mut result = DispatchResult::none();
     match action {
@@ -95,7 +97,7 @@ pub(super) fn dispatch_automation(
             if audio.is_running() {
                 let (min, max) = target.default_range();
                 let actual_value = min + value * (max - min);
-                let _ = audio.apply_automation(target, actual_value);
+                effects.push(AudioSideEffect::ApplyAutomation { target: target.clone(), value: actual_value });
             }
             // Only record to automation lane when recording + playing
             if state.recording.automation_recording && state.session.piano_roll.playing {
@@ -192,52 +194,57 @@ mod tests {
 
     #[test]
     fn add_lane_creates_and_is_idempotent() {
-        let (mut state, mut audio) = setup();
+        let (mut state, audio) = setup();
+        let mut effects = Vec::new();
         let target = AutomationTarget::level(0);
-        let result = dispatch_automation(&AutomationAction::AddLane(target.clone()), &mut state, &mut audio);
+        let result = dispatch_automation(&AutomationAction::AddLane(target.clone()), &mut state, &audio, &mut effects);
         assert!(result.audio_dirty.automation);
         assert_eq!(state.session.automation.lanes.len(), 1);
 
         // Adding same target again doesn't create new lane
-        dispatch_automation(&AutomationAction::AddLane(target), &mut state, &mut audio);
+        dispatch_automation(&AutomationAction::AddLane(target), &mut state, &audio, &mut effects);
         assert_eq!(state.session.automation.lanes.len(), 1);
     }
 
     #[test]
     fn remove_lane() {
-        let (mut state, mut audio) = setup();
+        let (mut state, audio) = setup();
+        let mut effects = Vec::new();
         let id = add_lane(&mut state);
         assert_eq!(state.session.automation.lanes.len(), 1);
-        dispatch_automation(&AutomationAction::RemoveLane(id), &mut state, &mut audio);
+        dispatch_automation(&AutomationAction::RemoveLane(id), &mut state, &audio, &mut effects);
         assert!(state.session.automation.lanes.is_empty());
     }
 
     #[test]
     fn toggle_lane_enabled() {
-        let (mut state, mut audio) = setup();
+        let (mut state, audio) = setup();
+        let mut effects = Vec::new();
         let id = add_lane(&mut state);
         assert!(state.session.automation.lane(id).unwrap().enabled);
-        dispatch_automation(&AutomationAction::ToggleLaneEnabled(id), &mut state, &mut audio);
+        dispatch_automation(&AutomationAction::ToggleLaneEnabled(id), &mut state, &audio, &mut effects);
         assert!(!state.session.automation.lane(id).unwrap().enabled);
     }
 
     #[test]
     fn add_and_remove_point() {
-        let (mut state, mut audio) = setup();
+        let (mut state, audio) = setup();
+        let mut effects = Vec::new();
         let id = add_lane(&mut state);
-        dispatch_automation(&AutomationAction::AddPoint(id, 100, 0.5), &mut state, &mut audio);
+        dispatch_automation(&AutomationAction::AddPoint(id, 100, 0.5), &mut state, &audio, &mut effects);
         assert_eq!(state.session.automation.lane(id).unwrap().points.len(), 1);
 
-        dispatch_automation(&AutomationAction::RemovePoint(id, 100), &mut state, &mut audio);
+        dispatch_automation(&AutomationAction::RemovePoint(id, 100), &mut state, &audio, &mut effects);
         assert!(state.session.automation.lane(id).unwrap().points.is_empty());
     }
 
     #[test]
     fn move_point() {
-        let (mut state, mut audio) = setup();
+        let (mut state, audio) = setup();
+        let mut effects = Vec::new();
         let id = add_lane(&mut state);
-        dispatch_automation(&AutomationAction::AddPoint(id, 100, 0.5), &mut state, &mut audio);
-        dispatch_automation(&AutomationAction::MovePoint(id, 100, 200, 0.8), &mut state, &mut audio);
+        dispatch_automation(&AutomationAction::AddPoint(id, 100, 0.5), &mut state, &audio, &mut effects);
+        dispatch_automation(&AutomationAction::MovePoint(id, 100, 200, 0.8), &mut state, &audio, &mut effects);
         let lane = state.session.automation.lane(id).unwrap();
         assert_eq!(lane.points.len(), 1);
         assert_eq!(lane.points[0].tick, 200);
@@ -246,35 +253,38 @@ mod tests {
 
     #[test]
     fn toggle_recording_pushes_undo() {
-        let (mut state, mut audio) = setup();
+        let (mut state, audio) = setup();
+        let mut effects = Vec::new();
         assert!(!state.undo_history.can_undo());
-        dispatch_automation(&AutomationAction::ToggleRecording, &mut state, &mut audio);
+        dispatch_automation(&AutomationAction::ToggleRecording, &mut state, &audio, &mut effects);
         assert!(state.recording.automation_recording);
         assert!(state.undo_history.can_undo());
 
-        dispatch_automation(&AutomationAction::ToggleRecording, &mut state, &mut audio);
+        dispatch_automation(&AutomationAction::ToggleRecording, &mut state, &audio, &mut effects);
         assert!(!state.recording.automation_recording);
     }
 
     #[test]
     fn arm_all_and_disarm_all() {
-        let (mut state, mut audio) = setup();
+        let (mut state, audio) = setup();
+        let mut effects = Vec::new();
         add_lane(&mut state);
         state.session.automation.add_lane(AutomationTarget::pan(0));
 
-        dispatch_automation(&AutomationAction::ArmAllLanes, &mut state, &mut audio);
+        dispatch_automation(&AutomationAction::ArmAllLanes, &mut state, &audio, &mut effects);
         assert!(state.session.automation.lanes.iter().all(|l| l.record_armed));
 
-        dispatch_automation(&AutomationAction::DisarmAllLanes, &mut state, &mut audio);
+        dispatch_automation(&AutomationAction::DisarmAllLanes, &mut state, &audio, &mut effects);
         assert!(state.session.automation.lanes.iter().all(|l| !l.record_armed));
     }
 
     #[test]
     fn toggle_lane_arm() {
-        let (mut state, mut audio) = setup();
+        let (mut state, audio) = setup();
+        let mut effects = Vec::new();
         let id = add_lane(&mut state);
         assert!(!state.session.automation.lane(id).unwrap().record_armed);
-        dispatch_automation(&AutomationAction::ToggleLaneArm(id), &mut state, &mut audio);
+        dispatch_automation(&AutomationAction::ToggleLaneArm(id), &mut state, &audio, &mut effects);
         assert!(state.session.automation.lane(id).unwrap().record_armed);
     }
 
@@ -322,35 +332,38 @@ mod tests {
 
     #[test]
     fn record_value_no_points_when_not_recording() {
-        let (mut state, mut audio) = setup();
+        let (mut state, audio) = setup();
+        let mut effects = Vec::new();
         // Not recording — RecordValue should NOT add any points
         state.recording.automation_recording = false;
         state.session.piano_roll.playing = true;
         let target = AutomationTarget::level(0);
-        dispatch_automation(&AutomationAction::RecordValue(target.clone(), 0.5), &mut state, &mut audio);
+        dispatch_automation(&AutomationAction::RecordValue(target.clone(), 0.5), &mut state, &audio, &mut effects);
         // No lane should be created
         assert!(state.session.automation.lane_for_target(&target).is_none());
     }
 
     #[test]
     fn record_value_no_points_when_not_playing() {
-        let (mut state, mut audio) = setup();
+        let (mut state, audio) = setup();
+        let mut effects = Vec::new();
         // Recording but not playing — RecordValue should NOT add points
         state.recording.automation_recording = true;
         state.session.piano_roll.playing = false;
         let target = AutomationTarget::level(0);
-        dispatch_automation(&AutomationAction::RecordValue(target.clone(), 0.5), &mut state, &mut audio);
+        dispatch_automation(&AutomationAction::RecordValue(target.clone(), 0.5), &mut state, &audio, &mut effects);
         assert!(state.session.automation.lane_for_target(&target).is_none());
     }
 
     #[test]
     fn record_value_adds_points_when_recording_and_playing() {
-        let (mut state, mut audio) = setup();
+        let (mut state, audio) = setup();
+        let mut effects = Vec::new();
         state.recording.automation_recording = true;
         state.session.piano_roll.playing = true;
         state.audio.playhead = 100;
         let target = AutomationTarget::level(0);
-        let result = dispatch_automation(&AutomationAction::RecordValue(target.clone(), 0.5), &mut state, &mut audio);
+        let result = dispatch_automation(&AutomationAction::RecordValue(target.clone(), 0.5), &mut state, &audio, &mut effects);
         assert!(result.audio_dirty.automation);
         let lane = state.session.automation.lane_for_target(&target).unwrap();
         assert_eq!(lane.points.len(), 1);
@@ -359,37 +372,39 @@ mod tests {
 
     #[test]
     fn record_value_uses_thinning() {
-        let (mut state, mut audio) = setup();
+        let (mut state, audio) = setup();
+        let mut effects = Vec::new();
         state.recording.automation_recording = true;
         state.session.piano_roll.playing = true;
         let target = AutomationTarget::level(0);
 
         // First point
         state.audio.playhead = 0;
-        dispatch_automation(&AutomationAction::RecordValue(target.clone(), 0.5), &mut state, &mut audio);
+        dispatch_automation(&AutomationAction::RecordValue(target.clone(), 0.5), &mut state, &audio, &mut effects);
         let lane_id = state.session.automation.lane_for_target(&target).unwrap().id;
         assert_eq!(state.session.automation.lane(lane_id).unwrap().points.len(), 1);
 
         // Second point: too close in value and tick — should be thinned out
         state.audio.playhead = 10;
-        dispatch_automation(&AutomationAction::RecordValue(target.clone(), 0.502), &mut state, &mut audio);
+        dispatch_automation(&AutomationAction::RecordValue(target.clone(), 0.502), &mut state, &audio, &mut effects);
         assert_eq!(state.session.automation.lane(lane_id).unwrap().points.len(), 1);
 
         // Third point: enough tick delta — should be added
         state.audio.playhead = 100;
-        dispatch_automation(&AutomationAction::RecordValue(target.clone(), 0.502), &mut state, &mut audio);
+        dispatch_automation(&AutomationAction::RecordValue(target.clone(), 0.502), &mut state, &audio, &mut effects);
         assert_eq!(state.session.automation.lane(lane_id).unwrap().points.len(), 2);
     }
 
     #[test]
     fn delete_points_in_range() {
-        let (mut state, mut audio) = setup();
+        let (mut state, audio) = setup();
+        let mut effects = Vec::new();
         let id = add_lane(&mut state);
-        dispatch_automation(&AutomationAction::AddPoint(id, 100, 0.5), &mut state, &mut audio);
-        dispatch_automation(&AutomationAction::AddPoint(id, 200, 0.6), &mut state, &mut audio);
-        dispatch_automation(&AutomationAction::AddPoint(id, 300, 0.7), &mut state, &mut audio);
+        dispatch_automation(&AutomationAction::AddPoint(id, 100, 0.5), &mut state, &audio, &mut effects);
+        dispatch_automation(&AutomationAction::AddPoint(id, 200, 0.6), &mut state, &audio, &mut effects);
+        dispatch_automation(&AutomationAction::AddPoint(id, 300, 0.7), &mut state, &audio, &mut effects);
 
-        dispatch_automation(&AutomationAction::DeletePointsInRange(id, 100, 250), &mut state, &mut audio);
+        dispatch_automation(&AutomationAction::DeletePointsInRange(id, 100, 250), &mut state, &audio, &mut effects);
         let lane = state.session.automation.lane(id).unwrap();
         assert_eq!(lane.points.len(), 1);
         assert_eq!(lane.points[0].tick, 300);
@@ -397,12 +412,13 @@ mod tests {
 
     #[test]
     fn copy_and_paste_points() {
-        let (mut state, mut audio) = setup();
+        let (mut state, audio) = setup();
+        let mut effects = Vec::new();
         let id = add_lane(&mut state);
-        dispatch_automation(&AutomationAction::AddPoint(id, 100, 0.5), &mut state, &mut audio);
-        dispatch_automation(&AutomationAction::AddPoint(id, 200, 0.8), &mut state, &mut audio);
+        dispatch_automation(&AutomationAction::AddPoint(id, 100, 0.5), &mut state, &audio, &mut effects);
+        dispatch_automation(&AutomationAction::AddPoint(id, 200, 0.8), &mut state, &audio, &mut effects);
 
-        dispatch_automation(&AutomationAction::CopyPoints(id, 50, 250), &mut state, &mut audio);
+        dispatch_automation(&AutomationAction::CopyPoints(id, 50, 250), &mut state, &audio, &mut effects);
         match &state.clipboard.contents {
             Some(ClipboardContents::AutomationPoints { points }) => {
                 assert_eq!(points.len(), 2);
@@ -412,7 +428,7 @@ mod tests {
 
         // Paste at offset
         let paste_points = vec![(0, 0.5), (100, 0.8)];
-        dispatch_automation(&AutomationAction::PastePoints(id, 500, paste_points), &mut state, &mut audio);
+        dispatch_automation(&AutomationAction::PastePoints(id, 500, paste_points), &mut state, &audio, &mut effects);
         let lane = state.session.automation.lane(id).unwrap();
         assert_eq!(lane.points.len(), 4);
     }

@@ -2,12 +2,14 @@ use crate::audio::AudioHandle;
 use crate::state::AppState;
 use crate::state::automation::AutomationTarget;
 use crate::action::DispatchResult;
+use crate::dispatch::side_effects::AudioSideEffect;
 
 use super::super::automation::record_automation_point;
 
 pub(super) fn handle_set_eq_param(
     state: &mut AppState,
-    audio: &mut AudioHandle,
+    audio: &AudioHandle,
+    effects: &mut Vec<AudioSideEffect>,
     instrument_id: crate::state::InstrumentId,
     band_idx: usize,
     param_name: &str,
@@ -44,7 +46,11 @@ pub(super) fn handle_set_eq_param(
     if audio.is_running() {
         let sc_param = format!("b{}_{}", band_idx, param_name);
         let sc_value = if param_name == "q" { 1.0 / value } else { value };
-        let _ = audio.set_eq_param(instrument_id, &sc_param, sc_value);
+        effects.push(AudioSideEffect::SetEqParam {
+            instrument_id,
+            param: sc_param,
+            value: sc_value,
+        });
     }
 
     let mut result = DispatchResult::none();
