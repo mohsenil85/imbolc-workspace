@@ -137,13 +137,37 @@ entries; audio thread drains them within a 100µs budget. History retained
 `imbolc-core/src/audio/commands.rs`, `imbolc-core/src/dispatch/side_effects.rs`.
 601 tests pass.
 
-### 6. Event scheduler with dynamic lookahead [Q5+Q6]
+### ~~6. Event scheduler with dynamic lookahead [Q5+Q6]~~ ✓
 
-Pre-compute upcoming OSC bundles into a ring buffer. Replace
-synchronous 0.5ms ticking with ahead-of-time scheduling via dedicated
-sender thread. Compute lookahead dynamically from
-buffer_size/sample_rate. Replaces the hardcoded 15ms
-`SCHEDULE_LOOKAHEAD_SECS`.
+**Done.** Three-phase rewrite replacing the hardcoded 15ms
+`SCHEDULE_LOOKAHEAD_SECS` with ahead-of-time scheduling and
+hardware-adaptive lookahead.
+
+**Phase 1 (Pre-scheduling):** Playback scans piano roll notes using a
+lookahead window ahead of the playhead. High-water mark
+(`last_scheduled_tick`) prevents double-scheduling. Handles loop
+boundary wrapping with split scan ranges. 6 tests cover boundary
+crossing, reset logic, and BPM scaling.
+
+**Phase 2 (Dedicated OSC sender thread):** Removed synchronous UDP
+I/O from the audio thread. `spawn_osc_sender()` creates a bounded
+channel (512 entries) + sender thread. Audio thread pre-encodes OSC
+bundles and pushes them; sender thread drains and transmits
+asynchronously. Falls back to direct send if queue full. Queue depth
+tracked via `AtomicUsize` for telemetry (`osc_send_queue_depth()`).
+
+**Phase 3 (Dynamic lookahead):** `compute_lookahead(buffer_size,
+sample_rate)` → `max(buffer_size/sample_rate + 5ms jitter margin,
+10ms floor)`. Adapts to actual device configuration (e.g. 64/44100 →
+10ms, 1024/44100 → 28.2ms). Fallback to 15ms if sample_rate unknown.
+16 tests cover all buffer/sample_rate combinations.
+
+**Files:** `imbolc-core/src/audio/playback.rs`,
+`imbolc-core/src/audio/osc_sender.rs` (new),
+`imbolc-core/src/audio/engine/mod.rs`,
+`imbolc-core/src/audio/engine/backend.rs`,
+`imbolc-core/src/audio/audio_thread.rs`.
+622 tests pass.
 
 ### 7. Modular routing [Q11]
 

@@ -12,7 +12,7 @@ authority and UI is projection-only (esp. BPM/playhead/drum-step
 feedback loops)?
 
 **Answer:**
-Full event-log architecture. Move to an event-log where the audio thread is the timing authority and UI is projection-only. Actions become events in a log. Eliminates clone-based state transfer and starvation risk. This is a significant long-term architectural rewrite. (See also Q7, Q8 which are subsumed by this.)
+Full event-log architecture. Move to an event-log where the audio thread is the timing authority and UI is projection-only. Actions become events in a log. Eliminates clone-based state transfer and starvation risk. (See also Q7, Q8 which are subsumed by this.) **Done — see TASKS_ARCH.md task 5.** Four phases: (1) factor dispatch into pure mutation + `AudioSideEffect` enum, (2) action projection replacing full-state cloning, (3) audio thread as timing authority for `playing` state, (4) shared retained event log replacing `AudioCmd` state-sync variants.
 
 ---
 
@@ -36,7 +36,7 @@ performance-plane (note scheduling) so playback never stutters during
 state changes?
 
 **Answer:**
-Current blocking behavior is acceptable for now. Track as near-term task: move control-plane ops (loading SynthDefs, connecting to SC, compiling resources) off the audio thread so playback never stutters during state changes.
+~~Track as near-term task: move control-plane ops off the audio thread so playback never stutters during state changes.~~ **Done — see TASKS_ARCH.md task 2.** Server startup, OSC connection, and SynthDef compilation all run in background threads. Routing rebuild uses a phased state machine. Two-channel dispatch with priority budgets prevents bulk ops from starving playback.
 
 ---
 
@@ -60,7 +60,7 @@ an event scheduler that fills a ring buffer ahead-of-time instead of
 synchronous ticking?
 
 **Answer:**
-Design an event scheduler with ring-buffer approach. Pre-compute upcoming events (e.g., next 50ms) and use a dedicated sender thread to drain timestamped OSC bundles, replacing the synchronous tick model. Compute lookahead dynamically from buffer_size/sample_rate. Long-term task (bundles Q5+Q6 together).
+~~Design an event scheduler with ring-buffer approach. Long-term task (bundles Q5+Q6 together).~~ **Done — see TASKS_ARCH.md task 6.** Three phases: (1) pre-scheduling with high-water mark to avoid double-scheduling, (2) dedicated OSC sender thread with bounded channel removing synchronous UDP I/O from audio thread, (3) dynamic lookahead computed from `buffer_size/sample_rate` with jitter margin and 10ms floor.
 
 ---
 
@@ -71,7 +71,7 @@ Is 15ms from measurement across machines or from a worst-case model
 dynamically and/or be user-configurable?
 
 **Answer:**
-Bundle with Q5. The event scheduler redesign will fundamentally change how lookahead works, so tuning the 15ms constant separately is pointless. Address as part of the event scheduler work.
+Bundled with Q5. **Done — see TASKS_ARCH.md task 6.** Hardcoded 15ms replaced by `compute_lookahead(buffer_size, sample_rate)` → `max(buffer_size/sample_rate + 5ms jitter, 10ms floor)`. Adapts to actual device configuration.
 
 ---
 
@@ -83,7 +83,7 @@ thread's priority channel and cause artifacts? How do you prevent
 that?
 
 **Answer:**
-Subsumed by Q1. The event-log rewrite eliminates clone-based state transfer, which is the core starvation risk. No separate task needed.
+Subsumed by Q1. **Done** — event-log rewrite eliminated clone-based state transfer. Shared `EventLogWriter`/`EventLogReader` with 100µs drain budget replaced full-state sync.
 
 ---
 
@@ -94,7 +94,7 @@ read/write operations from stalling the audio thread? Any lock-free
 snapshots (triple buffering, atomic snapshots) for audio reads?
 
 **Answer:**
-Subsumed by Q1. Current architecture already uses channels (no shared locks), which is good. The event-log rewrite will further decouple the threads. No separate task needed.
+Subsumed by Q1. **Done** — channels preserved (no shared locks), event-log further decoupled the threads. Audio thread drains log entries within budget; no lock contention path exists.
 
 ---
 
@@ -106,7 +106,7 @@ whole session. Will you move to delta updates (dirty-flag approach
 like AudioDirty) or keep full-state sync deliberately?
 
 **Answer:**
-Track field-level diffing as near-term task. Subsystem-level dirty-flag delta updates are already implemented (`StatePatch` + `DirtyFlags`). Next step: send individual param changes as lightweight messages instead of full `InstrumentState` blobs.
+~~Track field-level diffing as near-term task.~~ **Done — see TASKS_ARCH.md task 3.** Instrument-level delta updates with per-instrument dirty flags (`DirtyFlags`). `broadcast_state_patch()` sends only changed instruments as `InstrumentPatch` entries. Rate-limited at ~30Hz with threshold coalescing (falls back to full snapshot when >50% dirty).
 
 ---
 
@@ -118,7 +118,7 @@ break? Consider hybrid undo diffs while persistence remains
 snapshot-based?
 
 **Answer:**
-Hybrid undo diffs. Persistence stays as full MessagePack blob snapshots in SQLite (simple, atomic, reliable — blobs stay small enough). Undo moves to command-based diffs: store the action + inverse action instead of full state clones. Avoids O(max_depth * state_size) memory growth as projects scale to 64+ instruments. Near-term task.
+~~Hybrid undo diffs. Near-term task.~~ **Done — see TASKS_ARCH.md task 4.** Replaced full-state snapshots with scope-aware `UndoEntry` variants (`SingleInstrument`, `Session`, `Full`). Scope classifier routes each action to the narrowest scope. Persistence unaffected (undo history never persisted).
 
 
 ---
@@ -144,7 +144,7 @@ instrument output and bus output synths to hardware bus 0. Is that
 temporary, or should "instrument -> bus -> master" become first-class?
 
 **Answer:**
-Fix now — this is a bug. `OutputTarget::Bus(n)` is stored and editable but routing always writes to hardware bus 0. Make it first-class: `OutputTarget::Bus(n)` routes the instrument's output synth to that bus's audio bus, `OutputTarget::Master` writes to hardware bus 0, bus output synths write to hardware bus 0. Creates proper `instrument -> bus -> master` routing. **Immediate priority.**
+~~Fix now — this is a bug. Immediate priority.~~ **Done — see TASKS_DONE.md.** `OutputTarget::Bus(n)` routes instrument output synth to that bus's audio bus. `OutputTarget::Master` routes to hardware bus 0. Layer groups also support output target routing.
 
 
 ---
@@ -157,7 +157,7 @@ you want selectable pre/post-fader and pre/post-insert send tap
 points?
 
 **Answer:**
-Selectable per-send, with PostInsert as default. Current behavior (tapping from `source_out`, pre-filter/pre-FX) is wrong for typical use cases (reverb sends should hear the processed signal). Add `SendTapPoint` enum (`PreInsert | PostInsert | PostFader`) per send. Default PostInsert (post-chain, pre-fader) matches industry standard "pre-fader send." **Immediate priority.**
+~~Selectable per-send, with PostInsert as default. Immediate priority.~~ **Done — see TASKS_DONE.md.** Per-send `SendTapPoint` enum: `PreInsert` (pre-filter/FX) and `PostInsert` (post-effects, pre-fader, default). `MixerAction::CycleSendTapPoint` action for UI cycling.
 
 
 ---
@@ -169,7 +169,7 @@ voice silent?") via SC feedback, or does it assume based on note-off?
 If blind, how do you handle long release tails during voice stealing?
 
 **Answer:**
-Listen for SC `/n_end` OSC notifications (sent when a node is freed by doneAction:2) for ground truth about when voices actually die. Remove voices from the allocator on receipt. Eliminates the blind `release_dur + 1.5s` guess and prevents clicks/cutoffs from early freeing of voices with long release tails. **Near-term task.** (See also Q15, bundled with this.)
+~~Listen for SC `/n_end` OSC notifications. Near-term task. (See also Q15, bundled with this.)~~ **Done — see TASKS_ARCH.md task 1.** OSC listener receives `/n_end` and feeds via crossbeam channel to audio thread, which removes voices and returns control buses immediately. Timer-based `cleanup_expired()` retained as safety net.
 
 
 ---
@@ -182,7 +182,7 @@ growth for simplicity, or deterministic recycle (doneAction/ack-driven
 reclaim) to avoid long-session growth?
 
 **Answer:**
-Bundled with Q14. The `/n_end` notification provides a natural lifecycle hook: return control buses to the pool when `/n_end` arrives for a voice's node. Gives deterministic recycle without monotonic growth. No separate task needed.
+Bundled with Q14. **Done** — `/n_end` notification returns control buses to the pool on voice death. Deterministic recycle without monotonic growth.
 
 
 ---

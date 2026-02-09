@@ -97,23 +97,51 @@ Setup notes:
 - Install the VSTPlugin extension in SuperCollider.
 - Generate wrapper SynthDefs: `sclang imbolc-core/synthdefs/compile_vst.scd`, then load synthdefs from the Server pane.
 
-## Architecture status & roadmap
+## Architecture
 
-Current architecture (completed from `TASKS_ARCH.md` / `plans/questions.md`):
-- Control-plane operations (server start/connect, synthdef compilation, routing rebuild) are async or phased to protect the audio thread.
-- Voice allocator listens for `/n_end` to reclaim voices and control buses (timer cleanup retained as a fallback).
-- Network sync uses per-instrument dirty flags and `InstrumentPatch` updates with rate limiting and snapshot fallback.
-- Undo uses scope-aware diffs (single-instrument/session/full) while persistence stays full-state SQLite snapshots.
+### Threading model
 
-Long-term direction:
-- Event-log architecture with the audio thread as timing authority and UI as projection-only.
-- Event scheduler with dynamic lookahead and ring-buffered OSC bundles.
-- Modular routing as a signal graph for arbitrary signal flow.
-- Documentation pruning: keep reference docs current; per-crate `CLAUDE.md` files are the living contracts.
+Three main threads: **UI** (60 fps render + input), **dispatch** (action handling + state mutation), and **audio** (~2 kHz tick loop driving SuperCollider over OSC). A shared retained **event log** (`EventLogWriter`/`EventLogReader`) connects dispatch to audio — the main thread appends `Arc<LogEntry>` entries and the audio thread drains them within a 100 µs budget. No shared locks; all communication is channel-based.
 
-Decisions:
-- SuperCollider remains the long-term backend.
-- Network timing drift correction is not required while audio is centralized.
+The audio thread is the **timing authority** for transport state (`playing`, `playhead`, `bpm`). The main thread keeps a read-only mirror updated via `PlayingChanged` feedback. Dispatch dual-writes for immediate UI consistency.
+
+### Dispatch & side effects
+
+Dispatch functions are **pure state mutations** that return typed `AudioSideEffect` variants (~30 covering voice management, transport, samples, mixer, click track, tuner, drums, automation, EQ, server lifecycle, recording, VST). The top-level `dispatch_with_audio()` collects effects and applies them after dispatch returns — dispatchers never call audio methods directly.
+
+Actions forwarded to the audio thread are applied as **incremental projections** (`action_projection.rs`) rather than full-state clones.
+
+### Scheduling & lookahead
+
+Playback pre-schedules notes by scanning the piano roll ahead of the playhead using a high-water mark to avoid double-scheduling. A **dedicated OSC sender thread** (bounded 512-entry channel) removes synchronous UDP I/O from the audio thread — bundles are pre-encoded and queued, then transmitted asynchronously.
+
+Lookahead is **computed dynamically** from audio device parameters: `max(buffer_size / sample_rate + 5 ms jitter margin, 10 ms floor)`. This adapts to actual hardware (e.g. 64/44100 → 10 ms, 1024/44100 → 28.2 ms) instead of using a hardcoded constant.
+
+### Control-plane separation
+
+Heavy operations run off the audio thread: server startup, OSC connection, and SynthDef compilation each run in background threads that the audio thread polls. Routing rebuilds use a phased state machine (~0.5 ms per phase). A two-channel dispatch system gives priority operations (voice spawn, param changes) a 200 µs budget and normal operations (state updates, routing) a 100 µs budget.
+
+### Voice allocation
+
+Polyphonic voice stealing with SC `/n_end` OSC feedback for ground-truth voice death. Voices and control buses are reclaimed immediately on `/n_end`; timer-based `cleanup_expired()` is retained as a safety net.
+
+### Undo
+
+Scope-aware `UndoEntry` variants (`SingleInstrument`, `Session`, `Full`). A scope classifier routes each action to the narrowest scope — a single-instrument param tweak clones one instrument instead of all 64. Persistence is unaffected (full-state SQLite snapshots).
+
+### Networking
+
+LAN collaboration via `imbolc-net`: single audio server, multiple clients, control data over TCP (no audio over network, no drift correction needed). Per-instrument dirty flags with `InstrumentPatch` delta updates, rate-limited at ~30 Hz with threshold coalescing (falls back to full snapshot when >50% of instruments are dirty).
+
+### Routing
+
+Output targets route instruments to master (hardware bus 0) or named buses. Per-send tap points (`PreInsert` or `PostInsert`, default post-insert) control where sends read from the signal chain.
+
+### Roadmap
+
+- Modular routing: targeted loosening of the fixed instrument → bus → master topology toward a more flexible signal graph.
+- Documentation pruning: reduce `docs/` to actively-maintained reference material.
+- SuperCollider remains the long-term audio backend.
 
 ## Configuration & files
 
