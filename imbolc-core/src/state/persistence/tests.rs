@@ -783,6 +783,94 @@ mod tests {
     }
 
     #[test]
+    fn round_trip_layer_group_eq() {
+        let mut session = SessionState::new();
+        let mut instruments = InstrumentState::new();
+        let inst_id = instruments.add_instrument(SourceType::Saw);
+
+        // Assign instrument to group 1
+        if let Some(inst) = instruments.instrument_mut(inst_id) {
+            inst.layer_group = Some(1);
+        }
+
+        // Add layer group mixer (comes with default EQ)
+        let bus_ids: Vec<u8> = session.bus_ids().collect();
+        session.mixer.add_layer_group_mixer(1, &bus_ids);
+
+        // Verify EQ is present and modify some bands
+        let gm = session.mixer.layer_group_mixer_mut(1).unwrap();
+        assert!(gm.eq().is_some());
+        if let Some(eq) = gm.eq_mut() {
+            eq.bands[0].freq = 80.0;
+            eq.bands[0].gain = -3.5;
+            eq.bands[0].q = 1.2;
+            eq.bands[0].enabled = false;
+            eq.bands[5].freq = 2000.0;
+            eq.bands[5].gain = 4.0;
+            eq.bands[5].q = 0.8;
+            eq.bands[11].freq = 16000.0;
+            eq.bands[11].gain = -6.0;
+        }
+
+        session.piano_roll.add_track(inst_id);
+
+        let path = temp_db_path();
+        save_project(&path, &session, &instruments).expect("save");
+        let (loaded_session, _) = load_project(&path).expect("load");
+
+        let loaded_gm = loaded_session.mixer.layer_group_mixers.iter().find(|g| g.group_id == 1).unwrap();
+        let loaded_eq = loaded_gm.eq().expect("EQ should be present after load");
+        assert_eq!(loaded_eq.bands.len(), 12);
+
+        // Band 0
+        assert!((loaded_eq.bands[0].freq - 80.0).abs() < 0.01);
+        assert!((loaded_eq.bands[0].gain - -3.5).abs() < 0.01);
+        assert!((loaded_eq.bands[0].q - 1.2).abs() < 0.01);
+        assert!(!loaded_eq.bands[0].enabled);
+
+        // Band 5
+        assert!((loaded_eq.bands[5].freq - 2000.0).abs() < 0.01);
+        assert!((loaded_eq.bands[5].gain - 4.0).abs() < 0.01);
+        assert!((loaded_eq.bands[5].q - 0.8).abs() < 0.01);
+
+        // Band 11
+        assert!((loaded_eq.bands[11].freq - 16000.0).abs() < 0.01);
+        assert!((loaded_eq.bands[11].gain - -6.0).abs() < 0.01);
+
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn round_trip_layer_group_eq_disabled() {
+        let mut session = SessionState::new();
+        let mut instruments = InstrumentState::new();
+        let inst_id = instruments.add_instrument(SourceType::Saw);
+
+        if let Some(inst) = instruments.instrument_mut(inst_id) {
+            inst.layer_group = Some(1);
+        }
+
+        let bus_ids: Vec<u8> = session.bus_ids().collect();
+        session.mixer.add_layer_group_mixer(1, &bus_ids);
+
+        // Toggle EQ off
+        let gm = session.mixer.layer_group_mixer_mut(1).unwrap();
+        gm.toggle_eq(); // was Some → now None
+        assert!(gm.eq().is_none());
+
+        session.piano_roll.add_track(inst_id);
+
+        let path = temp_db_path();
+        save_project(&path, &session, &instruments).expect("save");
+        let (loaded_session, _) = load_project(&path).expect("load");
+
+        let loaded_gm = loaded_session.mixer.layer_group_mixers.iter().find(|g| g.group_id == 1).unwrap();
+        assert!(loaded_gm.eq().is_none(), "EQ should be None after load when toggled off");
+
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
     fn round_trip_layer_octave_offset() {
         let mut session = SessionState::new();
         let mut instruments = InstrumentState::new();

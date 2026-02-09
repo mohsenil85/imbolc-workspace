@@ -1,7 +1,7 @@
 use rusqlite::{Connection, Result as SqlResult};
 
 /// Schema version for the relational format.
-pub const SCHEMA_VERSION: i32 = 10;
+pub const SCHEMA_VERSION: i32 = 11;
 
 /// Create all tables for the relational schema.
 pub fn create_tables(conn: &Connection) -> SqlResult<()> {
@@ -266,7 +266,18 @@ CREATE TABLE IF NOT EXISTS layer_group_mixers (
     pan REAL NOT NULL,
     mute INTEGER NOT NULL,
     solo INTEGER NOT NULL,
-    output_target TEXT NOT NULL
+    output_target TEXT NOT NULL,
+    eq_enabled INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS layer_group_eq_bands (
+    group_id INTEGER NOT NULL,
+    band_index INTEGER NOT NULL,
+    freq REAL NOT NULL,
+    gain REAL NOT NULL,
+    q REAL NOT NULL,
+    enabled INTEGER NOT NULL,
+    PRIMARY KEY (group_id, band_index)
 );
 
 CREATE TABLE IF NOT EXISTS layer_group_sends (
@@ -691,6 +702,7 @@ DELETE FROM effect_vst_params;
 DELETE FROM mixer_buses;
 DELETE FROM mixer_master;
 DELETE FROM layer_group_mixers;
+DELETE FROM layer_group_eq_bands;
 DELETE FROM layer_group_sends;
 DELETE FROM bus_effects;
 DELETE FROM bus_effect_params;

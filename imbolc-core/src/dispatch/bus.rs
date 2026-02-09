@@ -1,4 +1,6 @@
 use crate::action::{BusAction, DispatchResult, LayerGroupAction, NavIntent};
+use crate::audio::AudioHandle;
+use crate::dispatch::side_effects::AudioSideEffect;
 use crate::state::{AppState, OutputTarget};
 
 /// Dispatch bus management actions
@@ -141,7 +143,12 @@ pub fn dispatch_bus(action: &BusAction, state: &mut AppState) -> DispatchResult 
 }
 
 /// Dispatch layer group actions
-pub fn dispatch_layer_group(action: &LayerGroupAction, state: &mut AppState) -> DispatchResult {
+pub fn dispatch_layer_group(
+    action: &LayerGroupAction,
+    state: &mut AppState,
+    audio: &AudioHandle,
+    effects: &mut Vec<AudioSideEffect>,
+) -> DispatchResult {
     let mut result = DispatchResult::none();
 
     match action {
@@ -205,6 +212,41 @@ pub fn dispatch_layer_group(action: &LayerGroupAction, state: &mut AppState) -> 
             if let Some(value) = targeted_value {
                 result.audio_dirty.layer_group_effect_param = Some((*group_id, *effect_id, *param_idx, value));
             }
+        }
+
+        LayerGroupAction::ToggleEq(group_id) => {
+            if let Some(gm) = state.session.mixer.layer_group_mixer_mut(*group_id) {
+                gm.toggle_eq();
+            }
+            result.audio_dirty.routing = true;
+            result.audio_dirty.session = true;
+        }
+
+        LayerGroupAction::SetEqParam(group_id, band_idx, param_name, value) => {
+            if let Some(gm) = state.session.mixer.layer_group_mixer_mut(*group_id) {
+                if let Some(ref mut eq) = gm.eq {
+                    if let Some(band) = eq.bands.get_mut(*band_idx) {
+                        match param_name.as_str() {
+                            "freq" => band.freq = value.clamp(20.0, 20000.0),
+                            "gain" => band.gain = value.clamp(-24.0, 24.0),
+                            "q" => band.q = value.clamp(0.1, 10.0),
+                            "on" => band.enabled = *value > 0.5,
+                            _ => {}
+                        }
+                    }
+                }
+            }
+            // Send real-time param update to audio engine
+            if audio.is_running() {
+                let sc_param = format!("b{}_{}", band_idx, param_name);
+                let sc_value = if param_name == "q" { 1.0 / value } else { *value };
+                effects.push(AudioSideEffect::SetLayerGroupEqParam {
+                    group_id: *group_id,
+                    param: sc_param,
+                    value: sc_value,
+                });
+            }
+            result.audio_dirty.session = true;
         }
     }
 
@@ -367,13 +409,19 @@ mod tests {
     // LayerGroup effect dispatch tests
     // ========================================================================
 
+    use crate::audio::AudioHandle;
+
+    fn setup_with_audio() -> (AppState, AudioHandle, Vec<AudioSideEffect>) {
+        (AppState::new(), AudioHandle::new(), Vec::new())
+    }
+
     #[test]
     fn layer_group_add_effect_dispatch() {
         use crate::state::EffectType;
-        let mut state = setup();
+        let (mut state, audio, mut effects) = setup_with_audio();
         state.session.mixer.add_layer_group_mixer(1, &[1, 2]);
 
-        let result = dispatch_layer_group(&LayerGroupAction::AddEffect(1, EffectType::TapeComp), &mut state);
+        let result = dispatch_layer_group(&LayerGroupAction::AddEffect(1, EffectType::TapeComp), &mut state, &audio, &mut effects);
         let gm = state.session.mixer.layer_group_mixer(1).unwrap();
         assert_eq!(gm.effects.len(), 1);
         assert_eq!(gm.effects[0].effect_type, EffectType::TapeComp);
@@ -383,24 +431,53 @@ mod tests {
     #[test]
     fn layer_group_remove_effect_dispatch() {
         use crate::state::EffectType;
-        let mut state = setup();
+        let (mut state, audio, mut effects) = setup_with_audio();
         state.session.mixer.add_layer_group_mixer(1, &[]);
         state.session.mixer.layer_group_mixer_mut(1).unwrap().add_effect(EffectType::Limiter);
         let effect_id = state.session.mixer.layer_group_mixer(1).unwrap().effects[0].id;
 
-        dispatch_layer_group(&LayerGroupAction::RemoveEffect(1, effect_id), &mut state);
+        dispatch_layer_group(&LayerGroupAction::RemoveEffect(1, effect_id), &mut state, &audio, &mut effects);
         assert!(state.session.mixer.layer_group_mixer(1).unwrap().effects.is_empty());
     }
 
     #[test]
     fn layer_group_toggle_bypass_dispatch() {
         use crate::state::EffectType;
-        let mut state = setup();
+        let (mut state, audio, mut effects) = setup_with_audio();
         state.session.mixer.add_layer_group_mixer(1, &[]);
         state.session.mixer.layer_group_mixer_mut(1).unwrap().add_effect(EffectType::Reverb);
         let effect_id = state.session.mixer.layer_group_mixer(1).unwrap().effects[0].id;
 
-        dispatch_layer_group(&LayerGroupAction::ToggleEffectBypass(1, effect_id), &mut state);
+        dispatch_layer_group(&LayerGroupAction::ToggleEffectBypass(1, effect_id), &mut state, &audio, &mut effects);
         assert!(!state.session.mixer.layer_group_mixer(1).unwrap().effects[0].enabled);
+    }
+
+    #[test]
+    fn layer_group_toggle_eq_dispatch() {
+        let (mut state, audio, mut effects) = setup_with_audio();
+        state.session.mixer.add_layer_group_mixer(1, &[]);
+        assert!(state.session.mixer.layer_group_mixer(1).unwrap().eq().is_some());
+
+        let result = dispatch_layer_group(&LayerGroupAction::ToggleEq(1), &mut state, &audio, &mut effects);
+        assert!(state.session.mixer.layer_group_mixer(1).unwrap().eq().is_none());
+        assert!(result.audio_dirty.routing);
+        assert!(result.audio_dirty.session);
+
+        dispatch_layer_group(&LayerGroupAction::ToggleEq(1), &mut state, &audio, &mut effects);
+        assert!(state.session.mixer.layer_group_mixer(1).unwrap().eq().is_some());
+    }
+
+    #[test]
+    fn layer_group_set_eq_param_dispatch() {
+        let (mut state, audio, mut effects) = setup_with_audio();
+        state.session.mixer.add_layer_group_mixer(1, &[]);
+
+        let result = dispatch_layer_group(
+            &LayerGroupAction::SetEqParam(1, 0, "gain".to_string(), 6.0),
+            &mut state, &audio, &mut effects,
+        );
+        let eq = state.session.mixer.layer_group_mixer(1).unwrap().eq().unwrap();
+        assert_eq!(eq.bands[0].gain, 6.0);
+        assert!(result.audio_dirty.session);
     }
 }

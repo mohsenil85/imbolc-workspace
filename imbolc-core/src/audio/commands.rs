@@ -122,6 +122,12 @@ pub enum AudioCmd {
         param: String,
         value: f32,
     },
+    /// Targeted /n_set to layer group EQ node (no routing rebuild).
+    SetLayerGroupEqParam {
+        group_id: u32,
+        param: String,
+        value: f32,
+    },
     SetInstrumentMixerParams {
         instrument_id: InstrumentId,
         level: f32,
@@ -274,6 +280,7 @@ impl AudioCmd {
                 | AudioCmd::SetLfoParam { .. }
                 | AudioCmd::SetBusEffectParam { .. }
                 | AudioCmd::SetLayerGroupEffectParam { .. }
+                | AudioCmd::SetLayerGroupEqParam { .. }
                 | AudioCmd::SetVstParam { .. }
                 // Playback control
                 | AudioCmd::SetPlaying { .. }

@@ -276,11 +276,44 @@ fn load_layer_group_mixers(conn: &Connection, session: &mut SessionState) -> Sql
             sends,
             effects: Vec::new(),
             next_effect_id: 0,
+            eq: None,
         };
 
         if has_group_effects {
             gm.effects = load_effects_from(conn, "layer_group_effects", "layer_group_effect_params", "layer_group_effect_vst_params", "group_id", group_id)?;
             gm.recalculate_next_effect_id();
+        }
+
+        // Load EQ if the table exists
+        if table_exists(conn, "layer_group_eq_bands")? {
+            let eq_enabled: i32 = conn.query_row(
+                "SELECT eq_enabled FROM layer_group_mixers WHERE group_id = ?1",
+                [group_id],
+                |row| row.get(0),
+            ).unwrap_or(0);
+            if eq_enabled != 0 {
+                let mut eq = crate::state::instrument::EqConfig::default();
+                let mut band_stmt = conn.prepare(
+                    "SELECT band_index, freq, gain, q, enabled FROM layer_group_eq_bands WHERE group_id = ?1 ORDER BY band_index"
+                )?;
+                let bands = band_stmt.query_map([group_id], |row| {
+                    let band_index: usize = row.get::<_, i32>(0)? as usize;
+                    let freq: f32 = row.get(1)?;
+                    let gain: f32 = row.get(2)?;
+                    let q: f32 = row.get(3)?;
+                    let enabled: bool = row.get::<_, i32>(4)? != 0;
+                    Ok((band_index, freq, gain, q, enabled))
+                })?.collect::<SqlResult<Vec<_>>>()?;
+                for (band_index, freq, gain, q, enabled) in bands {
+                    if band_index < eq.bands.len() {
+                        eq.bands[band_index].freq = freq;
+                        eq.bands[band_index].gain = gain;
+                        eq.bands[band_index].q = q;
+                        eq.bands[band_index].enabled = enabled;
+                    }
+                }
+                gm.eq = Some(eq);
+            }
         }
 
         session.mixer.layer_group_mixers.push(gm);

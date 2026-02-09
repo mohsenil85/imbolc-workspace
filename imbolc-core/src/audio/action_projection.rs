@@ -1333,6 +1333,28 @@ fn project_layer_group(
             }
             true
         }
+        LayerGroupAction::ToggleEq(group_id) => {
+            if let Some(gm) = session.mixer.layer_group_mixer_mut(*group_id) {
+                gm.toggle_eq();
+            }
+            true
+        }
+        LayerGroupAction::SetEqParam(group_id, band_idx, param_name, value) => {
+            if let Some(gm) = session.mixer.layer_group_mixer_mut(*group_id) {
+                if let Some(ref mut eq) = gm.eq {
+                    if let Some(band) = eq.bands.get_mut(*band_idx) {
+                        match param_name.as_str() {
+                            "freq" => band.freq = value.clamp(20.0, 20000.0),
+                            "gain" => band.gain = value.clamp(-24.0, 24.0),
+                            "q" => band.q = value.clamp(0.1, 10.0),
+                            "on" => band.enabled = *value > 0.5,
+                            _ => {}
+                        }
+                    }
+                }
+            }
+            true
+        }
     }
 }
 

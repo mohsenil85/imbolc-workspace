@@ -107,6 +107,11 @@ pub enum AudioSideEffect {
         param: String,
         value: f32,
     },
+    SetLayerGroupEqParam {
+        group_id: u32,
+        param: String,
+        value: f32,
+    },
 
     // ── Server lifecycle ──
     UpdateState,
@@ -256,6 +261,9 @@ fn apply_one(effect: &AudioSideEffect, audio: &mut AudioHandle) {
         // EQ
         AudioSideEffect::SetEqParam { instrument_id, param, value } => {
             let _ = audio.set_eq_param(*instrument_id, param, *value);
+        }
+        AudioSideEffect::SetLayerGroupEqParam { group_id, param, value } => {
+            let _ = audio.set_layer_group_eq_param(*group_id, param, *value);
         }
 
         // Server lifecycle

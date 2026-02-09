@@ -524,6 +524,9 @@ impl AudioEngine {
             for &node_id in self.layer_group_effect_node_map.values() {
                 let _ = backend.free_node(node_id);
             }
+            for &node_id in self.layer_group_eq_node_map.values() {
+                let _ = backend.free_node(node_id);
+            }
             // Free all loaded sample buffers
             for &bufnum in self.buffer_map.values() {
                 let _ = backend.free_buffer(bufnum);
@@ -534,6 +537,7 @@ impl AudioEngine {
         self.bus_node_map.clear();
         self.bus_effect_node_map.clear();
         self.layer_group_effect_node_map.clear();
+        self.layer_group_eq_node_map.clear();
         self.bus_audio_buses.clear();
         // Drain all voices (no OSC needed since server is disconnecting)
         let _ = self.voice_allocator.drain_all();

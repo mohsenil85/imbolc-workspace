@@ -278,6 +278,45 @@ tests pass.
 `imbolc-ui/src/panes/instrument_pane.rs`, `imbolc-ui/src/main.rs`,
 `imbolc-types/src/state/instrument/mod.rs` (cursor helpers).
 
+### ~~B7. Layer Group EQ~~ ✓
+
+**Done.** Added `eq: Option<EqConfig>` to `LayerGroupMixer` (initialized
+with default 12-band EQ). Toggle on/off via `LayerGroupAction::ToggleEq`,
+adjust bands via `LayerGroupAction::SetEqParam`. Audio routing builds
+`imbolc_eq12` synth node before effect chain in `GROUP_BUS_PROCESSING`.
+Real-time param updates via `AudioSideEffect::SetLayerGroupEqParam` →
+`AudioCmd::SetLayerGroupEqParam` → priority channel. Persistence bumps
+schema 10→11 with `eq_enabled` column on `layer_group_mixers` and new
+`layer_group_eq_bands` table. Backward-compat via `table_exists()` check.
+
+**Files:** `imbolc-types/src/state/instrument/mod.rs` (field + methods),
+`imbolc-types/src/action.rs` (LayerGroupAction variants),
+`imbolc-core/src/dispatch/bus.rs` (dispatch handlers),
+`imbolc-core/src/dispatch/side_effects.rs` (AudioSideEffect variant),
+`imbolc-core/src/dispatch/mod.rs` (updated call site),
+`imbolc-core/src/audio/action_projection.rs` (projection arms),
+`imbolc-core/src/audio/commands.rs` (AudioCmd variant),
+`imbolc-core/src/audio/audio_thread.rs` (routing + handler),
+`imbolc-core/src/audio/handle.rs` (set_layer_group_eq_param),
+`imbolc-core/src/audio/engine/mod.rs` (layer_group_eq_node_map),
+`imbolc-core/src/audio/engine/routing.rs` (build EQ node, param update, teardown),
+`imbolc-core/src/audio/engine/server.rs` (teardown),
+`imbolc-core/src/state/persistence/schema.rs` (v11, new table),
+`imbolc-core/src/state/persistence/save.rs` (save EQ),
+`imbolc-core/src/state/persistence/load.rs` (load EQ),
+`imbolc-core/src/state/persistence/tests.rs` (2 round-trip tests).
+
+**Tests:** 3 types tests (toggle, accessors, eq_mut), 2 dispatch tests
+(toggle_eq, set_eq_param), 2 persistence round-trip tests (EQ enabled,
+EQ disabled). 213 types + 276 core tests pass.
+
+**Deferred:** Undo support for `LayerGroupAction` variants (ToggleEq,
+SetEqParam, and all pre-existing effect variants). Currently
+`LayerGroupAction` falls through to `_ => false` in `is_undoable()`.
+This is tracked as future work — adding undo requires choosing scopes
+(Session for toggle, no undo for real-time param) and testing
+undo/redo round-trips.
+
 ---
 
 ## Migration Notes
@@ -308,7 +347,7 @@ Recommended: Phase B first — it's self-contained, doesn't touch the
 Instrument struct, and delivers the highest-value feature
 (reverb/compression buses). Phase A is larger and more invasive.
 
-1. ~~Phase B (bus effects)~~ — **Complete.** All B1–B6 done.
+1. ~~Phase B (bus effects)~~ — **Complete.** All B1–B7 done (B7 = layer group EQ).
 2. Phase A (flexible chain) — ~5 working sessions
 
 They share no code dependencies, so Phase A can't break Phase B. Bus

@@ -143,6 +143,10 @@ pub enum LayerGroupAction {
     ToggleEffectBypass(u32, EffectId),
     /// Adjust a parameter on a layer group effect
     AdjustEffectParam(u32, EffectId, usize, f32),
+    /// Toggle EQ on/off for a layer group
+    ToggleEq(u32),
+    /// Set an EQ band parameter on a layer group (group_id, band_index, param_name, value)
+    SetEqParam(u32, usize, String, f32),
 }
 
 /// Sample chopper actions.

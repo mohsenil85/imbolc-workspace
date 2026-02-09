@@ -597,12 +597,13 @@ fn save_mixer(conn: &Connection, session: &SessionState) -> SqlResult<()> {
 fn save_layer_group_mixers(conn: &Connection, session: &SessionState) -> SqlResult<()> {
     for gm in &session.mixer.layer_group_mixers {
         let output_target = encode_output_target(&gm.output_target);
+        let eq_enabled = if gm.eq.is_some() { 1i32 } else { 0i32 };
         conn.execute(
-            "INSERT INTO layer_group_mixers (group_id, name, level, pan, mute, solo, output_target)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT INTO layer_group_mixers (group_id, name, level, pan, mute, solo, output_target, eq_enabled)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             params![
                 gm.group_id as i32, gm.name, gm.level, gm.pan,
-                gm.mute as i32, gm.solo as i32, output_target,
+                gm.mute as i32, gm.solo as i32, output_target, eq_enabled,
             ],
         )?;
 
@@ -612,6 +613,20 @@ fn save_layer_group_mixers(conn: &Connection, session: &SessionState) -> SqlResu
                  VALUES (?1, ?2, ?3, ?4, ?5)",
                 params![gm.group_id as i32, send.bus_id as i32, send.level, send.enabled as i32, encode_tap_point(send.tap_point)],
             )?;
+        }
+
+        // Save EQ bands
+        if let Some(ref eq) = gm.eq {
+            for (i, band) in eq.bands.iter().enumerate() {
+                conn.execute(
+                    "INSERT INTO layer_group_eq_bands (group_id, band_index, freq, gain, q, enabled)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                    params![
+                        gm.group_id as i32, i as i32,
+                        band.freq, band.gain, band.q, band.enabled as i32,
+                    ],
+                )?;
+            }
         }
 
         save_effects_to(conn, "layer_group_effects", "layer_group_effect_params", "layer_group_effect_vst_params", "group_id", gm.group_id, &gm.effects)?;

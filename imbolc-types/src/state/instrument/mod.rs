@@ -216,6 +216,8 @@ pub struct LayerGroupMixer {
     pub effects: Vec<EffectSlot>,
     #[serde(default)]
     pub next_effect_id: EffectId,
+    #[serde(default)]
+    pub eq: Option<EqConfig>,
 }
 
 impl LayerGroupMixer {
@@ -232,7 +234,24 @@ impl LayerGroupMixer {
             sends,
             effects: Vec::new(),
             next_effect_id: 0,
+            eq: Some(EqConfig::default()),
         }
+    }
+
+    pub fn toggle_eq(&mut self) {
+        if self.eq.is_some() {
+            self.eq = None;
+        } else {
+            self.eq = Some(EqConfig::default());
+        }
+    }
+
+    pub fn eq(&self) -> Option<&EqConfig> {
+        self.eq.as_ref()
+    }
+
+    pub fn eq_mut(&mut self) -> Option<&mut EqConfig> {
+        self.eq.as_mut()
     }
 
     pub fn sync_sends_with_buses(&mut self, bus_ids: &[u8]) {
@@ -922,5 +941,37 @@ mod tests {
         inst.layer_octave_offset = -4;
         // 10 - 48 = -38 → clamped to 0
         assert_eq!(inst.offset_pitch(10), 0);
+    }
+
+    #[test]
+    fn layer_group_mixer_new_has_eq() {
+        let gm = LayerGroupMixer::new(1, &[1, 2]);
+        assert!(gm.eq.is_some());
+        let eq = gm.eq().unwrap();
+        assert!(eq.enabled);
+        assert_eq!(eq.bands.len(), EQ_BAND_COUNT);
+        // All bands default to 0dB gain
+        for band in &eq.bands {
+            assert_eq!(band.gain, 0.0);
+        }
+    }
+
+    #[test]
+    fn layer_group_mixer_toggle_eq() {
+        let mut gm = LayerGroupMixer::new(1, &[]);
+        assert!(gm.eq().is_some());
+        gm.toggle_eq();
+        assert!(gm.eq().is_none());
+        gm.toggle_eq();
+        assert!(gm.eq().is_some());
+    }
+
+    #[test]
+    fn layer_group_mixer_eq_mut() {
+        let mut gm = LayerGroupMixer::new(1, &[]);
+        if let Some(eq) = gm.eq_mut() {
+            eq.bands[0].gain = 3.0;
+        }
+        assert_eq!(gm.eq().unwrap().bands[0].gain, 3.0);
     }
 }

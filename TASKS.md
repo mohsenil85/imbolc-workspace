@@ -63,6 +63,21 @@ or select grid resolution.
 
 ---
 
+### LayerGroup Undo Support
+
+**Sources:** Phase B7 (layer group EQ)
+
+`LayerGroupAction` variants (ToggleEq, SetEqParam, and all effect
+CRUD variants) are not undoable. They fall through to `_ => false` in
+`is_undoable()` and `_ => UndoScope::Full` in `undo_scope()`. Adding
+undo requires choosing appropriate scopes (Session for structural
+toggles, skip for real-time param tweaks) and testing undo/redo
+round-trips.
+
+**Files:** `imbolc-core/src/state/undo.rs`, `imbolc-core/src/dispatch/bus.rs`
+
+---
+
 ## Long-term
 
 ### Scaling Bottlenecks

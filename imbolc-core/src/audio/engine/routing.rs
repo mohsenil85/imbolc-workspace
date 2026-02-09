@@ -577,6 +577,35 @@ impl AudioEngine {
     ) -> Result<i32, String> {
         let mut current_bus = group_bus;
 
+        // EQ (12-band parametric, if present) — inserted before effects
+        if let Some(ref eq) = gm.eq {
+            let node_id = self.next_node_id;
+            self.next_node_id += 1;
+            let eq_out_bus = self.bus_allocator.get_or_alloc_audio_bus(
+                u32::MAX - 256 - gm.group_id,
+                "group_eq_out",
+            );
+
+            let mut params: Vec<(String, f32)> = vec![
+                ("in".to_string(), current_bus as f32),
+                ("out".to_string(), eq_out_bus as f32),
+            ];
+            for (i, band) in eq.bands.iter().enumerate() {
+                params.push((format!("b{}_freq", i), band.freq));
+                params.push((format!("b{}_gain", i), band.gain));
+                params.push((format!("b{}_q", i), 1.0 / band.q));
+                params.push((format!("b{}_on", i), if band.enabled { 1.0 } else { 0.0 }));
+            }
+
+            let client = self.backend.as_ref().ok_or("Not connected")?;
+            client.create_synth("imbolc_eq12", node_id, GROUP_BUS_PROCESSING, &params)
+                .map_err(|e| e.to_string())?;
+
+            self.node_registry.register(node_id);
+            self.layer_group_eq_node_map.insert(gm.group_id, node_id);
+            current_bus = eq_out_bus;
+        }
+
         for effect in &gm.effects {
             if !effect.enabled {
                 continue;
@@ -689,6 +718,9 @@ impl AudioEngine {
             for &node_id in self.layer_group_effect_node_map.values() {
                 let _ = client.free_node(node_id);
             }
+            for &node_id in self.layer_group_eq_node_map.values() {
+                let _ = client.free_node(node_id);
+            }
             for chain in self.voice_allocator.drain_all() {
                 let _ = client.free_node(chain.group_id);
             }
@@ -698,6 +730,7 @@ impl AudioEngine {
         self.bus_node_map.clear();
         self.bus_effect_node_map.clear();
         self.layer_group_effect_node_map.clear();
+        self.layer_group_eq_node_map.clear();
         self.layer_group_audio_buses.clear();
         self.layer_group_node_map.clear();
         self.layer_group_send_node_map.clear();
@@ -945,6 +978,9 @@ impl AudioEngine {
                     for &node_id in self.layer_group_effect_node_map.values() {
                         let _ = client.free_node(node_id);
                     }
+                    for &node_id in self.layer_group_eq_node_map.values() {
+                        let _ = client.free_node(node_id);
+                    }
                     for chain in self.voice_allocator.drain_all() {
                         let _ = client.free_node(chain.group_id);
                     }
@@ -954,6 +990,7 @@ impl AudioEngine {
                 self.bus_node_map.clear();
                 self.bus_effect_node_map.clear();
                 self.layer_group_effect_node_map.clear();
+                self.layer_group_eq_node_map.clear();
                 self.layer_group_audio_buses.clear();
                 self.layer_group_node_map.clear();
                 self.layer_group_send_node_map.clear();
@@ -1266,6 +1303,18 @@ impl AudioEngine {
         let client = self.backend.as_ref().ok_or("Not connected")?;
 
         if let Some(&node_id) = self.layer_group_effect_node_map.get(&(group_id, effect_id)) {
+            let _ = client.set_param(node_id, param, value);
+        }
+
+        Ok(())
+    }
+
+    /// Set a layer group EQ parameter in real-time (targeted /n_set, no rebuild).
+    pub fn set_layer_group_eq_param(&self, group_id: u32, param: &str, value: f32) -> Result<(), String> {
+        if !self.is_running { return Ok(()); }
+        let client = self.backend.as_ref().ok_or("Not connected")?;
+
+        if let Some(&node_id) = self.layer_group_eq_node_map.get(&group_id) {
             let _ = client.set_param(node_id, param, value);
         }
 

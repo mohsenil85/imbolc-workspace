@@ -835,6 +835,19 @@ impl AudioHandle {
         })
     }
 
+    pub fn set_layer_group_eq_param(
+        &self,
+        group_id: u32,
+        param: &str,
+        value: f32,
+    ) -> Result<(), String> {
+        self.send_cmd(AudioCmd::SetLayerGroupEqParam {
+            group_id,
+            param: param.to_string(),
+            value,
+        })
+    }
+
     // ── Voice management ──────────────────────────────────────────
 
     pub fn spawn_voice(
