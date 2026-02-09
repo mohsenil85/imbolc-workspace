@@ -2,3 +2,5 @@
 /imbolc-worktrees/
 *.wav
 *.vst
+.mcp.json
+cclsp.json

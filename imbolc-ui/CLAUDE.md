@@ -204,9 +204,9 @@ Musical defaults (`[defaults]` section): `bpm`, `key`, `scale`, `tuning_a4`, `ti
 - Save/load: `save_project()` / `load_project()` in `imbolc-core/src/state/persistence/mod.rs`
 - Default path: `~/.config/imbolc/default.sqlite`
 
-## LSP Integration (CCLSP)
+## Code Navigation (CCLSP)
 
-Configured as MCP server (`cclsp.json` + `.mcp.json`). Provides rust-analyzer access. Prefer LSP tools over grep for navigating Rust code — they understand types, scopes, and cross-file references.
+Configured as MCP server at workspace root (`.mcp.json` + `cclsp.json`). Provides rust-analyzer access. Prefer LSP tools over grep for navigating Rust code — they understand types, scopes, and cross-file references. See workspace root CLAUDE.md for tool names.
 
 ## Detailed Documentation
 

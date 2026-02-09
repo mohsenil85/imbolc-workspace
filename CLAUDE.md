@@ -79,6 +79,32 @@ Each crate has its own `CLAUDE.md` with detailed guidance:
 
 See [imbolc-core/synthdefs/defs/README.md](imbolc-core/synthdefs/defs/README.md) for file template and conventions.
 
+## Code Navigation (CCLSP)
+
+An MCP server (`cclsp`) wraps rust-analyzer for LSP-powered code navigation. **Always use CCLSP tools for navigating and editing Rust code** — they understand types, scopes, and cross-file references. Only fall back to Grep/Glob for non-Rust files or text pattern searches that aren't symbol-based.
+
+**Navigation:**
+- `find_definition` — Jump to symbol definition
+- `find_references` — Find all references to a symbol
+- `find_workspace_symbols` — Search symbols by name across workspace
+- `find_implementation` — Find implementations of traits/interfaces
+
+**Analysis:**
+- `get_diagnostics` — Get compiler errors/warnings for a file
+- `get_hover` — Get type info and docs at a position
+- `prepare_call_hierarchy` — Prepare for call hierarchy queries
+- `get_incoming_calls` — Find all callers of a function
+- `get_outgoing_calls` — Find all callees from a function
+
+**Refactoring:**
+- `rename_symbol` — Rename a symbol across the workspace
+- `rename_symbol_strict` — Rename at a specific position (when multiple candidates)
+
+**Maintenance:**
+- `restart_server` — Restart LSP servers if results seem stale
+
+All tools are prefixed `mcp__cclsp__` when invoking. Configuration: `.mcp.json` + `cclsp.json` at workspace root.
+
 ## Configuration
 
 - Musical defaults: `~/.config/imbolc/config.toml`

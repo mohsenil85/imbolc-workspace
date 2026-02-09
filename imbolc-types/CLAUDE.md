@@ -135,6 +135,10 @@ AppState (defined in imbolc-core, composed of types from here)
 - **LfoShape**: Sin, Tri, Saw, Sqr, SampleAndHold, Random
 - **SendTapPoint**: PreInsert, PostInsert
 
+## Code Navigation
+
+When cclsp MCP tools are available, prefer them over grep for navigating Rust code. See workspace root CLAUDE.md for details.
+
 ## Build & Test
 
 ```bash

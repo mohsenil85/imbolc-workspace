@@ -283,6 +283,10 @@ sig = sig * 0.5;
 env = EnvGen.kr(...);
 ```
 
+## Code Navigation
+
+When cclsp MCP tools are available, prefer them over grep for navigating Rust code. See workspace root CLAUDE.md for details.
+
 ## Plans
 
 Implementation plans live at workspace root: `../plans/`
