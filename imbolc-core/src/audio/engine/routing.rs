@@ -4,6 +4,30 @@ use super::backend::RawArg;
 use std::collections::HashMap;
 use crate::state::{CustomSynthDefRegistry, EffectId, EffectType, FilterType, Instrument, InstrumentId, InstrumentState, ParameterTarget, ParamValue, SendTapPoint, SessionState, SourceType, SourceTypeExt};
 
+/// State machine for amortized routing rebuild across multiple ticks.
+/// Each step performs a bounded amount of work so the audio thread is never
+/// starved for more than ~0.5ms.
+pub(crate) enum RoutingRebuildPhase {
+    /// Tear down all existing nodes and clear maps.
+    TearDown,
+    /// Allocate buses for mixer buses and layer groups.
+    AllocBuses,
+    /// Build chain + sends for instrument at index `i` in the snapshot.
+    BuildInstrument(usize),
+    /// Build bus output synths, layer group outputs, restore VST params.
+    BuildOutputs,
+    /// Restart meter, sync bus watermarks.
+    Finalize,
+}
+
+/// Return value from `routing_rebuild_step`: either continue or done.
+pub(crate) enum RebuildStepResult {
+    /// More work to do — call `routing_rebuild_step` again next tick.
+    Continue(RoutingRebuildPhase),
+    /// Rebuild is complete.
+    Done,
+}
+
 impl AudioEngine {
     pub(super) fn source_synth_def(source: SourceType, registry: &CustomSynthDefRegistry, mono: bool) -> String {
         if mono && source.has_mono_variant() {
@@ -696,6 +720,205 @@ impl AudioEngine {
         self.restore_instrument_vst_params(instrument);
 
         Ok(())
+    }
+
+    // ── Phased routing rebuild (driven by AudioThread) ─────────
+
+    /// Execute one phase of the amortized routing rebuild state machine.
+    /// Returns `Continue(next_phase)` if more work remains, `Done` if complete.
+    /// Errors are non-fatal: the rebuild is abandoned and engine state may be partial.
+    pub(crate) fn routing_rebuild_step(
+        &mut self,
+        phase: RoutingRebuildPhase,
+        state: &InstrumentState,
+        session: &SessionState,
+    ) -> Result<RebuildStepResult, String> {
+        match phase {
+            RoutingRebuildPhase::TearDown => {
+                if !self.is_running {
+                    return Ok(RebuildStepResult::Done);
+                }
+                self.ensure_groups()?;
+                self.ensure_safety_limiter()?;
+
+                // Free all existing synths and voices
+                if let Some(ref client) = self.backend {
+                    for nodes in self.node_map.values() {
+                        for node_id in nodes.all_node_ids() {
+                            let _ = client.free_node(node_id);
+                        }
+                    }
+                    for &node_id in self.send_node_map.values() {
+                        let _ = client.free_node(node_id);
+                    }
+                    for &node_id in self.bus_node_map.values() {
+                        let _ = client.free_node(node_id);
+                    }
+                    for &node_id in self.layer_group_node_map.values() {
+                        let _ = client.free_node(node_id);
+                    }
+                    for &node_id in self.layer_group_send_node_map.values() {
+                        let _ = client.free_node(node_id);
+                    }
+                    for chain in self.voice_allocator.drain_all() {
+                        let _ = client.free_node(chain.group_id);
+                    }
+                }
+                self.node_map.clear();
+                self.send_node_map.clear();
+                self.bus_node_map.clear();
+                self.layer_group_audio_buses.clear();
+                self.layer_group_node_map.clear();
+                self.layer_group_send_node_map.clear();
+                self.bus_audio_buses.clear();
+                self.instrument_final_buses.clear();
+                self.bus_allocator.reset();
+                self.node_registry.invalidate_all();
+
+                Ok(RebuildStepResult::Continue(RoutingRebuildPhase::AllocBuses))
+            }
+
+            RoutingRebuildPhase::AllocBuses => {
+                // Allocate audio buses for each mixer bus (needed by BusIn instruments)
+                for bus in &session.mixer.buses {
+                    let bus_audio = self.bus_allocator.get_or_alloc_audio_bus(
+                        u32::MAX - bus.id as u32,
+                        "bus_out",
+                    );
+                    self.bus_audio_buses.insert(bus.id, bus_audio);
+                }
+
+                // Allocate audio buses for each active layer group
+                for group_id in state.active_layer_groups() {
+                    let group_bus = self.bus_allocator.get_or_alloc_audio_bus(
+                        u32::MAX - 256 - group_id,
+                        "layer_group_out",
+                    );
+                    self.layer_group_audio_buses.insert(group_id, group_bus);
+                }
+
+                if state.instruments.is_empty() {
+                    Ok(RebuildStepResult::Continue(RoutingRebuildPhase::BuildOutputs))
+                } else {
+                    Ok(RebuildStepResult::Continue(RoutingRebuildPhase::BuildInstrument(0)))
+                }
+            }
+
+            RoutingRebuildPhase::BuildInstrument(i) => {
+                let any_solo = state.any_instrument_solo();
+                if let Some(instrument) = state.instruments.get(i) {
+                    self.build_instrument_chain(instrument, any_solo, session)?;
+                    self.build_instrument_sends(instrument)?;
+
+                    let next = i + 1;
+                    if next < state.instruments.len() {
+                        Ok(RebuildStepResult::Continue(RoutingRebuildPhase::BuildInstrument(next)))
+                    } else {
+                        Ok(RebuildStepResult::Continue(RoutingRebuildPhase::BuildOutputs))
+                    }
+                } else {
+                    Ok(RebuildStepResult::Continue(RoutingRebuildPhase::BuildOutputs))
+                }
+            }
+
+            RoutingRebuildPhase::BuildOutputs => {
+                // Create bus output synths
+                for bus in &session.mixer.buses {
+                    if let Some(&bus_audio) = self.bus_audio_buses.get(&bus.id) {
+                        let node_id = self.next_node_id;
+                        self.next_node_id += 1;
+                        let mute = session.effective_bus_mute(bus);
+                        let params = vec![
+                            ("in".to_string(), bus_audio as f32),
+                            ("level".to_string(), bus.level),
+                            ("mute".to_string(), if mute { 1.0 } else { 0.0 }),
+                            ("pan".to_string(), bus.pan),
+                        ];
+                        if let Some(ref client) = self.backend {
+                            client
+                                .create_synth("imbolc_bus_out", node_id, GROUP_OUTPUT, &params)
+                                .map_err(|e| e.to_string())?;
+                        }
+                        self.node_registry.register(node_id);
+                        self.bus_node_map.insert(bus.id, node_id);
+                    }
+                }
+
+                // Create layer group output synths
+                for group_mixer in &session.mixer.layer_group_mixers {
+                    if let Some(&group_bus) = self.layer_group_audio_buses.get(&group_mixer.group_id) {
+                        let node_id = self.next_node_id;
+                        self.next_node_id += 1;
+                        let mute = session.mixer.effective_layer_group_mute(group_mixer);
+
+                        let group_out = match group_mixer.output_target {
+                            crate::state::instrument::OutputTarget::Bus(id) => {
+                                self.bus_audio_buses.get(&id).copied().unwrap_or(0) as f32
+                            }
+                            crate::state::instrument::OutputTarget::Master => 0.0,
+                        };
+
+                        let params = vec![
+                            ("in".to_string(), group_bus as f32),
+                            ("out".to_string(), group_out),
+                            ("level".to_string(), group_mixer.level),
+                            ("mute".to_string(), if mute { 1.0 } else { 0.0 }),
+                            ("pan".to_string(), group_mixer.pan),
+                        ];
+                        if let Some(ref client) = self.backend {
+                            client
+                                .create_synth("imbolc_bus_out", node_id, GROUP_OUTPUT, &params)
+                                .map_err(|e| e.to_string())?;
+                        }
+                        self.node_registry.register(node_id);
+                        self.layer_group_node_map.insert(group_mixer.group_id, node_id);
+
+                        for send in &group_mixer.sends {
+                            if !send.enabled || send.level <= 0.0 {
+                                continue;
+                            }
+                            if let Some(&bus_audio) = self.bus_audio_buses.get(&send.bus_id) {
+                                let send_node_id = self.next_node_id;
+                                self.next_node_id += 1;
+                                let send_params = vec![
+                                    ("in".to_string(), group_bus as f32),
+                                    ("out".to_string(), bus_audio as f32),
+                                    ("level".to_string(), send.level),
+                                ];
+                                if let Some(ref client) = self.backend {
+                                    client
+                                        .create_synth("imbolc_send", send_node_id, GROUP_OUTPUT, &send_params)
+                                        .map_err(|e| e.to_string())?;
+                                }
+                                self.node_registry.register(send_node_id);
+                                self.layer_group_send_node_map
+                                    .insert((group_mixer.group_id, send.bus_id), send_node_id);
+                            }
+                        }
+                    }
+                }
+
+                // Restore saved VST param values
+                for instrument in &state.instruments {
+                    self.restore_instrument_vst_params(instrument);
+                }
+
+                Ok(RebuildStepResult::Continue(RoutingRebuildPhase::Finalize))
+            }
+
+            RoutingRebuildPhase::Finalize => {
+                // Sync voice allocator bus watermarks
+                self.voice_allocator.sync_bus_watermarks(
+                    self.bus_allocator.next_audio_bus,
+                    self.bus_allocator.next_control_bus,
+                );
+
+                // (Re)create meter synth
+                self.restart_meter();
+
+                Ok(RebuildStepResult::Done)
+            }
+        }
     }
 
     /// Set bus output mixer params (level, mute, pan) in real-time

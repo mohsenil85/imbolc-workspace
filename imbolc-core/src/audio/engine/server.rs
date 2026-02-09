@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Stdio};
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
@@ -11,12 +11,116 @@ use super::{AudioEngine, ServerStatus, GROUP_SOURCES, GROUP_PROCESSING, GROUP_OU
 use crate::audio::osc_client::{AudioMonitor, OscClient};
 use regex::Regex;
 
+/// Result of spawning scsynth in a background thread.
+pub(crate) struct ServerSpawnResult {
+    pub child: Child,
+    pub use_pw_jack: bool,
+}
+
+/// Spawn scsynth in the current thread (meant to be called from a background thread).
+/// Handles device resolution, argument building, and process spawning.
+/// Returns the Child process on success.
+fn spawn_scsynth(
+    input_device: Option<String>,
+    output_device: Option<String>,
+    buffer_size: u32,
+) -> Result<ServerSpawnResult, String> {
+    let scsynth_paths = [
+        "scsynth",
+        "/Applications/SuperCollider.app/Contents/Resources/scsynth",
+        "/usr/local/bin/scsynth",
+        "/usr/bin/scsynth",
+    ];
+
+    // Build args: base port + buffer size + optional device flags
+    let mut args: Vec<String> = vec![
+        "-u".to_string(), "57110".to_string(),
+        "-Z".to_string(), buffer_size.to_string(),
+    ];
+
+    // Resolve "System Default" to actual device names so we always
+    // pass -H to scsynth. Without -H, scsynth probes all devices
+    // and can crash on incompatible ones (e.g. iPhone continuity mic).
+    let (default_output, default_input) = crate::audio::devices::default_device_names();
+    let resolved_input = input_device.or(default_input);
+    let resolved_output = output_device.or(default_output);
+
+    match (resolved_input.as_deref(), resolved_output.as_deref()) {
+        (Some(inp), Some(out)) if inp != out => {
+            args.push("-H".to_string());
+            args.push(inp.to_string());
+            args.push(out.to_string());
+        }
+        (Some(dev), None) | (None, Some(dev)) => {
+            args.push("-H".to_string());
+            args.push(dev.to_string());
+        }
+        (Some(dev), Some(_)) => {
+            // Same device for both
+            args.push("-H".to_string());
+            args.push(dev.to_string());
+        }
+        (None, None) => {}
+    }
+
+    // Redirect scsynth output to a log file for crash diagnostics
+    let log_path = dirs::config_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("imbolc")
+        .join("scsynth.log");
+    let _ = fs::create_dir_all(log_path.parent().unwrap());
+    let stdout_file = fs::File::create(&log_path).ok();
+    let stderr_file = stdout_file.as_ref().and_then(|f| f.try_clone().ok());
+
+    let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+
+    // On Linux, try launching scsynth via pw-jack so it routes through
+    // PipeWire's JACK emulation instead of requiring a standalone JACK daemon.
+    let use_pw_jack = cfg!(target_os = "linux")
+        && Command::new("pw-jack")
+            .arg("--version")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .is_ok();
+
+    for path in &scsynth_paths {
+        let mut cmd = if use_pw_jack {
+            let mut c = Command::new("pw-jack");
+            c.arg(path);
+            c
+        } else {
+            Command::new(path)
+        };
+        match cmd
+            .args(&arg_refs)
+            .stdout(stdout_file.as_ref()
+                .and_then(|f| f.try_clone().ok())
+                .map(Stdio::from)
+                .unwrap_or_else(Stdio::null))
+            .stderr(stderr_file.as_ref()
+                .and_then(|f| f.try_clone().ok())
+                .map(Stdio::from)
+                .unwrap_or_else(Stdio::null))
+            .spawn()
+        {
+            Ok(child) => {
+                return Ok(ServerSpawnResult { child, use_pw_jack });
+            }
+            Err(_) => continue,
+        }
+    }
+
+    Err("Could not find scsynth. Install SuperCollider.".to_string())
+}
+
 impl AudioEngine {
     #[allow(dead_code)]
     pub fn start_server(&mut self) -> Result<(), String> {
         self.start_server_with_devices(None, None, 512, 44100)
     }
 
+    /// Synchronous server start — used by the `StartServer` command which has a reply channel.
     pub fn start_server_with_devices(
         &mut self,
         input_device: Option<&str>,
@@ -29,119 +133,55 @@ impl AudioEngine {
         }
 
         self.server_status = ServerStatus::Starting;
-        // Store for latency calculation
-        let _ = sample_rate; // sample_rate is used for latency calculation in AudioMonitor
+        let _ = sample_rate;
 
-        let scsynth_paths = [
-            "scsynth",
-            "/Applications/SuperCollider.app/Contents/Resources/scsynth",
-            "/usr/local/bin/scsynth",
-            "/usr/bin/scsynth",
-        ];
+        let result = spawn_scsynth(
+            input_device.map(|s| s.to_string()),
+            output_device.map(|s| s.to_string()),
+            buffer_size,
+        )?;
 
-        // Build args: base port + buffer size + optional device flags
-        let mut args: Vec<String> = vec![
-            "-u".to_string(), "57110".to_string(),
-            "-Z".to_string(), buffer_size.to_string(),
-        ];
+        self.scsynth_process = Some(result.child);
+        self.server_status = ServerStatus::Running;
 
-        // Resolve "System Default" to actual device names so we always
-        // pass -H to scsynth. Without -H, scsynth probes all devices
-        // and can crash on incompatible ones (e.g. iPhone continuity mic).
-        let (default_output, default_input) = crate::audio::devices::default_device_names();
-        let resolved_input = input_device
-            .map(|s| s.to_string())
-            .or(default_input);
-        let resolved_output = output_device
-            .map(|s| s.to_string())
-            .or(default_output);
-
-        match (resolved_input.as_deref(), resolved_output.as_deref()) {
-            (Some(inp), Some(out)) if inp != out => {
-                args.push("-H".to_string());
-                args.push(inp.to_string());
-                args.push(out.to_string());
-            }
-            (Some(dev), None) | (None, Some(dev)) => {
-                args.push("-H".to_string());
-                args.push(dev.to_string());
-            }
-            (Some(dev), Some(_)) => {
-                // Same device for both
-                args.push("-H".to_string());
-                args.push(dev.to_string());
-            }
-            (None, None) => {}
+        if result.use_pw_jack {
+            Self::connect_jack_ports();
         }
 
-        // Redirect scsynth output to a log file for crash diagnostics
-        let log_path = dirs::config_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join("imbolc")
-            .join("scsynth.log");
-        let _ = fs::create_dir_all(log_path.parent().unwrap());
-        let stdout_file = fs::File::create(&log_path).ok();
-        let stderr_file = stdout_file.as_ref().and_then(|f| f.try_clone().ok());
+        Ok(())
+    }
 
-        let mut child = None;
-        let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-
-        // On Linux, try launching scsynth via pw-jack so it routes through
-        // PipeWire's JACK emulation instead of requiring a standalone JACK daemon.
-        let use_pw_jack = cfg!(target_os = "linux")
-            && Command::new("pw-jack")
-                .arg("--version")
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status()
-                .is_ok();
-
-        for path in &scsynth_paths {
-            let mut cmd = if use_pw_jack {
-                let mut c = Command::new("pw-jack");
-                c.arg(path);
-                c
-            } else {
-                Command::new(path)
-            };
-            match cmd
-                .args(&arg_refs)
-                .stdout(stdout_file.as_ref()
-                    .and_then(|f| f.try_clone().ok())
-                    .map(Stdio::from)
-                    .unwrap_or_else(Stdio::null))
-                .stderr(stderr_file.as_ref()
-                    .and_then(|f| f.try_clone().ok())
-                    .map(Stdio::from)
-                    .unwrap_or_else(Stdio::null))
-                .spawn()
-            {
-                Ok(c) => {
-                    child = Some(c);
-                    break;
-                }
-                Err(_) => continue,
-            }
+    /// Async server start — spawns scsynth in a background thread and returns a
+    /// receiver that delivers the result. The audio thread polls this via
+    /// `pending_server_start` in `poll_engine()`.
+    pub(crate) fn start_server_async(
+        &mut self,
+        input_device: Option<String>,
+        output_device: Option<String>,
+        buffer_size: u32,
+    ) -> Result<mpsc::Receiver<Result<ServerSpawnResult, String>>, String> {
+        if self.scsynth_process.is_some() {
+            return Err("Server already running".to_string());
         }
 
-        match child {
-            Some(c) => {
-                self.scsynth_process = Some(c);
-                self.server_status = ServerStatus::Running;
+        self.server_status = ServerStatus::Starting;
 
-                // On Linux with pw-jack, WirePlumber may not auto-connect
-                // SuperCollider's JACK outputs to the hardware. Explicitly
-                // connect them so audio reaches the speakers.
-                if use_pw_jack {
-                    Self::connect_jack_ports();
-                }
+        let (tx, rx) = mpsc::channel();
+        thread::spawn(move || {
+            let result = spawn_scsynth(input_device, output_device, buffer_size);
+            let _ = tx.send(result);
+        });
 
-                Ok(())
-            }
-            None => {
-                self.server_status = ServerStatus::Error;
-                Err("Could not find scsynth. Install SuperCollider.".to_string())
-            }
+        Ok(rx)
+    }
+
+    /// Install a successfully spawned scsynth child into the engine.
+    pub(crate) fn install_server_child(&mut self, result: ServerSpawnResult) {
+        self.scsynth_process = Some(result.child);
+        self.server_status = ServerStatus::Running;
+
+        if result.use_pw_jack {
+            Self::connect_jack_ports();
         }
     }
 
@@ -180,9 +220,13 @@ impl AudioEngine {
     pub fn stop_server(&mut self) {
         self.stop_recording();
         self.disconnect();
-        if let Some(mut child) = self.scsynth_process.take() {
-            let _ = child.kill();
-            let _ = child.wait();
+        if let Some(child) = self.scsynth_process.take() {
+            // Detach: kill+wait can block up to 500ms, so run off the audio thread
+            thread::spawn(move || {
+                let mut child = child;
+                let _ = child.kill();
+                let _ = child.wait();
+            });
         }
         self.server_status = ServerStatus::Stopped;
     }
@@ -369,6 +413,34 @@ impl AudioEngine {
         self.is_running = true;
         self.server_status = ServerStatus::Connected;
         Ok(())
+    }
+
+    /// Spawn a background thread that creates the OSC client, backend, and sends /notify.
+    /// Returns a receiver that delivers the ready-to-install backend.
+    pub(crate) fn connect_with_monitor_async(
+        server_addr: String,
+        monitor: AudioMonitor,
+    ) -> mpsc::Receiver<Result<Box<dyn AudioBackend + Send>, String>> {
+        let (tx, rx) = mpsc::channel();
+        thread::spawn(move || {
+            let result = (|| -> Result<Box<dyn AudioBackend + Send>, String> {
+                let client = OscClient::new_with_monitor(&server_addr, monitor)
+                    .map_err(|e| e.to_string())?;
+                let backend = ScBackend::new(client);
+                backend.send_raw("/notify", vec![RawArg::Int(1)])
+                    .map_err(|e| e.to_string())?;
+                Ok(Box::new(backend) as Box<dyn AudioBackend + Send>)
+            })();
+            let _ = tx.send(result);
+        });
+        rx
+    }
+
+    /// Install a fully-initialized backend (created by the connect thread).
+    pub(crate) fn install_backend(&mut self, backend: Box<dyn AudioBackend + Send>) {
+        self.backend = Some(backend);
+        self.is_running = true;
+        self.server_status = ServerStatus::Connected;
     }
 
     pub(super) fn restart_meter(&mut self) {

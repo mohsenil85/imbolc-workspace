@@ -2,9 +2,9 @@ mod automation;
 pub mod backend;
 pub(crate) mod node_registry;
 mod recording;
-mod routing;
+pub(crate) mod routing;
 mod samples;
-mod server;
+pub(crate) mod server;
 pub(crate) mod voice_allocator;
 mod voices;
 mod vst;
@@ -189,6 +189,10 @@ impl AudioEngine {
 
     pub fn status(&self) -> ServerStatus {
         self.server_status
+    }
+
+    pub(crate) fn set_status(&mut self, status: ServerStatus) {
+        self.server_status = status;
     }
 
     pub fn server_running(&self) -> bool {

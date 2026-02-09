@@ -7,6 +7,7 @@ use crossbeam_channel::{Receiver, TryRecvError};
 
 use super::commands::{AudioCmd, AudioFeedback, ExportKind};
 use super::engine::AudioEngine;
+use super::engine::server::ServerSpawnResult;
 use super::osc_client::AudioMonitor;
 use super::telemetry::AudioTelemetry;
 use super::ServerStatus;
@@ -20,6 +21,24 @@ use crate::state::{InstrumentId, InstrumentState, SessionState};
 struct PendingServerConnect {
     started_at: Instant,
     server_addr: String,
+}
+
+/// Pending async scsynth process spawn (Phase 2: control-plane separation).
+struct PendingServerStart {
+    rx: std::sync::mpsc::Receiver<Result<ServerSpawnResult, String>>,
+    server_addr: String,
+    buffer_size: u32,
+    sample_rate: u32,
+}
+
+/// Pending async OSC connect (Phase 3: control-plane separation).
+struct PendingConnect {
+    rx: std::sync::mpsc::Receiver<Result<Box<dyn super::engine::backend::AudioBackend + Send>, String>>,
+    /// Whether this is an initial connect (true) or a restart-connect (false).
+    /// Restart-connects show "Server restarted" instead of "Connected".
+    is_restart: bool,
+    /// Reply channel for direct Connect commands (None for restart-connects).
+    reply: Option<std::sync::mpsc::Sender<std::io::Result<()>>>,
 }
 
 struct RenderState {
@@ -79,6 +98,12 @@ pub(crate) struct AudioThread {
     last_status_poll: Instant,
     /// Deferred connection after server start (non-blocking restart)
     pending_server_connect: Option<PendingServerConnect>,
+    /// Pending async scsynth spawn (background thread)
+    pending_server_start: Option<PendingServerStart>,
+    /// Pending async OSC connect (background thread)
+    pending_connect: Option<PendingConnect>,
+    /// In-progress phased routing rebuild (driven one step per poll_engine())
+    routing_rebuild: Option<super::engine::routing::RoutingRebuildPhase>,
     /// In-flight VST parameter queries awaiting OSC replies
     pending_vst_queries: Vec<PendingVstQuery>,
     /// Tuner tone node ID (if currently playing)
@@ -126,6 +151,9 @@ impl AudioThread {
             tick_accumulator: 0.0,
             last_status_poll: Instant::now(),
             pending_server_connect: None,
+            pending_server_start: None,
+            pending_connect: None,
+            routing_rebuild: None,
             pending_vst_queries: Vec::new(),
             tuner_node_id: None,
             click_state: imbolc_types::ClickTrackState::default(),
@@ -300,63 +328,70 @@ impl AudioThread {
     fn handle_server_cmd(&mut self, cmd: AudioCmd) {
         match cmd {
             AudioCmd::Connect { server_addr, reply } => {
-                let result = self.engine.connect_with_monitor(&server_addr, self.monitor.clone());
-                match &result {
-                    Ok(()) => {
-                        let message = match self.load_synthdefs_and_samples() {
-                            Ok(()) => "Connected".to_string(),
-                            Err(e) => format!("Connected (synthdef warning: {})", e),
-                        };
-                        self.send_server_status(ServerStatus::Connected, message);
-                    }
-                    Err(err) => {
-                        self.send_server_status(ServerStatus::Error, err.to_string());
-                    }
+                if self.pending_connect.is_some() {
+                    let _ = reply.send(Err(std::io::Error::new(
+                        std::io::ErrorKind::Other, "Connect already in progress",
+                    )));
+                } else {
+                    let rx = AudioEngine::connect_with_monitor_async(
+                        server_addr, self.monitor.clone(),
+                    );
+                    self.pending_connect = Some(PendingConnect {
+                        rx,
+                        is_restart: false,
+                        reply: Some(reply),
+                    });
+                    self.send_server_status(ServerStatus::Starting, "Connecting...");
                 }
-                let _ = reply.send(result);
             }
             AudioCmd::Disconnect => {
+                self.pending_connect = None;
+                self.routing_rebuild = None;
                 self.engine.disconnect();
                 self.send_server_status(self.engine.status(), "Disconnected");
             }
             AudioCmd::StartServer { input_device, output_device, buffer_size, sample_rate, reply } => {
-                let result = self.engine.start_server_with_devices(
-                    input_device.as_deref(),
-                    output_device.as_deref(),
-                    buffer_size,
-                    sample_rate,
-                );
-                if result.is_ok() {
-                    self.monitor.set_audio_latency(buffer_size, sample_rate);
+                if self.pending_server_start.is_some() {
+                    let _ = reply.send(Err("Server start already in progress".to_string()));
+                } else {
+                    let result = self.engine.start_server_with_devices(
+                        input_device.as_deref(),
+                        output_device.as_deref(),
+                        buffer_size,
+                        sample_rate,
+                    );
+                    if result.is_ok() {
+                        self.monitor.set_audio_latency(buffer_size, sample_rate);
+                    }
+                    match &result {
+                        Ok(()) => self.send_server_status(ServerStatus::Running, "Server started"),
+                        Err(err) => self.send_server_status(ServerStatus::Error, err),
+                    }
+                    let _ = reply.send(result);
                 }
-                match &result {
-                    Ok(()) => self.send_server_status(ServerStatus::Running, "Server started"),
-                    Err(err) => self.send_server_status(ServerStatus::Error, err),
-                }
-                let _ = reply.send(result);
             }
             AudioCmd::StopServer => {
+                self.pending_server_start = None;
+                self.pending_connect = None;
+                self.routing_rebuild = None;
                 self.engine.stop_server();
                 self.send_server_status(ServerStatus::Stopped, "Server stopped");
             }
             AudioCmd::RestartServer { input_device, output_device, server_addr, buffer_size, sample_rate } => {
                 self.engine.stop_server();
                 self.pending_server_connect = None;
+                self.pending_server_start = None;
+                self.pending_connect = None;
+                self.routing_rebuild = None;
                 self.send_server_status(ServerStatus::Stopped, "Restarting server...");
 
-                let start_result = self.engine.start_server_with_devices(
-                    input_device.as_deref(),
-                    output_device.as_deref(),
-                    buffer_size,
-                    sample_rate,
-                );
-                match start_result {
-                    Ok(()) => {
-                        self.monitor.set_audio_latency(buffer_size, sample_rate);
-                        // Defer connection: let scsynth initialize before connecting
-                        self.pending_server_connect = Some(PendingServerConnect {
-                            started_at: Instant::now(),
+                match self.engine.start_server_async(input_device, output_device, buffer_size) {
+                    Ok(rx) => {
+                        self.pending_server_start = Some(PendingServerStart {
+                            rx,
                             server_addr,
+                            buffer_size,
+                            sample_rate,
                         });
                         self.send_server_status(ServerStatus::Starting, "Server starting...");
                     }
@@ -461,7 +496,11 @@ impl AudioThread {
     fn handle_mixer_cmd(&mut self, cmd: AudioCmd) {
         match cmd {
             AudioCmd::RebuildRouting => {
-                let _ = self.engine.rebuild_instrument_routing(&self.instruments, &self.session);
+                // Start (or restart) the phased routing rebuild state machine.
+                // Work is amortized across ticks in poll_engine().
+                self.routing_rebuild = Some(
+                    super::engine::routing::RoutingRebuildPhase::TearDown,
+                );
             }
             AudioCmd::RebuildInstrumentRouting { instrument_id } => {
                 let _ = self.engine.rebuild_single_instrument_routing(instrument_id, &self.instruments, &self.session);
@@ -994,6 +1033,39 @@ impl AudioThread {
             let _ = self.feedback_tx.send(AudioFeedback::CompileResult(result));
         }
 
+        // Poll async server spawn (Phase 2: off-thread start_server)
+        if let Some(ref pending) = self.pending_server_start {
+            match pending.rx.try_recv() {
+                Ok(Ok(result)) => {
+                    let buffer_size = pending.buffer_size;
+                    let sample_rate = pending.sample_rate;
+                    let server_addr = pending.server_addr.clone();
+                    self.pending_server_start = None;
+
+                    self.engine.install_server_child(result);
+                    self.monitor.set_audio_latency(buffer_size, sample_rate);
+                    self.send_server_status(ServerStatus::Running, "Server started, connecting...");
+
+                    // Chain into deferred connect (let scsynth initialize before OSC connect)
+                    self.pending_server_connect = Some(PendingServerConnect {
+                        started_at: Instant::now(),
+                        server_addr,
+                    });
+                }
+                Ok(Err(msg)) => {
+                    self.pending_server_start = None;
+                    self.engine.set_status(ServerStatus::Error);
+                    self.send_server_status(ServerStatus::Error, msg);
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => {}
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    self.pending_server_start = None;
+                    self.engine.set_status(ServerStatus::Error);
+                    self.send_server_status(ServerStatus::Error, "Server spawn thread terminated unexpectedly");
+                }
+            }
+        }
+
         // Deferred server connection: wait for scsynth to initialize before connecting
         if let Some(ref pending) = self.pending_server_connect {
             if pending.started_at.elapsed() >= Duration::from_millis(500) {
@@ -1003,21 +1075,80 @@ impl AudioThread {
                 // Check if scsynth is still alive after startup
                 if let Some(msg) = self.engine.check_server_health() {
                     self.send_server_status(ServerStatus::Error, msg);
-                } else {
+                } else if self.pending_connect.is_none() {
+                    // Spawn async connect (Phase 3: off-thread connect)
                     self.send_server_status(ServerStatus::Running, "Server started, connecting...");
-                    let connect_result = self.engine.connect_with_monitor(&server_addr, self.monitor.clone());
-                    match connect_result {
+                    let rx = AudioEngine::connect_with_monitor_async(
+                        server_addr, self.monitor.clone(),
+                    );
+                    self.pending_connect = Some(PendingConnect {
+                        rx,
+                        is_restart: true,
+                        reply: None,
+                    });
+                }
+            }
+        }
+
+        // Poll async connect (Phase 3: off-thread connect_with_monitor)
+        if let Some(ref pending) = self.pending_connect {
+            match pending.rx.try_recv() {
+                Ok(Ok(backend)) => {
+                    let is_restart = pending.is_restart;
+                    let reply = self.pending_connect.take().unwrap().reply;
+                    self.engine.install_backend(backend);
+                    let message = match self.load_synthdefs_and_samples() {
                         Ok(()) => {
-                            let message = match self.load_synthdefs_and_samples() {
-                                Ok(()) => "Server restarted".to_string(),
-                                Err(e) => format!("Restarted (synthdef warning: {})", e),
-                            };
-                            self.send_server_status(ServerStatus::Connected, message);
+                            if is_restart { "Server restarted".to_string() }
+                            else { "Connected".to_string() }
                         }
-                        Err(err) => {
-                            self.send_server_status(ServerStatus::Error, err.to_string());
+                        Err(e) => {
+                            if is_restart { format!("Restarted (synthdef warning: {})", e) }
+                            else { format!("Connected (synthdef warning: {})", e) }
                         }
+                    };
+                    self.send_server_status(ServerStatus::Connected, message);
+                    if let Some(reply) = reply {
+                        let _ = reply.send(Ok(()));
                     }
+                }
+                Ok(Err(msg)) => {
+                    let reply = self.pending_connect.take().unwrap().reply;
+                    self.engine.set_status(ServerStatus::Error);
+                    self.send_server_status(ServerStatus::Error, &msg);
+                    if let Some(reply) = reply {
+                        let _ = reply.send(Err(std::io::Error::new(
+                            std::io::ErrorKind::Other, msg,
+                        )));
+                    }
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => {}
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    let reply = self.pending_connect.take().unwrap().reply;
+                    self.engine.set_status(ServerStatus::Error);
+                    self.send_server_status(ServerStatus::Error, "Connect thread terminated unexpectedly");
+                    if let Some(reply) = reply {
+                        let _ = reply.send(Err(std::io::Error::new(
+                            std::io::ErrorKind::Other, "Connect thread terminated unexpectedly",
+                        )));
+                    }
+                }
+            }
+        }
+
+        // Drive phased routing rebuild (Phase 4: amortized across ticks)
+        if let Some(phase) = self.routing_rebuild.take() {
+            use super::engine::routing::RebuildStepResult;
+            match self.engine.routing_rebuild_step(phase, &self.instruments, &self.session) {
+                Ok(RebuildStepResult::Continue(next)) => {
+                    self.routing_rebuild = Some(next);
+                }
+                Ok(RebuildStepResult::Done) => {
+                    // Rebuild complete
+                }
+                Err(e) => {
+                    log::warn!(target: "audio", "Routing rebuild phase failed: {}", e);
+                    // Abandon rebuild on error
                 }
             }
         }

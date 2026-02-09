@@ -2,7 +2,11 @@
 
 ## Context
 
-Imbolc is a terminal-based DAW with 269K LOC across 5 crates, 524 passing tests, 27 panes, 51 sound sources, 37 effects, and 151 SynthDefs. Core features (sequencing, playback, mixing, persistence, MIDI) work. The goal is to harden it for public alpha/beta — early adopters who'll tolerate rough edges but expect stability.
+Imbolc is a terminal-based DAW with 269K LOC across 5 crates, 524
+passing tests, 27 panes, 51 sound sources, 37 effects, and 151
+SynthDefs. Core features (sequencing, playback, mixing, persistence,
+MIDI) work. The goal is to harden it for public alpha/beta — early
+adopters who'll tolerate rough edges but expect stability.
 
 **Decisions locked in:**
 - TUI is the product (imbolc-gui can be dropped/fenced)
@@ -14,21 +18,31 @@ Imbolc is a terminal-based DAW with 269K LOC across 5 crates, 524 passing tests,
 
 ## Phase 0: Hygiene (1-2 days)
 
-Clean build = professional signal. Zero warnings makes regressions visible.
+Clean build = professional signal. Zero warnings makes regressions
+visible.
 
 ### 0.1 Fix compile error
-- `imbolc-ui/src/panes/global_actions.rs:186` — non-exhaustive match on `PaneId::Tuner`. Add the missing arm.
-- `imbolc-ui/src/ui/action_id.rs` — verify `PaneId::Tuner` variant exists and is handled
+- `imbolc-ui/src/panes/global_actions.rs:186` — non-exhaustive match
+  on `PaneId::Tuner`. Add the missing arm.
+- `imbolc-ui/src/ui/action_id.rs` — verify `PaneId::Tuner` variant
+  exists and is handled
 
 ### 0.2 Fix all compiler warnings (~33)
-- `imbolc-ui/src/ui/mod.rs:30` — remove unused imports `selected_style_bold`, `selected_style`
-- `imbolc-ui/src/main.rs:64` — prefix `discover_mode` with `_` (or cfg-gate on `net` feature)
-- `imbolc-ui/src/ui/input.rs:35` — `#[allow(dead_code)]` on `AppEvent` variant fields
-- `imbolc-ui/src/ui/style.rs` — `#[allow(dead_code)]` on `theme_*` functions (intentional API for future themes)
-- `imbolc-ui/src/ui/layout_helpers.rs:20` — annotate or use `render_dialog_frame`
+- `imbolc-ui/src/ui/mod.rs:30` — remove unused imports
+  `selected_style_bold`, `selected_style`
+- `imbolc-ui/src/main.rs:64` — prefix `discover_mode` with `_` (or
+  cfg-gate on `net` feature)
+- `imbolc-ui/src/ui/input.rs:35` — `#[allow(dead_code)]` on `AppEvent`
+  variant fields
+- `imbolc-ui/src/ui/style.rs` — `#[allow(dead_code)]` on `theme_*`
+  functions (intentional API for future themes)
+- `imbolc-ui/src/ui/layout_helpers.rs:20` — annotate or use
+  `render_dialog_frame`
 - `imbolc-ui/src/ui/render.rs:73` — annotate or use `fill_line_bg`
-- `imbolc-ui/src/ui/list_selector.rs` — annotate `reset`, `next_and_scroll`, `prev_and_scroll`
-- Test helpers (`make_test_state`, `drive_and_collect_actions`, `send_reconnect`) — add `#[cfg(test)]` or `#[allow(dead_code)]`
+- `imbolc-ui/src/ui/list_selector.rs` — annotate `reset`,
+  `next_and_scroll`, `prev_and_scroll`
+- Test helpers (`make_test_state`, `drive_and_collect_actions`,
+  `send_reconnect`) — add `#[cfg(test)]` or `#[allow(dead_code)]`
 
 **Done when:** `cargo build` produces zero warnings.
 
@@ -43,14 +57,19 @@ Clean build = professional signal. Zero warnings makes regressions visible.
 An alpha that crashes or silently fails destroys trust.
 
 ### 1.1 Notification/feedback system
-**Why:** Every subsequent phase needs a way to tell users what happened. Currently errors go to server pane status or nowhere.
+**Why:** Every subsequent phase needs a way to tell users what
+happened. Currently errors go to server pane status or nowhere.
 
-- Add `StatusMessage { text, level, timestamp }` ring buffer to `AppState`
+- Add `StatusMessage { text, level, timestamp }` ring buffer to
+  `AppState`
 - Render one-line status bar at bottom of frame (`frame.rs`)
-- Auto-dismiss after 3-5s. Levels: Info (white), Warning (yellow), Error (red)
+- Auto-dismiss after 3-5s. Levels: Info (white), Warning (yellow),
+  Error (red)
 - Wire into: save/load, audio errors, MIDI connection, export progress
 
-**Files:** `imbolc-types/src/` (new type), `imbolc-core/src/state/mod.rs`, `imbolc-ui/src/ui/frame.rs`, `imbolc-ui/src/main.rs`
+**Files:** `imbolc-types/src/` (new type),
+`imbolc-core/src/state/mod.rs`, `imbolc-ui/src/ui/frame.rs`,
+`imbolc-ui/src/main.rs`
 
 ### 1.2 Terminal size handling
 - On startup + `Event::Resize`: check against minimum (80x24)
@@ -60,14 +79,16 @@ An alpha that crashes or silently fails destroys trust.
 **Files:** `imbolc-ui/src/main.rs`, `imbolc-ui/src/ui/frame.rs`
 
 ### 1.3 Panic recovery hook
-- Set a panic hook that restores terminal state (disable raw mode, show cursor)
+- Set a panic hook that restores terminal state (disable raw mode,
+  show cursor)
 - Attempt autosave on panic before exiting
 - Print useful error message to stderr
 
 **Files:** `imbolc-ui/src/main.rs`
 
 ### 1.4 Audit production unwraps
-- Review all `.unwrap()` outside test modules in imbolc-core and imbolc-ui
+- Review all `.unwrap()` outside test modules in imbolc-core and
+  imbolc-ui
 - Replace with proper error handling or document with comments
 - Mutex `.lock().unwrap()` → poisoned-mutex recovery where needed
 
@@ -75,12 +96,14 @@ An alpha that crashes or silently fails destroys trust.
 
 ## Phase 2: CI/CD (3-5 days)
 
-Without CI, regressions creep in silently. Required before inviting testers.
+Without CI, regressions creep in silently. Required before inviting
+testers.
 
 ### 2.1 GitHub Actions CI
 - `.github/workflows/ci.yml`
 - Matrix: ubuntu-latest, macos-latest
-- Steps: `cargo check`, `cargo build --release`, `cargo test` (skip e2e), `cargo clippy -- -D warnings`
+- Steps: `cargo check`, `cargo build --release`, `cargo test` (skip
+  e2e), `cargo clippy -- -D warnings`
 - Run on push to main + PRs
 
 ### 2.2 Release workflow
@@ -100,13 +123,15 @@ Without CI, regressions creep in silently. Required before inviting testers.
 Alpha testers need to install and run without hand-holding.
 
 ### 3.1 Installation guide
-- macOS: Homebrew SuperCollider setup, scsynth PATH, VSTPlugin (optional)
+- macOS: Homebrew SuperCollider setup, scsynth PATH, VSTPlugin
+  (optional)
 - Linux: Package manager commands
 - Windows: "Not supported for alpha"
 - Common errors + troubleshooting section
 
 ### 3.2 Getting Started tutorial
-Step-by-step: launch → add instrument → play notes → program pattern → add effects → mix → save → export
+Step-by-step: launch → add instrument → play notes → program pattern →
+add effects → mix → save → export
 
 ### 3.3 Docs audit
 - Add "Last verified" header to each file in `docs/`
@@ -121,13 +146,18 @@ Step-by-step: launch → add instrument → play notes → program pattern → a
 **Critical** — a DAW that can't export audio isn't a DAW.
 
 Plumbing already exists:
-- `AudioCmd::Render/Export` variants in `imbolc-core/src/audio/commands.rs`
+- `AudioCmd::Render/Export` variants in
+  `imbolc-core/src/audio/commands.rs`
 - `RenderState`, `ExportState`, `ExportKind` structs exist
-- `PianoRollActionId::RenderToWav/BounceToWav/ExportStems` keybindings defined
+- `PianoRollActionId::RenderToWav/BounceToWav/ExportStems` keybindings
+  defined
 
-**Need:** Wire trigger → audio thread → progress notifications → completion.
+**Need:** Wire trigger → audio thread → progress notifications →
+completion.
 
-**Files:** `imbolc-core/src/audio/audio_thread.rs`, `imbolc-core/src/audio/commands.rs`, `imbolc-ui/src/panes/piano_roll_pane/`
+**Files:** `imbolc-core/src/audio/audio_thread.rs`,
+`imbolc-core/src/audio/commands.rs`,
+`imbolc-ui/src/panes/piano_roll_pane/`
 
 ### 4.2 Autosave / crash recovery
 - Periodic autosave (every 2-5 min) to `.imbolc.autosave`
@@ -135,13 +165,19 @@ Plumbing already exists:
 - Use existing IO channel for non-blocking save
 
 ### 4.3 Automation recording + playback
-Per TASKS.md: data structures exist and are persisted, but recording mode, playback interpolation, and editing are missing.
+Per TASKS.md: data structures exist and are persisted, but recording
+mode, playback interpolation, and editing are missing.
 
-- Recording: Capture parameter changes as automation points during playback
-- Playback: Interpolate values in tick loop (`apply_automation()` exists)
+- Recording: Capture parameter changes as automation points during
+  playback
+- Playback: Interpolate values in tick loop (`apply_automation()`
+  exists)
 - Editing: `AutomationPane` already exists, wire point editing
 
-**Files:** `imbolc-core/src/audio/engine/automation.rs`, `imbolc-core/src/dispatch/automation.rs`, `imbolc-ui/src/panes/automation_pane/`, `imbolc-types/src/state/automation.rs`
+**Files:** `imbolc-core/src/audio/engine/automation.rs`,
+`imbolc-core/src/dispatch/automation.rs`,
+`imbolc-ui/src/panes/automation_pane/`,
+`imbolc-types/src/state/automation.rs`
 
 ---
 
@@ -157,7 +193,8 @@ Target: 700+ tests (up from 524). Focus on:
 Small feature from TASKS.md — keybind to cycle grid resolution.
 
 ### 5.3 MIDI Learn
-CC mapping state exists, needs "learn mode" UI toggle + auto-bind next incoming CC.
+CC mapping state exists, needs "learn mode" UI toggle + auto-bind next
+incoming CC.
 
 ---
 
@@ -170,7 +207,8 @@ CC mapping state exists, needs "learn mode" UI toggle + auto-bind next incoming 
 ### 6.2 Release prep
 - CHANGELOG.md
 - Verify LICENSE (GPL v3)
-- README: CI badge, terminal recording/screenshots, clean up sponsor links
+- README: CI badge, terminal recording/screenshots, clean up sponsor
+  links
 - Version bump: all `Cargo.toml` → `0.1.0-alpha.1`
 - Tag and release
 
@@ -228,4 +266,5 @@ After each phase:
 - `cargo build` — zero warnings
 - `cargo test` — all tests pass
 - `cargo clippy` — clean (after Phase 2)
-- Manual smoke test: launch → add instrument → play → sequence → mix → save → load → export
+- Manual smoke test: launch → add instrument → play → sequence → mix →
+  save → load → export
