@@ -321,6 +321,34 @@ pub enum ModSource {
     InstrumentParam(InstrumentId, String),
 }
 
+/// Decode an effect cursor position into (EffectId, Option<param_index>).
+/// Returns None if cursor is out of range. Used by Instrument, MixerBus, and LayerGroupMixer.
+pub fn decode_effect_cursor_from_slice(effects: &[EffectSlot], cursor: usize) -> Option<(EffectId, Option<usize>)> {
+    let mut pos = 0;
+    for effect in effects {
+        if cursor == pos {
+            return Some((effect.id, None));
+        }
+        pos += 1;
+        for pi in 0..effect.params.len() {
+            if cursor == pos {
+                return Some((effect.id, Some(pi)));
+            }
+            pos += 1;
+        }
+    }
+    None
+}
+
+/// Max cursor position for an effect chain. Returns 0 for empty chains.
+pub fn effects_max_cursor(effects: &[EffectSlot]) -> usize {
+    if effects.is_empty() {
+        return 0;
+    }
+    let total: usize = effects.iter().map(|e| 1 + e.params.len()).sum();
+    total.saturating_sub(1)
+}
+
 /// Which section of an instrument a given editing row belongs to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InstrumentSection {
@@ -649,20 +677,7 @@ impl Instrument {
     /// Decode a flat cursor position over the effects chain into (EffectId, Option<param_index>).
     /// Returns None if cursor is out of range. None param_index means the effect header row.
     pub fn decode_effect_cursor(&self, cursor: usize) -> Option<(EffectId, Option<usize>)> {
-        let mut pos = 0;
-        for effect in &self.effects {
-            if cursor == pos {
-                return Some((effect.id, None));
-            }
-            pos += 1;
-            for pi in 0..effect.params.len() {
-                if cursor == pos {
-                    return Some((effect.id, Some(pi)));
-                }
-                pos += 1;
-            }
-        }
-        None
+        decode_effect_cursor_from_slice(&self.effects, cursor)
     }
 }
 
@@ -828,5 +843,36 @@ mod tests {
         inst.move_effect(id2, -1);
         assert_eq!(inst.effect_position(id2), Some(0));
         assert_eq!(inst.effect_position(id1), Some(1));
+    }
+
+    #[test]
+    fn decode_effect_cursor_from_slice_navigates_headers_and_params() {
+        let mut inst = Instrument::new(1, SourceType::Saw);
+        let id1 = inst.add_effect(EffectType::Delay);
+        let id2 = inst.add_effect(EffectType::Reverb);
+        let params1 = inst.effects[0].params.len();
+
+        // Header of first effect
+        assert_eq!(decode_effect_cursor_from_slice(&inst.effects, 0), Some((id1, None)));
+        // First param of first effect
+        if params1 > 0 {
+            assert_eq!(decode_effect_cursor_from_slice(&inst.effects, 1), Some((id1, Some(0))));
+        }
+        // Header of second effect
+        assert_eq!(decode_effect_cursor_from_slice(&inst.effects, 1 + params1), Some((id2, None)));
+        // Out of range
+        let total: usize = inst.effects.iter().map(|e| 1 + e.params.len()).sum();
+        assert_eq!(decode_effect_cursor_from_slice(&inst.effects, total), None);
+    }
+
+    #[test]
+    fn effects_max_cursor_empty_and_populated() {
+        assert_eq!(effects_max_cursor(&[]), 0);
+
+        let mut inst = Instrument::new(1, SourceType::Saw);
+        inst.add_effect(EffectType::Delay);
+        inst.add_effect(EffectType::Reverb);
+        let total: usize = inst.effects.iter().map(|e| 1 + e.params.len()).sum();
+        assert_eq!(effects_max_cursor(&inst.effects), total - 1);
     }
 }

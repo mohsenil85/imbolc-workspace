@@ -5,7 +5,7 @@ use crate::state::InstrumentId;
 use super::VoiceChain;
 
 /// Maximum simultaneous voices per instrument
-pub const MAX_VOICES_PER_INSTRUMENT: usize = 16;
+pub const MAX_VOICES_PER_INSTRUMENT: usize = 64;
 
 /// Manages voice allocation, tracking, stealing, and control bus pooling.
 ///

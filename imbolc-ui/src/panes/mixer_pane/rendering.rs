@@ -1,6 +1,6 @@
-use super::{MixerPane, MixerSection};
+use super::{BusDetailSection, GroupDetailSection, MixerPane, MixerSection};
 use super::{CHANNEL_WIDTH, METER_HEIGHT, NUM_VISIBLE_CHANNELS, NUM_VISIBLE_GROUPS, NUM_VISIBLE_BUSES, BLOCK_CHARS};
-use crate::state::{AppState, MixerSelection, OutputTarget};
+use crate::state::{AppState, MixerSelection, OutputTarget, ParamValue};
 use crate::ui::{Rect, RenderBuf, Color, Style};
 use crate::ui::layout_helpers::center_rect;
 
@@ -509,71 +509,289 @@ impl MixerPane {
 
         let title = format!(" MIXER --- Group {} [{}] ", group_id, gm.name);
 
-        let members: Vec<&crate::state::Instrument> = state.instruments.instruments.iter()
-            .filter(|i| i.layer_group == Some(group_id))
-            .collect();
-
-        let num_member_slots = members.len().min(6);
-        let box_width = area.width.min(((num_member_slots + 1) as u16 * CHANNEL_WIDTH) + 6 + CHANNEL_WIDTH);
-        let box_height = METER_HEIGHT + 8;
+        let box_width = area.width.min(60);
+        let box_height = area.height.min(24);
         let rect = center_rect(area, box_width, box_height);
 
         buf.draw_block(rect, &title, Style::new().fg(Color::TEAL), Style::new().fg(Color::TEAL));
 
-        let base_x = rect.x + 2;
-        let base_y = rect.y + 1;
+        let inner_x = rect.x + 2;
+        let inner_y = rect.y + 1;
+        let inner_h = rect.height.saturating_sub(3);
 
-        let label_y = base_y;
-        let name_y = base_y + 1;
-        let meter_top_y = base_y + 2;
-        let db_y = meter_top_y + METER_HEIGHT;
-        let indicator_y = db_y + 1;
-        let output_y = indicator_y + 1;
-
-        let mut x = base_x;
-
-        // Render member instrument channels
-        for inst in &members {
-            let label = format!("I{}", inst.id);
-            Self::render_channel_buf(
-                buf, x, &label, &inst.name,
-                inst.level, inst.mute, inst.solo, Some(inst.output_target), false,
-                label_y, name_y, meter_top_y, db_y, indicator_y, output_y,
-            );
-            x += CHANNEL_WIDTH;
-        }
-
-        // Separator before group master
-        let teal_style = Style::new().fg(Color::TEAL);
-        for y in label_y..=output_y {
-            buf.set_cell(x, y, '│', teal_style);
-        }
-        x += 2;
-
-        // Group master strip
-        let group_label = format!("G{}", group_id);
-        Self::render_channel_buf(
-            buf, x, &group_label, &gm.name,
-            gm.level, gm.mute, gm.solo, Some(gm.output_target), true,
-            label_y, name_y, meter_top_y, db_y, indicator_y, output_y,
-        );
-
-        // Sends info below
-        let send_y = output_y + 1;
         let dim = Style::new().fg(Color::DARK_GRAY);
-        let mut sx = base_x;
-        for send in &gm.sends {
-            if sx >= rect.x + rect.width - 8 { break; }
-            let status = if send.enabled { "ON" } else { "OFF" };
-            let send_text = format!("→B{}:{:.0}%{}", send.bus_id, send.level * 100.0, status);
-            let send_style = if send.enabled {
-                Style::new().fg(Color::TEAL)
+        let normal = Style::new().fg(Color::WHITE);
+        let active_section = Style::new().fg(Color::WHITE).bold();
+        let selected_style = Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG);
+
+        // Section indicator bar
+        let section_bar_y = rect.y;
+        let sections = [GroupDetailSection::Effects, GroupDetailSection::Sends, GroupDetailSection::Output];
+        let mut sx = rect.x + (title.len() as u16) + 1;
+        for &section in &sections {
+            if sx + section.label().len() as u16 + 2 >= rect.x + rect.width { break; }
+            let sstyle = if section == self.group_detail_section {
+                Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG).bold()
             } else {
-                dim
+                Style::new().fg(Color::DARK_GRAY)
             };
-            Self::write_str(buf, sx, send_y, &send_text, send_style);
-            sx += send_text.len() as u16 + 1;
+            let label = format!(" {} ", section.label());
+            Self::write_str(buf, sx, section_bar_y, &label, sstyle);
+            sx += label.len() as u16 + 1;
         }
+
+        match self.group_detail_section {
+            GroupDetailSection::Effects => {
+                Self::write_str(buf, inner_x, inner_y, "EFFECTS CHAIN", active_section);
+
+                let mut ey = inner_y + 1;
+                let mut cursor_pos = 0;
+                for (ei, effect) in gm.effects.iter().enumerate() {
+                    if ey >= inner_y + inner_h { break; }
+
+                    let bypass_char = if effect.enabled { '\u{25CF}' } else { '\u{25CB}' };
+                    let effect_label = format!("{} [{}] {:?}", ei + 1, bypass_char, effect.effect_type);
+                    let style = if self.detail_cursor == cursor_pos {
+                        selected_style
+                    } else {
+                        normal
+                    };
+                    Self::write_str(buf, inner_x, ey, &effect_label, style);
+                    ey += 1;
+                    cursor_pos += 1;
+
+                    for param in effect.params.iter().take(4) {
+                        if ey >= inner_y + inner_h { break; }
+                        let val_str = match &param.value {
+                            ParamValue::Float(v) => format!("{:.2}", v),
+                            ParamValue::Int(v) => format!("{}", v),
+                            ParamValue::Bool(b) => if *b { "ON".to_string() } else { "OFF".to_string() },
+                        };
+                        let param_text = format!("  {} {}", param.name, val_str);
+                        let pstyle = if self.detail_cursor == cursor_pos {
+                            selected_style
+                        } else {
+                            dim
+                        };
+                        Self::write_str(buf, inner_x + 1, ey, &param_text, pstyle);
+                        ey += 1;
+                        cursor_pos += 1;
+                    }
+                }
+                if gm.effects.is_empty() {
+                    Self::write_str(buf, inner_x, inner_y + 1, "(no effects)", dim);
+                }
+            }
+            GroupDetailSection::Sends => {
+                Self::write_str(buf, inner_x, inner_y, "SENDS", active_section);
+
+                let mut sy = inner_y + 1;
+                for (si, send) in gm.sends.iter().enumerate() {
+                    if sy >= inner_y + inner_h { break; }
+                    let bar_len = (send.level * 5.0) as usize;
+                    let bar: String = "\u{2588}".repeat(bar_len) + &"\u{2591}".repeat(5 - bar_len);
+                    let status = if send.enabled {
+                        format!("{:.0}%", send.level * 100.0)
+                    } else {
+                        "OFF".to_string()
+                    };
+                    let send_text = format!("\u{2192}B{} {} {}", send.bus_id, bar, status);
+                    let sstyle = if self.detail_cursor == si {
+                        selected_style
+                    } else if send.enabled {
+                        normal
+                    } else {
+                        dim
+                    };
+                    Self::write_str(buf, inner_x, sy, &send_text, sstyle);
+                    sy += 1;
+                }
+            }
+            GroupDetailSection::Output => {
+                Self::write_str(buf, inner_x, inner_y, "OUTPUT", active_section);
+
+                let mut oy = inner_y + 1;
+
+                let pan_text = format!("Pan: {:+.2}", gm.pan);
+                let pan_style = if self.detail_cursor == 0 {
+                    selected_style
+                } else {
+                    normal
+                };
+                Self::write_str(buf, inner_x, oy, &pan_text, pan_style);
+                oy += 1;
+
+                let db_str = Self::level_to_db(gm.level);
+                let meter_len = (gm.level * 10.0) as usize;
+                let meter_bar: String = "\u{258E}".repeat(meter_len) + &"\u{2591}".repeat(10usize.saturating_sub(meter_len));
+                let level_text = format!("{} {}", meter_bar, db_str);
+                let level_style = if self.detail_cursor == 1 {
+                    selected_style
+                } else {
+                    normal
+                };
+                Self::write_str(buf, inner_x, oy, &level_text, level_style);
+                oy += 1;
+
+                let out_text = format!("\u{25B8} {}", match gm.output_target {
+                    OutputTarget::Master => "Master".to_string(),
+                    OutputTarget::Bus(id) => format!("Bus {}", id),
+                });
+                Self::write_str(buf, inner_x, oy, &out_text, dim);
+                oy += 1;
+
+                let mute_str = if gm.mute { "[M]" } else { " M " };
+                let solo_str = if gm.solo { "[S]" } else { " S " };
+                let mute_style = if gm.mute {
+                    Style::new().fg(Color::MUTE_COLOR).bold()
+                } else {
+                    dim
+                };
+                let solo_style = if gm.solo {
+                    Style::new().fg(Color::SOLO_COLOR).bold()
+                } else {
+                    dim
+                };
+                Self::write_str(buf, inner_x, oy, mute_str, mute_style);
+                Self::write_str(buf, inner_x + 4, oy, solo_str, solo_style);
+            }
+        }
+
+        // Hint line at bottom
+        let hint_y = rect.y + rect.height - 1;
+        let hint = "Tab:section  a:add  d:del  e:bypass  Esc:back";
+        let hint_x = rect.x + (rect.width.saturating_sub(hint.len() as u16)) / 2;
+        Self::write_str(buf, hint_x, hint_y, hint, dim);
+    }
+
+    pub(super) fn render_bus_detail_buf(&self, buf: &mut RenderBuf, area: Rect, state: &AppState, bus_id: u8) {
+        let Some(bus) = state.session.bus(bus_id) else { return };
+
+        let title = format!(" MIXER --- BUS {} [{}] ", bus_id, bus.name);
+
+        let box_width = area.width.min(60);
+        let box_height = area.height.min(24);
+        let rect = center_rect(area, box_width, box_height);
+
+        buf.draw_block(rect, &title, Style::new().fg(Color::PURPLE), Style::new().fg(Color::PURPLE));
+
+        let inner_x = rect.x + 2;
+        let inner_y = rect.y + 1;
+        let inner_h = rect.height.saturating_sub(3);
+
+        let dim = Style::new().fg(Color::DARK_GRAY);
+        let normal = Style::new().fg(Color::WHITE);
+        let active_section = Style::new().fg(Color::WHITE).bold();
+        let selected_style = Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG);
+
+        // Section indicator bar
+        let section_bar_y = rect.y;
+        let sections = [BusDetailSection::Effects, BusDetailSection::Output];
+        let mut sx = rect.x + (title.len() as u16) + 1;
+        for &section in &sections {
+            if sx + section.label().len() as u16 + 2 >= rect.x + rect.width { break; }
+            let sstyle = if section == self.bus_detail_section {
+                Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG).bold()
+            } else {
+                Style::new().fg(Color::DARK_GRAY)
+            };
+            let label = format!(" {} ", section.label());
+            Self::write_str(buf, sx, section_bar_y, &label, sstyle);
+            sx += label.len() as u16 + 1;
+        }
+
+        match self.bus_detail_section {
+            BusDetailSection::Effects => {
+                let effects_header = active_section;
+                Self::write_str(buf, inner_x, inner_y, "EFFECTS CHAIN", effects_header);
+
+                let mut ey = inner_y + 1;
+                let mut cursor_pos = 0;
+                for (ei, effect) in bus.effects.iter().enumerate() {
+                    if ey >= inner_y + inner_h { break; }
+
+                    let bypass_char = if effect.enabled { '\u{25CF}' } else { '\u{25CB}' };
+                    let effect_label = format!("{} [{}] {:?}", ei + 1, bypass_char, effect.effect_type);
+                    let style = if self.detail_cursor == cursor_pos {
+                        selected_style
+                    } else {
+                        normal
+                    };
+                    Self::write_str(buf, inner_x, ey, &effect_label, style);
+                    ey += 1;
+                    cursor_pos += 1;
+
+                    for param in effect.params.iter().take(4) {
+                        if ey >= inner_y + inner_h { break; }
+                        let val_str = match &param.value {
+                            ParamValue::Float(v) => format!("{:.2}", v),
+                            ParamValue::Int(v) => format!("{}", v),
+                            ParamValue::Bool(b) => if *b { "ON".to_string() } else { "OFF".to_string() },
+                        };
+                        let param_text = format!("  {} {}", param.name, val_str);
+                        let pstyle = if self.detail_cursor == cursor_pos {
+                            selected_style
+                        } else {
+                            dim
+                        };
+                        Self::write_str(buf, inner_x + 1, ey, &param_text, pstyle);
+                        ey += 1;
+                        cursor_pos += 1;
+                    }
+                }
+                if bus.effects.is_empty() {
+                    Self::write_str(buf, inner_x, inner_y + 1, "(no effects)", dim);
+                }
+            }
+            BusDetailSection::Output => {
+                let output_header = active_section;
+                Self::write_str(buf, inner_x, inner_y, "OUTPUT", output_header);
+
+                let mut oy = inner_y + 1;
+
+                let pan_text = format!("Pan: {:+.2}", bus.pan);
+                let pan_style = if self.detail_cursor == 0 {
+                    selected_style
+                } else {
+                    normal
+                };
+                Self::write_str(buf, inner_x, oy, &pan_text, pan_style);
+                oy += 1;
+
+                let db_str = Self::level_to_db(bus.level);
+                let meter_len = (bus.level * 10.0) as usize;
+                let meter_bar: String = "\u{258E}".repeat(meter_len) + &"\u{2591}".repeat(10usize.saturating_sub(meter_len));
+                let level_text = format!("{} {}", meter_bar, db_str);
+                let level_style = if self.detail_cursor == 1 {
+                    selected_style
+                } else {
+                    normal
+                };
+                Self::write_str(buf, inner_x, oy, &level_text, level_style);
+                oy += 1;
+
+                let mute_str = if bus.mute { "[M]" } else { " M " };
+                let solo_str = if bus.solo { "[S]" } else { " S " };
+                let mute_style = if bus.mute {
+                    Style::new().fg(Color::MUTE_COLOR).bold()
+                } else {
+                    dim
+                };
+                let solo_style = if bus.solo {
+                    Style::new().fg(Color::SOLO_COLOR).bold()
+                } else {
+                    dim
+                };
+                Self::write_str(buf, inner_x, oy, mute_str, mute_style);
+                Self::write_str(buf, inner_x + 4, oy, solo_str, solo_style);
+            }
+        }
+
+        // Hint line at bottom
+        let hint_y = rect.y + rect.height - 1;
+        let hint = "Tab:section  a:add  d:del  e:bypass  Esc:back";
+        let hint_x = rect.x + (rect.width.saturating_sub(hint.len() as u16)) / 2;
+        Self::write_str(buf, hint_x, hint_y, hint, dim);
     }
 
     #[allow(clippy::too_many_arguments)]

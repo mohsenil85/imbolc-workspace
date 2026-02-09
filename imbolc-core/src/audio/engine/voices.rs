@@ -4,6 +4,11 @@ use super::backend::{AudioBackend, BackendMessage, RawArg};
 use super::{AudioEngine, VoiceChain, GROUP_SOURCES};
 use crate::state::{BufferId, InstrumentId, InstrumentState, ParameterTarget, ParamValue, SessionState};
 
+/// Anti-click fade time for voice stealing/freeing.
+/// Must exceed the midi control node's gate release (10ms) plus margin
+/// for the source ADSR to begin releasing.
+const ANTI_CLICK_FADE_SECS: f64 = 0.030;
+
 impl AudioEngine {
     /// Spawn a voice for an instrument
     pub fn spawn_voice(
@@ -614,11 +619,11 @@ impl AudioEngine {
                         addr: "/n_free".to_string(),
                         args: vec![RawArg::Int(voice.group_id)],
                     }],
-                    0.005,
+                    ANTI_CLICK_FADE_SECS,
                 )
                 .map_err(|e| e.to_string())?;
         } else {
-            // Active voice: send gate=0 for a brief fade, then free after 5ms
+            // Active voice: send gate=0 for a brief fade, then free after fade
             backend
                 .set_params_bundled(voice.midi_node_id, &[("gate", 0.0)], 0.0)
                 .map_err(|e| e.to_string())?;
@@ -628,7 +633,7 @@ impl AudioEngine {
                         addr: "/n_free".to_string(),
                         args: vec![RawArg::Int(voice.group_id)],
                     }],
-                    0.005,
+                    ANTI_CLICK_FADE_SECS,
                 )
                 .map_err(|e| e.to_string())?;
         }

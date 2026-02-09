@@ -7,6 +7,15 @@ use crate::ui::{
     Rect, RenderBuf, Action, Color, FileSelectAction, InputEvent, InstrumentAction, Keymap, MouseEvent,
     MouseEventKind, MouseButton, NavAction, Pane, SessionAction, Style,
 };
+use crate::action::{BusAction, LayerGroupAction};
+
+/// Target for the add-effect modal: which entity receives the new effect.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EffectTarget {
+    Instrument,
+    Bus(u8),
+    LayerGroup(u32),
+}
 
 /// Options available in the Add Effect menu
 #[derive(Debug, Clone)]
@@ -23,6 +32,7 @@ pub struct AddEffectPane {
     selected: usize,
     scroll_offset: usize,
     cached_options: Vec<AddEffectOption>,
+    effect_target: EffectTarget,
 }
 
 impl AddEffectPane {
@@ -32,7 +42,17 @@ impl AddEffectPane {
             selected: 0,
             scroll_offset: 0,
             cached_options: Self::build_options_static(),
+            effect_target: EffectTarget::Instrument,
         }
+    }
+
+    pub fn set_effect_target(&mut self, target: EffectTarget) {
+        self.effect_target = target;
+    }
+
+    #[allow(dead_code)]
+    pub fn effect_target(&self) -> EffectTarget {
+        self.effect_target
     }
 
     fn adjust_scroll(&mut self) {
@@ -172,13 +192,27 @@ impl Pane for AddEffectPane {
             ActionId::Add(AddActionId::Confirm) => {
                 if let Some(option) = self.cached_options.get(self.selected) {
                     match option {
-                        AddEffectOption::Effect(effect_type) => {
-                            if let Some(inst) = state.instruments.selected_instrument() {
-                                Action::Instrument(InstrumentAction::AddEffect(inst.id, *effect_type))
-                            } else {
-                                Action::None
+                        AddEffectOption::Effect(effect_type) => match self.effect_target {
+                            EffectTarget::Bus(bus_id) => {
+                                Action::Bus(BusAction::AddEffect(bus_id, *effect_type))
                             }
-                        }
+                            EffectTarget::LayerGroup(group_id) => {
+                                Action::LayerGroup(LayerGroupAction::AddEffect(
+                                    group_id,
+                                    *effect_type,
+                                ))
+                            }
+                            EffectTarget::Instrument => {
+                                if let Some(inst) = state.instruments.selected_instrument() {
+                                    Action::Instrument(InstrumentAction::AddEffect(
+                                        inst.id,
+                                        *effect_type,
+                                    ))
+                                } else {
+                                    Action::None
+                                }
+                            }
+                        },
                         AddEffectOption::ImportVst => {
                             Action::Session(SessionAction::OpenFileBrowser(FileSelectAction::ImportVstEffect))
                         }
@@ -221,13 +255,32 @@ impl Pane for AddEffectPane {
                         self.adjust_scroll();
                         // Confirm on click
                         match &self.cached_options[idx] {
-                            AddEffectOption::Effect(effect_type) => {
-                                if let Some(inst) = state.instruments.selected_instrument() {
-                                    return Action::Instrument(InstrumentAction::AddEffect(inst.id, *effect_type));
+                            AddEffectOption::Effect(effect_type) => match self.effect_target {
+                                EffectTarget::Bus(bus_id) => {
+                                    return Action::Bus(BusAction::AddEffect(
+                                        bus_id,
+                                        *effect_type,
+                                    ));
                                 }
-                            }
+                                EffectTarget::LayerGroup(group_id) => {
+                                    return Action::LayerGroup(LayerGroupAction::AddEffect(
+                                        group_id,
+                                        *effect_type,
+                                    ));
+                                }
+                                EffectTarget::Instrument => {
+                                    if let Some(inst) = state.instruments.selected_instrument() {
+                                        return Action::Instrument(InstrumentAction::AddEffect(
+                                            inst.id,
+                                            *effect_type,
+                                        ));
+                                    }
+                                }
+                            },
                             AddEffectOption::ImportVst => {
-                                return Action::Session(SessionAction::OpenFileBrowser(FileSelectAction::ImportVstEffect));
+                                return Action::Session(SessionAction::OpenFileBrowser(
+                                    FileSelectAction::ImportVstEffect,
+                                ));
                             }
                             AddEffectOption::Separator(_) => {}
                         }
@@ -345,6 +398,10 @@ impl Pane for AddEffectPane {
 
     fn on_enter(&mut self, state: &AppState) {
         self.update_options(&state.session.vst_plugins);
+    }
+
+    fn on_exit(&mut self, _state: &AppState) {
+        self.effect_target = EffectTarget::Instrument;
     }
 
     fn as_any_mut(&mut self) -> &mut dyn Any {

@@ -648,21 +648,23 @@ mod tests {
         let mut engine = connect_engine();
         let inst_id = 1;
 
-        // Fill to limit with active voices
+        // Fill to limit with active voices (pitches 40..40+N, all unique)
         for i in 0..MAX_VOICES_PER_INSTRUMENT {
             engine.voice_allocator.add(make_voice(inst_id, 40 + i as u8, 0.8, 100));
         }
-        // Add an extra released voice (active count is already at limit)
-        engine.voice_allocator.add(make_released_voice(inst_id, 80, 0.8, 500, 1.0));
+        // Add an extra released voice with a pitch outside the active range
+        let released_pitch = 30;
+        engine.voice_allocator.add(make_released_voice(inst_id, released_pitch, 0.8, 500, 1.0));
 
-        // Trigger steal
+        // Trigger steal with a pitch outside both ranges (no same-pitch retrigger)
+        let new_pitch = 31;
         engine
-            .steal_voice_if_needed(inst_id, 90, 0.8)
+            .steal_voice_if_needed(inst_id, new_pitch, 0.8)
             .expect("steal");
 
         // The released voice should be gone, not any active voice
         assert!(
-            !engine.voice_allocator.chains().iter().any(|v| v.pitch == 80 && v.instrument_id == inst_id),
+            !engine.voice_allocator.chains().iter().any(|v| v.pitch == released_pitch && v.instrument_id == inst_id),
             "released voice should be stolen before active voices"
         );
         // All original active voices should still be present
@@ -677,15 +679,17 @@ mod tests {
         let mut engine = connect_engine();
         let inst_id = 1;
 
-        // Fill to limit — all same age, varying velocity
+        // Fill to limit — all same age, varying velocity (pitches 40..40+N)
         for i in 0..MAX_VOICES_PER_INSTRUMENT {
-            let vel = 0.2 + (i as f32 * 0.05); // 0.2, 0.25, 0.30, ...
+            let vel = 0.2 + (i as f32 * 0.01); // 0.2, 0.21, 0.22, ...
             engine.voice_allocator.add(make_voice(inst_id, 40 + i as u8, vel, 100));
         }
         let quietest_pitch = engine.voice_allocator.chains()[0].pitch; // velocity 0.2
 
+        // Use a pitch outside the active range to avoid same-pitch retrigger
+        let new_pitch = 39;
         engine
-            .steal_voice_if_needed(inst_id, 90, 0.8)
+            .steal_voice_if_needed(inst_id, new_pitch, 0.8)
             .expect("steal");
 
         assert!(
@@ -699,15 +703,17 @@ mod tests {
         let mut engine = connect_engine();
         let inst_id = 1;
 
-        // Fill to limit — all same velocity, varying age
+        // Fill to limit — all same velocity, varying age (pitches 40..40+N)
         for i in 0..MAX_VOICES_PER_INSTRUMENT {
-            let age = 1000 - (i as u64 * 50); // oldest first: 1000, 950, 900, ...
+            let age = 5000 - (i as u64 * 10); // oldest first: 5000, 4990, 4980, ...
             engine.voice_allocator.add(make_voice(inst_id, 40 + i as u8, 0.5, age));
         }
-        let oldest_pitch = engine.voice_allocator.chains()[0].pitch; // age 1000ms
+        let oldest_pitch = engine.voice_allocator.chains()[0].pitch; // age 5000ms
 
+        // Use a pitch outside the active range to avoid same-pitch retrigger
+        let new_pitch = 39;
         engine
-            .steal_voice_if_needed(inst_id, 90, 0.5)
+            .steal_voice_if_needed(inst_id, new_pitch, 0.5)
             .expect("steal");
 
         assert!(

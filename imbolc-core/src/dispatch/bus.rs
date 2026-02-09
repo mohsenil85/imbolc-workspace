@@ -1,4 +1,4 @@
-use crate::action::{BusAction, DispatchResult, LayerGroupAction};
+use crate::action::{BusAction, DispatchResult, LayerGroupAction, NavIntent};
 use crate::state::{AppState, OutputTarget};
 
 /// Dispatch bus management actions
@@ -80,6 +80,7 @@ pub fn dispatch_bus(action: &BusAction, state: &mut AppState) -> DispatchResult 
             }
             result.audio_dirty.routing = true;
             result.audio_dirty.session = true;
+            result.nav.push(NavIntent::Pop);
         }
 
         BusAction::RemoveEffect(bus_id, effect_id) => {
@@ -150,6 +151,7 @@ pub fn dispatch_layer_group(action: &LayerGroupAction, state: &mut AppState) -> 
             }
             result.audio_dirty.routing = true;
             result.audio_dirty.session = true;
+            result.nav.push(NavIntent::Pop);
         }
 
         LayerGroupAction::RemoveEffect(group_id, effect_id) => {

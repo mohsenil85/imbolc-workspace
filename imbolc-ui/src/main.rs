@@ -367,6 +367,18 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
                 quit_after_save = false;
             }
 
+            // Bridge mixer detail context to add_effect pane
+            if matches!(&pane_action, Action::Nav(action::NavAction::PushPane("add_effect")))
+                && panes.active().id() == "mixer"
+            {
+                if let Some(mixer) = panes.get_pane_mut::<MixerPane>("mixer") {
+                    let target = mixer.effect_target();
+                    if let Some(add_pane) = panes.get_pane_mut::<AddEffectPane>("add_effect") {
+                        add_pane.set_effect_target(target);
+                    }
+                }
+            }
+
             // Process navigation
             panes.process_nav(&pane_action, dispatcher.state());
 
