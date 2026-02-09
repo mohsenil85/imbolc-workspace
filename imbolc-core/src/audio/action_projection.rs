@@ -12,10 +12,13 @@
 //! - Does NOT produce AudioSideEffect enums (those are handled by Phase 1)
 
 use imbolc_types::{
-    Action, InstrumentAction, MixerAction,
+    Action, InstrumentAction, MixerAction, PianoRollAction, AutomationAction,
+    BusAction, VstParamAction, SessionAction, ClickAction, VstTarget,
     InstrumentId, MixerSelection, FilterConfig, FilterType, OutputTarget, EqConfig,
 };
-use crate::state::{InstrumentState, SessionState};
+use crate::state::instrument::Instrument;
+use crate::state::piano_roll::Note;
+use crate::state::{InstrumentState, SessionState, SourceType, EffectType};
 
 /// Apply an action's state mutations to the audio thread's local copies.
 /// Returns true if the action was handled (state was mutated or no-op).
@@ -39,13 +42,13 @@ pub fn project_action(
         Action::Instrument(a) => project_instrument(a, instruments, session),
         Action::Mixer(a) => project_mixer(a, instruments, session),
 
-        // Phase 2b: remaining action types
-        Action::PianoRoll(_) => false,
-        Action::Automation(_) => false,
-        Action::Bus(_) => false,
-        Action::VstParam(_) => false,
-        Action::Session(_) => false,
-        Action::Click(_) => false,
+        // Phase 2b: remaining common action types
+        Action::PianoRoll(a) => project_piano_roll(a, session),
+        Action::Automation(a) => project_automation(a, session),
+        Action::Bus(a) => project_bus(a, session, instruments),
+        Action::VstParam(a) => project_vst_param(a, instruments, session),
+        Action::Session(a) => project_session(a, session, instruments),
+        Action::Click(a) => { project_click(a, session); true }
 
         // Phase 2c: remaining action types
         Action::Arrangement(_) => false,
@@ -894,6 +897,501 @@ fn project_mixer(
                 MixerSelection::Master => {}
             }
             true
+        }
+    }
+}
+
+// ============================================================================
+// PianoRollAction projection
+// ============================================================================
+
+fn project_piano_roll(action: &PianoRollAction, session: &mut SessionState) -> bool {
+    match action {
+        PianoRollAction::ToggleNote { pitch, tick, duration, velocity, track } => {
+            session.piano_roll.toggle_note(*track, *pitch, *tick, *duration, *velocity);
+            true
+        }
+        PianoRollAction::PlayStop => {
+            // Skip state.io guard (UI concern). Project the toggle unconditionally.
+            let pr = &mut session.piano_roll;
+            pr.playing = !pr.playing;
+            if !pr.playing {
+                pr.recording = false;
+            }
+            true
+        }
+        PianoRollAction::PlayStopRecord => {
+            let is_playing = session.piano_roll.playing;
+            if !is_playing {
+                session.piano_roll.playing = true;
+                session.piano_roll.recording = true;
+            } else {
+                session.piano_roll.playing = false;
+                session.piano_roll.recording = false;
+            }
+            true
+        }
+        PianoRollAction::ToggleLoop => {
+            session.piano_roll.looping = !session.piano_roll.looping;
+            true
+        }
+        PianoRollAction::SetLoopStart(tick) => {
+            session.piano_roll.loop_start = *tick;
+            true
+        }
+        PianoRollAction::SetLoopEnd(tick) => {
+            session.piano_roll.loop_end = *tick;
+            true
+        }
+        PianoRollAction::CycleTimeSig => {
+            let new_ts = match session.time_signature {
+                (4, 4) => (3, 4),
+                (3, 4) => (6, 8),
+                (6, 8) => (5, 4),
+                (5, 4) => (7, 8),
+                _ => (4, 4),
+            };
+            session.time_signature = new_ts;
+            session.piano_roll.time_signature = new_ts;
+            true
+        }
+        PianoRollAction::TogglePolyMode(track_idx) => {
+            if let Some(track) = session.piano_roll.track_at_mut(*track_idx) {
+                track.polyphonic = !track.polyphonic;
+            }
+            true
+        }
+        PianoRollAction::AdjustSwing(delta) => {
+            let pr = &mut session.piano_roll;
+            pr.swing_amount = (pr.swing_amount + delta).clamp(0.0, 1.0);
+            true
+        }
+        PianoRollAction::DeleteNotesInRegion { track, start_tick, end_tick, start_pitch, end_pitch } => {
+            if let Some(t) = session.piano_roll.track_at_mut(*track) {
+                t.notes.retain(|n| {
+                    !(n.pitch >= *start_pitch && n.pitch <= *end_pitch
+                      && n.tick >= *start_tick && n.tick < *end_tick)
+                });
+            }
+            true
+        }
+        PianoRollAction::PasteNotes { track, anchor_tick, anchor_pitch, notes } => {
+            if let Some(t) = session.piano_roll.track_at_mut(*track) {
+                for cn in notes {
+                    let tick = *anchor_tick + cn.tick_offset;
+                    let pitch_i16 = *anchor_pitch as i16 + cn.pitch_offset;
+                    if pitch_i16 < 0 || pitch_i16 > 127 { continue; }
+                    let pitch = pitch_i16 as u8;
+                    if !t.notes.iter().any(|n| n.pitch == pitch && n.tick == tick) {
+                        let pos = t.notes.partition_point(|n| n.tick < tick);
+                        t.notes.insert(pos, Note {
+                            tick,
+                            duration: cn.duration,
+                            pitch,
+                            velocity: cn.velocity,
+                            probability: cn.probability,
+                        });
+                    }
+                }
+            }
+            true
+        }
+        // PlayNote/PlayNotes: voice spawning is AudioSideEffect; recording uses unavailable playhead
+        PianoRollAction::PlayNote { .. }
+        | PianoRollAction::PlayNotes { .. } => true,
+        // ReleaseNote/ReleaseNotes: audio side effect only
+        PianoRollAction::ReleaseNote { .. }
+        | PianoRollAction::ReleaseNotes { .. } => true,
+        // CopyNotes: clipboard only, no audio-relevant state mutation
+        PianoRollAction::CopyNotes { .. } => true,
+        // Render/Export: file I/O + state.io, not projectable
+        PianoRollAction::RenderToWav(_)
+        | PianoRollAction::BounceToWav
+        | PianoRollAction::ExportStems
+        | PianoRollAction::CancelExport => false,
+    }
+}
+
+// ============================================================================
+// AutomationAction projection
+// ============================================================================
+
+fn project_automation(action: &AutomationAction, session: &mut SessionState) -> bool {
+    match action {
+        AutomationAction::AddLane(target) => {
+            session.automation.add_lane(target.clone());
+            true
+        }
+        AutomationAction::RemoveLane(id) => {
+            session.automation.remove_lane(*id);
+            true
+        }
+        AutomationAction::ToggleLaneEnabled(id) => {
+            if let Some(lane) = session.automation.lane_mut(*id) {
+                lane.enabled = !lane.enabled;
+            }
+            true
+        }
+        AutomationAction::AddPoint(lane_id, tick, value) => {
+            if let Some(lane) = session.automation.lane_mut(*lane_id) {
+                lane.add_point(*tick, *value);
+            }
+            true
+        }
+        AutomationAction::RemovePoint(lane_id, tick) => {
+            if let Some(lane) = session.automation.lane_mut(*lane_id) {
+                lane.remove_point(*tick);
+            }
+            true
+        }
+        AutomationAction::MovePoint(lane_id, old_tick, new_tick, new_value) => {
+            if let Some(lane) = session.automation.lane_mut(*lane_id) {
+                lane.remove_point(*old_tick);
+                lane.add_point(*new_tick, *new_value);
+            }
+            true
+        }
+        AutomationAction::SetCurveType(lane_id, tick, curve) => {
+            if let Some(lane) = session.automation.lane_mut(*lane_id) {
+                if let Some(point) = lane.point_at_mut(*tick) {
+                    point.curve = *curve;
+                }
+            }
+            true
+        }
+        AutomationAction::SelectLane(delta) => {
+            if *delta > 0 {
+                session.automation.select_next();
+            } else {
+                session.automation.select_prev();
+            }
+            true
+        }
+        AutomationAction::ClearLane(id) => {
+            if let Some(lane) = session.automation.lane_mut(*id) {
+                lane.points.clear();
+            }
+            true
+        }
+        AutomationAction::ToggleLaneArm(id) => {
+            if let Some(lane) = session.automation.lane_mut(*id) {
+                lane.record_armed = !lane.record_armed;
+            }
+            true
+        }
+        AutomationAction::ArmAllLanes => {
+            for lane in &mut session.automation.lanes {
+                lane.record_armed = true;
+            }
+            true
+        }
+        AutomationAction::DisarmAllLanes => {
+            for lane in &mut session.automation.lanes {
+                lane.record_armed = false;
+            }
+            true
+        }
+        AutomationAction::DeletePointsInRange(lane_id, start_tick, end_tick) => {
+            if let Some(lane) = session.automation.lane_mut(*lane_id) {
+                lane.points.retain(|p| p.tick < *start_tick || p.tick >= *end_tick);
+            }
+            true
+        }
+        AutomationAction::PastePoints(lane_id, anchor_tick, points) => {
+            if let Some(lane) = session.automation.lane_mut(*lane_id) {
+                for (tick_offset, value) in points {
+                    let tick = *anchor_tick + tick_offset;
+                    lane.add_point(tick, *value);
+                }
+            }
+            true
+        }
+        // ToggleRecording: touches state.recording + state.undo_history (not available)
+        AutomationAction::ToggleRecording => false,
+        // RecordValue: recording depends on state.recording + state.audio.playhead; audio feedback is AudioSideEffect
+        AutomationAction::RecordValue(_, _) => true,
+        // CopyPoints: clipboard only
+        AutomationAction::CopyPoints(_, _, _) => true,
+    }
+}
+
+// ============================================================================
+// BusAction projection
+// ============================================================================
+
+fn project_bus(
+    action: &BusAction,
+    session: &mut SessionState,
+    instruments: &mut InstrumentState,
+) -> bool {
+    match action {
+        BusAction::Add => {
+            if session.add_bus().is_some() {
+                let bus_ids: Vec<u8> = session.bus_ids().collect();
+                for inst in &mut instruments.instruments {
+                    inst.sync_sends_with_buses(&bus_ids);
+                }
+                for gm in &mut session.mixer.layer_group_mixers {
+                    gm.sync_sends_with_buses(&bus_ids);
+                }
+            }
+            true
+        }
+        BusAction::Remove(bus_id) => {
+            let bus_id = *bus_id;
+            if session.bus(bus_id).is_none() {
+                return true;
+            }
+            // Reset instruments that output to this bus
+            for inst in &mut instruments.instruments {
+                if inst.output_target == OutputTarget::Bus(bus_id) {
+                    inst.output_target = OutputTarget::Master;
+                }
+                inst.disable_send_for_bus(bus_id);
+            }
+            // Reset layer group mixers that output to this bus
+            for gm in &mut session.mixer.layer_group_mixers {
+                if gm.output_target == OutputTarget::Bus(bus_id) {
+                    gm.output_target = OutputTarget::Master;
+                }
+                gm.disable_send_for_bus(bus_id);
+            }
+            session.automation.remove_lanes_for_bus(bus_id);
+            session.remove_bus(bus_id);
+            // Update mixer selection if pointing to the removed bus
+            if let MixerSelection::Bus(id) = session.mixer.selection {
+                if id == bus_id {
+                    let first_bus = session.bus_ids().next();
+                    session.mixer.selection = first_bus
+                        .map(MixerSelection::Bus)
+                        .unwrap_or(MixerSelection::Master);
+                }
+            }
+            true
+        }
+        BusAction::Rename(bus_id, name) => {
+            if let Some(bus) = session.bus_mut(*bus_id) {
+                bus.name = name.clone();
+            }
+            true
+        }
+    }
+}
+
+// ============================================================================
+// VstParamAction projection
+// ============================================================================
+
+/// Get the VstPluginId for a given instrument and target
+fn get_vst_plugin_id(instrument: &Instrument, target: VstTarget) -> Option<u32> {
+    match target {
+        VstTarget::Source => {
+            if let SourceType::Vst(id) = instrument.source {
+                Some(id)
+            } else {
+                None
+            }
+        }
+        VstTarget::Effect(effect_id) => {
+            instrument.effect_by_id(effect_id).and_then(|e| {
+                if let EffectType::Vst(id) = e.effect_type {
+                    Some(id)
+                } else {
+                    None
+                }
+            })
+        }
+    }
+}
+
+/// Get mutable param values for a given VST target
+fn get_param_values_mut(instrument: &mut Instrument, target: VstTarget) -> Option<&mut Vec<(u32, f32)>> {
+    match target {
+        VstTarget::Source => Some(&mut instrument.vst_param_values),
+        VstTarget::Effect(effect_id) => {
+            instrument.effect_by_id_mut(effect_id)
+                .map(|e| &mut e.vst_param_values)
+        }
+    }
+}
+
+fn project_vst_param(
+    action: &VstParamAction,
+    instruments: &mut InstrumentState,
+    session: &SessionState,
+) -> bool {
+    match action {
+        VstParamAction::SetParam(instrument_id, target, param_index, value) => {
+            let value = value.clamp(0.0, 1.0);
+            if let Some(instrument) = instruments.instrument_mut(*instrument_id) {
+                if let Some(values) = get_param_values_mut(instrument, *target) {
+                    if let Some(entry) = values.iter_mut().find(|(idx, _)| *idx == *param_index) {
+                        entry.1 = value;
+                    } else {
+                        values.push((*param_index, value));
+                    }
+                }
+            }
+            // Skip automation recording (depends on state.recording)
+            true
+        }
+        VstParamAction::AdjustParam(instrument_id, target, param_index, delta) => {
+            let current = instruments.instrument(*instrument_id)
+                .map(|inst| {
+                    let values = match *target {
+                        VstTarget::Source => inst.vst_param_values.as_slice(),
+                        VstTarget::Effect(effect_id) => {
+                            inst.effect_by_id(effect_id)
+                                .map(|e| e.vst_param_values.as_slice())
+                                .unwrap_or(&[])
+                        }
+                    };
+                    values.iter().find(|(idx, _)| *idx == *param_index)
+                        .map(|(_, v)| *v)
+                        .unwrap_or_else(|| {
+                            // Look up default from VST plugin registry
+                            if let Some(plugin_id) = get_vst_plugin_id(inst, *target) {
+                                if let Some(plugin) = session.vst_plugins.get(plugin_id) {
+                                    if let Some(spec) = plugin.params.iter().find(|p| p.index == *param_index) {
+                                        return spec.default;
+                                    }
+                                }
+                            }
+                            0.5
+                        })
+                })
+                .unwrap_or(0.5);
+            let new_value = (current + delta).clamp(0.0, 1.0);
+            // Inline SetParam logic
+            if let Some(instrument) = instruments.instrument_mut(*instrument_id) {
+                if let Some(values) = get_param_values_mut(instrument, *target) {
+                    if let Some(entry) = values.iter_mut().find(|(idx, _)| *idx == *param_index) {
+                        entry.1 = new_value;
+                    } else {
+                        values.push((*param_index, new_value));
+                    }
+                }
+            }
+            true
+        }
+        VstParamAction::ResetParam(instrument_id, target, param_index) => {
+            let default = instruments.instrument(*instrument_id)
+                .and_then(|inst| {
+                    let plugin_id = get_vst_plugin_id(inst, *target)?;
+                    session.vst_plugins.get(plugin_id)
+                        .and_then(|plugin| plugin.params.iter().find(|p| p.index == *param_index))
+                        .map(|spec| spec.default)
+                })
+                .unwrap_or(0.5);
+            // Inline SetParam logic
+            if let Some(instrument) = instruments.instrument_mut(*instrument_id) {
+                if let Some(values) = get_param_values_mut(instrument, *target) {
+                    if let Some(entry) = values.iter_mut().find(|(idx, _)| *idx == *param_index) {
+                        entry.1 = default;
+                    } else {
+                        values.push((*param_index, default));
+                    }
+                }
+            }
+            true
+        }
+        // DiscoverParams: VST3 binary probing / OSC discovery (file I/O)
+        VstParamAction::DiscoverParams(_, _) => false,
+        // SaveState: file I/O
+        VstParamAction::SaveState(_, _) => false,
+    }
+}
+
+// ============================================================================
+// SessionAction projection
+// ============================================================================
+
+fn project_session(
+    action: &SessionAction,
+    session: &mut SessionState,
+    _instruments: &mut InstrumentState,
+) -> bool {
+    match action {
+        // NewProject: uses state.project.default_settings (not available); sets AudioDirty::all()
+        // which triggers full sync anyway. Safe to return false.
+        SessionAction::NewProject => false,
+        SessionAction::UpdateSession(ref settings) => {
+            session.apply_musical_settings(settings);
+            true
+        }
+        SessionAction::UpdateSessionLive(ref settings) => {
+            session.apply_musical_settings(settings);
+            true
+        }
+        SessionAction::AdjustHumanizeVelocity(delta) => {
+            session.humanize.velocity = (session.humanize.velocity + delta).clamp(0.0, 1.0);
+            true
+        }
+        SessionAction::AdjustHumanizeTiming(delta) => {
+            session.humanize.timing = (session.humanize.timing + delta).clamp(0.0, 1.0);
+            true
+        }
+        SessionAction::ToggleMasterMute => {
+            session.mixer.master_mute = !session.mixer.master_mute;
+            true
+        }
+        SessionAction::CycleTheme => {
+            use imbolc_types::state::Theme;
+            let current_name = &session.theme.name;
+            session.theme = match current_name.as_str() {
+                "Dark" => Theme::light(),
+                "Light" => Theme::high_contrast(),
+                _ => Theme::dark(),
+            };
+            true
+        }
+        SessionAction::ImportVstPlugin(ref path, kind) => {
+            // Project the plugin add. Skip VST3 param probing (file I/O).
+            use imbolc_types::state::vst::VstPlugin;
+            let name = path.file_stem()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_else(|| "VST Plugin".to_string());
+            let plugin = VstPlugin {
+                id: 0,
+                name,
+                plugin_path: path.clone(),
+                kind: *kind,
+                params: vec![],
+            };
+            session.vst_plugins.add(plugin);
+            true
+        }
+        // OpenFileBrowser: navigation only
+        SessionAction::OpenFileBrowser(_) => true,
+        // File I/O actions: not projectable
+        SessionAction::Save
+        | SessionAction::SaveAs(_)
+        | SessionAction::Load
+        | SessionAction::LoadFrom(_)
+        | SessionAction::ImportCustomSynthDef(_)
+        | SessionAction::CreateCheckpoint(_)
+        | SessionAction::RestoreCheckpoint(_)
+        | SessionAction::DeleteCheckpoint(_) => false,
+    }
+}
+
+// ============================================================================
+// ClickAction projection
+// ============================================================================
+
+fn project_click(action: &ClickAction, session: &mut SessionState) {
+    match action {
+        ClickAction::Toggle => {
+            session.click_track.enabled = !session.click_track.enabled;
+        }
+        ClickAction::ToggleMute => {
+            session.click_track.muted = !session.click_track.muted;
+        }
+        ClickAction::AdjustVolume(delta) => {
+            session.click_track.volume = (session.click_track.volume + delta).clamp(0.0, 1.0);
+        }
+        ClickAction::SetVolume(volume) => {
+            session.click_track.volume = volume.clamp(0.0, 1.0);
         }
     }
 }
