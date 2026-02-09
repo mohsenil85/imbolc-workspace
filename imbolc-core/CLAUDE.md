@@ -112,6 +112,95 @@ src/
 | `LocalDispatcher` | `src/dispatch/local.rs` | Owns state, dispatches actions |
 | `AudioHandle` | `src/audio/handle.rs` | Main-thread interface; sends AudioCmd to audio thread |
 
+## Dispatch Sub-Handler Routing
+
+Top-level dispatch is in `src/dispatch/mod.rs`. Each `Action` variant routes to a sub-handler:
+
+| Action | Handler file | Purpose |
+|---|---|---|
+| `Instrument(a)` | `instrument/mod.rs` → sub-modules | See instrument table below |
+| `Mixer(a)` | `mixer.rs` | Level/pan/mute/solo, bus/group params |
+| `PianoRoll(a)` | `piano_roll.rs` | Note add/delete/move, selection |
+| `Arrangement(a)` | `arrangement.rs` | Clip CRUD, timeline placement |
+| `Session(a)` | `session.rs` | Save/load, BPM, key, scale |
+| `Sequencer(a)` | `sequencer.rs` | Drum sequencer pad/step editing |
+| `Chopper(a)` | `sequencer.rs` | Sample chopper slice config |
+| `Automation(a)` | `automation.rs` | Automation lane/point CRUD |
+| `Bus(a)` | `bus.rs` | Bus add/delete, bus effects |
+| `LayerGroup(a)` | `bus.rs` | Layer group effects/mixer |
+| `Server(a)` | `server.rs` | SC server start/stop, device config |
+| `Midi(a)` | `midi.rs` | MIDI CC mapping |
+| `VstParam(a)` | `vst_param.rs` | VST parameter editing |
+| `Undo/Redo` | inline in `mod.rs` | Pop undo/redo stack, AudioDirty::all() |
+
+**Instrument sub-handlers** (`src/dispatch/instrument/`):
+
+| Module | Handles |
+|---|---|
+| `crud.rs` | Add, Delete, Edit, Update |
+| `playback.rs` | PlayNote, PlayNotes, PlayDrumPad |
+| `selection.rs` | Select, SelectNext/Prev/First/Last |
+| `effects.rs` | AddEffect, RemoveEffect, MoveEffect, ToggleBypass, AdjustParam |
+| `filter.rs` | SetFilter, ToggleFilter, CycleFilterType, AdjustCutoff/Resonance |
+| `lfo.rs` | ToggleLfo, AdjustRate/Depth, SetShape/Target |
+| `envelope.rs` | AdjustAttack/Decay/Sustain/Release |
+| `eq.rs` | SetEqParam, ToggleEq |
+| `arpeggiator.rs` | ToggleArp, CycleDirection/Rate, AdjustOctaves/Gate, ChordShape |
+| `groove.rs` | Swing, humanize, timing offset, time signature |
+| `layer.rs` | LinkLayer, UnlinkLayer |
+| `sample.rs` | LoadSampleResult |
+
+## Audio Engine Modules
+
+| Module | Purpose |
+|---|---|
+| `handle.rs` | `AudioHandle` — main-thread API, sends `AudioCmd` via channel |
+| `audio_thread.rs` | Audio thread loop, reads triple buffer snapshots |
+| `engine/mod.rs` | `AudioEngine` — SC backend, node map, voice allocator |
+| `engine/routing.rs` | Amortized 5-phase SC node graph rebuild (TearDown → AllocBuses → BuildInstrument → BuildOutputs → Finalize) |
+| `engine/voice_allocator.rs` | Polyphonic voice pool (16/instrument), stealing by score, control bus recycling |
+| `engine/voices.rs` | Voice spawning, note-off envelopes |
+| `engine/backend.rs` | `AudioBackend` trait, OSC socket I/O |
+| `engine/server.rs` | SC server boot/kill, device enumeration |
+| `engine/samples.rs` | Sample buffer management |
+| `engine/recording.rs` | Disk recording, export, stem bounce |
+| `engine/automation.rs` | Automation playback, curve evaluation |
+| `triple_buffer.rs` | Lock-free state transfer (main → audio thread, 3 slots: front/middle/back) |
+| `event_log.rs` | Time-ordered event log for playback pre-scheduling |
+| `osc_sender.rs` | Background OSC sender thread |
+| `bus_allocator.rs` | SC audio/control bus allocation |
+| `playback.rs` | Sequencer tick, lookahead scheduling |
+| `drum_tick.rs` / `arpeggiator_tick.rs` / `click_tick.rs` | Per-feature playback ticks |
+
+## State Mutation Patterns
+
+### Undo Integration
+
+Every undoable action pushes a scoped snapshot before mutation:
+- `SingleInstrument(id)` — snapshot one instrument
+- `Instruments` — all instruments
+- `Session` — session state only
+- `Full` — both session + instruments
+
+Undo/Redo pops the stack, swaps state, sets `AudioDirty::all()`.
+
+### Dirty Flags (AudioDirty)
+
+`AudioDirty` is `Copy` (must stay Copy). Boolean flags OR on merge. Targeted param flags use `Option<(...)>`.
+
+- **Structural**: `instruments`, `session`, `piano_roll`, `automation`, `routing`, `mixer_params`
+- **Targeted optimization**: `routing_instrument: Option<InstrumentId>` (single-instrument rebuild)
+- **Real-time /n_set**: `filter_param`, `effect_param`, `lfo_param`, `bus_effect_param`, `layer_group_effect_param`
+
+See `CODE_MAP.md` at workspace root for the complete field-by-field reference.
+
+### Persistence Triggers
+
+- **Save**: explicit (`SessionAction::Save/SaveAs`), async background thread, SQLite relational schema v7+
+- **Load**: explicit (`SessionAction::Load/LoadFrom`), async, replaces entire state
+- **Checkpoints**: labeled snapshots within project DB (create/restore)
+- `project.dirty` flag set on all undoable actions, cleared after save
+
 ## Critical Patterns
 
 ### Action Dispatch

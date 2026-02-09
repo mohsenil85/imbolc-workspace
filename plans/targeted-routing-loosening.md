@@ -146,12 +146,20 @@ for stage in instrument.processing_chain.iter() {
 - Clear bus effect maps in `TearDown`
 - Extract shared effect param wiring logic (SidechainComp bus translation, etc.) into a helper to avoid duplication with instrument effect chain building
 
-### B5. Persistence (`imbolc-core/src/state/persistence/`)
+### ~~B5. Persistence (`imbolc-core/src/state/persistence/`)~~ ✓
 
-- Add tables: `bus_effects`, `bus_effect_params`, `bus_effect_vst_params` (and layer group equivalents)
-- Extend `save_mixer` / `load_mixer` to handle bus effects
-- Use `#[serde(default)]` on new fields for backward-compatible blob deserialization
-- Bump `SCHEMA_VERSION` (can share the bump with Phase A if done together)
+**Done.** Bumped `SCHEMA_VERSION` 8→9. Added 6 tables: `bus_effects`,
+`bus_effect_params`, `bus_effect_vst_params`, `layer_group_effects`,
+`layer_group_effect_params`, `layer_group_effect_vst_params`. Extracted
+generic `save_effects_to()` / `load_effects_from()` /
+`load_effect_params_from()` helpers (instrument effects refactored to
+delegate). `table_exists()` check provides backward compat with v8
+schemas. `recalculate_next_effect_id()` on load. 2 new round-trip tests
+(`round_trip_bus_effects`, `round_trip_layer_group_effects`). 258 tests
+pass, 0 warnings.
+
+**Files:** `imbolc-core/src/state/persistence/schema.rs`,
+`save.rs`, `load.rs`, `tests.rs`.
 
 ### B6. UI (`imbolc-ui/src/panes/mixer_pane/`)
 

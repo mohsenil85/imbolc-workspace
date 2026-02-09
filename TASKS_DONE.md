@@ -205,6 +205,22 @@ Per-send `SendTapPoint` enum: `PreInsert` (pre-filter/FX) and `PostInsert` (post
 **Files:** `imbolc-types/src/state/instrument/mod.rs`, `imbolc-core/src/audio/engine/routing.rs`, `imbolc-core/src/dispatch/mixer.rs`, `imbolc-types/src/action.rs`
 
 
+### Bus & Layer Group Effect Infrastructure (Phase B1-B3, B5) — DONE
+
+Added `effects: Vec<EffectSlot>` and `next_effect_id` to `MixerBus` and
+`LayerGroupMixer` with full CRUD methods (B1). Added `BusAction` and
+`LayerGroupAction` effect variants (B2). Dispatch handlers for bus/group
+effect add/remove/move/bypass/param-adjust with undo support (B3).
+Persistence: 6 new tables, generic save/load helpers, backward compat
+via `table_exists()` checks, 2 round-trip tests (B5). 258 core tests,
+203 types tests pass.
+
+**Files:** `imbolc-types/src/state/instrument/mod.rs`,
+`imbolc-types/src/action.rs`, `imbolc-core/src/dispatch/bus.rs`,
+`imbolc-core/src/state/persistence/{schema,save,load,tests}.rs`
+
+---
+
 ## Bugs
 
 ### Piano roll: remove time signature display

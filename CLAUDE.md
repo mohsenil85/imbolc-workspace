@@ -41,6 +41,10 @@ cargo run -p imbolc-ui      # Run the DAW
 | `imbolc-core` | State management, action dispatch, SuperCollider audio | `src/dispatch/`, `src/audio/` |
 | `imbolc-ui` | Terminal rendering, panes, keybindings | `src/panes/`, `src/ui/` |
 
+## Code Map
+
+**Read [CODE_MAP.md](CODE_MAP.md) first** for dispatch routing tables, type hierarchy, AudioDirty flags reference, module maps, and enum quick reference. This avoids re-exploring the codebase.
+
 ## Per-Crate Documentation
 
 Each crate has its own `CLAUDE.md` with detailed guidance:

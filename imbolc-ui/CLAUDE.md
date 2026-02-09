@@ -68,6 +68,63 @@ Module panes (input/rendering split, 7):
 - `server_pane/` — SuperCollider server status
 - `vst_param_pane/` — VST parameter editor
 
+## Main Loop Pipeline
+
+The event loop in `main.rs` follows this sequence each frame:
+
+1. **Poll events** (2ms timeout) — key, mouse, resize
+2. **Layer stack resolution** — key → `LayerResult::Action(id)` or `Blocked`/`Unresolved`
+3. **Global handler** — `handle_global_action()` checks quit, save, undo, nav keys
+4. **Pane handler** — `handle_action(id)` for resolved actions, `handle_raw_input()` for blocked/unresolved
+5. **Layer management** — process PushLayer/PopLayer/ExitPerformanceMode
+6. **Navigation** — `panes.process_nav()`, sync pane layer, auto-exit clip edit
+7. **Special intercepts** — MIDI port connect, SaveAndQuit, command palette re-dispatch
+8. **Dispatch** — `dispatcher.dispatch_with_audio(&action, &mut audio)` → state mutation
+9. **Tick** — `pane.tick()` for time-based updates (key releases, animations)
+10. **Audio sync** — `audio.apply_dirty()` sends changes to audio thread
+11. **I/O feedback** — drain save/load/import completion callbacks
+12. **Audio feedback** — drain playhead/meter/status updates
+13. **MIDI input** — poll MIDI events, process via `midi_dispatch`
+14. **Render** — update visualizations, render frame at ~60 FPS
+
+## Pane Trait Reference
+
+The `Pane` trait (`src/ui/pane.rs`) defines the pane contract:
+
+| Method | Called When | Returns | Notes |
+|---|---|---|---|
+| `id()` | Registration, navigation | `&'static str` | Unique pane identifier |
+| `handle_action(action, event, state)` | Layer matched key to action ID | `Action` | Return `Action::None` if unhandled |
+| `handle_raw_input(event, state)` | Layer returned Blocked/Unresolved | `Action` | For raw char input, bypass layers |
+| `handle_mouse(event, area, state)` | Mouse event received | `Action` | Area is full terminal rect |
+| `render(area, buf, state)` | Every frame (~60 FPS) | — | Must fill entire area |
+| `keymap()` | Help system, introspection | `&Keymap` | Displayed in help pane |
+| `on_enter(state)` | Pane becomes active | — | Initialize, refresh |
+| `on_exit(state)` | Pane becomes inactive | — | Cleanup |
+| `tick(state)` | Every frame before render | `Vec<Action>` | Time-based updates |
+| `toggle_performance_mode(state)` | User toggles piano/pad mode | `ToggleResult` | `Entered`/`Exited`/`NotSupported` |
+| `as_any_mut()` | `PaneManager::get_pane_mut::<T>()` | `&mut dyn Any` | Type downcasting |
+
+**Key distinction**: `handle_action()` receives a resolved action ID from the layer system. `handle_raw_input()` receives the raw key event when no layer matched. Use `handle_raw_input()` for text editing, character input, or when the pane needs to see raw keys.
+
+## UI Module Inventory
+
+| Module | Purpose |
+|---|---|
+| `pane.rs` | `Pane` trait, `PaneManager`, `NavIntent` |
+| `action_id.rs` | Typed action ID enums (global + per-pane) |
+| `keymap.rs` | `Keymap` builder: `bind()`, `bind_ctrl()`, `bind_key()`, etc. |
+| `layer.rs` | `LayerStack` — context-sensitive input layers, `LayerResult` |
+| `input.rs` | `KeyCode`, `InputEvent`, `MouseEvent`, `Modifiers` |
+| `keybindings.rs` | TOML keybinding loading (embedded + `~/.config/imbolc/keybindings.toml`) |
+| `frame.rs` | `Frame` — header bar with project name, master meter, CPU/latency metrics |
+| `render.rs` | `RenderBuf` — rendering abstraction over ratatui `Buffer` |
+| `style.rs` | `Color::new(r,g,b)`, `Style`, semantic constants (METER_LOW, SELECTION_BG) |
+| `piano_keyboard.rs` | Virtual piano keyboard (C/A layouts, key → MIDI note) |
+| `pad_keyboard.rs` | Virtual 4x4 pad grid for drum input |
+| `list_selector.rs` | Reusable list selection widget with bounds checking |
+| `layout_helpers.rs` | `center_rect()` for centering sub-rects |
+
 ## Critical Patterns
 
 See [../docs/architecture.md](../docs/architecture.md) for detailed architecture, state ownership, borrow patterns, and persistence.

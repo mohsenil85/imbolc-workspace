@@ -63,6 +63,78 @@ src/
 | `AutomationState` | `state/automation.rs` | Automation lanes and points |
 | `DrumSequencerState` | `state/drum_sequencer.rs` | Drum patterns and steps |
 
+## Type Composition Hierarchy
+
+```
+AppState (defined in imbolc-core, composed of types from here)
+├── session: SessionState
+│   ├── Musical: key, scale, bpm, tuning_a4, snap, time_signature
+│   ├── piano_roll: PianoRollState
+│   ├── arrangement: ArrangementState
+│   ├── automation: AutomationState
+│   ├── mixer: MixerState
+│   │   ├── buses: Vec<MixerBus> (effects, level, pan, sends)
+│   │   ├── master_level, master_mute
+│   │   ├── selection: MixerSelection
+│   │   └── layer_group_mixers: Vec<LayerGroupMixer>
+│   └── humanize, click_track, theme
+│
+└── instruments: InstrumentState
+    └── instruments: Vec<Instrument>
+        ├── source: SourceType + source_params
+        ├── filter: Option<FilterConfig>
+        ├── eq: Option<EqConfig>
+        ├── effects: Vec<EffectSlot>
+        ├── lfo: LfoConfig, amp_envelope: EnvConfig
+        ├── Mixer: level, pan, mute, solo, output_target, sends
+        ├── sampler_config, drum_sequencer (source-dependent)
+        ├── arpeggiator, chord_shape
+        ├── layer_group: Option<u32>
+        └── groove: GrooveConfig
+```
+
+## Key Enum Categories
+
+### SourceType (56 built-in + 2 parametric)
+
+- **Oscillators**: Saw, Sin, Sqr, Tri, Noise, Pulse, SuperSaw, Sync
+- **FM/Modulation**: Ring, FBSin, FM, PhaseMod, FMBell, FMBrass
+- **Physical Models**: Pluck, Formant, Bowed, Blown, Membrane
+- **Mallets**: Marimba, Vibes, Kalimba, SteelDrum, TubularBell, Glockenspiel
+- **Strings**: Guitar, BassGuitar, Harp, Koto
+- **Drums**: Kick, Snare, HihatClosed, HihatOpen, Clap, Cowbell, Rim, Tom, Clave, Conga
+- **Classic Synths**: Choir, EPiano, Organ, BrassStab, Strings, Acid
+- **Experimental**: Gendy, Chaos
+- **Synthesis**: Additive, Wavetable, Granular
+- **Routing**: AudioIn, BusIn
+- **Samplers**: PitchedSampler, TimeStretch, Kit
+- **External**: Custom(CustomSynthDefId), Vst(VstPluginId)
+
+### EffectType (40 built-in + 1 parametric)
+
+- **Time**: Delay, Reverb, SpringReverb
+- **Dynamics**: Gate, TapeComp, SidechainComp, Limiter, MultibandComp
+- **Modulation**: Chorus, Flanger, Phaser, Tremolo, Autopan, Leslie
+- **Distortion**: Distortion, Bitcrusher, Wavefolder, Saturator
+- **EQ**: TiltEq, ParaEq
+- **Stereo**: StereoWidener, MidSide, Crossfader
+- **Pitch**: PitchShifter, Autotune, FreqShifter
+- **Granular**: GranularDelay, GranularFreeze
+- **Spectral**: SpectralFreeze, Glitch, Denoise
+- **Convolution**: ConvolutionReverb
+- **Character**: Vinyl, Cabinet
+- **Synthesis**: RingMod, Resonator, Vocoder
+- **Envelope**: EnvFollower, WahPedal
+- **External**: Vst(VstPluginId)
+
+### Other Key Enums
+
+- **MixerSelection**: `Instrument(usize)` | `LayerGroup(u32)` | `Bus(u8)` | `Master`
+- **OutputTarget**: `Master` | `Bus(u8)`
+- **FilterType**: LowPass, HighPass, BandPass, Notch
+- **LfoShape**: Sin, Tri, Saw, Sqr, SampleAndHold, Random
+- **SendTapPoint**: PreInsert, PostInsert
+
 ## Build & Test
 
 ```bash
