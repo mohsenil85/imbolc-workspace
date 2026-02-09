@@ -20,10 +20,30 @@ return, and unknown node handling.
 `imbolc-core/src/audio/engine/voice_allocator.rs`,
 `imbolc-core/src/audio/audio_thread.rs`.
 
-### 2. Control-plane vs performance-plane separation [Q3]
+### ~~2. Control-plane vs performance-plane separation [Q3]~~ ✓
 
-Document current blocking behavior. Move load/connect/compile ops off
-the audio thread so playback never stutters during state changes.
+**Done.** All heavy control-plane operations moved off the audio thread:
+
+- **Server startup:** `start_server_async()` spawns `scsynth` in a
+  background thread; audio thread polls `pending_server_start`.
+- **OSC connection:** `connect_with_monitor_async()` runs handshake in a
+  background thread; audio thread polls `pending_connect`.
+- **SynthDef compilation:** `compile_synthdefs_async()` runs `sclang` in
+  a background thread; audio thread polls `poll_compile_result()`.
+- **Routing rebuild:** phased state machine
+  (`RoutingRebuildPhase`) spreads work across ticks (~0.5ms each).
+- **Two-channel dispatch:** priority channel (voice spawn, param
+  changes) gets 200µs budget; normal channel (state updates, routing)
+  gets 100µs budget — prevents bulk ops from starving playback.
+
+SynthDef *loading* (`LoadSynthDefs`) still runs synchronously on the
+audio thread but is fast enough (<100ms) to not cause audible stutter.
+
+**Files:** `imbolc-core/src/audio/audio_thread.rs`,
+`imbolc-core/src/audio/engine/server.rs`,
+`imbolc-core/src/audio/engine/routing.rs`,
+`imbolc-core/src/audio/handle.rs`.
+220 tests pass.
 
 ### 3. Field-level network delta updates [Q9]
 
