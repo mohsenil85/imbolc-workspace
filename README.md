@@ -131,8 +131,8 @@ This project is licensed under the GNU GPL v3.0. See [LICENSE](LICENSE) for deta
 Imbolc is free and open source. If you find it useful, consider supporting development:
 
 **Sponsorship**
-- [GitHub Sponsors](https://github.com/sponsors/YOUR_USERNAME)
-- [Ko-fi](https://ko-fi.com/YOUR_USERNAME)
+- [GitHub Sponsors](https://github.com/sponsors/mohsenil85)
+- [Ko-fi](https://ko-fi.com/mohsenil85)
 
 **Paid Support**
-- Priority support and consulting available — [email](mailto:you@example.com)
+- Priority support and consulting available — [email](mailto:mohsenil85@gmail.com)
