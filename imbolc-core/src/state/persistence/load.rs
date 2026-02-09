@@ -177,6 +177,8 @@ fn load_mixer(conn: &Connection, session: &mut SessionState) -> SqlResult<()> {
 
     session.mixer.buses.clear();
 
+    let has_bus_effects = table_exists(conn, "bus_effects")?;
+
     let mut stmt = conn.prepare("SELECT id, name, level, pan, mute, solo FROM mixer_buses ORDER BY id")?;
     let buses = stmt.query_map([], |row| {
         Ok(MixerBus {
@@ -192,7 +194,12 @@ fn load_mixer(conn: &Connection, session: &mut SessionState) -> SqlResult<()> {
     })?;
 
     for bus in buses {
-        session.mixer.buses.push(bus?);
+        let mut bus = bus?;
+        if has_bus_effects {
+            bus.effects = load_effects_from(conn, "bus_effects", "bus_effect_params", "bus_effect_vst_params", "bus_id", bus.id as u32)?;
+            bus.recalculate_next_effect_id();
+        }
+        session.mixer.buses.push(bus);
     }
 
     // Master
@@ -215,6 +222,8 @@ fn load_layer_group_mixers(conn: &Connection, session: &mut SessionState) -> Sql
     use crate::state::instrument::MixerSend;
 
     session.mixer.layer_group_mixers.clear();
+
+    let has_group_effects = table_exists(conn, "layer_group_effects")?;
 
     let mut stmt = conn.prepare(
         "SELECT group_id, name, level, pan, mute, solo, output_target FROM layer_group_mixers ORDER BY group_id"
@@ -256,7 +265,7 @@ fn load_layer_group_mixers(conn: &Connection, session: &mut SessionState) -> Sql
             })
         })?.collect::<SqlResult<_>>()?;
 
-        session.mixer.layer_group_mixers.push(LayerGroupMixer {
+        let mut gm = LayerGroupMixer {
             group_id,
             name,
             level,
@@ -267,7 +276,14 @@ fn load_layer_group_mixers(conn: &Connection, session: &mut SessionState) -> Sql
             sends,
             effects: Vec::new(),
             next_effect_id: 0,
-        });
+        };
+
+        if has_group_effects {
+            gm.effects = load_effects_from(conn, "layer_group_effects", "layer_group_effect_params", "layer_group_effect_vst_params", "group_id", group_id)?;
+            gm.recalculate_next_effect_id();
+        }
+
+        session.mixer.layer_group_mixers.push(gm);
     }
 
     Ok(())
@@ -752,13 +768,35 @@ fn load_params(
     Ok(params)
 }
 
+fn table_exists(conn: &Connection, name: &str) -> SqlResult<bool> {
+    let count: i32 = conn.query_row(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?1",
+        params![name],
+        |row| row.get(0),
+    )?;
+    Ok(count > 0)
+}
+
 fn load_effects(conn: &Connection, instrument_id: u32) -> SqlResult<Vec<crate::state::instrument::EffectSlot>> {
+    load_effects_from(conn, "instrument_effects", "instrument_effect_params", "effect_vst_params", "instrument_id", instrument_id)
+}
+
+fn load_effects_from(
+    conn: &Connection,
+    effects_table: &str,
+    params_table: &str,
+    vst_table: &str,
+    owner_col: &str,
+    owner_id: u32,
+) -> SqlResult<Vec<crate::state::instrument::EffectSlot>> {
     use crate::state::instrument::EffectSlot;
 
-    let mut stmt = conn.prepare(
-        "SELECT effect_id, effect_type, enabled, vst_state_path FROM instrument_effects WHERE instrument_id = ?1 ORDER BY position"
-    )?;
-    let effect_rows: Vec<(u32, String, i32, Option<String>)> = stmt.query_map(params![instrument_id], |row| {
+    let sql = format!(
+        "SELECT effect_id, effect_type, enabled, vst_state_path FROM {} WHERE {} = ?1 ORDER BY position",
+        effects_table, owner_col
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let effect_rows: Vec<(u32, String, i32, Option<String>)> = stmt.query_map(params![owner_id], |row| {
         Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
     })?.collect::<SqlResult<_>>()?;
 
@@ -770,13 +808,15 @@ fn load_effects(conn: &Connection, instrument_id: u32) -> SqlResult<Vec<crate::s
         slot.vst_state_path = vst_state.map(PathBuf::from);
 
         // Effect params
-        slot.params = load_effect_params(conn, instrument_id, effect_id)?;
+        slot.params = load_effect_params_from(conn, params_table, owner_col, owner_id, effect_id)?;
 
         // Effect VST param values
-        let mut vst_stmt = conn.prepare(
-            "SELECT param_index, value FROM effect_vst_params WHERE instrument_id = ?1 AND effect_id = ?2 ORDER BY param_index"
-        )?;
-        slot.vst_param_values = vst_stmt.query_map(params![instrument_id, effect_id], |row| {
+        let vst_sql = format!(
+            "SELECT param_index, value FROM {} WHERE {} = ?1 AND effect_id = ?2 ORDER BY param_index",
+            vst_table, owner_col
+        );
+        let mut vst_stmt = conn.prepare(&vst_sql)?;
+        slot.vst_param_values = vst_stmt.query_map(params![owner_id, effect_id], |row| {
             Ok((row.get::<_, u32>(0)?, row.get::<_, f32>(1)?))
         })?.collect::<SqlResult<_>>()?;
 
@@ -786,14 +826,22 @@ fn load_effects(conn: &Connection, instrument_id: u32) -> SqlResult<Vec<crate::s
     Ok(effects)
 }
 
-fn load_effect_params(conn: &Connection, instrument_id: u32, effect_id: u32) -> SqlResult<Vec<crate::state::param::Param>> {
+fn load_effect_params_from(
+    conn: &Connection,
+    table: &str,
+    owner_col: &str,
+    owner_id: u32,
+    effect_id: u32,
+) -> SqlResult<Vec<crate::state::param::Param>> {
     use crate::state::param::{Param, ParamValue};
 
-    let mut stmt = conn.prepare(
+    let sql = format!(
         "SELECT param_name, param_value_type, param_value_float, param_value_int, param_value_bool, param_min, param_max
-         FROM instrument_effect_params WHERE instrument_id = ?1 AND effect_id = ?2 ORDER BY position"
-    )?;
-    let params: Vec<Param> = stmt.query_map(params![instrument_id, effect_id], |row| {
+         FROM {} WHERE {} = ?1 AND effect_id = ?2 ORDER BY position",
+        table, owner_col
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let params: Vec<Param> = stmt.query_map(params![owner_id, effect_id], |row| {
         let name: String = row.get(0)?;
         let vtype: String = row.get(1)?;
         let vf: Option<f64> = row.get(2)?;

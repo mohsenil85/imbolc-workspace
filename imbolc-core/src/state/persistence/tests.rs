@@ -670,4 +670,115 @@ mod tests {
 
         std::fs::remove_file(&path).ok();
     }
+
+    #[test]
+    fn round_trip_bus_effects() {
+        let mut session = SessionState::new();
+        let instruments = InstrumentState::new();
+
+        // session.mixer.buses should already have default buses (1 and 2)
+        assert!(session.mixer.buses.len() >= 2, "expected at least 2 default buses");
+
+        // Add effects to bus 1
+        let bus = session.mixer.bus_mut(1).unwrap();
+        let reverb_id = bus.add_effect(EffectType::Reverb);
+        let delay_id = bus.add_effect(EffectType::Delay);
+
+        // Modify a param on the reverb
+        if let Some(effect) = bus.effect_by_id_mut(reverb_id) {
+            if let Some(param) = effect.params.get_mut(0) {
+                param.value = ParamValue::Float(0.77);
+            }
+        }
+
+        // Disable the delay and set VST fields
+        if let Some(effect) = bus.effect_by_id_mut(delay_id) {
+            effect.enabled = false;
+            effect.vst_state_path = Some(PathBuf::from("/tmp/delay.vststate"));
+            effect.vst_param_values = vec![(0, 0.42), (3, 0.88)];
+        }
+
+        let path = temp_db_path();
+        save_project(&path, &session, &instruments).expect("save");
+        let (loaded_session, _) = load_project(&path).expect("load");
+
+        // Bus 1 should have 2 effects
+        let loaded_bus = loaded_session.mixer.buses.iter().find(|b| b.id == 1).unwrap();
+        assert_eq!(loaded_bus.effects.len(), 2);
+        assert_eq!(loaded_bus.next_effect_id, 2);
+
+        // Reverb (id=0)
+        let loaded_reverb = loaded_bus.effect_by_id(reverb_id).unwrap();
+        assert_eq!(loaded_reverb.effect_type, EffectType::Reverb);
+        assert!(loaded_reverb.enabled);
+        match loaded_reverb.params[0].value {
+            ParamValue::Float(v) => assert!((v - 0.77).abs() < 0.01),
+            _ => panic!("Expected float param"),
+        }
+
+        // Delay (id=1)
+        let loaded_delay = loaded_bus.effect_by_id(delay_id).unwrap();
+        assert_eq!(loaded_delay.effect_type, EffectType::Delay);
+        assert!(!loaded_delay.enabled);
+        assert_eq!(loaded_delay.vst_state_path.as_deref(), Some(std::path::Path::new("/tmp/delay.vststate")));
+        assert_eq!(loaded_delay.vst_param_values.len(), 2);
+        assert!(loaded_delay.vst_param_values.iter().any(|&(k, v)| k == 0 && (v - 0.42).abs() < 0.01));
+        assert!(loaded_delay.vst_param_values.iter().any(|&(k, v)| k == 3 && (v - 0.88).abs() < 0.01));
+
+        // Bus 2 should have no effects
+        let loaded_bus2 = loaded_session.mixer.buses.iter().find(|b| b.id == 2).unwrap();
+        assert!(loaded_bus2.effects.is_empty());
+
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn round_trip_layer_group_effects() {
+        let mut session = SessionState::new();
+        let mut instruments = InstrumentState::new();
+        let inst_id = instruments.add_instrument(SourceType::Saw);
+
+        // Assign instrument to group 1
+        if let Some(inst) = instruments.instrument_mut(inst_id) {
+            inst.layer_group = Some(1);
+        }
+
+        // Add layer group mixer
+        let bus_ids: Vec<u8> = session.bus_ids().collect();
+        session.mixer.add_layer_group_mixer(1, &bus_ids);
+
+        // Add effects to layer group mixer
+        let gm = session.mixer.layer_group_mixer_mut(1).unwrap();
+        let comp_id = gm.add_effect(EffectType::TapeComp);
+        let lim_id = gm.add_effect(EffectType::Limiter);
+
+        // Modify a param on the compressor
+        if let Some(effect) = gm.effect_by_id_mut(comp_id) {
+            if let Some(param) = effect.params.get_mut(0) {
+                param.value = ParamValue::Float(0.65);
+            }
+        }
+
+        session.piano_roll.add_track(inst_id);
+
+        let path = temp_db_path();
+        save_project(&path, &session, &instruments).expect("save");
+        let (loaded_session, _) = load_project(&path).expect("load");
+
+        let loaded_gm = loaded_session.mixer.layer_group_mixers.iter().find(|g| g.group_id == 1).unwrap();
+        assert_eq!(loaded_gm.effects.len(), 2);
+        assert_eq!(loaded_gm.next_effect_id, 2);
+
+        let loaded_comp = loaded_gm.effect_by_id(comp_id).unwrap();
+        assert_eq!(loaded_comp.effect_type, EffectType::TapeComp);
+        match loaded_comp.params[0].value {
+            ParamValue::Float(v) => assert!((v - 0.65).abs() < 0.01),
+            _ => panic!("Expected float param"),
+        }
+
+        let loaded_lim = loaded_gm.effect_by_id(lim_id).unwrap();
+        assert_eq!(loaded_lim.effect_type, EffectType::Limiter);
+
+        std::fs::remove_file(&path).ok();
+    }
 }

@@ -1,7 +1,7 @@
 use rusqlite::{Connection, Result as SqlResult};
 
 /// Schema version for the relational format.
-pub const SCHEMA_VERSION: i32 = 8;
+pub const SCHEMA_VERSION: i32 = 9;
 
 /// Create all tables for the relational schema.
 pub fn create_tables(conn: &Connection) -> SqlResult<()> {
@@ -275,6 +275,70 @@ CREATE TABLE IF NOT EXISTS layer_group_sends (
     enabled INTEGER NOT NULL,
     tap_point TEXT NOT NULL DEFAULT 'PostInsert',
     PRIMARY KEY (group_id, bus_id)
+);
+
+CREATE TABLE IF NOT EXISTS bus_effects (
+    bus_id INTEGER NOT NULL,
+    effect_id INTEGER NOT NULL,
+    position INTEGER NOT NULL,
+    effect_type TEXT NOT NULL,
+    enabled INTEGER NOT NULL,
+    vst_state_path TEXT,
+    PRIMARY KEY (bus_id, effect_id)
+);
+
+CREATE TABLE IF NOT EXISTS bus_effect_params (
+    bus_id INTEGER NOT NULL,
+    effect_id INTEGER NOT NULL,
+    position INTEGER NOT NULL,
+    param_name TEXT NOT NULL,
+    param_value_type TEXT NOT NULL,
+    param_value_float REAL,
+    param_value_int INTEGER,
+    param_value_bool INTEGER,
+    param_min REAL NOT NULL,
+    param_max REAL NOT NULL,
+    PRIMARY KEY (bus_id, effect_id, position)
+);
+
+CREATE TABLE IF NOT EXISTS bus_effect_vst_params (
+    bus_id INTEGER NOT NULL,
+    effect_id INTEGER NOT NULL,
+    param_index INTEGER NOT NULL,
+    value REAL NOT NULL,
+    PRIMARY KEY (bus_id, effect_id, param_index)
+);
+
+CREATE TABLE IF NOT EXISTS layer_group_effects (
+    group_id INTEGER NOT NULL,
+    effect_id INTEGER NOT NULL,
+    position INTEGER NOT NULL,
+    effect_type TEXT NOT NULL,
+    enabled INTEGER NOT NULL,
+    vst_state_path TEXT,
+    PRIMARY KEY (group_id, effect_id)
+);
+
+CREATE TABLE IF NOT EXISTS layer_group_effect_params (
+    group_id INTEGER NOT NULL,
+    effect_id INTEGER NOT NULL,
+    position INTEGER NOT NULL,
+    param_name TEXT NOT NULL,
+    param_value_type TEXT NOT NULL,
+    param_value_float REAL,
+    param_value_int INTEGER,
+    param_value_bool INTEGER,
+    param_min REAL NOT NULL,
+    param_max REAL NOT NULL,
+    PRIMARY KEY (group_id, effect_id, position)
+);
+
+CREATE TABLE IF NOT EXISTS layer_group_effect_vst_params (
+    group_id INTEGER NOT NULL,
+    effect_id INTEGER NOT NULL,
+    param_index INTEGER NOT NULL,
+    value REAL NOT NULL,
+    PRIMARY KEY (group_id, effect_id, param_index)
 );
 
 -- ============================================================
@@ -627,6 +691,12 @@ DELETE FROM mixer_buses;
 DELETE FROM mixer_master;
 DELETE FROM layer_group_mixers;
 DELETE FROM layer_group_sends;
+DELETE FROM bus_effects;
+DELETE FROM bus_effect_params;
+DELETE FROM bus_effect_vst_params;
+DELETE FROM layer_group_effects;
+DELETE FROM layer_group_effect_params;
+DELETE FROM layer_group_effect_vst_params;
 DELETE FROM musical_settings;
 DELETE FROM piano_roll_tracks;
 DELETE FROM piano_roll_notes;

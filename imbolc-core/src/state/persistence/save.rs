@@ -327,32 +327,49 @@ fn save_params(
 }
 
 fn save_effects(conn: &Connection, instrument_id: u32, effects: &[crate::state::instrument::EffectSlot]) -> SqlResult<()> {
+    save_effects_to(conn, "instrument_effects", "instrument_effect_params", "effect_vst_params", "instrument_id", instrument_id as u32, effects)
+}
+
+fn save_effects_to(
+    conn: &Connection,
+    effects_table: &str,
+    params_table: &str,
+    vst_table: &str,
+    owner_col: &str,
+    owner_id: u32,
+    effects: &[crate::state::instrument::EffectSlot],
+) -> SqlResult<()> {
     for (pos, effect) in effects.iter().enumerate() {
         let effect_type = encode_effect_type(&effect.effect_type);
         let vst_state = effect.vst_state_path.as_ref().map(|p| p.to_string_lossy().to_string());
 
-        conn.execute(
-            "INSERT INTO instrument_effects (instrument_id, effect_id, position, effect_type, enabled, vst_state_path)
+        let sql = format!(
+            "INSERT INTO {} ({}, effect_id, position, effect_type, enabled, vst_state_path)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![instrument_id, effect.id, pos as i32, effect_type, effect.enabled as i32, vst_state],
-        )?;
+            effects_table, owner_col
+        );
+        conn.execute(&sql, params![owner_id, effect.id, pos as i32, effect_type, effect.enabled as i32, vst_state])?;
 
         // Effect params
-        let sql = "INSERT INTO instrument_effect_params (instrument_id, effect_id, position, param_name, param_value_type, param_value_float, param_value_int, param_value_bool, param_min, param_max)
-                   VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)";
-        let mut stmt = conn.prepare(sql)?;
+        let param_sql = format!(
+            "INSERT INTO {} ({}, effect_id, position, param_name, param_value_type, param_value_float, param_value_int, param_value_bool, param_min, param_max)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            params_table, owner_col
+        );
+        let mut stmt = conn.prepare(&param_sql)?;
         for (ppos, p) in effect.params.iter().enumerate() {
             let (vtype, vf, vi, vb) = encode_param_value(&p.value);
-            stmt.execute(params![instrument_id, effect.id, ppos as i32, p.name, vtype, vf, vi, vb, p.min, p.max])?;
+            stmt.execute(params![owner_id, effect.id, ppos as i32, p.name, vtype, vf, vi, vb, p.min, p.max])?;
         }
 
         // Effect VST param values
+        let vst_sql = format!(
+            "INSERT INTO {} ({}, effect_id, param_index, value)
+             VALUES (?1, ?2, ?3, ?4)",
+            vst_table, owner_col
+        );
         for (param_idx, value) in &effect.vst_param_values {
-            conn.execute(
-                "INSERT INTO effect_vst_params (instrument_id, effect_id, param_index, value)
-                 VALUES (?1, ?2, ?3, ?4)",
-                params![instrument_id, effect.id, param_idx, value],
-            )?;
+            conn.execute(&vst_sql, params![owner_id, effect.id, param_idx, value])?;
         }
     }
     Ok(())
@@ -564,6 +581,8 @@ fn save_mixer(conn: &Connection, session: &SessionState) -> SqlResult<()> {
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![bus.id as i32, bus.name, bus.level, bus.pan, bus.mute as i32, bus.solo as i32],
         )?;
+
+        save_effects_to(conn, "bus_effects", "bus_effect_params", "bus_effect_vst_params", "bus_id", bus.id as u32, &bus.effects)?;
     }
 
     conn.execute(
@@ -592,6 +611,8 @@ fn save_layer_group_mixers(conn: &Connection, session: &SessionState) -> SqlResu
                 params![gm.group_id as i32, send.bus_id as i32, send.level, send.enabled as i32, encode_tap_point(send.tap_point)],
             )?;
         }
+
+        save_effects_to(conn, "layer_group_effects", "layer_group_effect_params", "layer_group_effect_vst_params", "group_id", gm.group_id, &gm.effects)?;
     }
     Ok(())
 }
