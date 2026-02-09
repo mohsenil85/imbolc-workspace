@@ -9,9 +9,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     AutomationLaneId, AutomationTarget, ClipId, ClipboardNote, CurveType, DrumStep,
-    EffectId, EffectType, EqConfig, EffectSlot, EnvConfig, FilterConfig, FilterType,
+    EffectId, EffectType, EnvConfig, FilterType,
     InstrumentId, LfoConfig, MixerSelection, MusicalSettings, Param, PlacementId,
-    ServerStatus, SourceType, VstPluginKind,
+    ProcessingStage, ServerStatus, SourceType, VstPluginKind,
 };
 
 // ============================================================================
@@ -644,9 +644,7 @@ pub struct InstrumentUpdate {
     pub id: InstrumentId,
     pub source: SourceType,
     pub source_params: Vec<Param>,
-    pub filter: Option<FilterConfig>,
-    pub eq: Option<EqConfig>,
-    pub effects: Vec<EffectSlot>,
+    pub processing_chain: Vec<ProcessingStage>,
     pub lfo: LfoConfig,
     pub amp_envelope: EnvConfig,
     pub polyphonic: bool,
@@ -663,6 +661,7 @@ pub enum InstrumentAction {
     AddEffect(InstrumentId, EffectType),
     RemoveEffect(InstrumentId, EffectId),
     MoveEffect(InstrumentId, EffectId, i8),
+    MoveStage(InstrumentId, usize, i8),
     SetFilter(InstrumentId, Option<FilterType>),
     ToggleEffectBypass(InstrumentId, EffectId),
     ToggleFilter(InstrumentId),
@@ -744,6 +743,7 @@ impl InstrumentAction {
             | Self::AddEffect(id, _)
             | Self::RemoveEffect(id, _)
             | Self::MoveEffect(id, _, _)
+            | Self::MoveStage(id, _, _)
             | Self::SetFilter(id, _)
             | Self::ToggleEffectBypass(id, _)
             | Self::ToggleFilter(id)
