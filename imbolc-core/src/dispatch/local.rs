@@ -57,7 +57,7 @@ impl LocalDispatcher {
         let result = dispatch_action(action, &mut self.state, &*audio, &mut effects, &self.io_tx);
         apply_side_effects(&effects, audio);
         // Forward action to audio thread for incremental state projection
-        audio.forward_action(action, &self.state, result.audio_dirty);
+        audio.forward_action(action, result.audio_dirty);
         result
     }
 }

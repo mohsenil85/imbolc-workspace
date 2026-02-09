@@ -107,9 +107,9 @@ pub fn run_server() -> std::io::Result<()> {
             }
         }
 
-        // Flush audio dirty flags
+        // Flush audio dirty flags (always full sync in network server mode)
         if pending_audio_dirty.any() {
-            audio.flush_dirty(dispatcher.state(), pending_audio_dirty);
+            audio.apply_dirty(dispatcher.state(), pending_audio_dirty, true);
             pending_audio_dirty.clear();
         }
 

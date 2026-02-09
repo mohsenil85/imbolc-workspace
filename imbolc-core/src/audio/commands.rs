@@ -15,9 +15,9 @@ use crate::state::{BufferId, EffectId, InstrumentId};
 
 /// Commands sent from the main thread to the audio engine.
 ///
-/// Commands either carry their own data, use reply channels for
-/// synchronous operations, or rely on snapshots previously provided via
-/// UpdateState / UpdatePianoRollData / UpdateAutomationLanes.
+/// Steady-state uses ForwardAction for incremental projection. FullStateSync is
+/// the fallback for unprojectable actions (undo/redo/load). UpdatePianoRollData
+/// and UpdateAutomationLanes handle Song-mode flattening.
 #[derive(Debug)]
 #[allow(dead_code)]
 pub enum AudioCmd {
@@ -54,10 +54,6 @@ pub enum AudioCmd {
     },
 
     // ── State snapshots ───────────────────────────────────────────
-    UpdateState {
-        instruments: InstrumentSnapshot,
-        session: SessionSnapshot,
-    },
     UpdatePianoRollData {
         piano_roll: PianoRollSnapshot,
     },

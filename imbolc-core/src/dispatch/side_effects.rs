@@ -260,8 +260,8 @@ fn apply_one(effect: &AudioSideEffect, audio: &mut AudioHandle) {
 
         // Server lifecycle
         AudioSideEffect::UpdateState => {
-            // This is a no-op here — state sync is handled by flush_dirty
-            // This variant exists for server.rs which calls audio.update_state() directly
+            // No-op — state sync is handled by ForwardAction + apply_dirty.
+            // Variant kept for server.rs side effect enumeration.
         }
         AudioSideEffect::Connect { server_addr } => {
             let _ = audio.connect_async(server_addr);

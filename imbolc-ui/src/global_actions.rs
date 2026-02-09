@@ -2,7 +2,7 @@ use crate::action::{
     AudioDirty, ClickAction, MixerAction, PianoRollAction, SequencerAction,
     AutomationAction, Action
 };
-use crate::audio::AudioHandle;
+use crate::audio::{AudioHandle, is_action_projectable};
 use crate::state::{AppState, MixerSelection, ClipboardContents};
 use crate::dispatch::LocalDispatcher;
 use crate::panes::{
@@ -134,6 +134,7 @@ pub(crate) fn handle_global_action(
     app_frame: &mut Frame,
     select_mode: &mut InstrumentSelectMode,
     pending_audio_dirty: &mut AudioDirty,
+    needs_full_sync: &mut bool,
     layer_stack: &mut LayerStack,
 ) -> GlobalResult {
     // Helper to capture current view state
@@ -198,6 +199,7 @@ pub(crate) fn handle_global_action(
             }
             GlobalActionId::Undo => {
                 let r = dispatcher.dispatch_with_audio(&Action::Undo, audio);
+                if r.audio_dirty.any() { *needs_full_sync = true; }
                 pending_audio_dirty.merge(r.audio_dirty);
                 apply_dispatch_result(r, dispatcher, panes, app_frame, audio);
                 sync_piano_roll_to_selection(dispatcher, panes, audio);
@@ -205,6 +207,7 @@ pub(crate) fn handle_global_action(
             }
             GlobalActionId::Redo => {
                 let r = dispatcher.dispatch_with_audio(&Action::Redo, audio);
+                if r.audio_dirty.any() { *needs_full_sync = true; }
                 pending_audio_dirty.merge(r.audio_dirty);
                 apply_dispatch_result(r, dispatcher, panes, app_frame, audio);
                 sync_piano_roll_to_selection(dispatcher, panes, audio);
@@ -220,7 +223,11 @@ pub(crate) fn handle_global_action(
                     panes.push_to("save_as", dispatcher.state());
                     sync_pane_layer(panes, layer_stack);
                 } else {
-                    let r = dispatcher.dispatch_with_audio(&Action::Session(SessionAction::Save), audio);
+                    let save_action = Action::Session(SessionAction::Save);
+                    let r = dispatcher.dispatch_with_audio(&save_action, audio);
+                    if !is_action_projectable(&save_action) && r.audio_dirty.any() {
+                        *needs_full_sync = true;
+                    }
                     pending_audio_dirty.merge(r.audio_dirty);
                     apply_dispatch_result(r, dispatcher, panes, app_frame, audio);
                 }
@@ -233,7 +240,11 @@ pub(crate) fn handle_global_action(
                     panes.push_to("confirm", dispatcher.state());
                     sync_pane_layer(panes, layer_stack);
                 } else {
-                    let r = dispatcher.dispatch_with_audio(&Action::Session(SessionAction::Load), audio);
+                    let load_action = Action::Session(SessionAction::Load);
+                    let r = dispatcher.dispatch_with_audio(&load_action, audio);
+                    if !is_action_projectable(&load_action) && r.audio_dirty.any() {
+                        *needs_full_sync = true;
+                    }
                     pending_audio_dirty.merge(r.audio_dirty);
                     apply_dispatch_result(r, dispatcher, panes, app_frame, audio);
                 }
@@ -265,7 +276,11 @@ pub(crate) fn handle_global_action(
                 apply_dispatch_result(r, dispatcher, panes, app_frame, audio);
             }
             GlobalActionId::RecordMaster => {
-                let r = dispatcher.dispatch_with_audio(&Action::Server(ui::ServerAction::RecordMaster), audio);
+                let record_action = Action::Server(ui::ServerAction::RecordMaster);
+                let r = dispatcher.dispatch_with_audio(&record_action, audio);
+                if !is_action_projectable(&record_action) && r.audio_dirty.any() {
+                    *needs_full_sync = true;
+                }
                 pending_audio_dirty.merge(r.audio_dirty);
                 apply_dispatch_result(r, dispatcher, panes, app_frame, audio);
             }
@@ -276,6 +291,9 @@ pub(crate) fn handle_global_action(
                 let action = cut_from_active_pane(dispatcher, panes, audio);
                 if let Some(action) = action {
                     let r = dispatcher.dispatch_with_audio(&action, audio);
+                    if !is_action_projectable(&action) && r.audio_dirty.any() {
+                        *needs_full_sync = true;
+                    }
                     pending_audio_dirty.merge(r.audio_dirty);
                     apply_dispatch_result(r, dispatcher, panes, app_frame, audio);
                 }
@@ -284,6 +302,9 @@ pub(crate) fn handle_global_action(
                 let action = paste_to_active_pane(dispatcher.state_mut(), panes);
                 if let Some(action) = action {
                     let r = dispatcher.dispatch_with_audio(&action, audio);
+                    if !is_action_projectable(&action) && r.audio_dirty.any() {
+                        *needs_full_sync = true;
+                    }
                     pending_audio_dirty.merge(r.audio_dirty);
                     apply_dispatch_result(r, dispatcher, panes, app_frame, audio);
                 }
@@ -533,6 +554,7 @@ pub(crate) fn handle_global_action(
                     }
                 }
                 pending_audio_dirty.instruments = true;
+                *needs_full_sync = true;
             }
             GlobalActionId::Escape => {
                 // Global escape — falls through to pane when no mode layer handles it

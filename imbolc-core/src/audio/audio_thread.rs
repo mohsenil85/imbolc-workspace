@@ -284,8 +284,7 @@ impl AudioThread {
             LoadSynthDefFile { .. } => self.handle_server_cmd(cmd),
 
             // State synchronization
-            UpdateState { .. } | UpdatePianoRollData { .. } |
-            UpdateAutomationLanes { .. } |
+            UpdatePianoRollData { .. } | UpdateAutomationLanes { .. } |
             ForwardAction { .. } | FullStateSync { .. } => self.handle_state_cmd(cmd),
 
             // Playback control
@@ -425,40 +424,48 @@ impl AudioThread {
 
     fn handle_state_cmd(&mut self, cmd: AudioCmd) {
         match cmd {
-            AudioCmd::UpdateState { instruments, session } => {
-                self.apply_state_update(instruments, session);
-            }
             AudioCmd::UpdatePianoRollData { piano_roll } => {
                 self.apply_piano_roll_update(piano_roll);
             }
             AudioCmd::UpdateAutomationLanes { lanes } => {
                 self.automation_lanes = lanes;
             }
-            AudioCmd::ForwardAction { action, rebuild_routing: _, rebuild_instrument_routing: _, mixer_dirty: _ } => {
+            AudioCmd::ForwardAction { action, rebuild_routing, rebuild_instrument_routing, mixer_dirty } => {
                 let projected = super::action_projection::project_action(
                     &action,
                     &mut self.instruments,
                     &mut self.session,
                 );
                 if !projected {
-                    // Action wasn't projectable — main thread also sends
-                    // UpdateState via flush_dirty (shadow validation path).
                     log::debug!(target: "audio::projection", "unprojectable action: {:?}", std::mem::discriminant(&*action));
                 }
 
-                // During shadow validation: routing/mixer handled by flush_dirty's
-                // RebuildRouting/UpdateMixerParams commands. Skip here to avoid
-                // double-processing. When flush_dirty is removed, uncomment:
-                // if rebuild_routing {
-                //     self.routing_rebuild = Some(RoutingRebuildPhase::TearDown);
-                // } else if let Some(id) = rebuild_instrument_routing {
-                //     let _ = self.engine.rebuild_single_instrument_routing(id, &self.instruments, &self.session);
-                // }
-                // if mixer_dirty {
-                //     let _ = self.engine.update_all_instrument_mixer_params(&self.instruments, &self.session);
-                // }
+                if rebuild_routing {
+                    self.routing_rebuild = Some(super::engine::routing::RoutingRebuildPhase::TearDown);
+                } else if let Some(id) = rebuild_instrument_routing {
+                    let _ = self.engine.rebuild_single_instrument_routing(id, &self.instruments, &self.session);
+                }
+                if mixer_dirty {
+                    let _ = self.engine.update_all_instrument_mixer_params(&self.instruments, &self.session);
+                }
             }
-            AudioCmd::FullStateSync { instruments, session, piano_roll, automation_lanes, rebuild_routing } => {
+            AudioCmd::FullStateSync { mut instruments, session, piano_roll, automation_lanes, rebuild_routing } => {
+                // Preserve drum sequencer playback state from old instruments
+                let old_instruments: HashMap<u32, &_> = self.instruments.instruments
+                    .iter()
+                    .map(|i| (i.id, i))
+                    .collect();
+                for new_inst in instruments.instruments.iter_mut() {
+                    if let Some(old_inst) = old_instruments.get(&new_inst.id) {
+                        if let (Some(old_seq), Some(new_seq)) = (&old_inst.drum_sequencer, &mut new_inst.drum_sequencer) {
+                            if new_seq.playing {
+                                new_seq.current_step = old_seq.current_step;
+                                new_seq.step_accumulator = old_seq.step_accumulator;
+                                new_seq.last_played_step = old_seq.last_played_step;
+                            }
+                        }
+                    }
+                }
                 self.instruments = instruments;
                 self.session = session;
                 // Preserve runtime state (playhead, playing)
@@ -766,28 +773,6 @@ impl AudioThread {
     fn calculate_tail_ticks(&self) -> u32 {
         let ticks_per_second = (self.piano_roll.bpm / 60.0) * self.piano_roll.ticks_per_beat as f32;
         ticks_per_second as u32
-    }
-
-    fn apply_state_update(&mut self, mut instruments: InstrumentSnapshot, session: SessionSnapshot) {
-        // Build a HashMap of old instruments for O(1) lookup instead of O(n) per instrument
-        let old_instruments: HashMap<u32, &_> = self.instruments.instruments
-            .iter()
-            .map(|i| (i.id, i))
-            .collect();
-
-        for new_inst in instruments.instruments.iter_mut() {
-            if let Some(old_inst) = old_instruments.get(&new_inst.id) {
-                if let (Some(old_seq), Some(new_seq)) = (&old_inst.drum_sequencer, &mut new_inst.drum_sequencer) {
-                    if new_seq.playing {
-                        new_seq.current_step = old_seq.current_step;
-                        new_seq.step_accumulator = old_seq.step_accumulator;
-                        new_seq.last_played_step = old_seq.last_played_step;
-                    }
-                }
-            }
-        }
-        self.instruments = instruments;
-        self.session = session;
     }
 
     fn apply_piano_roll_update(&mut self, updated: PianoRollSnapshot) {

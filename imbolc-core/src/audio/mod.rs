@@ -15,6 +15,7 @@ pub mod snapshot;
 pub mod telemetry;
 pub mod triple_buffer;
 
+pub use action_projection::is_action_projectable;
 pub use engine::{AudioEngine, ServerStatus};
 pub use handle::{AudioHandle, AudioReadState};
 pub use input::AudioInputManager;

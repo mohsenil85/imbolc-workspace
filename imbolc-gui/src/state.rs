@@ -50,12 +50,13 @@ impl SharedState {
         );
         apply_side_effects(&effects, &mut self.audio);
 
-        // Forward action to audio thread for incremental state projection (Phase 2)
-        self.audio.forward_action(&action, &self.app, result.audio_dirty);
+        // Forward action to audio thread for incremental state projection
+        self.audio.forward_action(&action, result.audio_dirty);
 
-        // Handle audio dirty flags (shadow validation: old path still active)
+        // Handle audio dirty flags
         if result.audio_dirty.any() {
-            self.audio.flush_dirty(&self.app, result.audio_dirty);
+            let needs_full_sync = !imbolc_core::audio::is_action_projectable(&action);
+            self.audio.apply_dirty(&self.app, result.audio_dirty, needs_full_sync);
         }
 
         // Handle quit

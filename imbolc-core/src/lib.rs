@@ -25,9 +25,9 @@
 //! let result = dispatch_action(&action, &mut state, &audio, &mut effects, &io_tx);
 //!
 //! // 4. Process DispatchResult: audio_dirty flags, nav intents, status events
-//! if result.audio_dirty.any() {
-//!     audio.flush_dirty(&state, result.audio_dirty);
-//! }
+//! // ForwardAction handles incremental projection; apply_dirty handles fallback sync
+//! // audio.forward_action(&action, result.audio_dirty);
+//! // audio.apply_dirty(&state, result.audio_dirty, needs_full_sync);
 //!
 //! // 5. Drain IoFeedback from io_rx for async save/load completions
 //! // 6. Drain AudioFeedback via audio.drain_feedback() for render/export progress

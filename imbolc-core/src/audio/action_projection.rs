@@ -20,6 +20,54 @@ use crate::state::instrument::Instrument;
 use crate::state::piano_roll::Note;
 use crate::state::{InstrumentState, SessionState, SourceType, EffectType};
 
+/// Check whether an action can be incrementally projected on the audio thread.
+/// Returns false for actions that require full state sync (undo/redo, arrangement,
+/// sequencer, chopper, server, and specific sub-actions that involve file I/O or
+/// state not available on the audio thread).
+pub fn is_action_projectable(action: &Action) -> bool {
+    match action {
+        Action::None | Action::Quit | Action::SaveAndQuit
+        | Action::Nav(_) | Action::Midi(_)
+        | Action::ExitPerformanceMode | Action::PushLayer(_) | Action::PopLayer(_)
+        | Action::Tuner(_) | Action::AudioFeedback(_) => true,
+
+        Action::Undo | Action::Redo => false,
+
+        Action::Instrument(_) => true,
+        Action::Mixer(_) => true,
+        Action::Bus(_) => true,
+        Action::Click(_) => true,
+
+        Action::PianoRoll(a) => !matches!(a,
+            PianoRollAction::RenderToWav(_)
+            | PianoRollAction::BounceToWav
+            | PianoRollAction::ExportStems
+            | PianoRollAction::CancelExport
+        ),
+        Action::Automation(a) => !matches!(a, AutomationAction::ToggleRecording),
+        Action::VstParam(a) => !matches!(a,
+            VstParamAction::DiscoverParams(_, _)
+            | VstParamAction::SaveState(_, _)
+        ),
+        Action::Session(a) => !matches!(a,
+            SessionAction::NewProject
+            | SessionAction::Save
+            | SessionAction::SaveAs(_)
+            | SessionAction::Load
+            | SessionAction::LoadFrom(_)
+            | SessionAction::ImportCustomSynthDef(_)
+            | SessionAction::CreateCheckpoint(_)
+            | SessionAction::RestoreCheckpoint(_)
+            | SessionAction::DeleteCheckpoint(_)
+        ),
+
+        Action::Arrangement(_) => false,
+        Action::Sequencer(_) => false,
+        Action::Chopper(_) => false,
+        Action::Server(_) => false,
+    }
+}
+
 /// Apply an action's state mutations to the audio thread's local copies.
 /// Returns true if the action was handled (state was mutated or no-op).
 /// Returns false if the action is not projectable (caller should use full sync).

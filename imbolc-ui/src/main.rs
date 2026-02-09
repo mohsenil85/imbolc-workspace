@@ -18,7 +18,7 @@ mod network;
 use std::fs::File;
 use std::time::{Duration, Instant};
 
-use audio::AudioHandle;
+use audio::{AudioHandle, is_action_projectable};
 use action::{AudioDirty, IoFeedback};
 use dispatch::LocalDispatcher;
 use panes::{AddEffectPane, AddPane, AutomationPane, CheckpointListPane, CommandPalettePane, ConfirmPane, DocsPane, EqPane, FileBrowserPane, FrameEditPane, GroovePane, HelpPane, HomePane, InstrumentEditPane, InstrumentPane, InstrumentPickerPane, MidiSettingsPane, MixerPane, PaneSwitcherPane, PianoRollPane, ProjectBrowserPane, QuitPromptPane, SaveAsPane, SampleChopperPane, SequencerPane, ServerPane, TrackPane, TunerPane, VstParamPane, WaveformPane};
@@ -195,6 +195,7 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
     let mut last_render_time = Instant::now();
     let mut select_mode = InstrumentSelectMode::Normal;
     let mut pending_audio_dirty = AudioDirty::default();
+    let mut needs_full_sync = false;
     let mut quit_after_save = false;
 
     // CLI argument: optional project path (skip flags like --verbose)
@@ -217,6 +218,7 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
                 state.project.dirty = false;
                 app_frame.set_project_name(name);
                 pending_audio_dirty.merge(AudioDirty::all());
+                needs_full_sync = true;
 
                 if dispatcher.state().instruments.instruments.is_empty() {
                     panes.switch_to("add", dispatcher.state());
@@ -301,6 +303,7 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
                                 &mut app_frame,
                                 &mut select_mode,
                                 &mut pending_audio_dirty,
+                                &mut needs_full_sync,
                                 &mut layer_stack,
                             ) {
                                 GlobalResult::Quit => break,
@@ -375,7 +378,11 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
                 if dispatcher.state().session.arrangement.editing_clip.is_some()
                     && panes.active().id() != "piano_roll"
                 {
-                    let exit_result = dispatcher.dispatch_with_audio(&Action::Arrangement(action::ArrangementAction::ExitClipEdit), &mut audio);
+                    let exit_action = Action::Arrangement(action::ArrangementAction::ExitClipEdit);
+                    let exit_result = dispatcher.dispatch_with_audio(&exit_action, &mut audio);
+                    if !is_action_projectable(&exit_action) && exit_result.audio_dirty.any() {
+                        needs_full_sync = true;
+                    }
                     pending_audio_dirty.merge(exit_result.audio_dirty);
                     apply_dispatch_result(exit_result, &mut dispatcher, &mut panes, &mut app_frame, &mut audio);
                 }
@@ -388,7 +395,8 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
                     if let Some(cmd) = palette.take_command() {
                         let global_result = handle_global_action(
                             cmd, &mut dispatcher, &mut panes, &mut audio, &mut app_frame,
-                            &mut select_mode, &mut pending_audio_dirty, &mut layer_stack,
+                            &mut select_mode, &mut pending_audio_dirty, &mut needs_full_sync,
+                            &mut layer_stack,
                         );
                         if matches!(global_result, GlobalResult::Quit) { break; }
                         if matches!(global_result, GlobalResult::NotHandled) {
@@ -400,6 +408,9 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
                             }
                             let r = dispatcher.dispatch_with_audio(&re_action, &mut audio);
                             if r.quit { break; }
+                            if !is_action_projectable(&re_action) && r.audio_dirty.any() {
+                                needs_full_sync = true;
+                            }
                             pending_audio_dirty.merge(r.audio_dirty);
                             apply_dispatch_result(r, &mut dispatcher, &mut panes, &mut app_frame, &mut audio);
                         }
@@ -440,7 +451,11 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
             // Intercept SaveAndQuit — handle in main.rs, not dispatch
             if matches!(&pane_action, Action::SaveAndQuit) {
                 if dispatcher.state().project.path.is_some() {
-                    let r = dispatcher.dispatch_with_audio(&Action::Session(action::SessionAction::Save), &mut audio);
+                    let save_action = Action::Session(action::SessionAction::Save);
+                    let r = dispatcher.dispatch_with_audio(&save_action, &mut audio);
+                    if !is_action_projectable(&save_action) && r.audio_dirty.any() {
+                        needs_full_sync = true;
+                    }
                     pending_audio_dirty.merge(r.audio_dirty);
                     apply_dispatch_result(r, &mut dispatcher, &mut panes, &mut app_frame, &mut audio);
                     quit_after_save = true;
@@ -461,6 +476,9 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
                 if dispatch_result.quit {
                     break;
                 }
+                if !is_action_projectable(&pane_action) && dispatch_result.audio_dirty.any() {
+                    needs_full_sync = true;
+                }
                 pending_audio_dirty.merge(dispatch_result.audio_dirty);
                 apply_dispatch_result(dispatch_result, &mut dispatcher, &mut panes, &mut app_frame, &mut audio);
             }
@@ -468,14 +486,18 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
 
         // Process time-based pane updates (key releases, etc.)
         let tick_actions = panes.active_mut().tick(dispatcher.state());
-        for action in tick_actions {
-            let r = dispatcher.dispatch_with_audio(&action, &mut audio);
+        for action in &tick_actions {
+            let r = dispatcher.dispatch_with_audio(action, &mut audio);
+            if !is_action_projectable(action) && r.audio_dirty.any() {
+                needs_full_sync = true;
+            }
             pending_audio_dirty.merge(r.audio_dirty);
         }
 
         if pending_audio_dirty.any() {
-            audio.flush_dirty(dispatcher.state(), pending_audio_dirty);
+            audio.apply_dirty(dispatcher.state(), pending_audio_dirty, needs_full_sync);
             pending_audio_dirty.clear();
+            needs_full_sync = false;
         }
 
         // Drain I/O feedback
@@ -525,6 +547,7 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
 
                              let dirty = AudioDirty::all();
                              pending_audio_dirty.merge(dirty);
+                             needs_full_sync = true;
 
                              // Queue VST state restores - collect data first to avoid borrow conflicts
                              let vst_restores: Vec<_> = dispatcher.state().instruments.instruments.iter()
@@ -570,6 +593,7 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
                              // Register it
                              let _id = dispatcher.state_mut().session.custom_synthdefs.add(custom);
                              pending_audio_dirty.session = true;
+                             needs_full_sync = true;
 
                              if audio.is_running() {
                                  if let Some(server) = panes.get_pane_mut::<ServerPane>("server") {
@@ -618,6 +642,9 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
         for feedback in audio.drain_feedback() {
             let action = Action::AudioFeedback(feedback);
             let r = dispatcher.dispatch_with_audio(&action, &mut audio);
+            if !is_action_projectable(&action) && r.audio_dirty.any() {
+                needs_full_sync = true;
+            }
             pending_audio_dirty.merge(r.audio_dirty);
             apply_dispatch_result(r, &mut dispatcher, &mut panes, &mut app_frame, &mut audio);
         }
@@ -626,6 +653,9 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
         for event in midi_input.poll_events() {
             if let Some(action) = midi_dispatch::process_midi_event(&event, dispatcher.state()) {
                 let r = dispatcher.dispatch_with_audio(&action, &mut audio);
+                if !is_action_projectable(&action) && r.audio_dirty.any() {
+                    needs_full_sync = true;
+                }
                 pending_audio_dirty.merge(r.audio_dirty);
             }
         }
