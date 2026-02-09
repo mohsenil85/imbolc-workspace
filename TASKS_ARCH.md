@@ -30,12 +30,17 @@ bug for `privileged_client` via `double_option` serde helper. Next
 step: send individual param changes as lightweight messages instead of
 full `InstrumentState` blobs.
 
-### 4. Hybrid undo diffs [Q10]
+### ~~4. Hybrid undo diffs [Q10]~~ ✓
 
-Move undo from full-state snapshots to command-based diffs (action +
-inverse action). Persistence stays as full MessagePack blob snapshots
-in SQLite. Avoids O(max_depth * state_size) memory growth at 64+
-instruments.
+**Done.** Replaced full-state snapshots with scope-aware `UndoEntry`
+variants (`SingleInstrument`, `Session`, `Full`). A single-instrument
+param tweak now clones one `Instrument` instead of all 64. Scope
+classifier (`undo_scope()`) routes each action to the narrowest scope.
+Persistence unaffected (undo history is never persisted).
+
+**Files changed:** `imbolc-core/src/state/undo.rs` (rewrite),
+`imbolc-core/src/dispatch/mod.rs` (auto-push + undo/redo arms).
+220 tests pass (+3 new scope-aware tests).
 
 ---
 
