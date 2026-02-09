@@ -1,14 +1,13 @@
 # imbolc
 
-
-imbolc is a terminal-based digital audio workstation (DAW) written in Rust. The UI is a TUI (ratatui) and the audio engine runs on SuperCollider (scsynth) via OSC. It is optimized for keyboard-first instrument editing, sequencing, and mixing inside the terminal.
+Imbolc is a terminal-first digital audio workstation (DAW) written in Rust. The audio engine runs on SuperCollider (`scsynth`) over OSC, with a ratatui TUI (`imbolc-ui`) and an experimental Dioxus GUI (`imbolc-gui`) that share the same core engine.
 
 ## Quick start
 
-- Install Rust (edition 2021) and SuperCollider (scsynth on PATH; sclang needed for synthdef compilation).
-- Compile synthdefs: `imbolc-core/bin/compile-synthdefs`
-- Run: `cargo run -p imbolc-ui --release`
-- Use number keys `1`-`5` to switch panes, `F5` for server controls, and `?` for context help.
+- Install Rust (edition 2021) and SuperCollider (`scsynth` on PATH; `sclang` needed for SynthDef compilation).
+- Compile SynthDefs: `imbolc-core/bin/compile-synthdefs`
+- Run the TUI: `cargo run -p imbolc-ui --release`
+- Run the GUI: `cargo run -p imbolc-gui --release`
 
 Developer mode (UI only):
 
@@ -16,110 +15,147 @@ Developer mode (UI only):
 IMBOLC_NO_AUDIO=1 cargo run -p imbolc-ui
 ```
 
+Optional: override SynthDef location with `IMBOLC_SYNTHDEFS_DIR=/path/to/synthdefs`.
+
 ## Features
 
-### Audio Engine (Backend)
+### Audio engine (SuperCollider backend)
 
-- **Instrument model:** Source + filter + FX chain + LFO (15 modulation targets) + envelope + mixer routing.
-- **Sources (51 types):** Classic waves, FM/phase mod, physical models (pluck, bowed, blown, membrane), mallet percussion (marimba, vibes, kalimba, steel drum), plucked strings (guitar, harp, koto), drum synthesis, classic synths (choir, organ, brass), experimental (gendy, chaos), additive/wavetable/granular synthesis, audio in/bus in, pitched sampler, time stretch, kit, custom SynthDefs, VST instruments.
-- **Filters:** Low-pass, high-pass, band-pass.
-- **Effects (37 types):** Delay, reverb, gate, tape/sidechain comp, chorus, flanger, phaser, tremolo, distortion, bitcrusher, wavefolder, saturator, tilt EQ, stereo widener, freq shifter, limiter, pitch shifter, vinyl, cabinet, granular delay/freeze, convolution reverb, vocoder, ring mod, autopan, resonator, multiband comp, para EQ, spectral freeze, glitch, Leslie, spring reverb, env follower, mid/side, crossfader, denoise, autotune, wah pedal.
-- **Smart voice stealing:** Multi-criteria scoring (released voices first, then lower velocity, older notes), same-pitch retriggering, 5ms anti-click fades.
-- **Low-latency playback:** Dedicated audio thread (~1ms tick), OSC bundles with NTP timetags for sample-accurate scheduling.
-- **Persistence:** SQLite project files with full state serialization.
+- Instrument model: source + filter + EQ + FX chain + LFO + envelope + mixer; mono/stereo per instrument.
+- Sources: 55 built-in types (oscillators, FM/PM, physical models, mallets, strings, drums, classic synths, experimental, additive/wavetable/granular, audio/bus input, samplers, time stretch, kit) plus custom SynthDefs and VST instruments.
+- Filters: 8 types (low/high/band-pass, notch, comb, allpass, vowel, resdrive).
+- Effects: 39 built-ins (delay/reverb/comp, modulation, distortion, EQ, granular, spectral, utility, etc.) plus VST effects.
+- Modulation + automation share a unified `ParameterTarget` covering mixer, filter, envelope, synthesis, FX, EQ, groove, VST, and session params.
+- Voice allocation: polyphonic voice stealing with `/n_end` feedback for accurate release + control-bus recycling.
+- Low-latency scheduling: dedicated audio thread with lookahead OSC bundling.
 
-### Sequencing & Arrangement
+### Sequencing & arrangement
 
-- **Piano roll:** Multi-track note editor with per-note velocity, probability, and swing.
-- **Drum sequencer:** 16-step sequencer with per-step velocity and sample selection.
-- **Sample chopper:** Slice-based beat making with auto-slice and manual markers.
-- **Arrangement view:** Clip-based timeline with placement and editing.
-- **Automation:** Per-track automation lanes for any parameter (including VST params).
-- **Arpeggiator:** Configurable direction, octave range, gate length.
+- Piano roll with per-note velocity, probability, swing, and per-track groove/humanize.
+- Drum sequencer with 16-step patterns, variable grid resolution, per-step velocity/pitch, and sample selection.
+- Sample chopper with waveform preview, auto-slice, manual slices, and pad assignment.
+- Track/arrangement view with clip capture, placement, duplication, and play modes.
+- Automation lanes for instrument, bus, and global parameters (including VST params) with curve types.
+- Arpeggiator with direction, octave range, and gate settings.
 
-### Mixer & Routing
+### Mixer & routing
 
-- **Mixer:** Channel/bus levels, pan, mute/solo, 8 buses, sends, master control.
-- **Bus routing:** Insert and send effects, flexible output targets.
-- **12-band parametric EQ:** Per-instrument frequency shaping.
+- Mixer with per-instrument and bus levels, pan, mute/solo, 8 buses, sends, and master control.
+- Output targets route instruments to master or buses; `BusIn` instruments can read from buses.
+- Per-send tap points (pre-insert or post-insert; default post-insert).
+- 12-band parametric EQ per instrument.
 
-### Terminal UI (Frontend)
+### UI
 
-- **27 panes:** Instrument list, instrument editor, piano roll, sequencer, mixer, automation, EQ, VST params, server control, waveform/spectrum/oscilloscope, project browser, command palette, help, and more.
-- **Keyboard-first navigation:** Single-key actions, context-sensitive help (`?`), command palette (`Ctrl+p`).
-- **Performance mode:** Piano/pad keyboard overlay (`/`) for live playing.
-- **Analysis:** Real-time master level meter, spectrum analyzer, oscilloscope, braille waveform display.
-- **Productivity:** Full undo/redo history, clipboard (copy/paste notes and steps).
-- **Project management:** Save/load, project browser, recent projects.
+- TUI with 27 panes: instruments, instrument editor, piano roll, sequencer, track/arrangement, mixer, automation, EQ, VST params, server control, waveform/spectrum/oscilloscope/LUFS meter, project browser, docs, command palette, help, groove, tuner, checkpoints, and more.
+- Keyboard-first navigation with contextual help and command palette.
+- Performance mode: piano/pad overlay (`/`).
+- Full undo/redo history and clipboard.
 
-## UI tour (defaults)
+### Recording & export
 
-- `1` **Instruments:** list/manage instruments, `Enter` to edit the signal chain.
-- `2` **Piano Roll:** multi-track MIDI sequencing.
-- `3` **Sequencer / Chopper:** 16-step drum sequencer and sample slicing.
-- `4` **Mixer:** levels, pan, mute/solo, sends.
-- `5` **Server:** scsynth status, device selection, synthdef build/load, recording.
-- `?` **Help:** Context-sensitive help for the active pane.
-- `/` **Performance:** Toggle performance mode (piano/pad keyboard).
-- `Ctrl+p` **Command Palette:** Search and execute commands.
-- `Ctrl+f` **Frame Edit:** BPM, time signature, tuning, key/scale, snap.
-- `Ctrl+s` / `Ctrl+l` Save/load default project.
-- `u` / `Ctrl+r` Undo / Redo.
-- `` ` `` / `~` Navigate back/forward through pane history.
+- Real-time master recording to WAV.
+- Per-instrument render, master bounce, and stem export (with progress UI).
+
+### Networking (optional)
+
+- LAN collaboration via `imbolc-net`: single audio server, multiple clients, control data only (no audio over network).
+- Per-instrument dirty-flag patches with full-snapshot fallback.
+
+## UI tour (TUI defaults)
+
+- `F1` Instruments, `F2` Piano Roll / Sequencer / Waveform, `F3` Track, `F4` Mixer, `F5` Server
+- `F6` Docs (selected instrument), `Shift+F6` Learn (topic browser)
+- `F7` Automation, `F8` EQ, `F9` Groove, `F10` Tuner
+- `:` Command palette, `;` Pane switcher, `?` Context help
+- `Space` Play/Stop, `Ctrl+r` Master record
+- `Ctrl+s` Save, `Ctrl+l` Load, `Ctrl+z` Undo, `Ctrl+Z` Redo
+- `Ctrl+o` Project browser, `Ctrl+f` Frame edit, `Ctrl+m` MIDI settings
+- `1`-`9`, `0`, `_` Instrument select
+- `T` Cycle UI theme
 
 The canonical keybinding list lives in `imbolc-ui/keybindings.toml` and is surfaced in-app via `?`.
 
 ## VST support (experimental)
 
-VST support is routed through SuperCollider's VSTPlugin UGen and is still evolving.
+VST support is routed through SuperCollider's VSTPlugin UGen.
 
 What works today:
 - Manual import of `.vst` / `.vst3` bundles for instruments and effects.
-- VST instruments are hosted as persistent nodes; note-on/off is sent via `/u_cmd` MIDI messages.
-- VST effects can be inserted in instrument FX chains.
-- A VST parameter pane exists (search, adjust, reset, add automation lane).
+- Parameter discovery via VST3 probe or OSC query (in VST Params pane press `d`).
+- Search/adjust/reset parameters and add automation lanes.
+- State save to `.fxp` and automatic restore on project load.
 
 Current gaps:
-- Parameter discovery replies from VSTPlugin are not wired yet (UI exists, but populating requires manual trigger).
-- No parameter UI for VST effects (only VST instruments have a param pane today).
-- No preset/program browser; VST state save/restore is not surfaced in the UI yet.
+- Plugin scanning/catalog and preset/program browser.
+- Latency compensation (PDC).
+- Full MIDI-learn workflow in the UI.
 
 Setup notes:
-- Install the [VSTPlugin](https://git.iem.at/pd/vstplugin) extension in SuperCollider.
-- Generate the wrapper synthdefs by running `sclang imbolc-core/synthdefs/compile_vst.scd`, then load synthdefs from the Server pane.
+- Install the VSTPlugin extension in SuperCollider.
+- Generate wrapper SynthDefs: `sclang imbolc-core/synthdefs/compile_vst.scd`, then load synthdefs from the Server pane.
+
+## Architecture status & roadmap
+
+Current architecture (completed from `TASKS_ARCH.md` / `plans/questions.md`):
+- Control-plane operations (server start/connect, synthdef compilation, routing rebuild) are async or phased to protect the audio thread.
+- Voice allocator listens for `/n_end` to reclaim voices and control buses (timer cleanup retained as a fallback).
+- Network sync uses per-instrument dirty flags and `InstrumentPatch` updates with rate limiting and snapshot fallback.
+- Undo uses scope-aware diffs (single-instrument/session/full) while persistence stays full-state SQLite snapshots.
+
+Long-term direction:
+- Event-log architecture with the audio thread as timing authority and UI as projection-only.
+- Event scheduler with dynamic lookahead and ring-buffered OSC bundles.
+- Modular routing as a signal graph for arbitrary signal flow.
+- Documentation pruning: keep reference docs current; per-crate `CLAUDE.md` files are the living contracts.
+
+Decisions:
+- SuperCollider remains the long-term backend.
+- Network timing drift correction is not required while audio is centralized.
 
 ## Configuration & files
 
 - Defaults: `imbolc-core/config.toml` and `imbolc-ui/keybindings.toml` (embedded at build time).
 - Overrides: `~/.config/imbolc/config.toml`, `~/.config/imbolc/keybindings.toml`.
 - Project file: `~/.config/imbolc/default.sqlite`.
-- Custom synthdefs: `~/.config/imbolc/synthdefs/`.
+- Custom synthdefs: `~/.config/imbolc/synthdefs/` (or `IMBOLC_SYNTHDEFS_DIR`).
 - Audio device prefs: `~/.config/imbolc/audio_devices.json`.
 - scsynth log: `~/.config/imbolc/scsynth.log`.
+- App log: `~/.config/imbolc/imbolc.log`.
 - Recordings: `master_<timestamp>.wav` in the current working directory.
+- Renders: `~/.config/imbolc/renders/render_<instrument>_<timestamp>.wav`.
+- Exports: `~/.config/imbolc/exports/bounce_<timestamp>.wav` and `stem_<name>_<timestamp>.wav`.
+- VST state: `~/.config/imbolc/vst_states/*.fxp`.
 
 ## Workspace structure
 
-This is a Cargo workspace with multiple crates:
-
 ```
 imbolc/
-├── imbolc-ui/       Terminal UI binary (ratatui + crossterm)
+├── imbolc-ui/       Terminal UI (ratatui + crossterm)
+├── imbolc-gui/      Experimental GUI (Dioxus)
 ├── imbolc-core/     Core engine (state, dispatch, audio, persistence)
-│   └── synthdefs/   SuperCollider synth definitions (.scsyndef)
+│   └── synthdefs/   SuperCollider SynthDefs (.scd → .scsyndef)
 ├── imbolc-types/    Shared type definitions
-├── imbolc-net/      (future) Network/collaboration layer
-└── docs/            Architecture, audio routing, persistence docs
+├── imbolc-net/      Network collaboration layer
+├── docs/            Architecture + reference docs
+└── plans/           Architecture questions and implementation plans
 ```
 
 ## Build & test
 
 ```bash
-cargo build                 # Build all crates
-cargo build -p imbolc-ui    # Build UI only
-cargo run -p imbolc-ui      # Run the DAW
-cargo test                  # Run all tests
+cargo build
+cargo run -p imbolc-ui
+cargo run -p imbolc-gui
+cargo test
 cargo test -- --ignored     # Include tmux-based E2E tests
+```
+
+Network builds:
+
+```bash
+cargo build -p imbolc-ui --features net
+cargo build -p imbolc-ui --features mdns
 ```
 
 ## License
