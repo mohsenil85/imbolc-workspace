@@ -216,6 +216,9 @@ bindings = [
   { key = "o", action = "load_sample", description = "Load sample" },
   { key = "v", action = "vst_params", description = "VST parameters" },
   { key = "C", action = "toggle_channel_config", description = "Toggle mono/stereo" },
+  { key = "Ctrl+Up", action = "move_stage_up", description = "Move processing stage up" },
+  { key = "Ctrl+Down", action = "move_stage_down", description = "Move processing stage down" },
+  { key = "b", action = "toggle_effect_bypass", description = "Toggle effect bypass" },
 ]
 
 [layers.server]

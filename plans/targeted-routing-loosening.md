@@ -91,11 +91,10 @@ multiple filters exist.
 - Remove `MoveEffect` — `MoveStage` subsumes it. Having two ways to
   move effects is a maintenance burden with no user-facing benefit;
   callers can find the chain index via `effect_chain_index(id)`.
-  **Blocked on A6:** ~18 call sites in dispatch, action_projection,
-  and UI still use `MoveEffect` (instrument, bus, layer group
-  variants). Remove once instrument_edit_pane is fully refactored to
-  use `MoveStage` and bus/group `MoveEffect` is evaluated for
-  migration.
+  **A6 done — instrument_edit_pane now uses `MoveStage`.** Remaining:
+  evaluate bus/group `MoveEffect` variants for migration to a
+  unified move action, then remove `MoveEffect` from action.rs and
+  all remaining call sites (~12 in dispatch, action_projection).
 
 ### ~~A4. Dispatch (`imbolc-core/src/dispatch/instrument/`)~~ ✓
 
@@ -151,34 +150,33 @@ the final bus after all processing.
 `engine/mod.rs` (`ProcessingNodeRef`, `InstrumentNodes` update,
 `all_node_ids()`), `engine/mod.rs` tests (updated `set_filter` calls).
 
-### A6. UI (`imbolc-ui/src/panes/instrument_edit_pane/`) — compilation done, full refactor pending
+### ~~A6. UI (`imbolc-ui/src/panes/instrument_edit_pane/`)~~ ✓
 
-**Compilation compatibility done.** All UI code compiles and 116 tests
-pass. The pane still stores local `filter`, `eq`, `effects` fields
-internally and uses a local `Section` enum (`Source`, `Filter`,
-`Effects`, `Lfo`, `Envelope`) that maps to/from
-`InstrumentSection::Processing(i)`. Helper methods
-`build_processing_chain()`, `map_section()`, and `map_row_info()`
-bridge between the two representations.
+**Done.** Full refactor complete — replaced local `filter`/`eq`/`effects`
+fields with `processing_chain: Vec<ProcessingStage>`. Removed the local
+`Section` enum and all bridging helpers (`build_processing_chain()`,
+`map_section()`, `map_row_info()`, `effect_row_info()`). All four pane
+files rewritten:
 
-- **mod.rs**: `set_instrument()` / `refresh_instrument()` use accessor
-  methods (`filter()`, `eq()`, `effects()`). `apply_to()` and
-  `emit_update()` build `processing_chain` from local fields.
-  `total_rows()`, `section_for_row()`, `row_info()` delegate to
-  type-level helpers via `build_processing_chain()`.
-- **editing.rs**: `emit_update()` constructs `InstrumentUpdate` with
-  `processing_chain` field.
-- **Other UI files**: `instrument_pane.rs`, `mixer_pane/`, `eq_pane.rs`,
-  `main.rs` — all migrated from field access to accessor methods.
+- **mod.rs**: `set_instrument()` / `refresh_instrument()` clone
+  `instrument.processing_chain` directly. Nav helpers delegate to
+  type-level functions with no bridging. Dynamic `tab_index()` /
+  `set_tab_index()` encoding (0=Source, 1..=N=Processing, N+1=Lfo,
+  N+2=Envelope). New `row_for_processing_stage()` for cursor stability
+  after MoveStage. Dynamic `visual_overhead()` from chain content.
+- **editing.rs**: All match blocks use `InstrumentSection::Processing(i)`
+  dispatching to `ProcessingStage::Filter/Eq/Effect`. `emit_update()`
+  uses `self.processing_chain.clone()` directly.
+- **input.rs**: All match blocks rewritten. New handlers: `MoveStageUp`
+  (Ctrl+Up), `MoveStageDown` (Ctrl+Down), `ToggleEffectBypass` (`b`).
+  `NextSection`/`PrevSection` visit each processing stage individually.
+- **rendering.rs**: Replaced hardcoded section layout with chain loop.
+  Empty chain renders "(no processing)" placeholder.
 
-**Remaining full refactor (lower priority):**
-- Replace local `filter`/`eq`/`effects` fields with `processing_chain`
-  to render stages in actual user-defined order
-- Render Source → loop over `processing_chain` stages → LFO → Envelope
-- Section nav uses `Processing(idx)` directly; add Ctrl+Up/Down to
-  move stages
-- Cursor stability after `MoveStage`: recalculate `selected_row` from
-  the stage's new chain index
+**New keybindings:** `Ctrl+Up` move_stage_up, `Ctrl+Down`
+move_stage_down, `b` toggle_effect_bypass. 5 new tests (section
+navigation with reordered chain, tab cycling, cursor stability after
+move, toggle filter, empty chain). 121 UI tests pass.
 
 ### ~~A7. Persistence (`imbolc-core/src/state/persistence/`)~~ ✓
 
@@ -368,10 +366,10 @@ Instrument struct, and delivers the highest-value feature
 (reverb/compression buses). Phase A is larger and more invasive.
 
 1. ~~Phase B (bus effects)~~ — **Complete.** All B1–B7 done (B7 = layer group EQ).
-2. Phase A (flexible chain) — **Nearly complete.** A1–A5, A7–A8 done.
-   Remaining: A3 (MoveEffect removal, blocked on A6), A6 (full UI
-   refactor). The codebase compiles cleanly and all 708 tests pass
-   (236 types + 278 core + 116 UI + 78 net).
+2. Phase A (flexible chain) — **Nearly complete.** A1–A8 done.
+   Remaining: A3 (`MoveEffect` removal — now unblocked, instrument
+   side done, evaluate bus/group migration). All 713 tests pass
+   (236 types + 278 core + 121 UI + 78 net).
 
 They share no code dependencies, so Phase A can't break Phase B. Bus
 effects stay as plain `Vec<EffectSlot>` (buses don't have filter/EQ,

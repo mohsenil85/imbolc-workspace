@@ -1,4 +1,5 @@
 use super::InstrumentEditPane;
+use imbolc_types::ProcessingStage;
 use crate::state::{AppState, Param, ParamValue};
 use crate::ui::layout_helpers::center_rect;
 use crate::ui::widgets::TextInput;
@@ -68,7 +69,6 @@ impl InstrumentEditPane {
         };
 
         // === SOURCE SECTION ===
-        // Calculate source section row range
         let source_row_count = if self.source.is_sample() { 1 } else { 0 }
             + if self.source_params.is_empty() { 1 } else { self.source_params.len() };
         let source_start = global_row;
@@ -120,66 +120,14 @@ impl InstrumentEditPane {
             }
         }
 
-        // Blank line after source section (only if we rendered something and have room)
+        // Separator after source section
         if visual_y > base_y && visual_y < max_y {
             visual_y += 1;
         }
 
-        // === FILTER SECTION ===
-        let filter_row_count = if self.filter.is_some() {
-            3 + self.filter.as_ref().map_or(0, |f| f.extra_params.len())
-        } else {
-            1
-        };
-        let filter_start = global_row;
-        let filter_end = filter_start + filter_row_count;
-
-        if (filter_start..filter_end).any(|r| is_visible(r)) && visual_y < max_y {
-            let filter_label = if let Some(ref f) = self.filter {
-                format!("FILTER: {}  (f: off, t: cycle)", f.filter_type.name())
-            } else {
-                "FILTER: OFF  (f: enable)".to_string()
-            };
-            buf.draw_line(Rect::new(content_x, visual_y, inner.width.saturating_sub(2), 1),
-                &[(&filter_label, Style::new().fg(Color::FILTER_COLOR).bold())]);
-            visual_y += 1;
-        }
-
-        if let Some(ref f) = self.filter {
-            // Type row
-            if is_visible(global_row) && visual_y < max_y {
-                let is_sel = self.selected_row == global_row;
-                render_label_value_row_buf(buf, content_x, visual_y, "Type", &f.filter_type.name(), Color::FILTER_COLOR, is_sel);
-                visual_y += 1;
-            }
-            global_row += 1;
-
-            // Cutoff row
-            if is_visible(global_row) && visual_y < max_y {
-                let is_sel = self.selected_row == global_row;
-                render_value_row_buf(buf, content_x, visual_y, "Cutoff", f.cutoff.value, f.cutoff.min, f.cutoff.max, is_sel, self.editing && is_sel, &mut self.edit_input);
-                visual_y += 1;
-            }
-            global_row += 1;
-
-            // Resonance row
-            if is_visible(global_row) && visual_y < max_y {
-                let is_sel = self.selected_row == global_row;
-                render_value_row_buf(buf, content_x, visual_y, "Resonance", f.resonance.value, f.resonance.min, f.resonance.max, is_sel, self.editing && is_sel, &mut self.edit_input);
-                visual_y += 1;
-            }
-            global_row += 1;
-
-            // Extra filter params
-            for param in &f.extra_params {
-                if is_visible(global_row) && visual_y < max_y {
-                    let is_sel = self.selected_row == global_row;
-                    render_param_row_buf(buf, content_x, visual_y, param, is_sel, self.editing && is_sel, &mut self.edit_input);
-                    visual_y += 1;
-                }
-                global_row += 1;
-            }
-        } else {
+        // === PROCESSING CHAIN ===
+        if self.processing_chain.is_empty() {
+            // Placeholder row for empty chain
             if is_visible(global_row) && visual_y < max_y {
                 let is_sel = self.selected_row == global_row;
                 let style = if is_sel {
@@ -187,78 +135,106 @@ impl InstrumentEditPane {
                 } else {
                     Style::new().fg(Color::DARK_GRAY)
                 };
-                buf.draw_line(Rect::new(content_x + 2, visual_y, inner.width.saturating_sub(4), 1), &[("(disabled)", style)]);
-                visual_y += 1;
-            }
-            global_row += 1;
-        }
-
-        // Blank line after filter section
-        if visual_y < max_y {
-            visual_y += 1;
-        }
-
-        // === EFFECTS SECTION ===
-        let effects_row_count = if self.effects.is_empty() {
-            1
-        } else {
-            self.effects.iter().map(|e| 1 + e.params.len()).sum()
-        };
-        let effects_start = global_row;
-        let effects_end = effects_start + effects_row_count;
-
-        if (effects_start..effects_end).any(|r| is_visible(r)) && visual_y < max_y {
-            buf.draw_line(Rect::new(content_x, visual_y, inner.width.saturating_sub(2), 1),
-                &[("EFFECTS  (a: add effect, d: remove)", Style::new().fg(Color::FX_COLOR).bold())]);
-            visual_y += 1;
-        }
-
-        if self.effects.is_empty() {
-            if is_visible(global_row) && visual_y < max_y {
-                let is_sel = self.selected_row == global_row;
-                let style = if is_sel {
-                    Style::new().fg(Color::DARK_GRAY).bg(Color::SELECTION_BG)
-                } else {
-                    Style::new().fg(Color::DARK_GRAY)
-                };
-                buf.draw_line(Rect::new(content_x + 2, visual_y, inner.width.saturating_sub(4), 1), &[("(no effects)", style)]);
+                buf.draw_line(Rect::new(content_x + 2, visual_y, inner.width.saturating_sub(4), 1), &[("(no processing)", style)]);
                 visual_y += 1;
             }
             global_row += 1;
         } else {
-            for effect in &self.effects {
-                // Header row: effect name + enabled badge
-                if is_visible(global_row) && visual_y < max_y {
-                    let is_sel = self.selected_row == global_row;
-                    if is_sel {
-                        buf.set_cell(content_x, visual_y, '>', Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG).bold());
-                    }
+            for stage in &self.processing_chain {
+                match stage {
+                    ProcessingStage::Filter(f) => {
+                        let rc = stage.row_count();
+                        let stage_start = global_row;
+                        let stage_end = stage_start + rc;
 
-                    let enabled_str = if effect.enabled { "ON " } else { "OFF" };
-                    let effect_text = format!("{:10} [{}]", effect.effect_type.name(), enabled_str);
-                    let effect_style = if is_sel {
-                        Style::new().fg(Color::FX_COLOR).bg(Color::SELECTION_BG)
-                    } else {
-                        Style::new().fg(Color::FX_COLOR)
-                    };
-                    buf.draw_line(Rect::new(content_x + 2, visual_y, 18, 1), &[(&effect_text, effect_style)]);
-                    visual_y += 1;
-                }
-                global_row += 1;
+                        // Filter header (non-selectable)
+                        if (stage_start..stage_end).any(|r| is_visible(r)) && visual_y < max_y {
+                            let filter_label = format!("FILTER: {}  (f: off, t: cycle)", f.filter_type.name());
+                            buf.draw_line(Rect::new(content_x, visual_y, inner.width.saturating_sub(2), 1),
+                                &[(&filter_label, Style::new().fg(Color::FILTER_COLOR).bold())]);
+                            visual_y += 1;
+                        }
 
-                // Per-param rows with sliders
-                for param in &effect.params {
-                    if is_visible(global_row) && visual_y < max_y {
-                        let is_sel = self.selected_row == global_row;
-                        render_param_row_buf(buf, content_x, visual_y, param, is_sel, self.editing && is_sel, &mut self.edit_input);
-                        visual_y += 1;
+                        // Type row
+                        if is_visible(global_row) && visual_y < max_y {
+                            let is_sel = self.selected_row == global_row;
+                            render_label_value_row_buf(buf, content_x, visual_y, "Type", &f.filter_type.name(), Color::FILTER_COLOR, is_sel);
+                            visual_y += 1;
+                        }
+                        global_row += 1;
+
+                        // Cutoff row
+                        if is_visible(global_row) && visual_y < max_y {
+                            let is_sel = self.selected_row == global_row;
+                            render_value_row_buf(buf, content_x, visual_y, "Cutoff", f.cutoff.value, f.cutoff.min, f.cutoff.max, is_sel, self.editing && is_sel, &mut self.edit_input);
+                            visual_y += 1;
+                        }
+                        global_row += 1;
+
+                        // Resonance row
+                        if is_visible(global_row) && visual_y < max_y {
+                            let is_sel = self.selected_row == global_row;
+                            render_value_row_buf(buf, content_x, visual_y, "Resonance", f.resonance.value, f.resonance.min, f.resonance.max, is_sel, self.editing && is_sel, &mut self.edit_input);
+                            visual_y += 1;
+                        }
+                        global_row += 1;
+
+                        // Extra filter params
+                        for param in &f.extra_params {
+                            if is_visible(global_row) && visual_y < max_y {
+                                let is_sel = self.selected_row == global_row;
+                                render_param_row_buf(buf, content_x, visual_y, param, is_sel, self.editing && is_sel, &mut self.edit_input);
+                                visual_y += 1;
+                            }
+                            global_row += 1;
+                        }
                     }
-                    global_row += 1;
+                    ProcessingStage::Eq(_eq) => {
+                        // Single selectable row: "EQ [ON]  (e: toggle)"
+                        if is_visible(global_row) && visual_y < max_y {
+                            let is_sel = self.selected_row == global_row;
+                            let eq_text = "EQ [ON]  (e: toggle)";
+                            render_label_value_row_buf(buf, content_x, visual_y, "EQ", "ON", Color::FILTER_COLOR, is_sel);
+                            let _ = eq_text; // suppress unused
+                            visual_y += 1;
+                        }
+                        global_row += 1;
+                    }
+                    ProcessingStage::Effect(effect) => {
+                        // Header row: effect name + enabled badge
+                        if is_visible(global_row) && visual_y < max_y {
+                            let is_sel = self.selected_row == global_row;
+                            if is_sel {
+                                buf.set_cell(content_x, visual_y, '>', Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG).bold());
+                            }
+
+                            let enabled_str = if effect.enabled { "ON " } else { "OFF" };
+                            let effect_text = format!("{:10} [{}]", effect.effect_type.name(), enabled_str);
+                            let effect_style = if is_sel {
+                                Style::new().fg(Color::FX_COLOR).bg(Color::SELECTION_BG)
+                            } else {
+                                Style::new().fg(Color::FX_COLOR)
+                            };
+                            buf.draw_line(Rect::new(content_x + 2, visual_y, 18, 1), &[(&effect_text, effect_style)]);
+                            visual_y += 1;
+                        }
+                        global_row += 1;
+
+                        // Per-param rows with sliders
+                        for param in &effect.params {
+                            if is_visible(global_row) && visual_y < max_y {
+                                let is_sel = self.selected_row == global_row;
+                                render_param_row_buf(buf, content_x, visual_y, param, is_sel, self.editing && is_sel, &mut self.edit_input);
+                                visual_y += 1;
+                            }
+                            global_row += 1;
+                        }
+                    }
                 }
             }
         }
 
-        // Blank line after effects section
+        // Separator after processing chain
         if visual_y < max_y {
             visual_y += 1;
         }
@@ -319,7 +295,7 @@ impl InstrumentEditPane {
         }
         global_row += 1;
 
-        // Blank line after LFO section
+        // Separator after LFO section
         if visual_y < max_y {
             visual_y += 1;
         }

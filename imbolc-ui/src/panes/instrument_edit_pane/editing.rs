@@ -1,4 +1,6 @@
-use super::{InstrumentEditPane, Section};
+use super::InstrumentEditPane;
+use imbolc_types::ProcessingStage;
+use crate::state::InstrumentSection;
 use crate::state::param::{adjust_freq_semitone, adjust_musical_step};
 use crate::ui::{Action, InstrumentAction, InstrumentUpdate};
 
@@ -26,7 +28,7 @@ impl InstrumentEditPane {
         };
 
         match section {
-            Section::Source => {
+            InstrumentSection::Source => {
                 let param_idx = if self.source.is_sample() {
                     if local_idx == 0 { return; } // sample name row — not adjustable
                     local_idx - 1
@@ -41,50 +43,51 @@ impl InstrumentEditPane {
                     }
                 }
             }
-            Section::Filter => {
-                if let Some(ref mut f) = self.filter {
-                    match local_idx {
-                        0 => {} // type - use 't' to cycle
-                        1 => {
-                            if mode == AdjustMode::Musical {
-                                f.cutoff.value = adjust_freq_semitone(f.cutoff.value, increase, tuning_a4, f.cutoff.min, f.cutoff.max);
-                            } else {
-                                let range = f.cutoff.max - f.cutoff.min;
-                                let delta = range * fraction;
-                                if increase { f.cutoff.value = (f.cutoff.value + delta).min(f.cutoff.max); }
-                                else { f.cutoff.value = (f.cutoff.value - delta).max(f.cutoff.min); }
-                            }
-                        }
-                        2 => {
-                            if mode == AdjustMode::Musical {
-                                f.resonance.value = adjust_musical_step(f.resonance.value, increase, f.resonance.min, f.resonance.max);
-                            } else {
-                                let range = f.resonance.max - f.resonance.min;
-                                let delta = range * fraction;
-                                if increase { f.resonance.value = (f.resonance.value + delta).min(f.resonance.max); }
-                                else { f.resonance.value = (f.resonance.value - delta).max(f.resonance.min); }
-                            }
-                        }
-                        idx => {
-                            // Extra filter params (local_idx >= 3)
-                            let extra_idx = idx - 3;
-                            if let Some(param) = f.extra_params.get_mut(extra_idx) {
+            InstrumentSection::Processing(i) => {
+                match self.processing_chain.get_mut(i) {
+                    Some(ProcessingStage::Filter(f)) => {
+                        match local_idx {
+                            0 => {} // type - use 't' to cycle
+                            1 => {
                                 if mode == AdjustMode::Musical {
-                                    param.adjust_musical(increase, tuning_a4);
+                                    f.cutoff.value = adjust_freq_semitone(f.cutoff.value, increase, tuning_a4, f.cutoff.min, f.cutoff.max);
                                 } else {
-                                    param.adjust(increase, fraction);
+                                    let range = f.cutoff.max - f.cutoff.min;
+                                    let delta = range * fraction;
+                                    if increase { f.cutoff.value = (f.cutoff.value + delta).min(f.cutoff.max); }
+                                    else { f.cutoff.value = (f.cutoff.value - delta).max(f.cutoff.min); }
+                                }
+                            }
+                            2 => {
+                                if mode == AdjustMode::Musical {
+                                    f.resonance.value = adjust_musical_step(f.resonance.value, increase, f.resonance.min, f.resonance.max);
+                                } else {
+                                    let range = f.resonance.max - f.resonance.min;
+                                    let delta = range * fraction;
+                                    if increase { f.resonance.value = (f.resonance.value + delta).min(f.resonance.max); }
+                                    else { f.resonance.value = (f.resonance.value - delta).max(f.resonance.min); }
+                                }
+                            }
+                            idx => {
+                                // Extra filter params (local_idx >= 3)
+                                let extra_idx = idx - 3;
+                                if let Some(param) = f.extra_params.get_mut(extra_idx) {
+                                    if mode == AdjustMode::Musical {
+                                        param.adjust_musical(increase, tuning_a4);
+                                    } else {
+                                        param.adjust(increase, fraction);
+                                    }
                                 }
                             }
                         }
                     }
-                }
-            }
-            Section::Effects => {
-                if let Some((effect_idx, param_offset)) = self.effect_row_info(local_idx) {
-                    if param_offset == 0 { return; } // header row — not adjustable
-                    let param_idx = param_offset - 1;
-                    if let Some(effect) = self.effects.get_mut(effect_idx) {
-                        if let Some(param) = effect.params.get_mut(param_idx) {
+                    Some(ProcessingStage::Eq(_)) => {
+                        // EQ row is a toggle — not adjustable via slider
+                    }
+                    Some(ProcessingStage::Effect(e)) => {
+                        if local_idx == 0 { return; } // header row — not adjustable
+                        let param_idx = local_idx - 1;
+                        if let Some(param) = e.params.get_mut(param_idx) {
                             if mode == AdjustMode::Musical {
                                 param.adjust_musical(increase, tuning_a4);
                             } else {
@@ -92,9 +95,10 @@ impl InstrumentEditPane {
                             }
                         }
                     }
+                    None => {}
                 }
             }
-            Section::Lfo => {
+            InstrumentSection::Lfo => {
                 match local_idx {
                     0 => {} // enabled - use 'l' to toggle
                     1 => {
@@ -122,7 +126,7 @@ impl InstrumentEditPane {
                     _ => {}
                 }
             }
-            Section::Envelope => {
+            InstrumentSection::Envelope => {
                 let delta = match mode {
                     AdjustMode::Tiny => 0.01,
                     AdjustMode::Musical => 0.1,
@@ -148,7 +152,7 @@ impl InstrumentEditPane {
                 id,
                 source: self.source,
                 source_params: self.source_params.clone(),
-                processing_chain: self.build_processing_chain(),
+                processing_chain: self.processing_chain.clone(),
                 lfo: self.lfo.clone(),
                 amp_envelope: self.amp_envelope.clone(),
                 polyphonic: self.polyphonic,
@@ -164,7 +168,7 @@ impl InstrumentEditPane {
         let (section, local_idx) = self.row_info(self.selected_row);
 
         match section {
-            Section::Source => {
+            InstrumentSection::Source => {
                 let param_idx = if self.source.is_sample() {
                     if local_idx == 0 { return; }
                     local_idx - 1
@@ -175,33 +179,33 @@ impl InstrumentEditPane {
                     param.zero();
                 }
             }
-            Section::Filter => {
-                if let Some(ref mut f) = self.filter {
-                    match local_idx {
-                        0 => {} // type - can't zero
-                        1 => f.cutoff.value = f.cutoff.min,
-                        2 => f.resonance.value = f.resonance.min,
-                        idx => {
-                            let extra_idx = idx - 3;
-                            if let Some(param) = f.extra_params.get_mut(extra_idx) {
-                                param.zero();
+            InstrumentSection::Processing(i) => {
+                match self.processing_chain.get_mut(i) {
+                    Some(ProcessingStage::Filter(f)) => {
+                        match local_idx {
+                            0 => {} // type - can't zero
+                            1 => f.cutoff.value = f.cutoff.min,
+                            2 => f.resonance.value = f.resonance.min,
+                            idx => {
+                                let extra_idx = idx - 3;
+                                if let Some(param) = f.extra_params.get_mut(extra_idx) {
+                                    param.zero();
+                                }
                             }
                         }
                     }
-                }
-            }
-            Section::Effects => {
-                if let Some((effect_idx, param_offset)) = self.effect_row_info(local_idx) {
-                    if param_offset == 0 { return; } // header row
-                    let param_idx = param_offset - 1;
-                    if let Some(effect) = self.effects.get_mut(effect_idx) {
-                        if let Some(param) = effect.params.get_mut(param_idx) {
+                    Some(ProcessingStage::Eq(_)) => {} // EQ toggle — no zero
+                    Some(ProcessingStage::Effect(e)) => {
+                        if local_idx == 0 { return; } // header row
+                        let param_idx = local_idx - 1;
+                        if let Some(param) = e.params.get_mut(param_idx) {
                             param.zero();
                         }
                     }
+                    None => {}
                 }
             }
-            Section::Lfo => {
+            InstrumentSection::Lfo => {
                 match local_idx {
                     0 => self.lfo.enabled = false,
                     1 => self.lfo.rate = 0.1,
@@ -210,7 +214,7 @@ impl InstrumentEditPane {
                     _ => {}
                 }
             }
-            Section::Envelope => {
+            InstrumentSection::Envelope => {
                 match local_idx {
                     0 => self.amp_envelope.attack = 0.0,
                     1 => self.amp_envelope.decay = 0.0,
@@ -227,7 +231,7 @@ impl InstrumentEditPane {
         let (section, local_idx) = self.row_info(self.selected_row);
 
         match section {
-            Section::Source => {
+            InstrumentSection::Source => {
                 let param_idx = if self.source.is_sample() {
                     if local_idx == 0 { return; }
                     local_idx - 1
@@ -241,39 +245,39 @@ impl InstrumentEditPane {
                     }
                 }
             }
-            Section::Filter => {
-                if let Some(ref mut f) = self.filter {
-                    match local_idx {
-                        0 => {} // type - can't reset
-                        1 => f.cutoff.value = 1000.0, // FilterConfig::new default
-                        2 => f.resonance.value = 0.5,
-                        idx => {
-                            let extra_idx = idx - 3;
-                            let defaults = f.filter_type.default_extra_params();
-                            if let Some(param) = f.extra_params.get_mut(extra_idx) {
-                                if let Some(default) = defaults.get(extra_idx) {
-                                    param.value = default.value.clone();
+            InstrumentSection::Processing(i) => {
+                match self.processing_chain.get_mut(i) {
+                    Some(ProcessingStage::Filter(f)) => {
+                        match local_idx {
+                            0 => {} // type - can't reset
+                            1 => f.cutoff.value = 1000.0, // FilterConfig::new default
+                            2 => f.resonance.value = 0.5,
+                            idx => {
+                                let extra_idx = idx - 3;
+                                let defaults = f.filter_type.default_extra_params();
+                                if let Some(param) = f.extra_params.get_mut(extra_idx) {
+                                    if let Some(default) = defaults.get(extra_idx) {
+                                        param.value = default.value.clone();
+                                    }
                                 }
                             }
                         }
                     }
-                }
-            }
-            Section::Effects => {
-                if let Some((effect_idx, param_offset)) = self.effect_row_info(local_idx) {
-                    if param_offset == 0 { return; } // header row
-                    let param_idx = param_offset - 1;
-                    if let Some(effect) = self.effects.get_mut(effect_idx) {
-                        let defaults = effect.effect_type.default_params();
-                        if let Some(param) = effect.params.get_mut(param_idx) {
+                    Some(ProcessingStage::Eq(_)) => {} // EQ — no reset
+                    Some(ProcessingStage::Effect(e)) => {
+                        if local_idx == 0 { return; } // header row
+                        let param_idx = local_idx - 1;
+                        let defaults = e.effect_type.default_params();
+                        if let Some(param) = e.params.get_mut(param_idx) {
                             if let Some(default) = defaults.get(param_idx) {
                                 param.value = default.value.clone();
                             }
                         }
                     }
+                    None => {}
                 }
             }
-            Section::Lfo => {
+            InstrumentSection::Lfo => {
                 use crate::state::LfoConfig;
                 let defaults = LfoConfig::default();
                 match local_idx {
@@ -284,7 +288,7 @@ impl InstrumentEditPane {
                     _ => {}
                 }
             }
-            Section::Envelope => {
+            InstrumentSection::Envelope => {
                 let defaults = self.source.default_envelope();
                 match local_idx {
                     0 => self.amp_envelope.attack = defaults.attack,
@@ -297,38 +301,40 @@ impl InstrumentEditPane {
         }
     }
 
-    /// Set all parameters in the current section to their minimum values
+    /// Set all parameters in the current processing stage to their minimum values
     pub(super) fn zero_current_section(&mut self) {
         let section = self.current_section();
 
         match section {
-            Section::Source => {
+            InstrumentSection::Source => {
                 for param in &mut self.source_params {
                     param.zero();
                 }
             }
-            Section::Filter => {
-                if let Some(ref mut f) = self.filter {
-                    f.cutoff.value = f.cutoff.min;
-                    f.resonance.value = f.resonance.min;
-                    for param in &mut f.extra_params {
-                        param.zero();
+            InstrumentSection::Processing(i) => {
+                match self.processing_chain.get_mut(i) {
+                    Some(ProcessingStage::Filter(f)) => {
+                        f.cutoff.value = f.cutoff.min;
+                        f.resonance.value = f.resonance.min;
+                        for param in &mut f.extra_params {
+                            param.zero();
+                        }
                     }
+                    Some(ProcessingStage::Eq(_)) => {} // EQ — no zero
+                    Some(ProcessingStage::Effect(e)) => {
+                        for param in &mut e.params {
+                            param.zero();
+                        }
+                    }
+                    None => {}
                 }
             }
-            Section::Effects => {
-                for effect in &mut self.effects {
-                    for param in &mut effect.params {
-                        param.zero();
-                    }
-                }
-            }
-            Section::Lfo => {
+            InstrumentSection::Lfo => {
                 self.lfo.enabled = false;
                 self.lfo.rate = 0.1;
                 self.lfo.depth = 0.0;
             }
-            Section::Envelope => {
+            InstrumentSection::Envelope => {
                 self.amp_envelope.attack = 0.0;
                 self.amp_envelope.decay = 0.0;
                 self.amp_envelope.sustain = 0.0;
@@ -341,7 +347,7 @@ impl InstrumentEditPane {
     pub(super) fn current_value_string(&self) -> String {
         let (section, local_idx) = self.row_info(self.selected_row);
         match section {
-            Section::Source => {
+            InstrumentSection::Source => {
                 let param_idx = if self.source.is_sample() {
                     if local_idx == 0 { return String::new(); }
                     local_idx - 1
@@ -352,33 +358,32 @@ impl InstrumentEditPane {
                     .map(|p| p.value_string())
                     .unwrap_or_default()
             }
-            Section::Filter => {
-                if let Some(ref f) = self.filter {
-                    match local_idx {
-                        1 => format!("{:.2}", f.cutoff.value),
-                        2 => format!("{:.2}", f.resonance.value),
-                        idx => {
-                            let extra_idx = idx - 3;
-                            f.extra_params.get(extra_idx)
-                                .map(|p| p.value_string())
-                                .unwrap_or_default()
+            InstrumentSection::Processing(i) => {
+                match self.processing_chain.get(i) {
+                    Some(ProcessingStage::Filter(f)) => {
+                        match local_idx {
+                            1 => format!("{:.2}", f.cutoff.value),
+                            2 => format!("{:.2}", f.resonance.value),
+                            idx => {
+                                let extra_idx = idx - 3;
+                                f.extra_params.get(extra_idx)
+                                    .map(|p| p.value_string())
+                                    .unwrap_or_default()
+                            }
                         }
                     }
-                } else {
-                    String::new()
+                    Some(ProcessingStage::Eq(_)) => String::new(),
+                    Some(ProcessingStage::Effect(e)) => {
+                        if local_idx == 0 { return String::new(); }
+                        let param_idx = local_idx - 1;
+                        e.params.get(param_idx)
+                            .map(|p| p.value_string())
+                            .unwrap_or_default()
+                    }
+                    None => String::new(),
                 }
             }
-            Section::Effects => {
-                if let Some((effect_idx, param_offset)) = self.effect_row_info(local_idx) {
-                    if param_offset == 0 { return String::new(); }
-                    let param_idx = param_offset - 1;
-                    self.effects.get(effect_idx)
-                        .and_then(|e| e.params.get(param_idx))
-                        .map(|p| p.value_string())
-                        .unwrap_or_default()
-                } else { String::new() }
-            }
-            Section::Envelope => {
+            InstrumentSection::Envelope => {
                 match local_idx {
                     0 => format!("{:.2}", self.amp_envelope.attack),
                     1 => format!("{:.2}", self.amp_envelope.decay),
@@ -391,4 +396,3 @@ impl InstrumentEditPane {
         }
     }
 }
-

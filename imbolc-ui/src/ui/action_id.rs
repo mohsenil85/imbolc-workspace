@@ -271,6 +271,9 @@ define_action_enum! {
         ToggleChannelConfig => "toggle_channel_config",
         LoadSample => "load_sample",
         VstParams => "vst_params",
+        MoveStageUp => "move_stage_up",
+        MoveStageDown => "move_stage_down",
+        ToggleEffectBypass => "toggle_effect_bypass",
         Done => "done",
     }
 }
@@ -998,6 +1001,9 @@ mod tests {
             InstrumentEditActionId::ToggleActive,
             InstrumentEditActionId::LoadSample,
             InstrumentEditActionId::VstParams,
+            InstrumentEditActionId::MoveStageUp,
+            InstrumentEditActionId::MoveStageDown,
+            InstrumentEditActionId::ToggleEffectBypass,
             InstrumentEditActionId::Done,
         ];
 

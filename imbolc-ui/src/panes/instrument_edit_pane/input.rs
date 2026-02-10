@@ -1,7 +1,8 @@
 use super::editing::AdjustMode;
-use super::{InstrumentEditPane, Section};
+use super::InstrumentEditPane;
+use imbolc_types::ProcessingStage;
 use crate::state::{
-    AppState, FilterConfig, FilterType,
+    AppState, FilterConfig, FilterType, InstrumentSection,
 };
 use crate::ui::{Action, FileSelectAction, InputEvent, InstrumentAction, KeyCode, SessionAction, translate_key};
 use crate::ui::action_id::{ActionId, InstrumentEditActionId, ModeActionId};
@@ -53,7 +54,7 @@ impl InstrumentEditPane {
                 let text = self.edit_input.value().to_string();
                 let (section, local_idx) = self.row_info(self.selected_row);
                 match section {
-                    Section::Source => {
+                    InstrumentSection::Source => {
                         let param_idx = if self.source.is_sample() {
                             if local_idx == 0 {
                                 self.editing = false;
@@ -68,33 +69,33 @@ impl InstrumentEditPane {
                             param.parse_and_set(&text);
                         }
                     }
-                    Section::Filter => {
-                        if let Some(ref mut f) = self.filter {
-                            match local_idx {
-                                1 => if let Ok(v) = text.parse::<f32>() { f.cutoff.value = v.clamp(f.cutoff.min, f.cutoff.max); },
-                                2 => if let Ok(v) = text.parse::<f32>() { f.resonance.value = v.clamp(f.resonance.min, f.resonance.max); },
-                                idx => {
-                                    let extra_idx = idx - 3;
-                                    if let Some(param) = f.extra_params.get_mut(extra_idx) {
+                    InstrumentSection::Processing(i) => {
+                        match self.processing_chain.get_mut(i) {
+                            Some(ProcessingStage::Filter(f)) => {
+                                match local_idx {
+                                    1 => if let Ok(v) = text.parse::<f32>() { f.cutoff.value = v.clamp(f.cutoff.min, f.cutoff.max); },
+                                    2 => if let Ok(v) = text.parse::<f32>() { f.resonance.value = v.clamp(f.resonance.min, f.resonance.max); },
+                                    idx => {
+                                        let extra_idx = idx - 3;
+                                        if let Some(param) = f.extra_params.get_mut(extra_idx) {
+                                            param.parse_and_set(&text);
+                                        }
+                                    }
+                                }
+                            }
+                            Some(ProcessingStage::Eq(_)) => {} // EQ — no text edit
+                            Some(ProcessingStage::Effect(e)) => {
+                                if local_idx > 0 {
+                                    let param_idx = local_idx - 1;
+                                    if let Some(param) = e.params.get_mut(param_idx) {
                                         param.parse_and_set(&text);
                                     }
                                 }
                             }
+                            None => {}
                         }
                     }
-                    Section::Effects => {
-                        if let Some((effect_idx, param_offset)) = self.effect_row_info(local_idx) {
-                            if param_offset > 0 {
-                                let param_idx = param_offset - 1;
-                                if let Some(effect) = self.effects.get_mut(effect_idx) {
-                                    if let Some(param) = effect.params.get_mut(param_idx) {
-                                        param.parse_and_set(&text);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    Section::Envelope => {
+                    InstrumentSection::Envelope => {
                         if let Ok(v) = text.parse::<f32>() {
                             let max = if local_idx == 2 { 1.0 } else { 5.0 };
                             let val = v.clamp(0.0, max);
@@ -119,7 +120,7 @@ impl InstrumentEditPane {
                 if let Some(ref backup) = self.edit_backup_value.take() {
                     let (section, local_idx) = self.row_info(self.selected_row);
                     match section {
-                        Section::Source => {
+                        InstrumentSection::Source => {
                             let param_idx = if self.source.is_sample() {
                                 if local_idx == 0 { 0 } else { local_idx - 1 }
                             } else {
@@ -129,33 +130,33 @@ impl InstrumentEditPane {
                                 param.parse_and_set(backup);
                             }
                         }
-                        Section::Filter => {
-                            if let Some(ref mut f) = self.filter {
-                                match local_idx {
-                                    1 => if let Ok(v) = backup.parse::<f32>() { f.cutoff.value = v.clamp(f.cutoff.min, f.cutoff.max); },
-                                    2 => if let Ok(v) = backup.parse::<f32>() { f.resonance.value = v.clamp(f.resonance.min, f.resonance.max); },
-                                    idx => {
-                                        let extra_idx = idx - 3;
-                                        if let Some(param) = f.extra_params.get_mut(extra_idx) {
+                        InstrumentSection::Processing(i) => {
+                            match self.processing_chain.get_mut(i) {
+                                Some(ProcessingStage::Filter(f)) => {
+                                    match local_idx {
+                                        1 => if let Ok(v) = backup.parse::<f32>() { f.cutoff.value = v.clamp(f.cutoff.min, f.cutoff.max); },
+                                        2 => if let Ok(v) = backup.parse::<f32>() { f.resonance.value = v.clamp(f.resonance.min, f.resonance.max); },
+                                        idx => {
+                                            let extra_idx = idx - 3;
+                                            if let Some(param) = f.extra_params.get_mut(extra_idx) {
+                                                param.parse_and_set(backup);
+                                            }
+                                        }
+                                    }
+                                }
+                                Some(ProcessingStage::Eq(_)) => {}
+                                Some(ProcessingStage::Effect(e)) => {
+                                    if local_idx > 0 {
+                                        let param_idx = local_idx - 1;
+                                        if let Some(param) = e.params.get_mut(param_idx) {
                                             param.parse_and_set(backup);
                                         }
                                     }
                                 }
+                                None => {}
                             }
                         }
-                        Section::Effects => {
-                            if let Some((effect_idx, param_offset)) = self.effect_row_info(local_idx) {
-                                if param_offset > 0 {
-                                    let param_idx = param_offset - 1;
-                                    if let Some(effect) = self.effects.get_mut(effect_idx) {
-                                        if let Some(param) = effect.params.get_mut(param_idx) {
-                                            param.parse_and_set(backup);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        Section::Envelope => {
+                        InstrumentSection::Envelope => {
                             if let Ok(v) = backup.parse::<f32>() {
                                 let max = if local_idx == 2 { 1.0 } else { 5.0 };
                                 let val = v.clamp(0.0, max);
@@ -229,19 +230,21 @@ impl InstrumentEditPane {
                 let (section, local_idx) = self.row_info(self.selected_row);
                 // On the sample row, trigger load_sample instead of text edit
                 if self.source.is_sample() {
-                    if section == Section::Source && local_idx == 0 {
+                    if section == InstrumentSection::Source && local_idx == 0 {
                         if let Some(id) = self.instrument_id {
                             return Action::Session(SessionAction::OpenFileBrowser(FileSelectAction::LoadPitchedSample(id)));
                         }
                         return Action::None;
                     }
                 }
-                // Skip text edit on effect header rows
-                if section == Section::Effects {
-                    if let Some((_, param_offset)) = self.effect_row_info(local_idx) {
-                        if param_offset == 0 { return Action::None; }
-                    } else {
-                        return Action::None;
+                // Skip text edit on effect header rows and EQ rows
+                if let InstrumentSection::Processing(i) = section {
+                    match self.processing_chain.get(i) {
+                        Some(ProcessingStage::Effect(_)) if local_idx == 0 => return Action::None,
+                        Some(ProcessingStage::Eq(_)) => return Action::None,
+                        Some(ProcessingStage::Filter(_)) if local_idx == 0 => return Action::None, // filter type row
+                        None => return Action::None,
+                        _ => {}
                     }
                 }
                 self.edit_backup_value = Some(self.current_value_string());
@@ -253,27 +256,53 @@ impl InstrumentEditPane {
                 Action::PushLayer("text_edit")
             }
             ActionId::InstrumentEdit(InstrumentEditActionId::ToggleFilter) => {
-                if self.filter.is_some() {
-                    self.filter = None;
+                // Find first filter in chain
+                if let Some(idx) = self.processing_chain.iter().position(|s| s.is_filter()) {
+                    // If cursor is on a filter, remove that one; otherwise remove first
+                    let remove_idx = if let InstrumentSection::Processing(i) = self.current_section() {
+                        if self.processing_chain.get(i).map_or(false, |s| s.is_filter()) {
+                            i
+                        } else {
+                            idx
+                        }
+                    } else {
+                        idx
+                    };
+                    self.processing_chain.remove(remove_idx);
+                    let max = self.total_rows().saturating_sub(1);
+                    self.selected_row = self.selected_row.min(max);
                 } else {
-                    self.filter = Some(FilterConfig::new(FilterType::Lpf));
+                    // Insert filter at index 0
+                    self.processing_chain.insert(0, ProcessingStage::Filter(FilterConfig::new(FilterType::Lpf)));
                 }
                 self.emit_update()
             }
             ActionId::InstrumentEdit(InstrumentEditActionId::CycleFilterType) => {
-                if let Some(ref mut f) = self.filter {
-                    f.filter_type = match f.filter_type {
-                        FilterType::Lpf => FilterType::Hpf,
-                        FilterType::Hpf => FilterType::Bpf,
-                        FilterType::Bpf => FilterType::Notch,
-                        FilterType::Notch => FilterType::Comb,
-                        FilterType::Comb => FilterType::Allpass,
-                        FilterType::Allpass => FilterType::Vowel,
-                        FilterType::Vowel => FilterType::ResDrive,
-                        FilterType::ResDrive => FilterType::Lpf,
-                    };
-                    f.extra_params = f.filter_type.default_extra_params();
-                    return self.emit_update();
+                // Find filter to cycle: prefer the one the cursor is on, else first in chain
+                let filter_idx = if let InstrumentSection::Processing(i) = self.current_section() {
+                    if self.processing_chain.get(i).map_or(false, |s| s.is_filter()) {
+                        Some(i)
+                    } else {
+                        self.processing_chain.iter().position(|s| s.is_filter())
+                    }
+                } else {
+                    self.processing_chain.iter().position(|s| s.is_filter())
+                };
+                if let Some(idx) = filter_idx {
+                    if let Some(ProcessingStage::Filter(f)) = self.processing_chain.get_mut(idx) {
+                        f.filter_type = match f.filter_type {
+                            FilterType::Lpf => FilterType::Hpf,
+                            FilterType::Hpf => FilterType::Bpf,
+                            FilterType::Bpf => FilterType::Notch,
+                            FilterType::Notch => FilterType::Comb,
+                            FilterType::Comb => FilterType::Allpass,
+                            FilterType::Allpass => FilterType::Vowel,
+                            FilterType::Vowel => FilterType::ResDrive,
+                            FilterType::ResDrive => FilterType::Lpf,
+                        };
+                        f.extra_params = f.filter_type.default_extra_params();
+                        return self.emit_update();
+                    }
                 }
                 Action::None
             }
@@ -281,11 +310,9 @@ impl InstrumentEditPane {
                 Action::Nav(crate::ui::NavAction::PushPane("add_effect"))
             }
             ActionId::InstrumentEdit(InstrumentEditActionId::RemoveEffect) => {
-                let (section, local_idx) = self.row_info(self.selected_row);
-                if section == Section::Effects && !self.effects.is_empty() {
-                    if let Some((effect_idx, _)) = self.effect_row_info(local_idx) {
-                        self.effects.remove(effect_idx);
-                        // Clamp selected_row after removal
+                if let InstrumentSection::Processing(i) = self.current_section() {
+                    if self.processing_chain.get(i).map_or(false, |s| s.is_effect()) {
+                        self.processing_chain.remove(i);
                         let max = self.total_rows().saturating_sub(1);
                         self.selected_row = self.selected_row.min(max);
                         return self.emit_update();
@@ -336,10 +363,17 @@ impl InstrumentEditPane {
                 self.emit_update()
             }
             ActionId::InstrumentEdit(InstrumentEditActionId::ToggleEq) => {
-                if self.eq.is_some() {
-                    self.eq = None;
+                if let Some(idx) = self.processing_chain.iter().position(|s| s.is_eq()) {
+                    self.processing_chain.remove(idx);
+                    let max = self.total_rows().saturating_sub(1);
+                    self.selected_row = self.selected_row.min(max);
                 } else {
-                    self.eq = Some(crate::state::EqConfig::default());
+                    // Insert EQ after last filter, or at 0
+                    let insert_pos = self.processing_chain.iter()
+                        .rposition(|s| s.is_filter())
+                        .map(|i| i + 1)
+                        .unwrap_or(0);
+                    self.processing_chain.insert(insert_pos, ProcessingStage::Eq(crate::state::EqConfig::default()));
                 }
                 self.emit_update()
             }
@@ -356,13 +390,12 @@ impl InstrumentEditPane {
                 self.emit_update()
             }
             ActionId::InstrumentEdit(InstrumentEditActionId::VstParams) => {
-                let (section, local_idx) = self.row_info(self.selected_row);
-                if section == Section::Source && self.source.is_vst() {
+                let (section, _local_idx) = self.row_info(self.selected_row);
+                if section == InstrumentSection::Source && self.source.is_vst() {
                     // Navigate to VST params pane for VST instrument source
                     Action::Nav(crate::ui::NavAction::PushPane("vst_params"))
-                } else if section == Section::Effects {
-                    let idx = self.effect_row_info(local_idx).map(|(i, _)| i).unwrap_or(0);
-                    if let Some(effect) = self.effects.get(idx) {
+                } else if let InstrumentSection::Processing(i) = section {
+                    if let Some(ProcessingStage::Effect(effect)) = self.processing_chain.get(i) {
                         if effect.effect_type.is_vst() {
                             if let Some(instrument_id) = self.instrument_id {
                                 Action::Instrument(InstrumentAction::OpenVstEffectParams(instrument_id, effect.id))
@@ -383,15 +416,23 @@ impl InstrumentEditPane {
                 }
             }
             ActionId::InstrumentEdit(InstrumentEditActionId::NextSection) => {
-                // Jump to first row of next section
                 let current = self.current_section();
                 let skip_env = self.source.is_vst();
+                let n = self.processing_chain.len();
                 let next = match current {
-                    Section::Source => Section::Filter,
-                    Section::Filter => Section::Effects,
-                    Section::Effects => Section::Lfo,
-                    Section::Lfo => if skip_env { Section::Source } else { Section::Envelope },
-                    Section::Envelope => Section::Source,
+                    InstrumentSection::Source => {
+                        if n > 0 { InstrumentSection::Processing(0) }
+                        else { InstrumentSection::Lfo }
+                    }
+                    InstrumentSection::Processing(i) => {
+                        if i + 1 < n { InstrumentSection::Processing(i + 1) }
+                        else { InstrumentSection::Lfo }
+                    }
+                    InstrumentSection::Lfo => {
+                        if skip_env { InstrumentSection::Source }
+                        else { InstrumentSection::Envelope }
+                    }
+                    InstrumentSection::Envelope => InstrumentSection::Source,
                 };
                 for i in 0..self.total_rows() {
                     if self.section_for_row(i) == next {
@@ -402,20 +443,59 @@ impl InstrumentEditPane {
                 Action::None
             }
             ActionId::InstrumentEdit(InstrumentEditActionId::PrevSection) => {
-                // Jump to first row of previous section
                 let current = self.current_section();
                 let skip_env = self.source.is_vst();
+                let n = self.processing_chain.len();
                 let prev = match current {
-                    Section::Source => if skip_env { Section::Lfo } else { Section::Envelope },
-                    Section::Filter => Section::Source,
-                    Section::Effects => Section::Filter,
-                    Section::Lfo => Section::Effects,
-                    Section::Envelope => Section::Lfo,
+                    InstrumentSection::Source => {
+                        if skip_env { InstrumentSection::Lfo }
+                        else { InstrumentSection::Envelope }
+                    }
+                    InstrumentSection::Processing(i) => {
+                        if i > 0 { InstrumentSection::Processing(i - 1) }
+                        else { InstrumentSection::Source }
+                    }
+                    InstrumentSection::Lfo => {
+                        if n > 0 { InstrumentSection::Processing(n - 1) }
+                        else { InstrumentSection::Source }
+                    }
+                    InstrumentSection::Envelope => InstrumentSection::Lfo,
                 };
                 for i in 0..self.total_rows() {
                     if self.section_for_row(i) == prev {
                         self.selected_row = i;
                         break;
+                    }
+                }
+                Action::None
+            }
+            ActionId::InstrumentEdit(InstrumentEditActionId::MoveStageUp) => {
+                if let InstrumentSection::Processing(i) = self.current_section() {
+                    if i > 0 {
+                        let (_, local_idx) = self.row_info(self.selected_row);
+                        self.processing_chain.swap(i, i - 1);
+                        self.selected_row = self.row_for_processing_stage(i - 1, local_idx);
+                        return self.emit_update();
+                    }
+                }
+                Action::None
+            }
+            ActionId::InstrumentEdit(InstrumentEditActionId::MoveStageDown) => {
+                if let InstrumentSection::Processing(i) = self.current_section() {
+                    if i + 1 < self.processing_chain.len() {
+                        let (_, local_idx) = self.row_info(self.selected_row);
+                        self.processing_chain.swap(i, i + 1);
+                        self.selected_row = self.row_for_processing_stage(i + 1, local_idx);
+                        return self.emit_update();
+                    }
+                }
+                Action::None
+            }
+            ActionId::InstrumentEdit(InstrumentEditActionId::ToggleEffectBypass) => {
+                if let InstrumentSection::Processing(i) = self.current_section() {
+                    if let Some(ProcessingStage::Effect(e)) = self.processing_chain.get_mut(i) {
+                        e.enabled = !e.enabled;
+                        return self.emit_update();
                     }
                 }
                 Action::None

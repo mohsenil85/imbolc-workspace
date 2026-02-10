@@ -7,24 +7,13 @@ use std::time::Instant;
 
 use imbolc_types::{ChannelConfig, ProcessingStage};
 use crate::state::{
-    AppState, EffectSlot, EnvConfig, EqConfig, FilterConfig, Instrument, InstrumentId,
+    AppState, EnvConfig, InstrumentId,
     InstrumentSection, LfoConfig, Param, SourceType,
     instrument::{instrument_row_count, instrument_section_for_row, instrument_row_info},
 };
 use crate::ui::widgets::TextInput;
 use crate::ui::{Rect, RenderBuf, Action, InputEvent, Keymap, MouseEvent, PadKeyboard, Pane, PianoKeyboard, PianoRollAction, ToggleResult};
 use crate::ui::action_id::ActionId;
-
-/// Local section enum that preserves the pane's view of filter/effects as
-/// separate sections, translating to/from InstrumentSection::Processing(i).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Section {
-    Source,
-    Filter,
-    Effects,
-    Lfo,
-    Envelope,
-}
 
 pub struct InstrumentEditPane {
     keymap: Keymap,
@@ -33,9 +22,7 @@ pub struct InstrumentEditPane {
     source: SourceType,
     source_params: Vec<Param>,
     sample_name: Option<String>,
-    filter: Option<FilterConfig>,
-    eq: Option<EqConfig>,
-    effects: Vec<EffectSlot>,
+    processing_chain: Vec<ProcessingStage>,
     lfo: LfoConfig,
     amp_envelope: EnvConfig,
     polyphonic: bool,
@@ -59,9 +46,7 @@ impl InstrumentEditPane {
             source: SourceType::Saw,
             source_params: Vec::new(),
             sample_name: None,
-            filter: None,
-            eq: None,
-            effects: Vec::new(),
+            processing_chain: Vec::new(),
             lfo: LfoConfig::default(),
             amp_envelope: EnvConfig::default(),
             polyphonic: true,
@@ -77,15 +62,13 @@ impl InstrumentEditPane {
         }
     }
 
-    pub fn set_instrument(&mut self, instrument: &Instrument) {
+    pub fn set_instrument(&mut self, instrument: &crate::state::Instrument) {
         self.instrument_id = Some(instrument.id);
         self.instrument_name = instrument.name.clone();
         self.source = instrument.source;
         self.source_params = instrument.source_params.clone();
         self.sample_name = instrument.sampler_config.as_ref().and_then(|c| c.sample_name.clone());
-        self.filter = instrument.filter().cloned();
-        self.eq = instrument.eq().cloned();
-        self.effects = instrument.effects().cloned().collect();
+        self.processing_chain = instrument.processing_chain.clone();
         self.lfo = instrument.lfo.clone();
         self.amp_envelope = instrument.amp_envelope.clone();
         self.polyphonic = instrument.polyphonic;
@@ -98,21 +81,19 @@ impl InstrumentEditPane {
     /// Re-sync data from an instrument without resetting cursor position.
     /// Used when returning from a sub-pane (e.g. add_effect) where the same
     /// instrument may have changed.
-    fn refresh_instrument(&mut self, instrument: &Instrument) {
+    fn refresh_instrument(&mut self, instrument: &crate::state::Instrument) {
         self.instrument_id = Some(instrument.id);
         self.instrument_name = instrument.name.clone();
         self.source = instrument.source;
         self.source_params = instrument.source_params.clone();
         self.sample_name = instrument.sampler_config.as_ref().and_then(|c| c.sample_name.clone());
-        self.filter = instrument.filter().cloned();
-        self.eq = instrument.eq().cloned();
-        self.effects = instrument.effects().cloned().collect();
+        self.processing_chain = instrument.processing_chain.clone();
         self.lfo = instrument.lfo.clone();
         self.amp_envelope = instrument.amp_envelope.clone();
         self.polyphonic = instrument.polyphonic;
         self.active = instrument.active;
         self.channel_config = instrument.channel_config;
-        // Clamp selected_row to valid range (effects count may have changed)
+        // Clamp selected_row to valid range (chain may have changed)
         let max = self.total_rows().saturating_sub(1);
         self.selected_row = self.selected_row.min(max);
     }
@@ -122,29 +103,33 @@ impl InstrumentEditPane {
         self.instrument_id
     }
 
-    /// Get current tab as index (for view state - now section based)
+    /// Get current tab as index (for view state).
+    /// Dynamic encoding: 0=Source, 1..=N=Processing(0..N-1), N+1=Lfo, N+2=Envelope.
     pub fn tab_index(&self) -> u8 {
+        let n = self.processing_chain.len();
         match self.current_section() {
-            Section::Source => 0,
-            Section::Filter => 1,
-            Section::Effects => 2,
-            Section::Lfo => 3,
-            Section::Envelope => 4,
+            InstrumentSection::Source => 0,
+            InstrumentSection::Processing(i) => (i + 1) as u8,
+            InstrumentSection::Lfo => (n + 1) as u8,
+            InstrumentSection::Envelope => (n + 2) as u8,
         }
     }
 
-    /// Set tab from index (for view state restoration)
+    /// Set tab from index (for view state restoration).
+    /// Dynamic decoding: 0=Source, 1..=N=Processing(0..N-1), N+1=Lfo, N+2=Envelope.
     pub fn set_tab_index(&mut self, idx: u8) {
-        let target_section = match idx {
-            0 => Section::Source,
-            1 => Section::Filter,
-            2 => Section::Effects,
-            3 => Section::Lfo,
-            4 => Section::Envelope,
-            _ => Section::Source,
+        let n = self.processing_chain.len();
+        let target = if idx == 0 {
+            InstrumentSection::Source
+        } else if (idx as usize) <= n {
+            InstrumentSection::Processing(idx as usize - 1)
+        } else if idx as usize == n + 1 {
+            InstrumentSection::Lfo
+        } else {
+            InstrumentSection::Envelope
         };
         for i in 0..self.total_rows() {
-            if self.section_for_row(i) == target_section {
+            if self.section_for_row(i) == target {
                 self.selected_row = i;
                 break;
             }
@@ -153,93 +138,28 @@ impl InstrumentEditPane {
 
     /// Apply edits back to an instrument
     #[allow(dead_code)]
-    pub fn apply_to(&self, instrument: &mut Instrument) {
+    pub fn apply_to(&self, instrument: &mut crate::state::Instrument) {
         instrument.source = self.source;
         instrument.source_params = self.source_params.clone();
-        instrument.processing_chain = self.build_processing_chain();
+        instrument.processing_chain = self.processing_chain.clone();
         instrument.lfo = self.lfo.clone();
         instrument.amp_envelope = self.amp_envelope.clone();
         instrument.polyphonic = self.polyphonic;
         instrument.active = self.active;
     }
 
-    /// Build a processing chain from local filter/eq/effects copies
-    fn build_processing_chain(&self) -> Vec<ProcessingStage> {
-        let mut chain = Vec::new();
-        if let Some(ref f) = self.filter {
-            chain.push(ProcessingStage::Filter(f.clone()));
-        }
-        if let Some(ref e) = self.eq {
-            chain.push(ProcessingStage::Eq(e.clone()));
-        }
-        for effect in &self.effects {
-            chain.push(ProcessingStage::Effect(effect.clone()));
-        }
-        chain
-    }
-
-    /// Map InstrumentSection::Processing(i) to the local Section enum
-    fn map_section(&self, is: InstrumentSection) -> Section {
-        match is {
-            InstrumentSection::Source => Section::Source,
-            InstrumentSection::Processing(i) => {
-                let chain = self.build_processing_chain();
-                if let Some(stage) = chain.get(i) {
-                    match stage {
-                        ProcessingStage::Filter(_) => Section::Filter,
-                        ProcessingStage::Eq(_) => Section::Filter, // EQ grouped with filter section conceptually
-                        ProcessingStage::Effect(_) => Section::Effects,
-                    }
-                } else {
-                    Section::Effects // placeholder row for empty chain
-                }
-            }
-            InstrumentSection::Lfo => Section::Lfo,
-            InstrumentSection::Envelope => Section::Envelope,
-        }
-    }
-
-    /// Map InstrumentSection row_info to local Section with adjusted local_idx
-    fn map_row_info(&self, is: InstrumentSection, local_idx: usize) -> (Section, usize) {
-        match is {
-            InstrumentSection::Source => (Section::Source, local_idx),
-            InstrumentSection::Processing(i) => {
-                let chain = self.build_processing_chain();
-                if let Some(stage) = chain.get(i) {
-                    match stage {
-                        ProcessingStage::Filter(_) => (Section::Filter, local_idx),
-                        ProcessingStage::Eq(_) => (Section::Filter, local_idx), // not used in practice (EQ is pane-level)
-                        ProcessingStage::Effect(_) => {
-                            // Calculate local_idx within effects section:
-                            // sum rows from all prior Effect stages + local_idx
-                            let prior_effect_rows: usize = chain[..i].iter()
-                                .filter_map(|s| match s {
-                                    ProcessingStage::Effect(e) => Some(1 + e.params.len()),
-                                    _ => None,
-                                })
-                                .sum();
-                            (Section::Effects, prior_effect_rows + local_idx)
-                        }
-                    }
-                } else {
-                    (Section::Effects, 0) // placeholder
-                }
-            }
-            InstrumentSection::Lfo => (Section::Lfo, local_idx),
-            InstrumentSection::Envelope => (Section::Envelope, local_idx),
-        }
-    }
-
     /// Total number of selectable rows across all sections
     fn total_rows(&self) -> usize {
-        let chain = self.build_processing_chain();
-        instrument_row_count(self.source, &self.source_params, &chain)
+        instrument_row_count(self.source, &self.source_params, &self.processing_chain)
     }
 
     /// Calculate non-selectable visual lines (headers + separators)
     fn visual_overhead(&self) -> usize {
-        let headers = if self.source.is_vst() { 4 } else { 5 };
-        let separators = if self.source.is_vst() { 3 } else { 4 };
+        // Headers: 1 (source) + one per filter in chain + 1 (LFO) + (1 if !VST for envelope)
+        let filter_count = self.processing_chain.iter().filter(|s| s.is_filter()).count();
+        let headers = 1 + filter_count + 1 + if self.source.is_vst() { 0 } else { 1 };
+        // Separators: 1 (after source) + 1 (after chain) + (1 after LFO if !VST)
+        let separators = 1 + 1 + if self.source.is_vst() { 0 } else { 1 };
         headers + separators
     }
 
@@ -255,36 +175,27 @@ impl InstrumentEditPane {
     }
 
     /// Which section does a given row belong to?
-    fn section_for_row(&self, row: usize) -> Section {
-        let chain = self.build_processing_chain();
-        let is = instrument_section_for_row(row, self.source, &self.source_params, &chain);
-        self.map_section(is)
+    fn section_for_row(&self, row: usize) -> InstrumentSection {
+        instrument_section_for_row(row, self.source, &self.source_params, &self.processing_chain)
     }
 
     /// Get section and local index for a row
-    fn row_info(&self, row: usize) -> (Section, usize) {
-        let chain = self.build_processing_chain();
-        let (is, local_idx) = instrument_row_info(row, self.source, &self.source_params, &chain);
-        self.map_row_info(is, local_idx)
+    fn row_info(&self, row: usize) -> (InstrumentSection, usize) {
+        instrument_row_info(row, self.source, &self.source_params, &self.processing_chain)
     }
 
-    fn current_section(&self) -> Section {
+    fn current_section(&self) -> InstrumentSection {
         self.section_for_row(self.selected_row)
     }
 
-    /// Decode a local_idx within the Effects section into (effect_index, param_offset).
-    /// param_offset == 0 means the effect header row (name/enabled).
-    /// param_offset >= 1 means param at index (param_offset - 1).
-    fn effect_row_info(&self, local_idx: usize) -> Option<(usize, usize)> {
-        let mut offset = 0;
-        for (i, effect) in self.effects.iter().enumerate() {
-            let rows = 1 + effect.params.len();
-            if local_idx < offset + rows {
-                return Some((i, local_idx - offset));
-            }
-            offset += rows;
-        }
-        None
+    /// Find the first row belonging to a given processing stage chain index,
+    /// offset by local_idx within that stage. Used for cursor stability after MoveStage.
+    fn row_for_processing_stage(&self, chain_idx: usize, local_idx: usize) -> usize {
+        let source_rows = (if self.source.is_sample() || self.source.is_time_stretch() { 1 } else { 0 })
+            + self.source_params.len().max(1);
+        let chain_rows_before: usize = self.processing_chain[..chain_idx]
+            .iter().map(|s| s.row_count()).sum();
+        source_rows + chain_rows_before + local_idx
     }
 
     pub fn is_editing(&self) -> bool {
@@ -407,5 +318,146 @@ impl Pane for InstrumentEditPane {
 impl Default for InstrumentEditPane {
     fn default() -> Self {
         Self::new(Keymap::new())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::state::{FilterConfig, FilterType, EffectSlot, EffectType};
+    use crate::ui::action_id::{ActionId, InstrumentEditActionId};
+    use crate::ui::input::{InputEvent, KeyCode, Modifiers};
+
+    fn make_pane_with_chain(chain: Vec<ProcessingStage>) -> InstrumentEditPane {
+        let mut pane = InstrumentEditPane::default();
+        pane.instrument_id = Some(1);
+        pane.source = SourceType::Saw;
+        pane.source_params = SourceType::Saw.default_params();
+        pane.processing_chain = chain;
+        pane
+    }
+
+    fn dummy_event() -> InputEvent {
+        InputEvent::new(KeyCode::Char('x'), Modifiers::default())
+    }
+
+    #[test]
+    fn test_section_navigation_reordered_chain() {
+        // Chain: [Effect, Filter] — effect comes first
+        let effect = EffectSlot::new(0, EffectType::Delay);
+        let filter = FilterConfig::new(FilterType::Lpf);
+        let pane = make_pane_with_chain(vec![
+            ProcessingStage::Effect(effect),
+            ProcessingStage::Filter(filter),
+        ]);
+
+        // Source params for Saw: at least 1 row
+        let source_rows = pane.source_params.len().max(1);
+
+        // First processing row should be Processing(0) = Effect
+        let row = source_rows;
+        assert_eq!(pane.section_for_row(row), InstrumentSection::Processing(0));
+
+        // Effect header + params, then filter starts at Processing(1)
+        let effect_rows = 1 + EffectType::Delay.default_params().len();
+        let filter_row = source_rows + effect_rows;
+        assert_eq!(pane.section_for_row(filter_row), InstrumentSection::Processing(1));
+    }
+
+    #[test]
+    fn test_tab_cycling_visits_each_stage() {
+        let effect = EffectSlot::new(0, EffectType::Delay);
+        let filter = FilterConfig::new(FilterType::Lpf);
+        let mut pane = make_pane_with_chain(vec![
+            ProcessingStage::Effect(effect),
+            ProcessingStage::Filter(filter),
+        ]);
+
+        let state = AppState::new();
+        let event = dummy_event();
+
+        // Start at Source
+        assert_eq!(pane.current_section(), InstrumentSection::Source);
+
+        // Tab → Processing(0)
+        pane.handle_action_impl(ActionId::InstrumentEdit(InstrumentEditActionId::NextSection), &event, &state);
+        assert_eq!(pane.current_section(), InstrumentSection::Processing(0));
+
+        // Tab → Processing(1)
+        pane.handle_action_impl(ActionId::InstrumentEdit(InstrumentEditActionId::NextSection), &event, &state);
+        assert_eq!(pane.current_section(), InstrumentSection::Processing(1));
+
+        // Tab → Lfo
+        pane.handle_action_impl(ActionId::InstrumentEdit(InstrumentEditActionId::NextSection), &event, &state);
+        assert_eq!(pane.current_section(), InstrumentSection::Lfo);
+
+        // Tab → Envelope
+        pane.handle_action_impl(ActionId::InstrumentEdit(InstrumentEditActionId::NextSection), &event, &state);
+        assert_eq!(pane.current_section(), InstrumentSection::Envelope);
+
+        // Tab → Source (wrap)
+        pane.handle_action_impl(ActionId::InstrumentEdit(InstrumentEditActionId::NextSection), &event, &state);
+        assert_eq!(pane.current_section(), InstrumentSection::Source);
+    }
+
+    #[test]
+    fn test_cursor_stability_after_move_stage() {
+        let filter = FilterConfig::new(FilterType::Lpf);
+        let effect = EffectSlot::new(0, EffectType::Delay);
+        let mut pane = make_pane_with_chain(vec![
+            ProcessingStage::Filter(filter),
+            ProcessingStage::Effect(effect),
+        ]);
+
+        let state = AppState::new();
+        let event = dummy_event();
+
+        // Navigate to filter's cutoff row (local_idx=1 within filter stage)
+        let source_rows = pane.source_params.len().max(1);
+        pane.selected_row = source_rows + 1; // Type=0, Cutoff=1
+        assert_eq!(pane.current_section(), InstrumentSection::Processing(0));
+        let (_, local_idx) = pane.row_info(pane.selected_row);
+        assert_eq!(local_idx, 1); // cutoff
+
+        // Move stage down: filter goes from index 0 to index 1
+        pane.handle_action_impl(ActionId::InstrumentEdit(InstrumentEditActionId::MoveStageDown), &event, &state);
+
+        // Filter is now at chain index 1, cursor should be on cutoff at new position
+        assert_eq!(pane.current_section(), InstrumentSection::Processing(1));
+        let (_, new_local) = pane.row_info(pane.selected_row);
+        assert_eq!(new_local, 1); // still cutoff
+    }
+
+    #[test]
+    fn test_toggle_filter_with_existing_chain() {
+        let effect = EffectSlot::new(0, EffectType::Delay);
+        let mut pane = make_pane_with_chain(vec![
+            ProcessingStage::Effect(effect),
+        ]);
+
+        let state = AppState::new();
+        let event = dummy_event();
+
+        // Toggle on: should insert filter at index 0
+        pane.handle_action_impl(ActionId::InstrumentEdit(InstrumentEditActionId::ToggleFilter), &event, &state);
+        assert_eq!(pane.processing_chain.len(), 2);
+        assert!(pane.processing_chain[0].is_filter());
+        assert!(pane.processing_chain[1].is_effect());
+
+        // Toggle off: should remove the filter
+        pane.handle_action_impl(ActionId::InstrumentEdit(InstrumentEditActionId::ToggleFilter), &event, &state);
+        assert_eq!(pane.processing_chain.len(), 1);
+        assert!(pane.processing_chain[0].is_effect());
+    }
+
+    #[test]
+    fn test_empty_chain_placeholder() {
+        let pane = make_pane_with_chain(vec![]);
+        let total = pane.total_rows();
+        let source_rows = pane.source_params.len().max(1);
+        let lfo_rows = 4;
+        let env_rows = 4;
+        // Empty chain should contribute 1 placeholder row
+        assert_eq!(total, source_rows + 1 + lfo_rows + env_rows);
     }
 }
