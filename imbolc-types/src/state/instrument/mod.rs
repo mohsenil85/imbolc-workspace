@@ -765,20 +765,39 @@ impl Instrument {
 }
 
 /// Serde deserializer that accepts either a Vec<MixerSend> (legacy) or BTreeMap<BusId, MixerSend> (new).
+/// Uses a manual Visitor instead of `#[serde(untagged)]` because untagged enums require
+/// `deserialize_any`, which bincode does not support.
 fn deserialize_sends<'de, D>(deserializer: D) -> Result<BTreeMap<BusId, MixerSend>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum SendsFormat {
-        Map(BTreeMap<BusId, MixerSend>),
-        Vec(Vec<MixerSend>),
+    struct SendsVisitor;
+
+    impl<'de> serde::de::Visitor<'de> for SendsVisitor {
+        type Value = BTreeMap<BusId, MixerSend>;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("a map or sequence of mixer sends")
+        }
+
+        fn visit_map<A: serde::de::MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+            let mut result = BTreeMap::new();
+            while let Some((key, value)) = map.next_entry::<BusId, MixerSend>()? {
+                result.insert(key, value);
+            }
+            Ok(result)
+        }
+
+        fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+            let mut result = BTreeMap::new();
+            while let Some(send) = seq.next_element::<MixerSend>()? {
+                result.insert(send.bus_id, send);
+            }
+            Ok(result)
+        }
     }
-    match SendsFormat::deserialize(deserializer)? {
-        SendsFormat::Map(map) => Ok(map),
-        SendsFormat::Vec(vec) => Ok(vec.into_iter().map(|s| (s.bus_id, s)).collect()),
-    }
+
+    deserializer.deserialize_map(SendsVisitor)
 }
 
 #[cfg(test)]
