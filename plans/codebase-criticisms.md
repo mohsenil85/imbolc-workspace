@@ -96,16 +96,10 @@ friction grows with each new instrument feature.
 
 ---
 
-## 6. Current branch has compilation errors on main
+## ~~6. Current branch has compilation errors on main~~ (FIXED)
 
-**Where:**
-- `imbolc-core/src/dispatch/side_effects.rs:266` — calls
-  `set_layer_group_eq_param` which doesn't exist (should be
-  `set_eq_param`)
-- `imbolc-core/src/state/persistence/load.rs:268` — missing `eq` field
-  in `LayerGroupMixer` initializer
-
-From in-progress layer-group EQ work that's half-landed.
+**Fixed.** Compilation errors from half-landed layer-group EQ work
+have been resolved.
 
 ---
 
@@ -118,32 +112,10 @@ be replaced with types the compiler enforces.
 
 ---
 
-## 7. EQ params are stringly-typed
+## ~~7. EQ params are stringly-typed~~ (FIXED)
 
-**Where:** `action.rs` (`SetEqParam`), `dispatch/instrument/eq.rs`,
-`dispatch/bus.rs`
-
-```rust
-// Action variant
-SetEqParam(u32, usize, String, f32)
-
-// Dispatch matches on string literals
-match param_name {
-    "freq" => band.freq = value.clamp(20.0, 20000.0),
-    "gain" => band.gain = value.clamp(-24.0, 24.0),
-    "q"    => band.q = value.clamp(0.1, 10.0),
-    "on"   => band.enabled = value > 0.5,
-    _ => {}  // silent no-op
-}
-```
-
-Typo in a param name (`"frequ"`) silently does nothing. Adding a new
-EQ param requires updating string matches in 3+ places with no
-compiler help. The `_ => {}` arm means the compiler can't warn about
-unhandled cases.
-
-**Fix:** `enum EqParamKind { Freq, Gain, Q, Enabled }` — exhaustive
-match, zero-cost, catches typos at compile time.
+**Fixed.** `EqParamKind` enum added, `String` replaced with exhaustive
+match in all 6 files. No `_ => {}` arms remain.
 
 ---
 
@@ -280,8 +252,8 @@ centralizing the check.
 
 | # | Issue | Severity | Effort |
 |---|-------|----------|--------|
-| 6 | Compilation errors | **High** (blocks build) | Minutes |
-| 7 | Stringly-typed EQ params | **High** (silent bugs) | Small |
+| 6 | ~~Compilation errors~~ | ~~**High**~~ FIXED | — |
+| 7 | ~~Stringly-typed EQ params~~ | ~~**High**~~ FIXED | — |
 | 1 | AudioDirty data loss | **Medium** (latent bug) | Hours |
 | 2 | Projection parity | **Medium** (silent correctness) | Hours |
 | 9 | Bare ID type aliases | **Medium** (wrong-ID bugs) | Large (mechanical) |
