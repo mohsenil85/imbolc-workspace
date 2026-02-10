@@ -104,7 +104,7 @@ impl AudioEngine {
                     if let Some(&effect_node) = nodes.effects.get(effect_id) {
                         if let Some(instrument) = state.instrument(instrument_id) {
                             if let Some(effect) = instrument.effect_by_id(*effect_id) {
-                                if let Some(param) = effect.params.get(*param_idx) {
+                                if let Some(param) = effect.params.get(param_idx.get()) {
                                     backend.set_param(effect_node, &param.name, value)
                                         .map_err(|e| e.to_string())?;
                                 }
@@ -405,7 +405,7 @@ impl AudioEngine {
                     if let Some(&effect_node) = nodes.effects.get(effect_id) {
                         if let Some(instrument) = state.instrument(instrument_id) {
                             if let Some(effect) = instrument.effect_by_id(*effect_id) {
-                                if let Some(param) = effect.params.get(*param_idx) {
+                                if let Some(param) = effect.params.get(param_idx.get()) {
                                     msgs.push(build_n_set_message(effect_node, &param.name, value));
                                 }
                             }

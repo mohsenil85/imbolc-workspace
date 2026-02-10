@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use imbolc_types::{BusId, MixerSend};
+use imbolc_types::{BusId, EffectId, MixerSend, ParamIndex};
 use crate::state::AutomationTarget;
 use crate::state::custom_synthdef::{CustomSynthDef, CustomSynthDefRegistry, ParamSpec};
 use crate::state::instrument::{EffectType, FilterType, LfoConfig, LfoShape, ParameterTarget, ModSource, OutputTarget, SourceType};
@@ -220,7 +220,7 @@ fn save_and_load_round_trip_complex() {
     // Automation lane targeting effect param
     let lane_id = session
         .automation
-        .add_lane(AutomationTarget::effect_param(saw_id, 0, 0));
+        .add_lane(AutomationTarget::effect_param(saw_id, EffectId::new(0), ParamIndex::new(0)));
     if let Some(lane) = session.automation.lane_mut(lane_id) {
         lane.add_point(0, 0.2);
         lane.add_point(480, 0.8);

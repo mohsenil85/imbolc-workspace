@@ -53,7 +53,7 @@ pub(super) fn handle_adjust_effect_param(
     state: &mut AppState,
     id: crate::state::InstrumentId,
     effect_id: crate::state::EffectId,
-    param_idx: usize,
+    param_idx: imbolc_types::ParamIndex,
     delta: f32,
 ) -> DispatchResult {
     let mut record_target: Option<(AutomationTarget, f32)> = None;
@@ -61,7 +61,7 @@ pub(super) fn handle_adjust_effect_param(
     if let Some(instrument) = state.instruments.instrument_mut(id) {
         let inst_id = instrument.id;
         if let Some(effect) = instrument.effect_by_id_mut(effect_id) {
-            if let Some(param) = effect.params.get_mut(param_idx) {
+            if let Some(param) = effect.params.get_mut(param_idx.get()) {
                 let range = param.max - param.min;
                 match &mut param.value {
                     crate::state::ParamValue::Float(v) => {

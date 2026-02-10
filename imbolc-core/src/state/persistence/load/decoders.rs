@@ -170,7 +170,7 @@ pub(crate) fn decode_parameter_target(s: &str) -> crate::state::instrument::Para
         let parts: Vec<&str> = rest.splitn(2, ':').collect();
         if parts.len() == 2 {
             if let (Ok(eid), Ok(pidx)) = (parts[0].parse::<u32>(), parts[1].parse::<usize>()) {
-                return ParameterTarget::EffectParam(imbolc_types::EffectId::new(eid), pidx);
+                return ParameterTarget::EffectParam(imbolc_types::EffectId::new(eid), imbolc_types::ParamIndex::new(pidx));
             }
         }
     }

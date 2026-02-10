@@ -208,7 +208,7 @@ impl MixerPane {
     }
 
     /// Decode effect cursor into (effect_id, param_index_within_effect) where None = header
-    fn decode_effect_cursor(&self, state: &AppState) -> Option<(crate::state::EffectId, Option<usize>)> {
+    fn decode_effect_cursor(&self, state: &AppState) -> Option<(crate::state::EffectId, Option<imbolc_types::ParamIndex>)> {
         let (_, inst) = self.detail_instrument(state)?;
         inst.decode_effect_cursor(self.detail_cursor)
     }
@@ -235,14 +235,14 @@ impl MixerPane {
     }
 
     /// Decode bus effect cursor into (effect_id, param_index) where None = header
-    fn decode_bus_effect_cursor(&self, state: &AppState) -> Option<(crate::state::EffectId, Option<usize>)> {
+    fn decode_bus_effect_cursor(&self, state: &AppState) -> Option<(crate::state::EffectId, Option<imbolc_types::ParamIndex>)> {
         let bus_id = self.detail_bus_id()?;
         let bus = state.session.bus(bus_id)?;
         crate::state::decode_effect_cursor_from_slice(&bus.effects, self.detail_cursor)
     }
 
     /// Decode group effect cursor into (effect_id, param_index) where None = header
-    fn decode_group_effect_cursor(&self, state: &AppState) -> Option<(crate::state::EffectId, Option<usize>)> {
+    fn decode_group_effect_cursor(&self, state: &AppState) -> Option<(crate::state::EffectId, Option<imbolc_types::ParamIndex>)> {
         let gid = self.detail_group_id()?;
         let gm = state.session.mixer.layer_group_mixer(gid)?;
         crate::state::decode_effect_cursor_from_slice(&gm.effects, self.detail_cursor)

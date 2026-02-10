@@ -109,3 +109,19 @@ impl std::fmt::Display for VstPluginId {
         write!(f, "{}", self.0)
     }
 }
+
+/// Index of a parameter within an effect's parameter list (0-based).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(transparent)]
+pub struct ParamIndex(usize);
+
+impl ParamIndex {
+    pub fn new(idx: usize) -> Self { Self(idx) }
+    pub fn get(self) -> usize { self.0 }
+}
+
+impl std::fmt::Display for ParamIndex {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}

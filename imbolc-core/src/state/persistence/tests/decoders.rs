@@ -137,7 +137,7 @@ fn roundtrip_lfo_shape() {
 
 #[test]
 fn roundtrip_parameter_target() {
-    use imbolc_types::BusId;
+    use imbolc_types::{BusId, EffectId, ParamIndex};
     use crate::state::instrument::ParameterTarget::*;
     let all = [
         Level, Pan, FilterCutoff, FilterResonance, FilterBypass,
@@ -152,7 +152,7 @@ fn roundtrip_parameter_target() {
         HumanizeVelocity, HumanizeTiming, TimingOffset, TimeSignature,
         // Data variants
         SendLevel(BusId::new(1)), SendLevel(BusId::new(3)),
-        EffectParam(1, 2),
+        EffectParam(EffectId::new(1), ParamIndex::new(2)),
         EffectBypass(5),
         EqBandFreq(0), EqBandGain(1), EqBandQ(2),
         VstParam(7),

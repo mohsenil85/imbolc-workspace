@@ -81,7 +81,7 @@ pub fn EffectSlotComponent(
                             let pvalue = *param_value;
                             let pmin = *param_min;
                             let pmax = *param_max;
-                            let param_idx = idx;
+                            let param_idx = imbolc_types::ParamIndex::new(idx);
 
                             rsx! {
                                 div {

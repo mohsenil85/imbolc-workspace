@@ -5,7 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::{BusId, EffectId};
+use crate::{BusId, EffectId, ParamIndex};
 
 /// Core parameter target - shared between LFO and Automation.
 ///
@@ -96,7 +96,7 @@ pub enum ParameterTarget {
     /// Gate rate
     GateRate,
     /// Generic effect parameter (effect_id, param_index)
-    EffectParam(EffectId, usize),
+    EffectParam(EffectId, ParamIndex),
     /// Effect bypass toggle (discrete)
     EffectBypass(EffectId),
 
@@ -224,7 +224,7 @@ impl ParameterTarget {
             Self::DelayFeedback => "Delay Feedback".to_string(),
             Self::ReverbMix => "Reverb Mix".to_string(),
             Self::GateRate => "Gate Rate".to_string(),
-            Self::EffectParam(fx_id, param_idx) => format!("FX{} Param{}", fx_id.get() + 1, param_idx + 1),
+            Self::EffectParam(fx_id, param_idx) => format!("FX{} Param{}", fx_id.get() + 1, param_idx.get() + 1),
             Self::EffectBypass(fx_id) => format!("FX{} Bypass", fx_id.get() + 1),
             Self::EqBandFreq(band) => format!("EQ B{} Freq", band + 1),
             Self::EqBandGain(band) => format!("EQ B{} Gain", band + 1),

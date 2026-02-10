@@ -20,7 +20,7 @@ pub fn deserialize_instruments(bytes: &[u8]) -> Result<InstrumentState, String> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use imbolc_types::BusId;
+    use imbolc_types::{BusId, EffectId, ParamIndex};
     use crate::state::AutomationTarget;
     use crate::state::custom_synthdef::{CustomSynthDef, CustomSynthDefRegistry, ParamSpec};
     use crate::state::instrument::{
@@ -160,7 +160,7 @@ mod tests {
         // Automation lane targeting effect param
         let lane_id = session
             .automation
-            .add_lane(AutomationTarget::effect_param(saw_id, 0, 0));
+            .add_lane(AutomationTarget::effect_param(saw_id, EffectId::new(0), ParamIndex::new(0)));
         if let Some(lane) = session.automation.lane_mut(lane_id) {
             lane.add_point(0, 0.2);
             lane.add_point(480, 0.8);
@@ -239,7 +239,7 @@ mod tests {
         let loaded_lane = &loaded_session.automation.lanes[0];
         assert_eq!(
             loaded_lane.target,
-            AutomationTarget::effect_param(saw_id, 0, 0)
+            AutomationTarget::effect_param(saw_id, EffectId::new(0), ParamIndex::new(0))
         );
         assert_eq!(loaded_lane.points.len(), 2);
 

@@ -106,7 +106,7 @@ pub fn dispatch_bus(action: &BusAction, state: &mut AppState) -> DispatchResult 
             let mut targeted_value: Option<f32> = None;
             if let Some(bus) = state.session.bus_mut(*bus_id) {
                 if let Some(effect) = bus.effect_by_id_mut(*effect_id) {
-                    if let Some(param) = effect.params.get_mut(*param_idx) {
+                    if let Some(param) = effect.params.get_mut(param_idx.get()) {
                         let range = param.max - param.min;
                         match &mut param.value {
                             crate::state::ParamValue::Float(v) => {
@@ -182,7 +182,7 @@ pub fn dispatch_layer_group(
             let mut targeted_value: Option<f32> = None;
             if let Some(gm) = state.session.mixer.layer_group_mixer_mut(*group_id) {
                 if let Some(effect) = gm.effect_by_id_mut(*effect_id) {
-                    if let Some(param) = effect.params.get_mut(*param_idx) {
+                    if let Some(param) = effect.params.get_mut(param_idx.get()) {
                         let range = param.max - param.min;
                         match &mut param.value {
                             crate::state::ParamValue::Float(v) => {
@@ -246,7 +246,7 @@ pub fn dispatch_layer_group(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use imbolc_types::BusId;
+    use imbolc_types::{BusId, ParamIndex};
     use crate::state::SourceType;
     use crate::state::automation::AutomationTarget;
 
@@ -390,7 +390,7 @@ mod tests {
             _ => panic!("expected float"),
         };
 
-        let result = dispatch_bus(&BusAction::AdjustEffectParam(BusId::new(1), effect_id, 0, 1.0), &mut state);
+        let result = dispatch_bus(&BusAction::AdjustEffectParam(BusId::new(1), effect_id, ParamIndex::new(0), 1.0), &mut state);
         let new_val = match &state.session.bus(BusId::new(1)).unwrap().effects[0].params[0].value {
             crate::state::ParamValue::Float(v) => *v,
             _ => panic!("expected float"),

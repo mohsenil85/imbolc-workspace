@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::{BusId, EffectId, InstrumentId, ParameterTarget};
+use crate::{BusId, EffectId, InstrumentId, ParamIndex, ParameterTarget};
 
 /// Whether target uses continuous interpolation or discrete steps.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -236,7 +236,7 @@ impl AutomationTarget {
     }
 
     #[inline]
-    pub fn effect_param(id: InstrumentId, effect_id: EffectId, param_idx: usize) -> Self {
+    pub fn effect_param(id: InstrumentId, effect_id: EffectId, param_idx: ParamIndex) -> Self {
         Self::instrument(id, ParameterTarget::EffectParam(effect_id, param_idx))
     }
 

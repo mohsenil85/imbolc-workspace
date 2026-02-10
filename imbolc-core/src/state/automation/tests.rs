@@ -263,7 +263,7 @@ mod tests {
         // Verify some EffectParam targets exist
         assert!(targets.iter().any(|t| {
             if let Some(pt) = t.parameter_target() {
-                matches!(pt, imbolc_types::ParameterTarget::EffectParam(_, 0))
+                matches!(pt, imbolc_types::ParameterTarget::EffectParam(_, pi) if pi.get() == 0)
             } else {
                 false
             }

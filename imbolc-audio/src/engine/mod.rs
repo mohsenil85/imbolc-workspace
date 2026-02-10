@@ -368,7 +368,7 @@ mod tests {
     use super::*;
     use super::voice_allocator::MAX_VOICES_PER_INSTRUMENT;
     use crate::engine::backend::NullBackend;
-    use imbolc_types::{AutomationTarget, BusId, ParamValue};
+    use imbolc_types::{AutomationTarget, BusId, ParamIndex, ParamValue};
     use imbolc_types::{EffectType, FilterType, SourceType};
     use imbolc_types::state::mixer::DEFAULT_BUS_COUNT;
 
@@ -519,7 +519,7 @@ mod tests {
             .unwrap();
         engine
             .apply_automation(
-                &AutomationTarget::effect_param(inst_id, EffectId::new(1), 0),
+                &AutomationTarget::effect_param(inst_id, EffectId::new(1), ParamIndex::new(0)),
                 0.7,
                 &mut state.instruments,
                 &state.session,

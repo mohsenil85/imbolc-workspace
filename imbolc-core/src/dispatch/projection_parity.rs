@@ -17,7 +17,8 @@ use crate::state::AppState;
 
 use imbolc_types::{
     AutomationTarget, BusId, CurveType, EffectType, FilterType, InstrumentId, LfoShape,
-    MixerSelection, MixerSend, MusicalSettings, OutputTarget, ParameterTarget, SourceType,
+    MixerSelection, MixerSend, MusicalSettings, OutputTarget, ParamIndex, ParameterTarget,
+    SourceType,
 };
 
 // ============================================================================
@@ -342,7 +343,7 @@ fn parity_adjust_effect_param() {
     let eid = first_effect_id(&s);
     assert_parity(
         &mut s,
-        &Action::Instrument(InstrumentAction::AdjustEffectParam(id, eid, 0, 1.0)),
+        &Action::Instrument(InstrumentAction::AdjustEffectParam(id, eid, ParamIndex::new(0), 1.0)),
     );
 }
 
@@ -841,7 +842,7 @@ fn parity_bus_adjust_effect_param() {
     let eid = s.session.bus(BusId::new(1)).unwrap().effects[0].id;
     assert_parity(
         &mut s,
-        &Action::Bus(BusAction::AdjustEffectParam(BusId::new(1), eid, 0, 1.0)),
+        &Action::Bus(BusAction::AdjustEffectParam(BusId::new(1), eid, ParamIndex::new(0), 1.0)),
     );
 }
 
@@ -925,7 +926,7 @@ fn parity_layer_group_adjust_effect_param() {
     let eid = s.session.mixer.layer_group_mixer(gid).unwrap().effects[0].id;
     assert_parity(
         &mut s,
-        &Action::LayerGroup(LayerGroupAction::AdjustEffectParam(gid, eid, 0, 1.0)),
+        &Action::LayerGroup(LayerGroupAction::AdjustEffectParam(gid, eid, ParamIndex::new(0), 1.0)),
     );
 }
 

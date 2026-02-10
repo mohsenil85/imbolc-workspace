@@ -4,7 +4,7 @@ pub use imbolc_types::AutomationTarget;
 // Keep the context-aware methods that need Instrument and VstPluginRegistry
 use crate::state::instrument::{Instrument, SourceType};
 use crate::state::vst_plugin::VstPluginRegistry;
-use imbolc_types::ParameterTarget;
+use imbolc_types::{ParamIndex, ParameterTarget};
 
 /// Extension trait for context-aware AutomationTarget methods that depend on complex types.
 pub trait AutomationTargetExt {
@@ -29,7 +29,7 @@ impl AutomationTargetExt for AutomationTarget {
                 continue;
             }
             for (param_idx, _param) in effect.params.iter().enumerate() {
-                targets.push(AutomationTarget::effect_param(id, effect.id, param_idx));
+                targets.push(AutomationTarget::effect_param(id, effect.id, ParamIndex::new(param_idx)));
             }
             // Effect bypass
             targets.push(AutomationTarget::effect_bypass(id, effect.id));
@@ -68,7 +68,7 @@ impl AutomationTargetExt for AutomationTarget {
                 if let Some(inst) = inst {
                     if let Some(effect) = inst.effect_by_id(*effect_id) {
                         let effect_name = effect.effect_type.name();
-                        if let Some(param) = effect.params.get(*param_idx) {
+                        if let Some(param) = effect.params.get(param_idx.get()) {
                             return format!("{} > {}", effect_name, param.name);
                         }
                     }

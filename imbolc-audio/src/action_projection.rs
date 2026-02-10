@@ -223,7 +223,7 @@ fn project_instrument(
         InstrumentAction::AdjustEffectParam(id, effect_id, param_idx, delta) => {
             if let Some(instrument) = instruments.instrument_mut(*id) {
                 if let Some(effect) = instrument.effects_mut().find(|e| e.id == *effect_id) {
-                    if let Some(param) = effect.params.get_mut(*param_idx) {
+                    if let Some(param) = effect.params.get_mut(param_idx.get()) {
                         use imbolc_types::ParamValue;
                         match &mut param.value {
                             ParamValue::Float(ref mut v) => {
@@ -1240,7 +1240,7 @@ fn project_bus(
         BusAction::AdjustEffectParam(bus_id, effect_id, param_idx, delta) => {
             if let Some(bus) = session.bus_mut(*bus_id) {
                 if let Some(effect) = bus.effect_by_id_mut(*effect_id) {
-                    if let Some(param) = effect.params.get_mut(*param_idx) {
+                    if let Some(param) = effect.params.get_mut(param_idx.get()) {
                         let range = param.max - param.min;
                         match &mut param.value {
                             imbolc_types::ParamValue::Float(ref mut v) => {
@@ -1295,7 +1295,7 @@ fn project_layer_group(
         LayerGroupAction::AdjustEffectParam(group_id, effect_id, param_idx, delta) => {
             if let Some(gm) = session.mixer.layer_group_mixer_mut(*group_id) {
                 if let Some(effect) = gm.effect_by_id_mut(*effect_id) {
-                    if let Some(param) = effect.params.get_mut(*param_idx) {
+                    if let Some(param) = effect.params.get_mut(param_idx.get()) {
                         let range = param.max - param.min;
                         match &mut param.value {
                             imbolc_types::ParamValue::Float(ref mut v) => {

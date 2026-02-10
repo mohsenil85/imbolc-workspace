@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     AutomationLaneId, AutomationTarget, BusId, ClipId, ClipboardNote, CurveType, DrumStep,
     EffectId, EffectType, EnvConfig, FilterType,
-    InstrumentId, LfoConfig, MixerSelection, MusicalSettings, Param, PlacementId,
+    InstrumentId, LfoConfig, MixerSelection, MusicalSettings, Param, ParamIndex, PlacementId,
     ProcessingStage, ServerStatus, SourceType, VstPluginKind,
 };
 
@@ -147,7 +147,7 @@ pub enum BusAction {
     /// Toggle bypass on a bus effect
     ToggleEffectBypass(BusId, EffectId),
     /// Adjust a parameter on a bus effect
-    AdjustEffectParam(BusId, EffectId, usize, f32),
+    AdjustEffectParam(BusId, EffectId, ParamIndex, f32),
 }
 
 /// Layer group actions.
@@ -162,7 +162,7 @@ pub enum LayerGroupAction {
     /// Toggle bypass on a layer group effect
     ToggleEffectBypass(u32, EffectId),
     /// Adjust a parameter on a layer group effect
-    AdjustEffectParam(u32, EffectId, usize, f32),
+    AdjustEffectParam(u32, EffectId, ParamIndex, f32),
     /// Toggle EQ on/off for a layer group
     ToggleEq(u32),
     /// Set an EQ band parameter on a layer group (group_id, band_index, param, value)
@@ -262,7 +262,7 @@ pub struct AudioDirty {
     /// Sends /n_set directly to the effect node without routing rebuild.
     /// The param name is resolved from the instrument state at send time.
     /// Supports up to 4 per frame; overflow escalates to instruments=true.
-    pub effect_params: [Option<(InstrumentId, EffectId, usize, f32)>; 4],
+    pub effect_params: [Option<(InstrumentId, EffectId, ParamIndex, f32)>; 4],
     /// Targeted LFO param updates: (instrument_id, param_kind, value).
     /// Sends /n_set directly to the LFO node without routing rebuild.
     /// Supports up to 2 per frame (one per LfoParamKind); overflow escalates to instruments=true.
@@ -270,11 +270,11 @@ pub struct AudioDirty {
     /// Targeted bus effect param updates: (bus_id, effect_id, param_index, value).
     /// Sends /n_set directly to the bus effect node without routing rebuild.
     /// Supports up to 4 per frame; overflow escalates to session=true.
-    pub bus_effect_params: [Option<(BusId, EffectId, usize, f32)>; 4],
+    pub bus_effect_params: [Option<(BusId, EffectId, ParamIndex, f32)>; 4],
     /// Targeted layer group effect param updates: (group_id, effect_id, param_index, value).
     /// Sends /n_set directly to the layer group effect node without routing rebuild.
     /// Supports up to 4 per frame; overflow escalates to session=true.
-    pub layer_group_effect_params: [Option<(u32, EffectId, usize, f32)>; 4],
+    pub layer_group_effect_params: [Option<(u32, EffectId, ParamIndex, f32)>; 4],
 }
 
 impl AudioDirty {
@@ -448,7 +448,7 @@ impl AudioDirty {
 
     /// Set a targeted effect param update. Finds an empty slot in the array.
     /// If all slots are full, escalates to instruments=true.
-    pub fn set_effect_param(&mut self, id: InstrumentId, effect_id: EffectId, param_idx: usize, value: f32) {
+    pub fn set_effect_param(&mut self, id: InstrumentId, effect_id: EffectId, param_idx: ParamIndex, value: f32) {
         if let Some(slot) = self.effect_params.iter_mut().find(|s| s.is_none()) {
             *slot = Some((id, effect_id, param_idx, value));
         } else {
@@ -470,7 +470,7 @@ impl AudioDirty {
 
     /// Set a targeted bus effect param update. Finds an empty slot in the array.
     /// If all slots are full, escalates to session=true.
-    pub fn set_bus_effect_param(&mut self, bus_id: BusId, effect_id: EffectId, param_idx: usize, value: f32) {
+    pub fn set_bus_effect_param(&mut self, bus_id: BusId, effect_id: EffectId, param_idx: ParamIndex, value: f32) {
         if let Some(slot) = self.bus_effect_params.iter_mut().find(|s| s.is_none()) {
             *slot = Some((bus_id, effect_id, param_idx, value));
         } else {
@@ -481,7 +481,7 @@ impl AudioDirty {
 
     /// Set a targeted layer group effect param update. Finds an empty slot in the array.
     /// If all slots are full, escalates to session=true.
-    pub fn set_layer_group_effect_param(&mut self, group_id: u32, effect_id: EffectId, param_idx: usize, value: f32) {
+    pub fn set_layer_group_effect_param(&mut self, group_id: u32, effect_id: EffectId, param_idx: ParamIndex, value: f32) {
         if let Some(slot) = self.layer_group_effect_params.iter_mut().find(|s| s.is_none()) {
             *slot = Some((group_id, effect_id, param_idx, value));
         } else {
@@ -854,7 +854,7 @@ pub enum InstrumentAction {
     CycleFilterType(InstrumentId),
     AdjustFilterCutoff(InstrumentId, f32),
     AdjustFilterResonance(InstrumentId, f32),
-    AdjustEffectParam(InstrumentId, EffectId, usize, f32),
+    AdjustEffectParam(InstrumentId, EffectId, ParamIndex, f32),
     PlayNote(u8, u8),
     PlayNotes(Vec<u8>, u8),
     Select(usize),
@@ -1151,13 +1151,13 @@ mod tests {
     fn merge_preserves_multiple_effect_params() {
         let eid = EffectId::new(1);
         let mut a = AudioDirty::default();
-        a.effect_params[0] = Some((InstrumentId::new(1), eid, 0, 0.5));
+        a.effect_params[0] = Some((InstrumentId::new(1), eid, ParamIndex::new(0), 0.5));
         let mut b = AudioDirty::default();
-        b.effect_params[0] = Some((InstrumentId::new(1), eid, 1, 0.8));
+        b.effect_params[0] = Some((InstrumentId::new(1), eid, ParamIndex::new(1), 0.8));
         let mut c = AudioDirty::default();
-        c.effect_params[0] = Some((InstrumentId::new(2), eid, 0, 0.3));
+        c.effect_params[0] = Some((InstrumentId::new(2), eid, ParamIndex::new(0), 0.3));
         let mut d = AudioDirty::default();
-        d.effect_params[0] = Some((InstrumentId::new(2), eid, 1, 0.6));
+        d.effect_params[0] = Some((InstrumentId::new(2), eid, ParamIndex::new(1), 0.6));
         a.merge(b);
         a.merge(c);
         a.merge(d);
@@ -1172,10 +1172,10 @@ mod tests {
         let mut a = AudioDirty::default();
         // Fill all 4 slots
         for i in 0..4 {
-            a.effect_params[i] = Some((InstrumentId::new(1), eid, i, i as f32));
+            a.effect_params[i] = Some((InstrumentId::new(1), eid, ParamIndex::new(i), i as f32));
         }
         let mut b = AudioDirty::default();
-        b.effect_params[0] = Some((InstrumentId::new(2), eid, 0, 99.0));
+        b.effect_params[0] = Some((InstrumentId::new(2), eid, ParamIndex::new(0), 99.0));
         a.merge(b);
         assert!(a.instruments, "overflow should escalate to instruments=true");
         assert!(a.effect_params.iter().all(|p| p.is_none()));
@@ -1212,10 +1212,10 @@ mod tests {
         let eid = EffectId::new(1);
         let mut a = AudioDirty::default();
         for i in 0..4 {
-            a.bus_effect_params[i] = Some((BusId::new(1), eid, i, i as f32));
+            a.bus_effect_params[i] = Some((BusId::new(1), eid, ParamIndex::new(i), i as f32));
         }
         let mut b = AudioDirty::default();
-        b.bus_effect_params[0] = Some((BusId::new(2), eid, 0, 99.0));
+        b.bus_effect_params[0] = Some((BusId::new(2), eid, ParamIndex::new(0), 99.0));
         a.merge(b);
         assert!(a.session, "bus overflow should escalate to session=true");
         assert!(!a.instruments, "bus overflow should NOT escalate to instruments");
@@ -1227,10 +1227,10 @@ mod tests {
         let eid = EffectId::new(1);
         let mut a = AudioDirty::default();
         for i in 0..4 {
-            a.layer_group_effect_params[i] = Some((1, eid, i, i as f32));
+            a.layer_group_effect_params[i] = Some((1, eid, ParamIndex::new(i), i as f32));
         }
         let mut b = AudioDirty::default();
-        b.layer_group_effect_params[0] = Some((2, eid, 0, 99.0));
+        b.layer_group_effect_params[0] = Some((2, eid, ParamIndex::new(0), 99.0));
         a.merge(b);
         assert!(a.session, "layer group overflow should escalate to session=true");
         assert!(!a.instruments);
@@ -1269,14 +1269,14 @@ mod tests {
     #[test]
     fn any_detects_effect_params() {
         let mut d = AudioDirty::default();
-        d.effect_params[0] = Some((InstrumentId::new(1), EffectId::new(1), 0, 0.5));
+        d.effect_params[0] = Some((InstrumentId::new(1), EffectId::new(1), ParamIndex::new(0), 0.5));
         assert!(d.any());
     }
 
     #[test]
     fn any_detects_bus_effect_params() {
         let mut d = AudioDirty::default();
-        d.bus_effect_params[0] = Some((BusId::new(1), EffectId::new(1), 0, 0.5));
+        d.bus_effect_params[0] = Some((BusId::new(1), EffectId::new(1), ParamIndex::new(0), 0.5));
         assert!(d.any());
     }
 }
