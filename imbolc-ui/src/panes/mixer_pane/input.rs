@@ -406,7 +406,7 @@ impl MixerPane {
             ActionId::Mixer(MixerActionId::SendToggle) => {
                 if self.detail_section == MixerSection::Sends {
                     if let Some((_, inst)) = self.detail_instrument(state) {
-                        if let Some(send) = inst.sends.values().nth(self.detail_cursor) {
+                        if let Some(send) = inst.mixer.sends.values().nth(self.detail_cursor) {
                             return Action::Mixer(MixerAction::ToggleSend(send.bus_id));
                         }
                     }
@@ -703,7 +703,7 @@ impl MixerPane {
             }
             MixerSection::Sends => {
                 if let Some((_, inst)) = self.detail_instrument(state) {
-                    if let Some(send) = inst.sends.values().nth(self.detail_cursor) {
+                    if let Some(send) = inst.mixer.sends.values().nth(self.detail_cursor) {
                         return Action::Mixer(MixerAction::AdjustSend(send.bus_id, delta * 0.01));
                     }
                 }

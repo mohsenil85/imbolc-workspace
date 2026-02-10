@@ -115,7 +115,7 @@ impl MixerPane {
                 };
                 Self::render_channel_buf(
                     buf, x, &label, &instrument.name,
-                    instrument.level, instrument.mute, instrument.solo, Some(instrument.output_target), is_selected,
+                    instrument.mixer.level, instrument.mixer.mute, instrument.mixer.solo, Some(instrument.mixer.output_target), is_selected,
                     label_y, name_y, meter_top_y, db_y, indicator_y, output_y,
                 );
             } else {
@@ -204,7 +204,7 @@ impl MixerPane {
             let send_info = match state.session.mixer.selection {
                 MixerSelection::Instrument(idx) => {
                     state.instruments.instruments.get(idx).and_then(|instrument| {
-                        instrument.sends.get(&bus_id).map(|send| {
+                        instrument.mixer.sends.get(&bus_id).map(|send| {
                             let status = if send.enabled { "ON" } else { "OFF" };
                             format!("Send→B{}: {:.0}% [{}]", bus_id, send.level * 100.0, status)
                         })
@@ -327,7 +327,7 @@ impl MixerPane {
         Self::write_str(buf, col2_x, inner_y, "SENDS", sends_header);
 
         let mut sy = inner_y + 1;
-        for (si, send) in inst.sends.values().enumerate() {
+        for (si, send) in inst.mixer.sends.values().enumerate() {
             if sy >= inner_y + inner_h / 2 { break; }
             let bar_len = (send.level * 5.0) as usize;
             let bar: String = "\u{2588}".repeat(bar_len) + &"\u{2591}".repeat(5 - bar_len);
@@ -398,7 +398,7 @@ impl MixerPane {
 
         let mut oy = inner_y + 1;
 
-        let pan_text = format!("Pan: {:+.2}", inst.pan);
+        let pan_text = format!("Pan: {:+.2}", inst.mixer.pan);
         let pan_style = if self.detail_section == MixerSection::Output && self.detail_cursor == 0 {
             selected_style
         } else {
@@ -407,8 +407,8 @@ impl MixerPane {
         Self::write_str(buf, col3_x, oy, &pan_text, pan_style);
         oy += 1;
 
-        let db_str = Self::level_to_db(inst.level);
-        let meter_len = (inst.level * 10.0) as usize;
+        let db_str = Self::level_to_db(inst.mixer.level);
+        let meter_len = (inst.mixer.level * 10.0) as usize;
         let meter_bar: String = "\u{258E}".repeat(meter_len) + &"\u{2591}".repeat(10usize.saturating_sub(meter_len));
         let level_text = format!("{} {}", meter_bar, db_str);
         let level_style = if self.detail_section == MixerSection::Output && self.detail_cursor == 1 {
@@ -419,7 +419,7 @@ impl MixerPane {
         Self::write_str(buf, col3_x, oy, &level_text, level_style);
         oy += 1;
 
-        let out_text = format!("\u{25B8} {}", match inst.output_target {
+        let out_text = format!("\u{25B8} {}", match inst.mixer.output_target {
             OutputTarget::Master => "Master".to_string(),
             OutputTarget::Bus(id) => format!("Bus {}", id),
         });
@@ -431,14 +431,14 @@ impl MixerPane {
         Self::write_str(buf, col3_x, oy, &out_text, out_style);
         oy += 1;
 
-        let mute_str = if inst.mute { "[M]" } else { " M " };
-        let solo_str = if inst.solo { "[S]" } else { " S " };
-        let mute_style = if inst.mute {
+        let mute_str = if inst.mixer.mute { "[M]" } else { " M " };
+        let solo_str = if inst.mixer.solo { "[S]" } else { " S " };
+        let mute_style = if inst.mixer.mute {
             Style::new().fg(Color::MUTE_COLOR).bold()
         } else {
             dim
         };
-        let solo_style = if inst.solo {
+        let solo_style = if inst.mixer.solo {
             Style::new().fg(Color::SOLO_COLOR).bold()
         } else {
             dim

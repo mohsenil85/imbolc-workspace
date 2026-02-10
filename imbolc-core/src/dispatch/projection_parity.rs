@@ -710,7 +710,7 @@ fn parity_mixer_adjust_send() {
     let mut s = rich();
     s.session.mixer.selection = MixerSelection::Instrument(0);
     // Enable the send first so there's something to adjust
-    s.instruments.instruments[0].sends.insert(
+    s.instruments.instruments[0].mixer.sends.insert(
         BusId::new(1),
         MixerSend { bus_id: BusId::new(1), level: 0.5, enabled: true, tap_point: Default::default() },
     );
@@ -728,7 +728,7 @@ fn parity_mixer_toggle_send() {
 fn parity_mixer_cycle_send_tap_point() {
     let mut s = rich();
     s.session.mixer.selection = MixerSelection::Instrument(0);
-    s.instruments.instruments[0].sends.insert(
+    s.instruments.instruments[0].mixer.sends.insert(
         BusId::new(1),
         MixerSend { bus_id: BusId::new(1), level: 0.5, enabled: true, tap_point: Default::default() },
     );
@@ -788,7 +788,7 @@ fn parity_bus_add() {
 fn parity_bus_remove() {
     let mut s = one_instrument();
     // Set output to bus 1 to test reset behavior
-    s.instruments.instruments[0].output_target = OutputTarget::Bus(BusId::new(1));
+    s.instruments.instruments[0].mixer.output_target = OutputTarget::Bus(BusId::new(1));
     assert_parity(&mut s, &Action::Bus(BusAction::Remove(BusId::new(1))));
 }
 
@@ -996,7 +996,7 @@ fn parity_update() {
         lfo: inst.lfo.clone(),
         amp_envelope: inst.amp_envelope.clone(),
         polyphonic: !inst.polyphonic,
-        active: inst.active,
+        active: inst.mixer.active,
     };
     assert_parity(
         &mut s,

@@ -72,8 +72,8 @@ impl InstrumentEditPane {
         self.lfo = instrument.lfo.clone();
         self.amp_envelope = instrument.amp_envelope.clone();
         self.polyphonic = instrument.polyphonic;
-        self.active = instrument.active;
-        self.channel_config = instrument.channel_config;
+        self.active = instrument.mixer.active;
+        self.channel_config = instrument.mixer.channel_config;
         self.selected_row = 0;
         self.scroll_offset = 0;
     }
@@ -91,8 +91,8 @@ impl InstrumentEditPane {
         self.lfo = instrument.lfo.clone();
         self.amp_envelope = instrument.amp_envelope.clone();
         self.polyphonic = instrument.polyphonic;
-        self.active = instrument.active;
-        self.channel_config = instrument.channel_config;
+        self.active = instrument.mixer.active;
+        self.channel_config = instrument.mixer.channel_config;
         // Clamp selected_row to valid range (chain may have changed)
         let max = self.total_rows().saturating_sub(1);
         self.selected_row = self.selected_row.min(max);
@@ -145,7 +145,7 @@ impl InstrumentEditPane {
         instrument.lfo = self.lfo.clone();
         instrument.amp_envelope = self.amp_envelope.clone();
         instrument.polyphonic = self.polyphonic;
-        instrument.active = self.active;
+        instrument.mixer.active = self.active;
     }
 
     /// Total number of selectable rows across all sections

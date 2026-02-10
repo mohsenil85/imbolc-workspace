@@ -169,9 +169,9 @@ impl AppState {
     /// Compute effective mute for an instrument, considering solo state and master mute.
     pub fn effective_instrument_mute(&self, inst: &Instrument) -> bool {
         if self.instruments.any_instrument_solo() {
-            !inst.solo
+            !inst.mixer.solo
         } else {
-            inst.mute || self.session.mixer.master_mute
+            inst.mixer.mute || self.session.mixer.master_mute
         }
     }
 
@@ -251,7 +251,7 @@ impl AppState {
         match self.session.mixer.selection {
             MixerSelection::Instrument(idx) => {
                 if let Some(inst) = self.instruments.instruments.get_mut(idx) {
-                    inst.output_target = match inst.output_target {
+                    inst.mixer.output_target = match inst.mixer.output_target {
                         OutputTarget::Master => {
                             bus_ids.first().map(|&id| OutputTarget::Bus(id)).unwrap_or(OutputTarget::Master)
                         }
@@ -291,7 +291,7 @@ impl AppState {
         match self.session.mixer.selection {
             MixerSelection::Instrument(idx) => {
                 if let Some(inst) = self.instruments.instruments.get_mut(idx) {
-                    inst.output_target = match inst.output_target {
+                    inst.mixer.output_target = match inst.mixer.output_target {
                         OutputTarget::Master => {
                             bus_ids.last().map(|&id| OutputTarget::Bus(id)).unwrap_or(OutputTarget::Master)
                         }
@@ -376,12 +376,12 @@ mod tests {
         assert!(!state.effective_instrument_mute(inst));
 
         // Mute the instrument
-        state.instruments.instruments[0].mute = true;
+        state.instruments.instruments[0].mixer.mute = true;
         let inst = &state.instruments.instruments[0];
         assert!(state.effective_instrument_mute(inst));
 
         // Unmute instrument but mute master
-        state.instruments.instruments[0].mute = false;
+        state.instruments.instruments[0].mixer.mute = false;
         state.session.mixer.master_mute = true;
         let inst = &state.instruments.instruments[0];
         assert!(state.effective_instrument_mute(inst));
@@ -392,7 +392,7 @@ mod tests {
         let mut state = AppState::new();
         state.add_instrument(SourceType::Saw);
         state.add_instrument(SourceType::Sin);
-        state.instruments.instruments[0].solo = true;
+        state.instruments.instruments[0].mixer.solo = true;
 
         let inst0 = &state.instruments.instruments[0];
         assert!(!state.effective_instrument_mute(inst0)); // soloed — not muted
@@ -447,15 +447,15 @@ mod tests {
         state.add_instrument(SourceType::Saw);
         state.session.mixer.selection = MixerSelection::Instrument(0);
 
-        assert_eq!(state.instruments.instruments[0].output_target, OutputTarget::Master);
+        assert_eq!(state.instruments.instruments[0].mixer.output_target, OutputTarget::Master);
         state.mixer_cycle_output();
-        assert_eq!(state.instruments.instruments[0].output_target, OutputTarget::Bus(BusId::new(1)));
+        assert_eq!(state.instruments.instruments[0].mixer.output_target, OutputTarget::Bus(BusId::new(1)));
 
         // Cycle through all buses back to Master
         for _ in 1..=DEFAULT_BUS_COUNT {
             state.mixer_cycle_output();
         }
-        assert_eq!(state.instruments.instruments[0].output_target, OutputTarget::Master);
+        assert_eq!(state.instruments.instruments[0].mixer.output_target, OutputTarget::Master);
     }
 
     #[test]
@@ -465,9 +465,9 @@ mod tests {
         state.session.mixer.selection = MixerSelection::Instrument(0);
 
         state.mixer_cycle_output_reverse();
-        assert_eq!(state.instruments.instruments[0].output_target, OutputTarget::Bus(BusId::new(DEFAULT_BUS_COUNT)));
+        assert_eq!(state.instruments.instruments[0].mixer.output_target, OutputTarget::Bus(BusId::new(DEFAULT_BUS_COUNT)));
         state.mixer_cycle_output_reverse();
-        assert_eq!(state.instruments.instruments[0].output_target, OutputTarget::Bus(BusId::new(DEFAULT_BUS_COUNT - 1)));
+        assert_eq!(state.instruments.instruments[0].mixer.output_target, OutputTarget::Bus(BusId::new(DEFAULT_BUS_COUNT - 1)));
     }
 
     #[test]

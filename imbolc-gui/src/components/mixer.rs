@@ -19,7 +19,7 @@ pub fn Mixer() -> Element {
             .instruments
             .instruments
             .iter()
-            .map(|i| (i.id, i.name.clone(), i.level, i.pan, i.mute, i.solo))
+            .map(|i| (i.id, i.name.clone(), i.mixer.level, i.mixer.pan, i.mixer.mute, i.mixer.solo))
             .collect();
         let master_level = s.app.session.mixer.master_level;
         let master_mute = s.app.session.mixer.master_mute;

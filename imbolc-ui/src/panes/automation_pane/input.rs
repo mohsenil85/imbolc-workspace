@@ -68,7 +68,7 @@ impl AutomationPane {
                     options = AutomationTarget::targets_for_instrument_context(inst, &state.session.vst_plugins);
                     // Add send targets
                     let id = inst.id;
-                    for &bus_id in inst.sends.keys() {
+                    for &bus_id in inst.mixer.sends.keys() {
                         options.push(AutomationTarget::send_level(id, bus_id));
                     }
                 }

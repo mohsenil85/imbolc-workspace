@@ -90,7 +90,7 @@ pub(super) fn handle_update(
         instrument.lfo = update.lfo.clone();
         instrument.amp_envelope = update.amp_envelope.clone();
         instrument.polyphonic = update.polyphonic;
-        instrument.active = update.active;
+        instrument.mixer.active = update.active;
     }
 
     // Record automation for changed LFO/envelope params
@@ -152,7 +152,7 @@ mod tests {
             lfo: inst.lfo.clone(),
             amp_envelope: inst.amp_envelope.clone(),
             polyphonic: inst.polyphonic,
-            active: inst.active,
+            active: inst.mixer.active,
         }
     }
 

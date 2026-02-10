@@ -286,7 +286,7 @@ impl Pane for InstrumentPane {
             let eq_str = format!(" {:4}", Self::format_eq(instrument));
             let fx_raw = Self::format_effects(instrument);
             let fx_str = format!(" {:18}", &fx_raw[..fx_raw.len().min(18)]);
-            let level_str = format!(" {}", Self::format_level(instrument.level));
+            let level_str = format!(" {}", Self::format_level(instrument.mixer.level));
 
             let source_c = source_color(instrument.source);
 

@@ -51,6 +51,43 @@ impl LayerConfig {
     }
 }
 
+/// Mixer settings for an instrument: level, pan, mute, solo, routing, and sends.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InstrumentMixer {
+    pub level: f32,
+    pub pan: f32,
+    pub mute: bool,
+    pub solo: bool,
+    pub active: bool,
+    pub output_target: OutputTarget,
+    #[serde(default)]
+    pub channel_config: ChannelConfig,
+    #[serde(deserialize_with = "deserialize_sends")]
+    pub sends: BTreeMap<BusId, MixerSend>,
+}
+
+impl InstrumentMixer {
+    pub fn new(active: bool) -> Self {
+        Self {
+            level: 0.8,
+            pan: 0.0,
+            mute: false,
+            solo: false,
+            active,
+            output_target: OutputTarget::Master,
+            channel_config: ChannelConfig::default(),
+            sends: BTreeMap::new(),
+        }
+    }
+
+    /// Disable sends for a removed bus (keeps the entry for undo support)
+    pub fn disable_send_for_bus(&mut self, bus_id: BusId) {
+        if let Some(send) = self.sends.get_mut(&bus_id) {
+            send.enabled = false;
+        }
+    }
+}
+
 /// Whether an instrument's signal chain is mono or stereo.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum ChannelConfig {
@@ -413,18 +450,8 @@ pub struct Instrument {
     pub lfo: LfoConfig,
     pub amp_envelope: EnvConfig,
     pub polyphonic: bool,
-    // Integrated mixer
-    pub level: f32,
-    pub pan: f32,
-    pub mute: bool,
-    pub solo: bool,
-    pub active: bool,
-    pub output_target: OutputTarget,
-    /// Mono or stereo signal chain
-    #[serde(default)]
-    pub channel_config: ChannelConfig,
-    #[serde(deserialize_with = "deserialize_sends")]
-    pub sends: BTreeMap<BusId, MixerSend>,
+    /// Mixer: level, pan, mute, solo, routing, sends
+    pub mixer: InstrumentMixer,
     // Sample configuration (only used when source is SourceType::PitchedSampler)
     pub sampler_config: Option<SamplerConfig>,
     // Kit sequencer (only used when source is SourceType::Kit)
@@ -447,7 +474,6 @@ pub struct Instrument {
 
 impl Instrument {
     pub fn new(id: InstrumentId, source: SourceType) -> Self {
-        let sends = BTreeMap::new();
         // Sample instruments get a sampler config
         let sampler_config = if source.is_sample() || source.is_time_stretch() {
             Some(SamplerConfig::default())
@@ -469,14 +495,7 @@ impl Instrument {
             lfo: LfoConfig::default(),
             amp_envelope: source.default_envelope(),
             polyphonic: true,
-            level: 0.8,
-            pan: 0.0,
-            mute: false,
-            solo: false,
-            active: !source.is_audio_input(),
-            output_target: OutputTarget::Master,
-            channel_config: ChannelConfig::default(),
-            sends,
+            mixer: InstrumentMixer::new(!source.is_audio_input()),
             sampler_config,
             drum_sequencer,
             vst_param_values: Vec::new(),
@@ -690,9 +709,7 @@ impl Instrument {
 
     /// Disable sends for a removed bus (keeps the entry for undo support)
     pub fn disable_send_for_bus(&mut self, bus_id: BusId) {
-        if let Some(send) = self.sends.get_mut(&bus_id) {
-            send.enabled = false;
-        }
+        self.mixer.disable_send_for_bus(bus_id);
     }
 
     // --- Structure navigation convenience methods ---

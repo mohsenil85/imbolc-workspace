@@ -19,7 +19,7 @@ pub fn TrackList() -> Element {
             .instruments
             .instruments
             .iter()
-            .map(|i| (i.id, i.name.clone(), i.mute, i.solo))
+            .map(|i| (i.id, i.name.clone(), i.mixer.mute, i.mixer.solo))
             .collect();
         let selected_idx = s.app.instruments.selected;
         (instruments, selected_idx)

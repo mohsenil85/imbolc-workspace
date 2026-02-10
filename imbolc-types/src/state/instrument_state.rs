@@ -156,7 +156,7 @@ impl InstrumentState {
 
     /// Check if any instrument is soloed
     pub fn any_instrument_solo(&self) -> bool {
-        self.instruments.iter().any(|s| s.solo)
+        self.instruments.iter().any(|s| s.mixer.solo)
     }
 
     pub fn selected_drum_sequencer(&self) -> Option<&DrumSequencerState> {

@@ -82,10 +82,10 @@ mod tests {
                     target: ParameterTarget::FilterCutoff,
                 }));
             }
-            inst.output_target = OutputTarget::Bus(BusId::new(2));
-            inst.level = 0.55;
-            inst.pan = 0.25;
-            inst.sends.insert(BusId::new(1), imbolc_types::MixerSend {
+            inst.mixer.output_target = OutputTarget::Bus(BusId::new(2));
+            inst.mixer.level = 0.55;
+            inst.mixer.pan = 0.25;
+            inst.mixer.sends.insert(BusId::new(1), imbolc_types::MixerSend {
                 bus_id: BusId::new(1),
                 level: 0.33,
                 enabled: true,
@@ -272,10 +272,10 @@ mod tests {
             .find(|i| i.id == saw_id)
             .unwrap();
         assert!(matches!(loaded_saw.source, SourceType::Saw));
-        assert_eq!(loaded_saw.output_target, OutputTarget::Bus(BusId::new(2)));
-        assert!((loaded_saw.level - 0.55).abs() < 0.001);
-        assert!((loaded_saw.pan - 0.25).abs() < 0.001);
-        let send = loaded_saw.sends.get(&BusId::new(1)).expect("send for bus 1");
+        assert_eq!(loaded_saw.mixer.output_target, OutputTarget::Bus(BusId::new(2)));
+        assert!((loaded_saw.mixer.level - 0.55).abs() < 0.001);
+        assert!((loaded_saw.mixer.pan - 0.25).abs() < 0.001);
+        let send = loaded_saw.mixer.sends.get(&BusId::new(1)).expect("send for bus 1");
         assert!(send.enabled);
         assert!((send.level - 0.33).abs() < 0.001);
         assert!(loaded_saw.filter().is_some());

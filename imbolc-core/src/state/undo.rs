@@ -710,23 +710,23 @@ mod tests {
         );
 
         // Modify instrument 1's level
-        instruments.instrument_mut(id1).unwrap().level = 0.3;
+        instruments.instrument_mut(id1).unwrap().mixer.level = 0.3;
         // Also modify instrument 2 (should NOT be reverted)
-        instruments.instrument_mut(id2).unwrap().level = 0.7;
+        instruments.instrument_mut(id2).unwrap().mixer.level = 0.7;
 
         // Undo should only revert instrument 1
         assert!(history.undo(&mut session, &mut instruments).is_some());
         // Instrument 1 reverted to default (0.8)
         assert!(
-            (instruments.instrument(id1).unwrap().level - 0.8).abs() < f32::EPSILON,
+            (instruments.instrument(id1).unwrap().mixer.level - 0.8).abs() < f32::EPSILON,
             "instrument 1 level should be reverted to 0.8, got {}",
-            instruments.instrument(id1).unwrap().level
+            instruments.instrument(id1).unwrap().mixer.level
         );
         // Instrument 2 unchanged
         assert!(
-            (instruments.instrument(id2).unwrap().level - 0.7).abs() < f32::EPSILON,
+            (instruments.instrument(id2).unwrap().mixer.level - 0.7).abs() < f32::EPSILON,
             "instrument 2 level should remain 0.7, got {}",
-            instruments.instrument(id2).unwrap().level
+            instruments.instrument(id2).unwrap().mixer.level
         );
     }
 
@@ -744,7 +744,7 @@ mod tests {
         // Modify session
         session.mixer.master_level = 0.3;
         // Also modify an instrument (should NOT be reverted)
-        instruments.instrument_mut(id1).unwrap().level = 0.1;
+        instruments.instrument_mut(id1).unwrap().mixer.level = 0.1;
 
         // Undo should only revert session
         assert!(history.undo(&mut session, &mut instruments).is_some());
@@ -755,9 +755,9 @@ mod tests {
         );
         // Instrument unchanged
         assert!(
-            (instruments.instrument(id1).unwrap().level - 0.1).abs() < f32::EPSILON,
+            (instruments.instrument(id1).unwrap().mixer.level - 0.1).abs() < f32::EPSILON,
             "instrument level should remain 0.1, got {}",
-            instruments.instrument(id1).unwrap().level
+            instruments.instrument(id1).unwrap().mixer.level
         );
     }
 

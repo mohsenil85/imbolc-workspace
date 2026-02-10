@@ -191,7 +191,7 @@ fn handle_toggle_channel_config(state: &mut AppState, id: crate::state::Instrume
     use crate::action::AudioDirty;
 
     if let Some(inst) = state.instruments.instrument_mut(id) {
-        inst.channel_config = inst.channel_config.toggle();
+        inst.mixer.channel_config = inst.mixer.channel_config.toggle();
         // Mark routing dirty to rebuild signal chain with new channel config
         DispatchResult {
             audio_dirty: AudioDirty {

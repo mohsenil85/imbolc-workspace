@@ -129,7 +129,7 @@ pub fn tick_arpeggiator(
                 for &target_id in &targets {
                     let inst = instruments.instrument(target_id);
                     let skip = inst.map_or(true, |inst| {
-                        !inst.active || if any_solo { !inst.solo } else { inst.mute }
+                        !inst.mixer.active || if any_solo { !inst.mixer.solo } else { inst.mixer.mute }
                     });
                     if skip { continue; }
                     let target_pitch = inst.map_or(pitch, |i| i.offset_pitch(pitch));

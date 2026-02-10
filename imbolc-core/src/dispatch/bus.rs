@@ -25,8 +25,8 @@ pub fn dispatch_bus(action: &BusAction, state: &mut AppState) -> DispatchResult 
 
             // Reset instruments that output to this bus
             for inst in &mut state.instruments.instruments {
-                if inst.output_target == OutputTarget::Bus(bus_id) {
-                    inst.output_target = OutputTarget::Master;
+                if inst.mixer.output_target == OutputTarget::Bus(bus_id) {
+                    inst.mixer.output_target = OutputTarget::Master;
                 }
                 // Disable sends to this bus
                 inst.disable_send_for_bus(bus_id);
@@ -274,18 +274,18 @@ mod tests {
 
         assert_eq!(state.session.mixer.buses.len(), initial_bus_count + 1);
         // Sends are lazily created now, so instrument sends remain empty
-        assert!(state.instruments.instruments[0].sends.is_empty());
+        assert!(state.instruments.instruments[0].mixer.sends.is_empty());
     }
 
     #[test]
     fn remove_bus_resets_instrument_output() {
         let mut state = setup();
         state.add_instrument(SourceType::Saw);
-        state.instruments.instruments[0].output_target = OutputTarget::Bus(BusId::new(3));
+        state.instruments.instruments[0].mixer.output_target = OutputTarget::Bus(BusId::new(3));
 
         dispatch_bus(&BusAction::Remove(BusId::new(3)), &mut state);
 
-        assert_eq!(state.instruments.instruments[0].output_target, OutputTarget::Master);
+        assert_eq!(state.instruments.instruments[0].mixer.output_target, OutputTarget::Master);
     }
 
     #[test]
@@ -294,7 +294,7 @@ mod tests {
         let mut state = setup();
         state.add_instrument(SourceType::Saw);
         // Insert and enable a send to bus 3
-        state.instruments.instruments[0].sends.insert(
+        state.instruments.instruments[0].mixer.sends.insert(
             BusId::new(3),
             MixerSend { bus_id: BusId::new(3), level: 0.5, enabled: true, tap_point: Default::default() },
         );
@@ -302,7 +302,7 @@ mod tests {
         dispatch_bus(&BusAction::Remove(BusId::new(3)), &mut state);
 
         // Send should be disabled but still exist
-        let send = state.instruments.instruments[0].sends.get(&BusId::new(3));
+        let send = state.instruments.instruments[0].mixer.sends.get(&BusId::new(3));
         assert!(send.is_some());
         assert!(!send.unwrap().enabled);
     }

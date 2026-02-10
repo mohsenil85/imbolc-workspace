@@ -172,8 +172,8 @@ fn save_instruments(conn: &Connection, instruments: &InstrumentState) -> SqlResu
 
     for (pos, inst) in instruments.instruments.iter().enumerate() {
         let source_type = encode_source_type(&inst.source);
-        let output_target = encode_output_target(&inst.output_target);
-        let channel_config = format!("{:?}", inst.channel_config);
+        let output_target = encode_output_target(&inst.mixer.output_target);
+        let channel_config = format!("{:?}", inst.mixer.channel_config);
 
         let (filter_type, filter_cutoff, filter_cutoff_min, filter_cutoff_max,
              filter_resonance, filter_resonance_min, filter_resonance_max, filter_enabled) =
@@ -218,11 +218,11 @@ fn save_instruments(conn: &Connection, instruments: &InstrumentState) -> SqlResu
             inst.amp_envelope.sustain,
             inst.amp_envelope.release,
             inst.polyphonic as i32,
-            inst.level,
-            inst.pan,
-            inst.mute as i32,
-            inst.solo as i32,
-            inst.active as i32,
+            inst.mixer.level,
+            inst.mixer.pan,
+            inst.mixer.mute as i32,
+            inst.mixer.solo as i32,
+            inst.mixer.active as i32,
             output_target,
             channel_config,
             inst.convolution_ir_path.as_deref(),
@@ -254,7 +254,7 @@ fn save_instruments(conn: &Connection, instruments: &InstrumentState) -> SqlResu
         save_effects(conn, inst.id.get(), &effects)?;
 
         // Sends
-        for send in inst.sends.values() {
+        for send in inst.mixer.sends.values() {
             conn.execute(
                 "INSERT INTO instrument_sends (instrument_id, bus_id, level, enabled, tap_point)
                  VALUES (?1, ?2, ?3, ?4, ?5)",

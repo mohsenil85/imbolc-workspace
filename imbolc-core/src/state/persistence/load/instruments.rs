@@ -189,13 +189,13 @@ pub(super) fn load_instruments(conn: &Connection, instruments: &mut InstrumentSt
         inst.lfo = lfo;
         inst.amp_envelope = amp_envelope;
         inst.polyphonic = r.polyphonic != 0;
-        inst.level = r.level;
-        inst.pan = r.pan;
-        inst.mute = r.mute != 0;
-        inst.solo = r.solo != 0;
-        inst.active = r.active != 0;
-        inst.output_target = decode_output_target(&r.output_target);
-        inst.channel_config = decode_channel_config(&r.channel_config);
+        inst.mixer.level = r.level;
+        inst.mixer.pan = r.pan;
+        inst.mixer.mute = r.mute != 0;
+        inst.mixer.solo = r.solo != 0;
+        inst.mixer.active = r.active != 0;
+        inst.mixer.output_target = decode_output_target(&r.output_target);
+        inst.mixer.channel_config = decode_channel_config(&r.channel_config);
         inst.convolution_ir_path = r.convolution_ir_path;
         inst.layer.group = r.layer_group;
         inst.next_effect_id = imbolc_types::EffectId::new(r.next_effect_id);
@@ -282,7 +282,7 @@ pub(super) fn load_instruments(conn: &Connection, instruments: &mut InstrumentSt
         }
 
         // Sends
-        inst.sends = load_sends(conn, r.id)?;
+        inst.mixer.sends = load_sends(conn, r.id)?;
 
         // VST param values
         inst.vst_param_values = load_vst_param_values(conn, r.id)?;
