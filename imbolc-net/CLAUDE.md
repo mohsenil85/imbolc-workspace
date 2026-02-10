@@ -121,7 +121,7 @@ cargo test -p imbolc-net --features mdns
 
 ## Deployment Scenarios
 
-See [docs/network-scenarios.md](../docs/network-scenarios.md) for detailed deployment scenarios:
+See [plans/network-scenarios.md](../plans/network-scenarios.md) for detailed deployment scenarios:
 - Solo local (laptop only)
 - Solo with MIDI/audio interface
 - Two laptops (casual jam)

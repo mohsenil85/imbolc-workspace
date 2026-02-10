@@ -82,7 +82,7 @@ round-trips.
 
 ### Scaling Bottlenecks
 
-See [docs/scaling-analysis.md](docs/scaling-analysis.md) for ranked analysis
+See [plans/scaling-analysis.md](plans/scaling-analysis.md) for ranked analysis
 of local and network scaling issues.
 
 ---

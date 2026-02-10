@@ -112,4 +112,4 @@ Working through all 16 questions from plans/questions.md.
 | 15 | Control bus return | Bundled with Q14, return buses on /n_end | Near-term |
 | 16 | Docs pruning | Delete stale docs, CLAUDE.md = living contracts | Housekeeping |
 
-All details recorded in `plans/questions.md`. Actionable items tracked in `TASKS_ARCH.md`.
+All details recorded in `plans/questions.md`.

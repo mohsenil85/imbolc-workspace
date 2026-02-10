@@ -2,7 +2,7 @@
 
 ## Context
 
-The full modular routing refactor (TASKS_ARCH #7) would be the largest
+The full modular routing refactor (Q11 in questions.md) would be the largest
 rewrite in the codebase — touching every crate — for power-user
 features that affect ~5% of sessions. Instead, three targeted changes
 address the real pain points at a fraction of the cost.

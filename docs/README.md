@@ -1,6 +1,6 @@
 # Imbolc Documentation
 
-This directory contains technical documentation for the Imbolc DAW.
+Reference documentation for the Imbolc DAW. Per-crate `CLAUDE.md` files are the primary living contracts; these docs provide deeper architectural detail.
 
 ## Architecture
 
@@ -15,16 +15,13 @@ This directory contains technical documentation for the Imbolc DAW.
 | Document | Description |
 |----------|-------------|
 | [audio-routing.md](audio-routing.md) | Bus model, insert vs send effects, node ordering |
-| [polyphonic-voice-allocation.md](polyphonic-voice-allocation.md) | Voice stealing, note tracking, polyphony modes (Implemented) |
-| [lfo-targets-implementation.md](lfo-targets-implementation.md) | LFO modulation targets and implementation (Partially Implemented) |
+| [polyphonic-voice-allocation.md](polyphonic-voice-allocation.md) | Voice stealing, note tracking, polyphony modes |
 
 ## Features
 
 | Document | Description |
 |----------|-------------|
 | [keybindings.md](keybindings.md) | Keybinding philosophy, conventions, configuration |
-| [custom-synthdef-plan.md](custom-synthdef-plan.md) | Custom SynthDef system — Phase 1 complete (import & playback) |
-| [vst3-support-roadmap.md](vst3-support-roadmap.md) | VST3 plugin support — Plan A complete (params, automation, state) |
 
 ## Persistence
 
@@ -32,38 +29,8 @@ This directory contains technical documentation for the Imbolc DAW.
 |----------|-------------|
 | [sqlite-persistence.md](sqlite-persistence.md) | SQLite schema, save/load implementation |
 
-## Sequencing (Reference)
-
-These documents use Java syntax from an earlier prototype. Concepts remain valid; see `imbolc-types/src/state/` for Rust implementations.
-
-| Document | Description |
-|----------|-------------|
-| [sequencer-musical-settings.md](sequencer-musical-settings.md) | Musical settings for the drum sequencer |
-| [sequencer-swing.md](sequencer-swing.md) | Swing and groove implementation |
-
-## Network (Planned)
-
-| Document | Description |
-|----------|-------------|
-| [network-scenarios.md](network-scenarios.md) | Deployment scenarios: solo, LAN jam, pro setup (Not Yet Implemented) |
-
-## Development
-
-| Document | Description |
-|----------|-------------|
-| [ai-coding-affordances.md](ai-coding-affordances.md) | AI coding agent guidance and patterns |
-| [ai-integration.md](ai-integration.md) | AI tool integration design (Not Implemented) |
-| [lessons-learned.md](lessons-learned.md) | Development lessons and retrospectives |
-
-## Archive
-
-| Document | Description |
-|----------|-------------|
-| [vst-integration.md](vst-integration.md) | Stub - superseded by vst3-support-roadmap.md |
-| [old-sibling-repo-recovery.md](old-sibling-repo-recovery.md) | Historical notes on repo recovery |
-
 ## See Also
 
-- [CLAUDE.md](../CLAUDE.md) — Workspace overview for AI agents
-- [plans/](../plans/) — Implementation plans
+- [CLAUDE.md](../CLAUDE.md) — Workspace overview
+- [plans/](../plans/) — Implementation plans (custom-synthdef, VST3 roadmap, network scenarios, scaling analysis)
 - [TASKS.md](../TASKS.md) — Current bugs, features, refactors

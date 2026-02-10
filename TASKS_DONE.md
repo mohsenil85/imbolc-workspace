@@ -191,7 +191,7 @@ Server pane displays connection status and messages; frame no longer renders a b
 
 ---
 
-## Architecture Tasks (from TASKS_ARCH.md)
+## Architecture Tasks (from plans/questions.md)
 
 ### OutputTarget Bus Routing [Q12] — DONE
 `OutputTarget::Bus(n)` routes instrument output synth to that bus's audio bus.

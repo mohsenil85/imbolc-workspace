@@ -1,8 +1,0 @@
-* Over view of the types of files we export
-** all are basically sqlites, where possible
-** import .scd -> instrument
-** import .vst -> instrument
-** global keyboard settings (eg, MPK25) should go in ~/.config/imbolc/keyboards.imbolckbd
-*** save import export keyboard settings
-** export music tracks
-** 
