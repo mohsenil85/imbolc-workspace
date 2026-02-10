@@ -106,7 +106,7 @@ mod tests {
 
         // Sampler instrument: config and slices
         if let Some(inst) = instruments.instrument_mut(sampler_id) {
-            if let Some(config) = inst.sampler_config.as_mut() {
+            if let Some(config) = inst.sampler_config_mut() {
                 config.buffer_id = Some(77);
                 config.sample_name = Some("kick.wav".to_string());
                 config.loop_mode = true;
@@ -123,7 +123,7 @@ mod tests {
 
         // Kit instrument: pads, steps, and chopper state
         if let Some(inst) = instruments.instrument_mut(kit_id) {
-            if let Some(seq) = inst.drum_sequencer.as_mut() {
+            if let Some(seq) = inst.drum_sequencer_mut() {
                 seq.pads[0].buffer_id = Some(123);
                 seq.pads[0].path = Some("/tmp/kick.wav".to_string());
                 seq.pads[0].name = "Kick".to_string();
@@ -297,7 +297,7 @@ mod tests {
             .iter()
             .find(|i| i.id == sampler_id)
             .unwrap();
-        let config = loaded_sampler.sampler_config.as_ref().unwrap();
+        let config = loaded_sampler.sampler_config().unwrap();
         assert_eq!(config.buffer_id, Some(77));
         assert_eq!(config.sample_name.as_deref(), Some("kick.wav"));
         assert!(config.loop_mode);
@@ -311,7 +311,7 @@ mod tests {
             .iter()
             .find(|i| i.id == kit_id)
             .unwrap();
-        let seq = loaded_kit.drum_sequencer.as_ref().unwrap();
+        let seq = loaded_kit.drum_sequencer().unwrap();
         assert_eq!(seq.pads[0].buffer_id, Some(123));
         assert_eq!(seq.pads[0].name, "Kick");
         assert!(seq.patterns[0].steps[0][0].active);

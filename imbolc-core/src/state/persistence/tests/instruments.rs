@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use crate::state::custom_synthdef::{CustomSynthDef, CustomSynthDefRegistry, ParamSpec};
-use crate::state::instrument::SourceType;
+use crate::state::instrument::{SourceExtra, SourceType};
 use crate::state::instrument_state::InstrumentState;
 use crate::state::session::SessionState;
 use super::{save_project, load_project, temp_db_path};
@@ -13,7 +13,7 @@ fn round_trip_drum_sequencer() {
     let kit_id = instruments.add_instrument(SourceType::Kit);
 
     if let Some(inst) = instruments.instrument_mut(kit_id) {
-        if let Some(seq) = inst.drum_sequencer.as_mut() {
+        if let Some(seq) = inst.drum_sequencer_mut() {
             seq.pads[0].name = "Kick".to_string();
             seq.pads[0].level = 0.9;
             seq.pads[0].reverse = true;
@@ -34,7 +34,7 @@ fn round_trip_drum_sequencer() {
     let (_, loaded_inst) = load_project(&path).expect("load");
 
     let loaded_kit = loaded_inst.instruments.iter().find(|i| i.id == kit_id).unwrap();
-    let seq = loaded_kit.drum_sequencer.as_ref().unwrap();
+    let seq = loaded_kit.drum_sequencer().unwrap();
     assert_eq!(seq.pads[0].name, "Kick");
     assert!((seq.pads[0].level - 0.9).abs() < 0.001);
     assert!(seq.pads[0].reverse);
@@ -56,7 +56,7 @@ fn round_trip_sampler_config() {
     let sampler_id = instruments.add_instrument(SourceType::PitchedSampler);
 
     if let Some(inst) = instruments.instrument_mut(sampler_id) {
-        if let Some(config) = inst.sampler_config.as_mut() {
+        if let Some(config) = inst.sampler_config_mut() {
             config.buffer_id = Some(42);
             config.sample_name = Some("test.wav".to_string());
             config.loop_mode = true;
@@ -76,7 +76,7 @@ fn round_trip_sampler_config() {
     let (_, loaded_inst) = load_project(&path).expect("load");
 
     let loaded = loaded_inst.instruments.iter().find(|i| i.id == sampler_id).unwrap();
-    let config = loaded.sampler_config.as_ref().unwrap();
+    let config = loaded.sampler_config().unwrap();
     assert_eq!(config.buffer_id, Some(42));
     assert_eq!(config.sample_name.as_deref(), Some("test.wav"));
     assert!(config.loop_mode);
@@ -94,8 +94,10 @@ fn round_trip_vst_plugins() {
     let inst_id = instruments.add_instrument(SourceType::Saw);
 
     if let Some(inst) = instruments.instrument_mut(inst_id) {
-        inst.vst_param_values = vec![(0, 0.75), (1, 0.5)];
-        inst.vst_state_path = Some(PathBuf::from("/tmp/test.vststate"));
+        inst.source_extra = SourceExtra::Vst {
+            param_values: vec![(0, 0.75), (1, 0.5)],
+            state_path: Some(PathBuf::from("/tmp/test.vststate")),
+        };
     }
 
     session.piano_roll.add_track(inst_id);
@@ -105,9 +107,9 @@ fn round_trip_vst_plugins() {
     let (_, loaded_inst) = load_project(&path).expect("load");
 
     let loaded = loaded_inst.instruments.iter().find(|i| i.id == inst_id).unwrap();
-    assert!(loaded.vst_param_values.iter().any(|&(k, v)| k == 0 && (v - 0.75).abs() < 0.01));
-    assert!(loaded.vst_param_values.iter().any(|&(k, v)| k == 1 && (v - 0.5).abs() < 0.01));
-    assert_eq!(loaded.vst_state_path.as_deref(), Some(std::path::Path::new("/tmp/test.vststate")));
+    assert!(loaded.vst_source_params().iter().any(|&(k, v)| k == 0 && (v - 0.75).abs() < 0.01));
+    assert!(loaded.vst_source_params().iter().any(|&(k, v)| k == 1 && (v - 0.5).abs() < 0.01));
+    assert_eq!(loaded.vst_source_state_path().map(|p| p.as_path()), Some(std::path::Path::new("/tmp/test.vststate")));
 
     std::fs::remove_file(&path).ok();
 }
@@ -145,7 +147,7 @@ fn round_trip_custom_synthdefs() {
 }
 
 #[test]
-fn round_trip_layer.octave_offset() {
+fn round_trip_layer_octave_offset() {
     let mut session = SessionState::new();
     let mut instruments = InstrumentState::new();
     let id1 = instruments.add_instrument(SourceType::Saw);

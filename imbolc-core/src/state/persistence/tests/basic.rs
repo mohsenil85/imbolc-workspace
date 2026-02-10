@@ -31,8 +31,8 @@ fn save_and_load_round_trip_basic() {
         filter.cutoff.value = 1234.0;
         filter.resonance.value = 0.42;
     }
-    inst.lfo.enabled = true;
-    inst.lfo.rate = 5.0;
+    inst.modulation.lfo.enabled = true;
+    inst.modulation.lfo.rate = 5.0;
     inst.mixer.level = 0.42;
     inst.mixer.pan = -0.2;
     inst.mixer.output_target = OutputTarget::Bus(BusId::new(2));
@@ -166,7 +166,7 @@ fn save_and_load_round_trip_complex() {
 
     // Sampler instrument: config and slices
     if let Some(inst) = instruments.instrument_mut(sampler_id) {
-        if let Some(config) = inst.sampler_config.as_mut() {
+        if let Some(config) = inst.sampler_config_mut() {
             config.buffer_id = Some(77);
             config.sample_name = Some("kick.wav".to_string());
             config.loop_mode = true;
@@ -183,7 +183,7 @@ fn save_and_load_round_trip_complex() {
 
     // Kit instrument: pads, steps, and chopper state
     if let Some(inst) = instruments.instrument_mut(kit_id) {
-        if let Some(seq) = inst.drum_sequencer.as_mut() {
+        if let Some(seq) = inst.drum_sequencer_mut() {
             seq.pads[0].buffer_id = Some(123);
             seq.pads[0].path = Some("/tmp/kick.wav".to_string());
             seq.pads[0].name = "Kick".to_string();
@@ -304,7 +304,7 @@ fn save_and_load_round_trip_complex() {
         .find(|i| i.id == sampler_id)
         .unwrap();
     assert!(matches!(loaded_sampler.source, SourceType::PitchedSampler));
-    let config = loaded_sampler.sampler_config.as_ref().unwrap();
+    let config = loaded_sampler.sampler_config().unwrap();
     assert_eq!(config.buffer_id, Some(77));
     assert_eq!(config.sample_name.as_deref(), Some("kick.wav"));
     assert!(config.loop_mode);
@@ -320,7 +320,7 @@ fn save_and_load_round_trip_complex() {
         .iter()
         .find(|i| i.id == kit_id)
         .unwrap();
-    let seq = loaded_kit.drum_sequencer.as_ref().unwrap();
+    let seq = loaded_kit.drum_sequencer().unwrap();
     assert_eq!(seq.pads[0].buffer_id, Some(123));
     assert_eq!(seq.pads[0].name, "Kick");
     assert!((seq.pads[0].level - 0.9).abs() < 0.001);

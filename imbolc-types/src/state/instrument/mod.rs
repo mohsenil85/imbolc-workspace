@@ -21,6 +21,41 @@ use super::groove::GrooveConfig;
 use super::sampler::SamplerConfig;
 use crate::{BusId, EffectId, InstrumentId, Param, ParamIndex};
 
+/// Source-type-specific configuration, enforcing mutual exclusivity at compile time.
+/// Replaces the old `sampler_config`, `drum_sequencer`, `vst_param_values`, `vst_state_path` fields.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SourceExtra {
+    None,
+    Sampler(SamplerConfig),
+    Kit(DrumSequencerState),
+    Vst {
+        param_values: Vec<(u32, f32)>,
+        state_path: Option<PathBuf>,
+    },
+}
+
+impl Default for SourceExtra {
+    fn default() -> Self {
+        SourceExtra::None
+    }
+}
+
+/// LFO + amp envelope configuration, always co-accessed and co-updated.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModulationConfig {
+    pub lfo: LfoConfig,
+    pub amp_envelope: EnvConfig,
+}
+
+impl Default for ModulationConfig {
+    fn default() -> Self {
+        Self {
+            lfo: LfoConfig::default(),
+            amp_envelope: EnvConfig::default(),
+        }
+    }
+}
+
 /// Arpeggiator and chord-shape configuration for an instrument.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NoteInputConfig {
@@ -447,19 +482,13 @@ pub struct Instrument {
     pub source_params: Vec<Param>,
     #[serde(default)]
     pub processing_chain: Vec<ProcessingStage>,
-    pub lfo: LfoConfig,
-    pub amp_envelope: EnvConfig,
+    /// LFO + amp envelope
+    pub modulation: ModulationConfig,
     pub polyphonic: bool,
     /// Mixer: level, pan, mute, solo, routing, sends
     pub mixer: InstrumentMixer,
-    // Sample configuration (only used when source is SourceType::PitchedSampler)
-    pub sampler_config: Option<SamplerConfig>,
-    // Kit sequencer (only used when source is SourceType::Kit)
-    pub drum_sequencer: Option<DrumSequencerState>,
-    // Per-instance VST parameter values: (param_index, normalized_value)
-    pub vst_param_values: Vec<(u32, f32)>,
-    // Path to saved VST plugin state file (.fxp)
-    pub vst_state_path: Option<PathBuf>,
+    /// Source-type-specific config (sampler, kit sequencer, or VST params)
+    pub source_extra: SourceExtra,
     /// Arpeggiator and chord input configuration
     pub note_input: NoteInputConfig,
     /// Path to loaded impulse response file for convolution reverb
@@ -474,17 +503,14 @@ pub struct Instrument {
 
 impl Instrument {
     pub fn new(id: InstrumentId, source: SourceType) -> Self {
-        // Sample instruments get a sampler config
-        let sampler_config = if source.is_sample() || source.is_time_stretch() {
-            Some(SamplerConfig::default())
+        let source_extra = if source.is_sample() || source.is_time_stretch() {
+            SourceExtra::Sampler(SamplerConfig::default())
+        } else if source.is_kit() {
+            SourceExtra::Kit(DrumSequencerState::new())
+        } else if source.is_vst() {
+            SourceExtra::Vst { param_values: Vec::new(), state_path: None }
         } else {
-            None
-        };
-        // Kit instruments get a drum sequencer
-        let drum_sequencer = if source.is_kit() {
-            Some(DrumSequencerState::new())
-        } else {
-            None
+            SourceExtra::None
         };
         Self {
             id,
@@ -492,14 +518,13 @@ impl Instrument {
             source,
             source_params: source.default_params(),
             processing_chain: Vec::new(),
-            lfo: LfoConfig::default(),
-            amp_envelope: source.default_envelope(),
+            modulation: ModulationConfig {
+                lfo: LfoConfig::default(),
+                amp_envelope: source.default_envelope(),
+            },
             polyphonic: true,
             mixer: InstrumentMixer::new(!source.is_audio_input()),
-            sampler_config,
-            drum_sequencer,
-            vst_param_values: Vec::new(),
-            vst_state_path: None,
+            source_extra,
             note_input: NoteInputConfig::default(),
             convolution_ir_path: None,
             layer: LayerConfig::default(),
@@ -749,47 +774,52 @@ impl Instrument {
     // --- Source-type-gated accessors ---
 
     pub fn sampler_config(&self) -> Option<&SamplerConfig> {
-        if self.source.is_sample() || self.source.is_time_stretch() {
-            self.sampler_config.as_ref()
-        } else {
-            None
+        match &self.source_extra {
+            SourceExtra::Sampler(config) => Some(config),
+            _ => None,
         }
     }
 
     pub fn sampler_config_mut(&mut self) -> Option<&mut SamplerConfig> {
-        if self.source.is_sample() || self.source.is_time_stretch() {
-            self.sampler_config.as_mut()
-        } else {
-            None
+        match &mut self.source_extra {
+            SourceExtra::Sampler(config) => Some(config),
+            _ => None,
         }
     }
 
     pub fn drum_sequencer(&self) -> Option<&DrumSequencerState> {
-        if self.source.is_kit() {
-            self.drum_sequencer.as_ref()
-        } else {
-            None
+        match &self.source_extra {
+            SourceExtra::Kit(seq) => Some(seq),
+            _ => None,
         }
     }
 
     pub fn drum_sequencer_mut(&mut self) -> Option<&mut DrumSequencerState> {
-        if self.source.is_kit() {
-            self.drum_sequencer.as_mut()
-        } else {
-            None
+        match &mut self.source_extra {
+            SourceExtra::Kit(seq) => Some(seq),
+            _ => None,
         }
     }
 
     pub fn vst_source_params(&self) -> &[(u32, f32)] {
-        if self.source.is_vst() { &self.vst_param_values } else { &[] }
+        match &self.source_extra {
+            SourceExtra::Vst { param_values, .. } => param_values,
+            _ => &[],
+        }
     }
 
     pub fn vst_source_params_mut(&mut self) -> Option<&mut Vec<(u32, f32)>> {
-        if self.source.is_vst() { Some(&mut self.vst_param_values) } else { None }
+        match &mut self.source_extra {
+            SourceExtra::Vst { param_values, .. } => Some(param_values),
+            _ => None,
+        }
     }
 
     pub fn vst_source_state_path(&self) -> Option<&PathBuf> {
-        if self.source.is_vst() { self.vst_state_path.as_ref() } else { None }
+        match &self.source_extra {
+            SourceExtra::Vst { state_path, .. } => state_path.as_ref(),
+            _ => None,
+        }
     }
 
     pub fn has_convolution_reverb(&self) -> bool {
@@ -924,7 +954,7 @@ mod tests {
     #[test]
     fn timestretch_has_sampler_config_and_correct_params() {
         let inst = Instrument::new(InstrumentId::new(1), SourceType::TimeStretch);
-        assert!(inst.sampler_config.is_some());
+        assert!(inst.sampler_config().is_some());
         let param_names: Vec<&str> = inst.source_params.iter().map(|p| p.name.as_str()).collect();
         assert!(param_names.contains(&"stretch"));
         assert!(param_names.contains(&"pitch"));
@@ -1454,8 +1484,10 @@ mod tests {
     #[test]
     fn vst_source_params_returns_values_for_vst() {
         let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Vst(VstPluginId::new(0)));
-        inst.vst_param_values.push((0, 0.5));
-        inst.vst_param_values.push((1, 0.8));
+        if let SourceExtra::Vst { ref mut param_values, .. } = inst.source_extra {
+            param_values.push((0, 0.5));
+            param_values.push((1, 0.8));
+        }
         assert_eq!(inst.vst_source_params().len(), 2);
         assert_eq!(inst.vst_source_params()[0], (0, 0.5));
     }

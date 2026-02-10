@@ -22,21 +22,11 @@ instrument, session, and piano roll actions.
 
 ---
 
-## 3. `is_running()` guards silently swallow operations
+## ~~3. `is_running()` guards silently swallow operations~~ (FIXED)
 
-**Where:** Throughout `imbolc-core/src/dispatch/instrument/` —
-playback.rs, effects.rs, eq.rs, etc.
-
-Pattern:
-```rust
-if audio.is_running() {
-    // do the thing
-}
-// else: silently return DispatchResult::none()
-```
-
-User presses a key, nothing happens, no feedback. Should at minimum
-return a status message.
+**Fixed.** All `is_running()` guards converted from `if` to
+`if/else`, returning a status message ("Audio engine not running")
+when the engine is offline. No more silent swallowing.
 
 ---
 
@@ -49,7 +39,7 @@ and `next_effect_id` counter.
 
 ---
 
-## 5. Instrument god struct (28 → 18 fields, partial progress)
+## 5. Instrument god struct (28 → 18 fields, in progress with #13)
 
 **Where:** `Instrument` in `imbolc-types/src/state/instrument/mod.rs`
 
@@ -58,9 +48,9 @@ Down from 28 to 18 fields after three extractions:
 - **`LayerConfig`** — group assignment, octave
 - **`NoteInputConfig`** — arpeggiator, chord shape
 
-Remaining fields are a mix of source-type-specific `Option<T>`s (see
-#13) and core identity/state (name, source, effects, etc.). 18 fields
-is reasonable for now — the worst friction has been addressed.
+**In progress:** Closing together with #13 — source-type-specific
+`Option<T>` fields will move into a `SourceConfig` enum, further
+reducing the field count and eliminating the runtime invariant.
 
 ---
 
@@ -142,7 +132,7 @@ level. Custom serde deserializer handles migration from old Vec format.
 
 ---
 
-## 13. `Option<T>` fields on Instrument that depend on SourceType
+## 13. `Option<T>` fields on Instrument that depend on SourceType (in progress with #5)
 
 **Where:** `Instrument` in `imbolc-types/src/state/instrument/mod.rs`
 
@@ -152,14 +142,9 @@ pub drum_sequencer: Option<DrumSequencerState>, // only if SourceType is Kit
 pub convolution_ir_path: Option<String>,        // only if ConvolutionReverb effect present
 ```
 
-Nothing stops you from accessing `instrument.sampler_config` on a Saw
-oscillator. The relationship between `source` and which `Option<T>`
-fields are `Some` is a runtime invariant.
-
-Full typestate (separate struct per source type) would be
-high-churn. A lighter fix: accessor methods that return `Option` only
-when the source type matches, making the intent explicit and
-centralizing the check.
+**In progress:** Closing together with #5 — these `Option<T>` fields
+will move into a `SourceConfig` enum that makes the source-type
+relationship a compile-time invariant instead of a runtime one.
 
 ---
 
@@ -176,7 +161,6 @@ centralizing the check.
 | 11 | ~~Raw u8 bus IDs~~ | ~~**Medium**~~ FIXED | — |
 | 12 | ~~Sends/buses BTreeMap~~ | ~~**Medium**~~ FIXED | — |
 | 8 | ~~Raw usize param index~~ | ~~**Low**~~ FIXED | — |
-| 3 | Silent `is_running()` | **Low** (UX annoyance) | Small |
+| 3 | ~~Silent `is_running()`~~ | ~~**Low**~~ FIXED | — |
 | 4 | ~~Effect chain duplication~~ | ~~**Low**~~ FIXED | — |
-| 13 | Option fields vs SourceType | **Low** (wrong access) | Large |
-| 5 | Instrument god struct (28→18 fields) | **Low** (scaling friction) | Partial (3 extractions done) |
+| 5+13 | Instrument god struct + Option vs SourceType | **Low** | In progress |

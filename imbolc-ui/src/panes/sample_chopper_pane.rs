@@ -27,7 +27,7 @@ impl SampleChopperPane {
 
     fn selected_drum_sequencer<'a>(&self, state: &'a AppState) -> Option<&'a crate::state::drum_sequencer::DrumSequencerState> {
         state.instruments.selected_instrument()
-            .and_then(|i| i.drum_sequencer.as_ref())
+            .and_then(|i| i.drum_sequencer())
     }
 
     fn get_chopper_state<'a>(&self, state: &'a AppState) -> Option<&'a crate::state::drum_sequencer::ChopperState> {
@@ -252,7 +252,7 @@ impl Pane for SampleChopperPane {
 
             // Check pad assignments
             if let Some(inst) = state.instruments.selected_instrument() {
-                if let Some(ds) = &inst.drum_sequencer {
+                if let Some(ds) = inst.drum_sequencer() {
                     for (pad_idx, pad) in ds.pads.iter().enumerate() {
                         if pad.buffer_id == chopper.buffer_id &&
                            (pad.slice_start - slice.start).abs() < 0.001 &&

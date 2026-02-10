@@ -16,7 +16,7 @@ use imbolc_types::{
     BusAction, EqParamKind, LayerGroupAction, VstParamAction, SessionAction, ClickAction, VstTarget,
     InstrumentId, BusId, MixerSelection, FilterType, OutputTarget,
 };
-use imbolc_types::{Instrument, MixerSend};
+use imbolc_types::{Instrument, MixerSend, SourceExtra};
 use imbolc_types::Note;
 use imbolc_types::{InstrumentState, SessionState, SourceType, EffectType};
 
@@ -139,8 +139,8 @@ fn project_instrument(
                 instrument.source = update.source.clone();
                 instrument.source_params = update.source_params.clone();
                 instrument.processing_chain = update.processing_chain.clone();
-                instrument.lfo = update.lfo.clone();
-                instrument.amp_envelope = update.amp_envelope.clone();
+                instrument.modulation.lfo = update.lfo.clone();
+                instrument.modulation.amp_envelope = update.amp_envelope.clone();
                 instrument.polyphonic = update.polyphonic;
                 instrument.mixer.active = update.active;
             }
@@ -281,7 +281,7 @@ fn project_instrument(
             let sample_name = path.file_stem()
                 .map(|s| s.to_string_lossy().to_string());
             if let Some(instrument) = instruments.instrument_mut(*instrument_id) {
-                if let Some(ref mut config) = instrument.sampler_config {
+                if let Some(config) = instrument.sampler_config_mut() {
                     config.buffer_id = Some(buffer_id);
                     config.sample_name = sample_name;
                 }
@@ -477,59 +477,59 @@ fn project_instrument(
         // LFO actions
         InstrumentAction::ToggleLfo(id) => {
             if let Some(inst) = instruments.instrument_mut(*id) {
-                inst.lfo.enabled = !inst.lfo.enabled;
+                inst.modulation.lfo.enabled = !inst.modulation.lfo.enabled;
             }
             true
         }
         InstrumentAction::AdjustLfoRate(id, delta) => {
             if let Some(inst) = instruments.instrument_mut(*id) {
-                inst.lfo.rate = (inst.lfo.rate + delta * 0.5).clamp(0.1, 20.0);
+                inst.modulation.lfo.rate = (inst.modulation.lfo.rate + delta * 0.5).clamp(0.1, 20.0);
             }
             true
         }
         InstrumentAction::AdjustLfoDepth(id, delta) => {
             if let Some(inst) = instruments.instrument_mut(*id) {
-                inst.lfo.depth = (inst.lfo.depth + delta * 0.05).clamp(0.0, 1.0);
+                inst.modulation.lfo.depth = (inst.modulation.lfo.depth + delta * 0.05).clamp(0.0, 1.0);
             }
             true
         }
         InstrumentAction::SetLfoShape(id, shape) => {
             if let Some(inst) = instruments.instrument_mut(*id) {
-                inst.lfo.shape = *shape;
+                inst.modulation.lfo.shape = *shape;
             }
             true
         }
         InstrumentAction::SetLfoTarget(id, target) => {
             if let Some(inst) = instruments.instrument_mut(*id) {
-                inst.lfo.target = target.clone();
+                inst.modulation.lfo.target = target.clone();
             }
             true
         }
         // Envelope actions
         InstrumentAction::AdjustEnvelopeAttack(id, delta) => {
             if let Some(inst) = instruments.instrument_mut(*id) {
-                inst.amp_envelope.attack = (inst.amp_envelope.attack + delta * 0.1)
+                inst.modulation.amp_envelope.attack = (inst.modulation.amp_envelope.attack + delta * 0.1)
                     .clamp(0.001, 2.0);
             }
             true
         }
         InstrumentAction::AdjustEnvelopeDecay(id, delta) => {
             if let Some(inst) = instruments.instrument_mut(*id) {
-                inst.amp_envelope.decay = (inst.amp_envelope.decay + delta * 0.1)
+                inst.modulation.amp_envelope.decay = (inst.modulation.amp_envelope.decay + delta * 0.1)
                     .clamp(0.001, 2.0);
             }
             true
         }
         InstrumentAction::AdjustEnvelopeSustain(id, delta) => {
             if let Some(inst) = instruments.instrument_mut(*id) {
-                inst.amp_envelope.sustain = (inst.amp_envelope.sustain + delta * 0.05)
+                inst.modulation.amp_envelope.sustain = (inst.modulation.amp_envelope.sustain + delta * 0.05)
                     .clamp(0.0, 1.0);
             }
             true
         }
         InstrumentAction::AdjustEnvelopeRelease(id, delta) => {
             if let Some(inst) = instruments.instrument_mut(*id) {
-                inst.amp_envelope.release = (inst.amp_envelope.release + delta * 0.2)
+                inst.modulation.amp_envelope.release = (inst.modulation.amp_envelope.release + delta * 0.2)
                     .clamp(0.001, 5.0);
             }
             true
@@ -1366,7 +1366,10 @@ fn get_vst_plugin_id(instrument: &Instrument, target: VstTarget) -> Option<imbol
 /// Get mutable param values for a given VST target
 fn get_param_values_mut(instrument: &mut Instrument, target: VstTarget) -> Option<&mut Vec<(u32, f32)>> {
     match target {
-        VstTarget::Source => Some(&mut instrument.vst_param_values),
+        VstTarget::Source => match &mut instrument.source_extra {
+            SourceExtra::Vst { ref mut param_values, .. } => Some(param_values),
+            _ => None,
+        },
         VstTarget::Effect(effect_id) => {
             instrument.effect_by_id_mut(effect_id)
                 .map(|e| &mut e.vst_param_values)
@@ -1398,7 +1401,7 @@ fn project_vst_param(
             let current = instruments.instrument(*instrument_id)
                 .map(|inst| {
                     let values = match *target {
-                        VstTarget::Source => inst.vst_param_values.as_slice(),
+                        VstTarget::Source => inst.vst_source_params(),
                         VstTarget::Effect(effect_id) => {
                             inst.effect_by_id(effect_id)
                                 .map(|e| e.vst_param_values.as_slice())

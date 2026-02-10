@@ -603,8 +603,10 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
                              let vst_restores: Vec<_> = dispatcher.state().instruments.instruments.iter()
                                  .flat_map(|inst| {
                                      let mut restores = Vec::new();
-                                     if let (state::SourceType::Vst(_), Some(ref path)) = (&inst.source, &inst.vst_state_path) {
-                                         restores.push((inst.id, action::VstTarget::Source, path.clone()));
+                                     if inst.source.is_vst() {
+                                         if let Some(path) = inst.vst_source_state_path() {
+                                             restores.push((inst.id, action::VstTarget::Source, path.clone()));
+                                         }
                                      }
                                      for effect in inst.effects() {
                                          if let (state::EffectType::Vst(_), Some(ref path)) = (&effect.effect_type, &effect.vst_state_path) {

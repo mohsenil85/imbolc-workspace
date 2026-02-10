@@ -50,7 +50,7 @@ impl InstrumentPickerPane {
                     return false;
                 }
                 // Exclude Kit instruments (can't trigger a Kit from another Kit)
-                if i.drum_sequencer.is_some() {
+                if i.drum_sequencer().is_some() {
                     return false;
                 }
                 // Exclude audio inputs and bus inputs

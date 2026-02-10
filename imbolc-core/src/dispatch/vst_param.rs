@@ -5,6 +5,7 @@ use crate::state::AppState;
 use crate::state::automation::AutomationTarget;
 use crate::action::{DispatchResult, VstParamAction, VstTarget};
 use crate::state::instrument::Instrument;
+use imbolc_types::SourceExtra;
 use crate::state::vst_plugin::VstPluginId;
 use crate::dispatch::automation::record_automation_point;
 use crate::dispatch::side_effects::AudioSideEffect;
@@ -60,7 +61,7 @@ fn get_vst_plugin_id(instrument: &Instrument, target: VstTarget) -> Option<VstPl
 /// Get param values slice for a given target
 fn get_param_values(instrument: &Instrument, target: VstTarget) -> &[(u32, f32)] {
     match target {
-        VstTarget::Source => &instrument.vst_param_values,
+        VstTarget::Source => instrument.vst_source_params(),
         VstTarget::Effect(effect_id) => {
             instrument.effect_by_id(effect_id)
                 .map(|e| e.vst_param_values.as_slice())
@@ -72,7 +73,7 @@ fn get_param_values(instrument: &Instrument, target: VstTarget) -> &[(u32, f32)]
 /// Get mutable param values for a given target
 fn get_param_values_mut(instrument: &mut Instrument, target: VstTarget) -> Option<&mut Vec<(u32, f32)>> {
     match target {
-        VstTarget::Source => Some(&mut instrument.vst_param_values),
+        VstTarget::Source => instrument.vst_source_params_mut(),
         VstTarget::Effect(effect_id) => {
             instrument.effect_by_id_mut(effect_id)
                 .map(|e| &mut e.vst_param_values)
@@ -219,7 +220,9 @@ pub(super) fn dispatch_vst_param(
                 if let Some(instrument) = state.instruments.instrument_mut(*instrument_id) {
                     match *target {
                         VstTarget::Source => {
-                            instrument.vst_state_path = Some(path.clone());
+                            if let SourceExtra::Vst { ref mut state_path, .. } = instrument.source_extra {
+                                *state_path = Some(path.clone());
+                            }
                         }
                         VstTarget::Effect(effect_id) => {
                             if let Some(effect) = instrument.effect_by_id_mut(effect_id) {
@@ -311,7 +314,7 @@ mod tests {
 
         // State should be updated even without recording
         let inst = state.instruments.instrument(id).unwrap();
-        let val = inst.vst_param_values.iter().find(|(idx, _)| *idx == 0);
+        let val = inst.vst_source_params().iter().find(|(idx, _)| *idx == 0);
         assert!(val.is_some());
         assert!((val.unwrap().1 - 0.7).abs() < f32::EPSILON);
     }

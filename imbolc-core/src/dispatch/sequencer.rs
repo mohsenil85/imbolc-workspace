@@ -721,7 +721,7 @@ pub(super) fn dispatch_chopper(
         }
         ChopperAction::PreviewSlice => {
             if let Some(instrument) = state.instruments.selected_instrument() {
-                if let Some(seq) = &instrument.drum_sequencer {
+                if let Some(seq) = instrument.drum_sequencer() {
                     if let Some(chopper) = &seq.chopper {
                         if let Some(slice) = chopper.slices.get(chopper.selected_slice) {
                             if let Some(buffer_id) = chopper.buffer_id {

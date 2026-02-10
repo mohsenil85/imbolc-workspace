@@ -192,7 +192,7 @@ fn save_instruments(conn: &Connection, instruments: &InstrumentState) -> SqlResu
 
         let chord_shape = inst.note_input.chord_shape.as_ref().map(|cs| format!("{:?}", cs));
 
-        let vst_state = inst.vst_state_path.as_ref().map(|p| p.to_string_lossy().to_string());
+        let vst_state = inst.vst_source_state_path().map(|p| p.to_string_lossy().to_string());
 
         let groove = &inst.groove;
         let groove_time_sig_num = groove.time_signature.map(|(n, _)| n as i32);
@@ -208,15 +208,15 @@ fn save_instruments(conn: &Connection, instruments: &InstrumentState) -> SqlResu
             filter_cutoff, filter_cutoff_min, filter_cutoff_max,
             filter_resonance, filter_resonance_min, filter_resonance_max,
             filter_enabled,
-            inst.lfo.enabled as i32,
-            inst.lfo.rate,
-            inst.lfo.depth,
-            format!("{:?}", inst.lfo.shape),
-            encode_parameter_target(&inst.lfo.target),
-            inst.amp_envelope.attack,
-            inst.amp_envelope.decay,
-            inst.amp_envelope.sustain,
-            inst.amp_envelope.release,
+            inst.modulation.lfo.enabled as i32,
+            inst.modulation.lfo.rate,
+            inst.modulation.lfo.depth,
+            format!("{:?}", inst.modulation.lfo.shape),
+            encode_parameter_target(&inst.modulation.lfo.target),
+            inst.modulation.amp_envelope.attack,
+            inst.modulation.amp_envelope.decay,
+            inst.modulation.amp_envelope.sustain,
+            inst.modulation.amp_envelope.release,
             inst.polyphonic as i32,
             inst.mixer.level,
             inst.mixer.pan,
@@ -289,7 +289,7 @@ fn save_instruments(conn: &Connection, instruments: &InstrumentState) -> SqlResu
         save_processing_chain(conn, inst.id.get(), &inst.processing_chain)?;
 
         // VST param values
-        for (param_idx, value) in &inst.vst_param_values {
+        for (param_idx, value) in inst.vst_source_params() {
             conn.execute(
                 "INSERT INTO instrument_vst_params (instrument_id, param_index, value)
                  VALUES (?1, ?2, ?3)",
@@ -298,12 +298,12 @@ fn save_instruments(conn: &Connection, instruments: &InstrumentState) -> SqlResu
         }
 
         // Sampler config
-        if let Some(ref config) = inst.sampler_config {
+        if let Some(config) = inst.sampler_config() {
             save_sampler_config(conn, inst.id.get(), config)?;
         }
 
         // Drum sequencer
-        if let Some(ref seq) = inst.drum_sequencer {
+        if let Some(seq) = inst.drum_sequencer() {
             save_drum_sequencer(conn, inst.id.get(), seq)?;
         }
     }

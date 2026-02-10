@@ -545,7 +545,7 @@ pub(crate) fn handle_global_action(
 
                 // Unify: toggle all drum sequencers
                 for inst in &mut dispatcher.state_mut().instruments.instruments {
-                    if let Some(seq) = &mut inst.drum_sequencer {
+                    if let Some(seq) = inst.drum_sequencer_mut() {
                         seq.playing = playing;
                         if !playing {
                             seq.current_step = 0;

@@ -10,7 +10,7 @@ const LFO_RATE_MAX: f32 = 20.0;
 
 pub(super) fn handle_toggle_lfo(state: &mut AppState, id: InstrumentId) -> DispatchResult {
     if let Some(instrument) = state.instruments.instrument_mut(id) {
-        instrument.lfo.enabled = !instrument.lfo.enabled;
+        instrument.modulation.lfo.enabled = !instrument.modulation.lfo.enabled;
     }
     let mut result = DispatchResult::none();
     result.audio_dirty.instruments = true;
@@ -28,11 +28,11 @@ pub(super) fn handle_adjust_lfo_rate(
     let mut new_rate: Option<f32> = None;
 
     if let Some(instrument) = state.instruments.instrument_mut(id) {
-        let old_rate = instrument.lfo.rate;
-        instrument.lfo.rate = (old_rate + delta * 0.5).clamp(LFO_RATE_MIN, LFO_RATE_MAX);
-        new_rate = Some(instrument.lfo.rate);
+        let old_rate = instrument.modulation.lfo.rate;
+        instrument.modulation.lfo.rate = (old_rate + delta * 0.5).clamp(LFO_RATE_MIN, LFO_RATE_MAX);
+        new_rate = Some(instrument.modulation.lfo.rate);
 
-        let normalized = (instrument.lfo.rate - LFO_RATE_MIN) / (LFO_RATE_MAX - LFO_RATE_MIN);
+        let normalized = (instrument.modulation.lfo.rate - LFO_RATE_MIN) / (LFO_RATE_MAX - LFO_RATE_MIN);
         automation_data = Some((instrument.id, normalized));
     }
 
@@ -58,9 +58,9 @@ pub(super) fn handle_adjust_lfo_depth(
     let mut new_depth: Option<f32> = None;
 
     if let Some(instrument) = state.instruments.instrument_mut(id) {
-        instrument.lfo.depth = (instrument.lfo.depth + delta * 0.05).clamp(0.0, 1.0);
-        new_depth = Some(instrument.lfo.depth);
-        automation_data = Some((instrument.id, instrument.lfo.depth));
+        instrument.modulation.lfo.depth = (instrument.modulation.lfo.depth + delta * 0.05).clamp(0.0, 1.0);
+        new_depth = Some(instrument.modulation.lfo.depth);
+        automation_data = Some((instrument.id, instrument.modulation.lfo.depth));
     }
 
     if let Some((inst_id, depth)) = automation_data {
@@ -81,7 +81,7 @@ pub(super) fn handle_set_lfo_shape(
     shape: LfoShape,
 ) -> DispatchResult {
     if let Some(instrument) = state.instruments.instrument_mut(id) {
-        instrument.lfo.shape = shape;
+        instrument.modulation.lfo.shape = shape;
     }
     let mut result = DispatchResult::none();
     result.audio_dirty.instruments = true;
@@ -95,7 +95,7 @@ pub(super) fn handle_set_lfo_target(
     target: ParameterTarget,
 ) -> DispatchResult {
     if let Some(instrument) = state.instruments.instrument_mut(id) {
-        instrument.lfo.target = target;
+        instrument.modulation.lfo.target = target;
     }
     let mut result = DispatchResult::none();
     result.audio_dirty.instruments = true;

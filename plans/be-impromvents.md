@@ -976,3 +976,4 @@ Phase I (Node Registry) ←── independent, benefits from Phase B
 7. **I** (node registry: robustness)
 8. **D** (targeted diffs: optimization)
 9. **G2** (triple-buffer: only if profiling demands it)
+   

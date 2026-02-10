@@ -22,7 +22,7 @@ pub(super) fn handle_load_sample_result(
     }
 
     if let Some(instrument) = state.instruments.instrument_mut(instrument_id) {
-        if let Some(ref mut config) = instrument.sampler_config {
+        if let Some(ref mut config) = instrument.sampler_config_mut() {
             config.buffer_id = Some(buffer_id);
             config.sample_name = sample_name;
         }

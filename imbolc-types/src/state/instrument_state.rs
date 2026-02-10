@@ -161,13 +161,13 @@ impl InstrumentState {
 
     pub fn selected_drum_sequencer(&self) -> Option<&DrumSequencerState> {
         self.selected_instrument()
-            .and_then(|s| s.drum_sequencer.as_ref())
+            .and_then(|s| s.drum_sequencer())
     }
 
     pub fn selected_drum_sequencer_mut(&mut self) -> Option<&mut DrumSequencerState> {
         self.selected
             .and_then(|idx| self.instruments.get_mut(idx))
-            .and_then(|s| s.drum_sequencer.as_mut())
+            .and_then(|s| s.drum_sequencer_mut())
     }
 
     /// Allocate a new unique layer group ID

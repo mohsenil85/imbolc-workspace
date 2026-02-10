@@ -26,8 +26,8 @@ pub(super) fn handle_adjust_envelope_attack(
         0.1,
         ATTACK_MIN,
         ATTACK_MAX,
-        |inst| inst.amp_envelope.attack,
-        |inst, v| inst.amp_envelope.attack = v,
+        |inst| inst.modulation.amp_envelope.attack,
+        |inst, v| inst.modulation.amp_envelope.attack = v,
         AutomationTarget::attack,
         |v| (v - ATTACK_MIN) / (ATTACK_MAX - ATTACK_MIN),
     )
@@ -45,8 +45,8 @@ pub(super) fn handle_adjust_envelope_decay(
         0.1,
         DECAY_MIN,
         DECAY_MAX,
-        |inst| inst.amp_envelope.decay,
-        |inst, v| inst.amp_envelope.decay = v,
+        |inst| inst.modulation.amp_envelope.decay,
+        |inst, v| inst.modulation.amp_envelope.decay = v,
         AutomationTarget::decay,
         |v| (v - DECAY_MIN) / (DECAY_MAX - DECAY_MIN),
     )
@@ -64,8 +64,8 @@ pub(super) fn handle_adjust_envelope_sustain(
         0.05,
         SUSTAIN_MIN,
         SUSTAIN_MAX,
-        |inst| inst.amp_envelope.sustain,
-        |inst, v| inst.amp_envelope.sustain = v,
+        |inst| inst.modulation.amp_envelope.sustain,
+        |inst, v| inst.modulation.amp_envelope.sustain = v,
         AutomationTarget::sustain,
         |v| v, // Already 0-1 range
     )
@@ -83,8 +83,8 @@ pub(super) fn handle_adjust_envelope_release(
         0.2,
         RELEASE_MIN,
         RELEASE_MAX,
-        |inst| inst.amp_envelope.release,
-        |inst, v| inst.amp_envelope.release = v,
+        |inst| inst.modulation.amp_envelope.release,
+        |inst, v| inst.modulation.amp_envelope.release = v,
         AutomationTarget::release,
         |v| (v - RELEASE_MIN) / (RELEASE_MAX - RELEASE_MIN),
     )

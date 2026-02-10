@@ -25,7 +25,7 @@ pub(super) fn handle_delete(
     // Collect buffer IDs from the instrument before removing it
     let mut buffer_ids: Vec<BufferId> = Vec::new();
     if let Some(inst) = state.instruments.instrument(inst_id) {
-        if let Some(seq) = &inst.drum_sequencer {
+        if let Some(seq) = inst.drum_sequencer() {
             for pad in &seq.pads {
                 if let Some(id) = pad.buffer_id {
                     buffer_ids.push(id);
@@ -37,7 +37,7 @@ pub(super) fn handle_delete(
                 }
             }
         }
-        if let Some(sampler) = &inst.sampler_config {
+        if let Some(sampler) = inst.sampler_config() {
             if let Some(id) = sampler.buffer_id {
                 buffer_ids.push(id);
             }
@@ -75,9 +75,9 @@ pub(super) fn handle_update(
     // Capture old values for automation recording before applying
     let old_values = if state.recording.automation_recording && state.audio.playing {
         state.instruments.instrument(update.id).map(|inst| {
-            (inst.lfo.rate, inst.lfo.depth,
-             inst.amp_envelope.attack, inst.amp_envelope.decay,
-             inst.amp_envelope.sustain, inst.amp_envelope.release)
+            (inst.modulation.lfo.rate, inst.modulation.lfo.depth,
+             inst.modulation.amp_envelope.attack, inst.modulation.amp_envelope.decay,
+             inst.modulation.amp_envelope.sustain, inst.modulation.amp_envelope.release)
         })
     } else {
         None
@@ -87,8 +87,8 @@ pub(super) fn handle_update(
         instrument.source = update.source.clone();
         instrument.source_params = update.source_params.clone();
         instrument.processing_chain = update.processing_chain.clone();
-        instrument.lfo = update.lfo.clone();
-        instrument.amp_envelope = update.amp_envelope.clone();
+        instrument.modulation.lfo = update.lfo.clone();
+        instrument.modulation.amp_envelope = update.amp_envelope.clone();
         instrument.polyphonic = update.polyphonic;
         instrument.mixer.active = update.active;
     }
@@ -149,8 +149,8 @@ mod tests {
             source: inst.source,
             source_params: inst.source_params.clone(),
             processing_chain: inst.processing_chain.clone(),
-            lfo: inst.lfo.clone(),
-            amp_envelope: inst.amp_envelope.clone(),
+            lfo: inst.modulation.lfo.clone(),
+            amp_envelope: inst.modulation.amp_envelope.clone(),
             polyphonic: inst.polyphonic,
             active: inst.mixer.active,
         }
@@ -164,8 +164,8 @@ mod tests {
         update.lfo.depth = 0.9;
         handle_update(&mut state, &update);
         let inst = state.instruments.instrument(id).unwrap();
-        assert!((inst.lfo.rate - 8.0).abs() < f32::EPSILON);
-        assert!((inst.lfo.depth - 0.9).abs() < f32::EPSILON);
+        assert!((inst.modulation.lfo.rate - 8.0).abs() < f32::EPSILON);
+        assert!((inst.modulation.lfo.depth - 0.9).abs() < f32::EPSILON);
     }
 
     #[test]
@@ -222,8 +222,8 @@ mod tests {
 
         // Values should still be applied
         let inst = state.instruments.instrument(id).unwrap();
-        assert!((inst.lfo.rate - 10.0).abs() < f32::EPSILON);
-        assert!((inst.amp_envelope.attack - 0.5).abs() < f32::EPSILON);
+        assert!((inst.modulation.lfo.rate - 10.0).abs() < f32::EPSILON);
+        assert!((inst.modulation.amp_envelope.attack - 0.5).abs() < f32::EPSILON);
 
         // But no automation lanes created
         assert!(state.session.automation.lane_for_target(&AutomationTarget::lfo_rate(id)).is_none());

@@ -67,10 +67,10 @@ impl InstrumentEditPane {
         self.instrument_name = instrument.name.clone();
         self.source = instrument.source;
         self.source_params = instrument.source_params.clone();
-        self.sample_name = instrument.sampler_config.as_ref().and_then(|c| c.sample_name.clone());
+        self.sample_name = instrument.sampler_config().and_then(|c| c.sample_name.clone());
         self.processing_chain = instrument.processing_chain.clone();
-        self.lfo = instrument.lfo.clone();
-        self.amp_envelope = instrument.amp_envelope.clone();
+        self.lfo = instrument.modulation.lfo.clone();
+        self.amp_envelope = instrument.modulation.amp_envelope.clone();
         self.polyphonic = instrument.polyphonic;
         self.active = instrument.mixer.active;
         self.channel_config = instrument.mixer.channel_config;
@@ -86,10 +86,10 @@ impl InstrumentEditPane {
         self.instrument_name = instrument.name.clone();
         self.source = instrument.source;
         self.source_params = instrument.source_params.clone();
-        self.sample_name = instrument.sampler_config.as_ref().and_then(|c| c.sample_name.clone());
+        self.sample_name = instrument.sampler_config().and_then(|c| c.sample_name.clone());
         self.processing_chain = instrument.processing_chain.clone();
-        self.lfo = instrument.lfo.clone();
-        self.amp_envelope = instrument.amp_envelope.clone();
+        self.lfo = instrument.modulation.lfo.clone();
+        self.amp_envelope = instrument.modulation.amp_envelope.clone();
         self.polyphonic = instrument.polyphonic;
         self.active = instrument.mixer.active;
         self.channel_config = instrument.mixer.channel_config;
@@ -142,8 +142,8 @@ impl InstrumentEditPane {
         instrument.source = self.source;
         instrument.source_params = self.source_params.clone();
         instrument.processing_chain = self.processing_chain.clone();
-        instrument.lfo = self.lfo.clone();
-        instrument.amp_envelope = self.amp_envelope.clone();
+        instrument.modulation.lfo = self.lfo.clone();
+        instrument.modulation.amp_envelope = self.amp_envelope.clone();
         instrument.polyphonic = self.polyphonic;
         instrument.mixer.active = self.active;
     }

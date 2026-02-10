@@ -412,7 +412,7 @@ mod tests {
         let inst_id = state.add_instrument(SourceType::AudioIn);
         if let Some(inst) = state.instruments.instrument_mut(inst_id) {
             inst.set_filter(Some(FilterType::Lpf));
-            inst.lfo.enabled = true;
+            inst.modulation.lfo.enabled = true;
             inst.add_effect(EffectType::Delay);
             inst.mixer.sends.insert(BusId::new(1), imbolc_types::MixerSend { bus_id: BusId::new(1), level: 0.5, enabled: true, tap_point: imbolc_types::SendTapPoint::default() });
         }
@@ -576,7 +576,7 @@ mod tests {
             .unwrap();
 
         // Verify envelope state was mutated
-        let env = &state.instruments.instrument(inst_id).unwrap().amp_envelope;
+        let env = &state.instruments.instrument(inst_id).unwrap().modulation.amp_envelope;
         assert!((env.attack - 0.05).abs() < f32::EPSILON);
         assert!((env.decay - 0.2).abs() < f32::EPSILON);
         assert!((env.sustain - 0.7).abs() < f32::EPSILON);
@@ -1008,10 +1008,10 @@ mod tests {
             let mut state = AppState::new();
             let inst_id = state.add_instrument(SourceType::AudioIn);
             if let Some(inst) = state.instruments.instrument_mut(inst_id) {
-                inst.lfo.enabled = true;
-                inst.lfo.target = imbolc_types::ParameterTarget::Pan;
-                inst.lfo.rate = 2.0;
-                inst.lfo.depth = 0.5;
+                inst.modulation.lfo.enabled = true;
+                inst.modulation.lfo.target = imbolc_types::ParameterTarget::Pan;
+                inst.modulation.lfo.rate = 2.0;
+                inst.modulation.lfo.depth = 0.5;
             }
             engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild routing");
             let nodes = engine.node_map.get(&inst_id).expect("nodes");

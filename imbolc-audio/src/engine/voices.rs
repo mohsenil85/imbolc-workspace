@@ -122,21 +122,21 @@ impl AudioEngine {
             args.push(RawArg::Float(voice_gate_bus as f32));
             // Amp envelope (ADSR)
             args.push(RawArg::Str("attack".to_string()));
-            args.push(RawArg::Float(instrument.amp_envelope.attack));
+            args.push(RawArg::Float(instrument.modulation.amp_envelope.attack));
             args.push(RawArg::Str("decay".to_string()));
-            args.push(RawArg::Float(instrument.amp_envelope.decay));
+            args.push(RawArg::Float(instrument.modulation.amp_envelope.decay));
             args.push(RawArg::Str("sustain".to_string()));
-            args.push(RawArg::Float(instrument.amp_envelope.sustain));
+            args.push(RawArg::Float(instrument.modulation.amp_envelope.sustain));
             args.push(RawArg::Str("release".to_string()));
-            args.push(RawArg::Float(instrument.amp_envelope.release));
+            args.push(RawArg::Float(instrument.modulation.amp_envelope.release));
             // Output to source_out_bus
             args.push(RawArg::Str("out".to_string()));
             args.push(RawArg::Float(source_out_bus as f32));
 
             // Wire LFO mod inputs based on target
-            if instrument.lfo.enabled {
+            if instrument.modulation.lfo.enabled {
                 if let Some(lfo_bus) = self.bus_allocator.get_control_bus(instrument_id, "lfo_out") {
-                    match instrument.lfo.target {
+                    match instrument.modulation.lfo.target {
                         ParameterTarget::Level => {
                             args.push(RawArg::Str("amp_mod_in".to_string()));
                             args.push(RawArg::Float(lfo_bus as f32));
@@ -268,7 +268,7 @@ impl AudioEngine {
         let instrument = state.instrument(instrument_id)
             .ok_or_else(|| format!("No instrument with id {}", instrument_id))?;
 
-        let sampler_config = instrument.sampler_config.as_ref()
+        let sampler_config = instrument.sampler_config()
             .ok_or("Sampler instrument has no sampler config")?;
 
         let buffer_id = sampler_config.buffer_id
@@ -423,22 +423,22 @@ impl AudioEngine {
 
             // Amp envelope (ADSR)
             args.push(RawArg::Str("attack".to_string()));
-            args.push(RawArg::Float(instrument.amp_envelope.attack));
+            args.push(RawArg::Float(instrument.modulation.amp_envelope.attack));
             args.push(RawArg::Str("decay".to_string()));
-            args.push(RawArg::Float(instrument.amp_envelope.decay));
+            args.push(RawArg::Float(instrument.modulation.amp_envelope.decay));
             args.push(RawArg::Str("sustain".to_string()));
-            args.push(RawArg::Float(instrument.amp_envelope.sustain));
+            args.push(RawArg::Float(instrument.modulation.amp_envelope.sustain));
             args.push(RawArg::Str("release".to_string()));
-            args.push(RawArg::Float(instrument.amp_envelope.release));
+            args.push(RawArg::Float(instrument.modulation.amp_envelope.release));
 
             // Output to source_out_bus
             args.push(RawArg::Str("out".to_string()));
             args.push(RawArg::Float(source_out_bus as f32));
 
             // Wire LFO mod inputs for sampler/timestretch voice
-            if instrument.lfo.enabled {
+            if instrument.modulation.lfo.enabled {
                 if let Some(lfo_bus) = self.bus_allocator.get_control_bus(instrument_id, "lfo_out") {
-                    match instrument.lfo.target {
+                    match instrument.modulation.lfo.target {
                         ParameterTarget::Level => {
                             args.push(RawArg::Str("amp_mod_in".to_string()));
                             args.push(RawArg::Float(lfo_bus as f32));
@@ -530,7 +530,7 @@ impl AudioEngine {
 
         // Find and mark an active voice as released via the allocator
         let release_time = state.instrument(instrument_id)
-            .map(|s| s.amp_envelope.release)
+            .map(|s| s.modulation.amp_envelope.release)
             .unwrap_or(1.0);
 
         if let Some(pos) = self.voice_allocator.mark_released(instrument_id, pitch, release_time) {
@@ -747,7 +747,7 @@ impl AudioEngine {
 
         // Sampler instruments need buffer - skip if none
         if (instrument.source.is_sample() || instrument.source.is_time_stretch())
-            && instrument.sampler_config.as_ref().and_then(|c| c.buffer_id).is_none()
+            && instrument.sampler_config().and_then(|c| c.buffer_id).is_none()
         {
             return Ok(());
         }
@@ -835,21 +835,21 @@ impl AudioEngine {
             args.push(RawArg::Float(voice_gate_bus as f32));
             // Amp envelope (ADSR)
             args.push(RawArg::Str("attack".to_string()));
-            args.push(RawArg::Float(instrument.amp_envelope.attack));
+            args.push(RawArg::Float(instrument.modulation.amp_envelope.attack));
             args.push(RawArg::Str("decay".to_string()));
-            args.push(RawArg::Float(instrument.amp_envelope.decay));
+            args.push(RawArg::Float(instrument.modulation.amp_envelope.decay));
             args.push(RawArg::Str("sustain".to_string()));
-            args.push(RawArg::Float(instrument.amp_envelope.sustain));
+            args.push(RawArg::Float(instrument.modulation.amp_envelope.sustain));
             args.push(RawArg::Str("release".to_string()));
-            args.push(RawArg::Float(instrument.amp_envelope.release));
+            args.push(RawArg::Float(instrument.modulation.amp_envelope.release));
             // Output to source_out_bus
             args.push(RawArg::Str("out".to_string()));
             args.push(RawArg::Float(source_out_bus as f32));
 
             // Wire LFO mod inputs if enabled
-            if instrument.lfo.enabled {
+            if instrument.modulation.lfo.enabled {
                 if let Some(lfo_bus) = self.bus_allocator.get_control_bus(target_instrument_id, "lfo_out") {
-                    match instrument.lfo.target {
+                    match instrument.modulation.lfo.target {
                         ParameterTarget::Level => {
                             args.push(RawArg::Str("amp_mod_in".to_string()));
                             args.push(RawArg::Float(lfo_bus as f32));
@@ -889,7 +889,7 @@ impl AudioEngine {
         )?;
 
         // 5. Schedule cleanup after envelope completes
-        let release_time = instrument.amp_envelope.release;
+        let release_time = instrument.modulation.amp_envelope.release;
         let cleanup_offset = release_offset + release_time as f64 + 0.5;
         self.queue_timed_bundle(
             vec![BackendMessage {

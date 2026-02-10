@@ -186,8 +186,8 @@ pub(super) fn load_instruments(conn: &Connection, instruments: &mut InstrumentSt
         // Create instrument with defaults, then override
         let mut inst = Instrument::new(imbolc_types::InstrumentId::new(r.id), source);
         inst.name = r.name;
-        inst.lfo = lfo;
-        inst.amp_envelope = amp_envelope;
+        inst.modulation.lfo = lfo;
+        inst.modulation.amp_envelope = amp_envelope;
         inst.polyphonic = r.polyphonic != 0;
         inst.mixer.level = r.level;
         inst.mixer.pan = r.pan;
@@ -201,7 +201,9 @@ pub(super) fn load_instruments(conn: &Connection, instruments: &mut InstrumentSt
         inst.next_effect_id = imbolc_types::EffectId::new(r.next_effect_id);
         inst.note_input.arpeggiator = arpeggiator;
         inst.note_input.chord_shape = chord_shape;
-        inst.vst_state_path = r.vst_state_path.map(PathBuf::from);
+        if let SourceExtra::Vst { ref mut state_path, .. } = inst.source_extra {
+            *state_path = r.vst_state_path.map(PathBuf::from);
+        }
         inst.groove = groove;
 
         // Layer octave offset (backward compat: column may not exist in old databases)
@@ -285,13 +287,19 @@ pub(super) fn load_instruments(conn: &Connection, instruments: &mut InstrumentSt
         inst.mixer.sends = load_sends(conn, r.id)?;
 
         // VST param values
-        inst.vst_param_values = load_vst_param_values(conn, r.id)?;
+        if let SourceExtra::Vst { ref mut param_values, .. } = inst.source_extra {
+            *param_values = load_vst_param_values(conn, r.id)?;
+        }
 
         // Sampler config
-        inst.sampler_config = load_sampler_config(conn, r.id)?;
+        if let Some(config) = load_sampler_config(conn, r.id)? {
+            inst.source_extra = SourceExtra::Sampler(config);
+        }
 
         // Drum sequencer
-        inst.drum_sequencer = load_drum_sequencer(conn, r.id)?;
+        if let Some(seq) = load_drum_sequencer(conn, r.id)? {
+            inst.source_extra = SourceExtra::Kit(seq);
+        }
 
         instruments.instruments.push(inst);
     }

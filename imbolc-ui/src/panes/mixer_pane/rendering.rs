@@ -456,7 +456,7 @@ impl MixerPane {
         Self::write_str(buf, col3_x, lfo_y, "LFO", lfo_header);
 
         let mut ly = lfo_y + 1;
-        let lfo = &inst.lfo;
+        let lfo = &inst.modulation.lfo;
         if lfo.enabled {
             let shape_text = format!("{:?} {:.1}Hz", lfo.shape, lfo.rate);
             let shape_style = if self.detail_section == MixerSection::Lfo && self.detail_cursor == 0 {

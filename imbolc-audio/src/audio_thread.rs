@@ -490,7 +490,7 @@ impl AudioThread {
                     .collect();
                 for new_inst in instruments.instruments.iter_mut() {
                     if let Some(old_inst) = old_instruments.get(&new_inst.id) {
-                        if let (Some(old_seq), Some(new_seq)) = (&old_inst.drum_sequencer, &mut new_inst.drum_sequencer) {
+                        if let (Some(old_seq), Some(new_seq)) = (old_inst.drum_sequencer(), new_inst.drum_sequencer_mut()) {
                             if new_seq.playing {
                                 new_seq.current_step = old_seq.current_step;
                                 new_seq.step_accumulator = old_seq.step_accumulator;
@@ -972,7 +972,7 @@ impl AudioThread {
 
     fn load_drum_samples(&mut self) {
         for instrument in &self.instruments.instruments {
-            if let Some(seq) = &instrument.drum_sequencer {
+            if let Some(seq) = instrument.drum_sequencer() {
                 for pad in &seq.pads {
                     if let (Some(buffer_id), Some(path)) = (pad.buffer_id, pad.path.as_ref()) {
                         let _ = self.engine.load_sample(buffer_id, path);

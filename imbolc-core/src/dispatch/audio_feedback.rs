@@ -1,4 +1,5 @@
 use crate::action::{DispatchResult, NavIntent, VstTarget};
+use imbolc_types::SourceExtra;
 use imbolc_audio::commands::AudioFeedback;
 use imbolc_audio::AudioHandle;
 use crate::state::AppState;
@@ -24,7 +25,7 @@ pub fn dispatch_audio_feedback(
         }
         AudioFeedback::DrumSequencerStep { instrument_id, step } => {
             if let Some(inst) = state.instruments.instrument_mut(*instrument_id) {
-                if let Some(seq) = inst.drum_sequencer.as_mut() {
+                if let Some(seq) = inst.drum_sequencer_mut() {
                     seq.current_step = *step;
                     seq.last_played_step = Some(*step);
                 }
@@ -105,9 +106,11 @@ pub fn dispatch_audio_feedback(
             if let Some(instrument) = state.instruments.instrument_mut(*instrument_id) {
                 match target {
                     VstTarget::Source => {
-                        instrument.vst_param_values.clear();
-                        for (index, _, _, default) in params {
-                            instrument.vst_param_values.push((*index, *default));
+                        if let SourceExtra::Vst { ref mut param_values, .. } = instrument.source_extra {
+                            param_values.clear();
+                            for (index, _, _, default) in params {
+                                param_values.push((*index, *default));
+                            }
                         }
                     }
                     VstTarget::Effect(effect_id) => {
@@ -149,7 +152,9 @@ pub fn dispatch_audio_feedback(
             if let Some(instrument) = state.instruments.instrument_mut(*instrument_id) {
                 match target {
                     VstTarget::Source => {
-                        instrument.vst_state_path = Some(path.clone());
+                        if let SourceExtra::Vst { ref mut state_path, .. } = instrument.source_extra {
+                            *state_path = Some(path.clone());
+                        }
                     }
                     VstTarget::Effect(effect_id) => {
                         if let Some(effect) = instrument.effect_by_id_mut(*effect_id) {

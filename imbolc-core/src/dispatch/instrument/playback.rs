@@ -98,7 +98,7 @@ pub(super) fn handle_play_drum_pad(
     pad_idx: usize,
 ) -> DispatchResult {
     if let Some(instrument) = state.instruments.selected_instrument() {
-        if let Some(seq) = &instrument.drum_sequencer {
+        if let Some(seq) = instrument.drum_sequencer() {
             if let Some(pad) = seq.pads.get(pad_idx) {
                 if let (Some(buffer_id), instrument_id) = (pad.buffer_id, instrument.id) {
                     let amp = pad.level;

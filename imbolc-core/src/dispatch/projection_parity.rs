@@ -993,8 +993,8 @@ fn parity_update() {
         source: inst.source,
         source_params: inst.source_params.clone(),
         processing_chain: inst.processing_chain.clone(),
-        lfo: inst.lfo.clone(),
-        amp_envelope: inst.amp_envelope.clone(),
+        lfo: inst.modulation.lfo.clone(),
+        amp_envelope: inst.modulation.amp_envelope.clone(),
         polyphonic: !inst.polyphonic,
         active: inst.mixer.active,
     };

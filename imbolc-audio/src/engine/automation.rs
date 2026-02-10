@@ -155,7 +155,7 @@ impl AudioEngine {
             }
             ParameterTarget::Attack => {
                 if let Some(inst) = state.instrument_mut(instrument_id) {
-                    inst.amp_envelope.attack = value;
+                    inst.modulation.amp_envelope.attack = value;
                 }
                 for voice in self.voice_allocator.chains() {
                     if voice.instrument_id == instrument_id {
@@ -166,7 +166,7 @@ impl AudioEngine {
             }
             ParameterTarget::Decay => {
                 if let Some(inst) = state.instrument_mut(instrument_id) {
-                    inst.amp_envelope.decay = value;
+                    inst.modulation.amp_envelope.decay = value;
                 }
                 for voice in self.voice_allocator.chains() {
                     if voice.instrument_id == instrument_id {
@@ -177,7 +177,7 @@ impl AudioEngine {
             }
             ParameterTarget::Sustain => {
                 if let Some(inst) = state.instrument_mut(instrument_id) {
-                    inst.amp_envelope.sustain = value;
+                    inst.modulation.amp_envelope.sustain = value;
                 }
                 for voice in self.voice_allocator.chains() {
                     if voice.instrument_id == instrument_id {
@@ -188,7 +188,7 @@ impl AudioEngine {
             }
             ParameterTarget::Release => {
                 if let Some(inst) = state.instrument_mut(instrument_id) {
-                    inst.amp_envelope.release = value;
+                    inst.modulation.amp_envelope.release = value;
                 }
                 for voice in self.voice_allocator.chains() {
                     if voice.instrument_id == instrument_id {
@@ -451,7 +451,7 @@ impl AudioEngine {
             }
             ParameterTarget::Attack => {
                 if let Some(inst) = state.instrument_mut(instrument_id) {
-                    inst.amp_envelope.attack = value;
+                    inst.modulation.amp_envelope.attack = value;
                 }
                 for voice in self.voice_allocator.chains() {
                     if voice.instrument_id == instrument_id {
@@ -461,7 +461,7 @@ impl AudioEngine {
             }
             ParameterTarget::Decay => {
                 if let Some(inst) = state.instrument_mut(instrument_id) {
-                    inst.amp_envelope.decay = value;
+                    inst.modulation.amp_envelope.decay = value;
                 }
                 for voice in self.voice_allocator.chains() {
                     if voice.instrument_id == instrument_id {
@@ -471,7 +471,7 @@ impl AudioEngine {
             }
             ParameterTarget::Sustain => {
                 if let Some(inst) = state.instrument_mut(instrument_id) {
-                    inst.amp_envelope.sustain = value;
+                    inst.modulation.amp_envelope.sustain = value;
                 }
                 for voice in self.voice_allocator.chains() {
                     if voice.instrument_id == instrument_id {
@@ -481,7 +481,7 @@ impl AudioEngine {
             }
             ParameterTarget::Release => {
                 if let Some(inst) = state.instrument_mut(instrument_id) {
-                    inst.amp_envelope.release = value;
+                    inst.modulation.amp_envelope.release = value;
                 }
                 for voice in self.voice_allocator.chains() {
                     if voice.instrument_id == instrument_id {

@@ -152,16 +152,16 @@ impl AudioEngine {
         }
 
         // LFO (if enabled)
-        let lfo_control_bus: Option<i32> = if instrument.lfo.enabled {
+        let lfo_control_bus: Option<i32> = if instrument.modulation.lfo.enabled {
             let lfo_node_id = self.next_node_id;
             self.next_node_id += 1;
             let lfo_out_bus = self.bus_allocator.get_or_alloc_control_bus(instrument.id, "lfo_out");
 
             let params = vec![
                 ("out".to_string(), lfo_out_bus as f32),
-                ("rate".to_string(), instrument.lfo.rate),
-                ("depth".to_string(), instrument.lfo.depth),
-                ("shape".to_string(), instrument.lfo.shape.index() as f32),
+                ("rate".to_string(), instrument.modulation.lfo.rate),
+                ("depth".to_string(), instrument.modulation.lfo.depth),
+                ("shape".to_string(), instrument.modulation.lfo.shape.index() as f32),
             ];
 
             let client = self.backend.as_ref().ok_or("Not connected")?;
@@ -182,12 +182,12 @@ impl AudioEngine {
                 instrument.id, "filter_out", channels,
             );
 
-            let cutoff_mod_bus = if instrument.lfo.enabled && instrument.lfo.target == ParameterTarget::FilterCutoff {
+            let cutoff_mod_bus = if instrument.modulation.lfo.enabled && instrument.modulation.lfo.target == ParameterTarget::FilterCutoff {
                 lfo_control_bus.map(|b| b as f32).unwrap_or(-1.0)
             } else {
                 -1.0
             };
-            let res_mod_bus = if instrument.lfo.enabled && instrument.lfo.target == ParameterTarget::FilterResonance {
+            let res_mod_bus = if instrument.modulation.lfo.enabled && instrument.modulation.lfo.target == ParameterTarget::FilterResonance {
                 lfo_control_bus.map(|b| b as f32).unwrap_or(-1.0)
             } else {
                 -1.0
@@ -295,9 +295,9 @@ impl AudioEngine {
             }
 
             // Inject LFO mod bus if targeting this effect type
-            if instrument.lfo.enabled {
+            if instrument.modulation.lfo.enabled {
                 if let Some(lfo_bus) = lfo_control_bus {
-                    match (instrument.lfo.target, effect.effect_type) {
+                    match (instrument.modulation.lfo.target, effect.effect_type) {
                         (ParameterTarget::DelayTime, EffectType::Delay) => {
                             params.push(("time_mod_in".to_string(), lfo_bus as f32));
                         }
@@ -342,7 +342,7 @@ impl AudioEngine {
             self.next_node_id += 1;
             let mute = if any_solo { !instrument.mixer.solo } else { instrument.mixer.mute || session.mixer.master_mute };
 
-            let pan_mod_bus = if instrument.lfo.enabled && instrument.lfo.target == ParameterTarget::Pan {
+            let pan_mod_bus = if instrument.modulation.lfo.enabled && instrument.modulation.lfo.target == ParameterTarget::Pan {
                 lfo_control_bus.map(|b| b as f32).unwrap_or(-1.0)
             } else {
                 -1.0
@@ -404,7 +404,7 @@ impl AudioEngine {
         let source_out_bus = self.bus_allocator.get_audio_bus(instrument.id, "source_out").unwrap_or(16);
         let is_mono = instrument.mixer.channel_config.is_mono();
 
-        let send_lfo_bus = if instrument.lfo.enabled && matches!(instrument.lfo.target, ParameterTarget::SendLevel(_)) {
+        let send_lfo_bus = if instrument.modulation.lfo.enabled && matches!(instrument.modulation.lfo.target, ParameterTarget::SendLevel(_)) {
             self.bus_allocator.get_control_bus(instrument.id, "lfo_out")
                 .map(|b| b as f32)
                 .unwrap_or(-1.0)
@@ -459,7 +459,7 @@ impl AudioEngine {
 
         if matches!(instrument.source, SourceType::Vst(_)) {
             if let Some(source_node) = self.node_map.get(&instrument.id).and_then(|n| n.source) {
-                for &(param_index, value) in &instrument.vst_param_values {
+                for &(param_index, value) in instrument.vst_source_params() {
                     let _ = client.send_unit_cmd(
                         source_node, VST_UGEN_INDEX, "/set",
                         vec![RawArg::Int(param_index as i32), RawArg::Float(value)],
