@@ -5,13 +5,21 @@ use imbolc_types::{InstrumentAction, ServerAction, SessionState, InstrumentState
 use std::collections::HashMap;
 
 fn roundtrip_client(msg: &ClientMessage) -> ClientMessage {
-    let json = serde_json::to_string(msg).expect("serialize ClientMessage");
-    serde_json::from_str(&json).expect("deserialize ClientMessage")
+    let bytes = bincode::serde::encode_to_vec(msg, bincode::config::standard())
+        .expect("serialize ClientMessage");
+    let (rt, _): (ClientMessage, _) =
+        bincode::serde::decode_from_slice(&bytes, bincode::config::standard())
+            .expect("deserialize ClientMessage");
+    rt
 }
 
 fn roundtrip_server(msg: &ServerMessage) -> ServerMessage {
-    let json = serde_json::to_string(msg).expect("serialize ServerMessage");
-    serde_json::from_str(&json).expect("deserialize ServerMessage")
+    let bytes = bincode::serde::encode_to_vec(msg, bincode::config::standard())
+        .expect("serialize ServerMessage");
+    let (rt, _): (ServerMessage, _) =
+        bincode::serde::decode_from_slice(&bytes, bincode::config::standard())
+            .expect("deserialize ServerMessage");
+    rt
 }
 
 fn make_network_state() -> NetworkState {
@@ -85,8 +93,9 @@ fn test_roundtrip_client_action() {
 #[test]
 fn test_roundtrip_client_goodbye() {
     let msg = ClientMessage::Goodbye;
-    let json = serde_json::to_string(&msg).unwrap();
-    let rt: ClientMessage = serde_json::from_str(&json).unwrap();
+    let bytes = bincode::serde::encode_to_vec(&msg, bincode::config::standard()).unwrap();
+    let (rt, _): (ClientMessage, _) =
+        bincode::serde::decode_from_slice(&bytes, bincode::config::standard()).unwrap();
     assert!(matches!(rt, ClientMessage::Goodbye));
 }
 
@@ -316,9 +325,11 @@ fn test_roundtrip_network_action_variants() {
         NetworkAction::Redo,
     ];
     for action in &actions {
-        let json = serde_json::to_string(action).expect("serialize");
-        let rt: NetworkAction = serde_json::from_str(&json).expect("deserialize");
-        // Just verify it doesn't panic — we can't easily check equality without PartialEq
+        let bytes = bincode::serde::encode_to_vec(action, bincode::config::standard())
+            .expect("serialize");
+        let (rt, _): (NetworkAction, _) =
+            bincode::serde::decode_from_slice(&bytes, bincode::config::standard())
+                .expect("deserialize");
         let _ = rt;
     }
 }
@@ -339,8 +350,9 @@ fn test_roundtrip_state_patch_all_none() {
         privileged_client: None,
         seq: 0,
     };
-    let json = serde_json::to_string(&patch).unwrap();
-    let rt: StatePatch = serde_json::from_str(&json).unwrap();
+    let bytes = bincode::serde::encode_to_vec(&patch, bincode::config::standard()).unwrap();
+    let (rt, _): (StatePatch, _) =
+        bincode::serde::decode_from_slice(&bytes, bincode::config::standard()).unwrap();
     assert!(rt.session.is_none());
     assert!(rt.piano_roll.is_none());
     assert!(rt.arrangement.is_none());
@@ -352,7 +364,7 @@ fn test_roundtrip_state_patch_all_none() {
     assert_eq!(rt.seq, 0);
 }
 
-/// `Some(None)` = "privilege revoked" must survive JSON roundtrip.
+/// `Some(None)` = "privilege revoked" must survive bincode roundtrip.
 #[test]
 fn test_roundtrip_state_patch_privileged_client_cleared() {
     let patch = StatePatch {
@@ -367,8 +379,9 @@ fn test_roundtrip_state_patch_privileged_client_cleared() {
         privileged_client: Some(None), // "changed to: nobody"
         seq: 5,
     };
-    let json = serde_json::to_string(&patch).unwrap();
-    let rt: StatePatch = serde_json::from_str(&json).unwrap();
+    let bytes = bincode::serde::encode_to_vec(&patch, bincode::config::standard()).unwrap();
+    let (rt, _): (StatePatch, _) =
+        bincode::serde::decode_from_slice(&bytes, bincode::config::standard()).unwrap();
     assert_eq!(rt.privileged_client, Some(None), "Some(None) must roundtrip");
     assert_eq!(rt.seq, 5);
 }
@@ -376,16 +389,18 @@ fn test_roundtrip_state_patch_privileged_client_cleared() {
 /// All three privileged_client states must be distinguishable after roundtrip.
 #[test]
 fn test_roundtrip_state_patch_privileged_client_all_variants() {
+    let cfg = bincode::config::standard();
+
     // None = no change
     let p1 = StatePatch { session: None, piano_roll: None, arrangement: None, automation: None, mixer: None, instruments: None, instrument_patches: None, ownership: None, privileged_client: None, seq: 1 };
-    let j1 = serde_json::to_string(&p1).unwrap();
-    let r1: StatePatch = serde_json::from_str(&j1).unwrap();
+    let b1 = bincode::serde::encode_to_vec(&p1, cfg).unwrap();
+    let (r1, _): (StatePatch, _) = bincode::serde::decode_from_slice(&b1, cfg).unwrap();
     assert_eq!(r1.privileged_client, None);
 
     // Some(None) = changed to nobody
     let p2 = StatePatch { session: None, piano_roll: None, arrangement: None, automation: None, mixer: None, instruments: None, instrument_patches: None, ownership: None, privileged_client: Some(None), seq: 2 };
-    let j2 = serde_json::to_string(&p2).unwrap();
-    let r2: StatePatch = serde_json::from_str(&j2).unwrap();
+    let b2 = bincode::serde::encode_to_vec(&p2, cfg).unwrap();
+    let (r2, _): (StatePatch, _) = bincode::serde::decode_from_slice(&b2, cfg).unwrap();
     assert_eq!(r2.privileged_client, Some(None));
 
     // Some(Some(...)) = changed to Alice
@@ -395,8 +410,8 @@ fn test_roundtrip_state_patch_privileged_client_all_variants() {
         privileged_client: Some(Some((ClientId::new(1), "Alice".into()))),
         seq: 3,
     };
-    let j3 = serde_json::to_string(&p3).unwrap();
-    let r3: StatePatch = serde_json::from_str(&j3).unwrap();
+    let b3 = bincode::serde::encode_to_vec(&p3, cfg).unwrap();
+    let (r3, _): (StatePatch, _) = bincode::serde::decode_from_slice(&b3, cfg).unwrap();
     assert!(matches!(r3.privileged_client, Some(Some(_))));
 }
 
@@ -425,36 +440,12 @@ fn test_roundtrip_state_patch_with_instrument_patches() {
         seq: 10,
     };
 
-    let json = serde_json::to_string(&patch).unwrap();
-    let rt: StatePatch = serde_json::from_str(&json).unwrap();
+    let bytes = bincode::serde::encode_to_vec(&patch, bincode::config::standard()).unwrap();
+    let (rt, _): (StatePatch, _) =
+        bincode::serde::decode_from_slice(&bytes, bincode::config::standard()).unwrap();
     assert!(rt.instruments.is_none());
     let rt_patches = rt.instrument_patches.unwrap();
     assert_eq!(rt_patches.len(), 1);
     assert!(rt_patches.contains_key(&0));
     assert_eq!(rt.seq, 10);
-}
-
-#[test]
-fn test_roundtrip_state_patch_instrument_patches_absent() {
-    // When instrument_patches is None, the field should be absent from JSON
-    let patch = StatePatch {
-        session: None,
-        piano_roll: None,
-        arrangement: None,
-        automation: None,
-        mixer: None,
-        instruments: None,
-        instrument_patches: None,
-        ownership: None,
-        privileged_client: None,
-        seq: 1,
-    };
-    let json = serde_json::to_string(&patch).unwrap();
-    assert!(
-        !json.contains("instrument_patches"),
-        "instrument_patches should be skipped when None: {}",
-        json
-    );
-    let rt: StatePatch = serde_json::from_str(&json).unwrap();
-    assert!(rt.instrument_patches.is_none());
 }

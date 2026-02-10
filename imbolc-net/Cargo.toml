@@ -11,6 +11,7 @@ mdns = ["dep:mdns-sd", "dep:gethostname", "dep:flume"]
 imbolc-types = { path = "../imbolc-types" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+bincode = { version = "2", features = ["serde"] }
 log = "0.4"
 mdns-sd = { version = "0.10", optional = true }
 gethostname = { version = "0.4", optional = true }
