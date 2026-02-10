@@ -40,20 +40,12 @@ return a status message.
 
 ---
 
-## 4. Effect management code duplicated 3x
+## ~~4. Effect management code duplicated 3x~~ (FIXED)
 
-**Where:**
-- `Instrument` in `imbolc-types/src/state/instrument/mod.rs`
-- `MixerBus` in `imbolc-types/src/state/` (bus module)
-- `LayerGroupMixer` in `imbolc-types/src/state/` (layer group module)
-
-Each has its own `add_effect()`, `remove_effect()`, `move_effect()`,
-`effect_by_id()`, `next_effect_id` counter. ~100 lines copy-pasted
-across three types.
-
-**Fix:** Extract an `EffectChain` struct that all three
-embed. Consistent by construction, single place to add new effect
-chain logic.
+**Fixed.** Extracted `EffectChain` struct that `Instrument`,
+`MixerBus`, and `LayerGroupMixer` all embed. Single place for
+`add_effect()`, `remove_effect()`, `move_effect()`, `effect_by_id()`,
+and `next_effect_id` counter.
 
 ---
 
@@ -94,27 +86,22 @@ match in all 6 files. No `_ => {}` arms remain.
 
 ---
 
-## 8. Effect params accessed by raw `usize` index
+## ~~8. Effect params accessed by raw `usize` index~~ (FIXED)
 
-**Where:** `AdjustEffectParam(InstrumentId, EffectId, usize, f32)` in
-`action.rs`, dispatch in `effects.rs`, `bus.rs`
-
-The `usize` is a positional index into `effect.params`. No type
-distinguishes "delay time" from "delay feedback" — it's just
-`params[0]` vs `params[1]`. If param order changes in a SynthDef, old
-automation/saves silently target the wrong param.
-
-Not proposing per-effect typed enums (too much churn), but a
-`ParamIndex` newtype would at least prevent confusing it with other
-`usize` values in the same function signature.
+**Fixed.** `ParamIndex` newtype added in `imbolc-types/src/lib.rs`.
+All `AdjustEffectParam` variants (instrument, bus, layer group),
+`AudioDirty` targeted param arrays, and helper methods now use
+`ParamIndex` instead of raw `usize`.
 
 ---
 
-## 9. All ID types are bare type aliases (IN PROGRESS — newtypes defined, migration incomplete)
+## 9. All ID types are bare type aliases (IN PROGRESS — nearly complete)
 
 **Where:** `imbolc-types/src/lib.rs`
 
-All 5 ID types are now defined as newtypes:
+All 5 ID types are now defined as newtypes with full trait derives
+(`Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize,
+Display`):
 
 ```rust
 pub struct InstrumentId(u32);
@@ -124,14 +111,10 @@ pub struct VstPluginId(u32);
 pub struct BusId(u8);  // with new() asserting > 0
 ```
 
-`BusId` is fully migrated. The other 4 newtypes are defined but the
-codebase still has ~43 compilation errors from mismatched types
-(e.g. passing raw `u32` where `InstrumentId` expected), missing
-`ToSql`/`FromSql` impls for persistence, and net test breakage.
-
-**Remaining work:** Fix compilation errors across persistence layer,
-dispatch handlers, and network tests. Mechanical but spread across
-many files.
+`BusId` fully migrated. The main codebase compiles. Down from ~43
+errors to ~4 remaining in `imbolc-net` test files
+(protocol_roundtrip.rs, broadcast.rs, ownership.rs) — raw integer
+literals need wrapping with `InstrumentId::new()`.
 
 ---
 
@@ -154,28 +137,12 @@ use `BusId` instead of raw `u8`.
 
 ---
 
-## 12. Parallel sends/buses invariant enforced by convention
+## ~~12. Parallel sends/buses invariant enforced by convention~~ (FIXED)
 
-**Where:** `Instrument.sends: Vec<MixerSend>` must stay in sync with
-`SessionState` buses
-
-```rust
-// After adding a bus, must manually sync all instruments
-if let Some(_new_id) = state.session.add_bus() {
-    let bus_ids: Vec<u8> = state.session.bus_ids().collect();
-    for inst in &mut state.instruments.instruments {
-        inst.sync_sends_with_buses(&bus_ids);  // easy to forget
-    }
-}
-```
-
-Forgetting to call `sync_sends_with_buses` means an instrument has no
-send slot for the new bus. The compiler can't catch this — it's a
-runtime invariant maintained by discipline.
-
-**Fix:** Use `BTreeMap<BusId, MixerSend>` instead of
-`Vec<MixerSend>`. Sends are looked up by bus ID, not position. No sync
-step needed — missing entries just mean "default send level."
+**Fixed.** `Instrument.sends` changed from `Vec<MixerSend>` to
+`BTreeMap<BusId, MixerSend>`. Sends are looked up by bus ID directly.
+`sync_sends_with_buses` removed — missing entries mean default send
+level. Custom serde deserializer handles migration from old Vec format.
 
 ---
 
@@ -208,12 +175,12 @@ centralizing the check.
 | 7 | ~~Stringly-typed EQ params~~ | ~~**High**~~ FIXED | — |
 | 1 | ~~AudioDirty data loss~~ | ~~**Medium**~~ FIXED | — |
 | 2 | ~~Projection parity~~ | ~~**Medium**~~ FIXED | — |
-| 9 | ID type aliases (newtypes defined, migration incomplete) | **Medium** (wrong-ID bugs) | Large (mechanical) |
+| 9 | ID type newtypes (nearly complete, ~4 net test errors) | **Medium** (wrong-ID bugs) | Small (mechanical) |
 | 10 | ~~Persistence silent fallbacks~~ | ~~**Medium**~~ FIXED | — |
 | 11 | ~~Raw u8 bus IDs~~ | ~~**Medium**~~ FIXED | — |
-| 12 | Sends/buses sync invariant | **Medium** (forgotten sync) | Medium |
-| 8 | Raw usize param index | **Low** (index confusion) | Small |
+| 12 | ~~Sends/buses BTreeMap~~ | ~~**Medium**~~ FIXED | — |
+| 8 | ~~Raw usize param index~~ | ~~**Low**~~ FIXED | — |
 | 3 | Silent `is_running()` | **Low** (UX annoyance) | Small |
-| 4 | Effect chain duplication | **Low** (maintenance tax) | Medium |
+| 4 | ~~Effect chain duplication~~ | ~~**Low**~~ FIXED | — |
 | 13 | Option fields vs SourceType | **Low** (wrong access) | Large |
 | 5 | Instrument god struct | **Low** (scaling friction) | Large |

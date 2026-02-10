@@ -5,8 +5,8 @@ use imbolc_net::server::NetServer;
 use imbolc_net::protocol::{NetworkAction, ServerMessage};
 use imbolc_types::{
     ArrangementAction, AutomationAction, AutomationTarget, BusAction, InstrumentAction,
-    InstrumentParameter, MixerAction, ParameterTarget, PianoRollAction, ServerAction, SourceType,
-    VstParamAction, VstTarget,
+    InstrumentId, InstrumentParameter, MixerAction, ParameterTarget, PianoRollAction,
+    ServerAction, SourceType, VstParamAction, VstTarget,
 };
 
 #[test]
@@ -438,7 +438,7 @@ fn test_patch_single_instrument_change() {
     let _welcome = alice.recv().unwrap();
 
     // Targeted action on instrument 1
-    server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::AdjustFilterCutoff(1, 0.1)), &state.session);
+    server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::AdjustFilterCutoff(InstrumentId::new(1), 0.1)), &state.session);
     let state = common::make_test_state_with_instruments(&server, 4);
     server.broadcast_state_patch(&state);
     server.flush_writer();
@@ -448,7 +448,7 @@ fn test_patch_single_instrument_change() {
         ServerMessage::StatePatchUpdate { patch } => {
             assert!(patch.instruments.is_none(), "full instruments should NOT be sent for targeted change");
             let patches = patch.instrument_patches.expect("instrument_patches should be present");
-            assert!(patches.contains_key(&1), "instrument 1 should be in patches");
+            assert!(patches.contains_key(&InstrumentId::new(1)), "instrument 1 should be in patches");
             assert_eq!(patches.len(), 1);
         }
         other => panic!("Expected StatePatchUpdate, got {:?}", other),
@@ -494,7 +494,7 @@ fn test_patch_targeted_then_structural() {
     let _welcome = alice.recv().unwrap();
 
     // Targeted + structural in same tick → structural wins
-    server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::AdjustFilterCutoff(1, 0.1)), &state.session);
+    server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::AdjustFilterCutoff(InstrumentId::new(1), 0.1)), &state.session);
     server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::Add(SourceType::Saw)), &state.session);
     let state = common::make_test_state_with_instruments(&server, 4);
     server.broadcast_state_patch(&state);
@@ -523,8 +523,8 @@ fn test_instrument_patches_roundtrip() {
     let _welcome = alice.recv().unwrap();
 
     // Two targeted changes on different instruments
-    server.mark_dirty(&NetworkAction::VstParam(VstParamAction::SetParam(0, VstTarget::Source, 0, 0.5)), &state.session);
-    server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::AdjustFilterCutoff(2, 0.3)), &state.session);
+    server.mark_dirty(&NetworkAction::VstParam(VstParamAction::SetParam(InstrumentId::new(0), VstTarget::Source, 0, 0.5)), &state.session);
+    server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::AdjustFilterCutoff(InstrumentId::new(2), 0.3)), &state.session);
     let state = common::make_test_state_with_instruments(&server, 4);
     server.broadcast_state_patch(&state);
     server.flush_writer();
@@ -533,8 +533,8 @@ fn test_instrument_patches_roundtrip() {
     match msg {
         ServerMessage::StatePatchUpdate { patch } => {
             let patches = patch.instrument_patches.expect("instrument_patches should be present");
-            assert!(patches.contains_key(&0), "instrument 0 should be in patches");
-            assert!(patches.contains_key(&2), "instrument 2 should be in patches");
+            assert!(patches.contains_key(&InstrumentId::new(0)), "instrument 0 should be in patches");
+            assert!(patches.contains_key(&InstrumentId::new(2)), "instrument 2 should be in patches");
             assert_eq!(patches.len(), 2);
         }
         other => panic!("Expected StatePatchUpdate, got {:?}", other),
@@ -600,9 +600,9 @@ fn test_patch_threshold_coalescing() {
     let _welcome = alice.recv().unwrap();
 
     // Dirty 3 out of 4 instruments (> half) → should coalesce to full instruments
-    server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::AdjustFilterCutoff(0, 0.1)), &state.session);
-    server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::AdjustFilterCutoff(1, 0.2)), &state.session);
-    server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::AdjustFilterCutoff(2, 0.3)), &state.session);
+    server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::AdjustFilterCutoff(InstrumentId::new(0), 0.1)), &state.session);
+    server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::AdjustFilterCutoff(InstrumentId::new(1), 0.2)), &state.session);
+    server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::AdjustFilterCutoff(InstrumentId::new(2), 0.3)), &state.session);
     let state = common::make_test_state_with_instruments(&server, 4);
     server.broadcast_state_patch(&state);
     server.flush_writer();
@@ -876,7 +876,7 @@ fn test_mixed_subsystems_no_full_session() {
     // Mark both PianoRoll and Automation dirty
     server.mark_dirty(&NetworkAction::PianoRoll(PianoRollAction::ToggleLoop), &state.session);
     server.mark_dirty(&NetworkAction::Automation(AutomationAction::AddLane(
-        AutomationTarget::Instrument(0, InstrumentParameter::Standard(ParameterTarget::Level)),
+        AutomationTarget::Instrument(InstrumentId::new(0), InstrumentParameter::Standard(ParameterTarget::Level)),
     )), &state.session);
 
     let state = common::make_test_state(&server);
@@ -905,8 +905,8 @@ fn test_piano_roll_per_track_sends_track_patches() {
 
     // Build state with 2 piano roll tracks
     let mut state = common::make_test_state(&server);
-    state.session.piano_roll.add_track(1);
-    state.session.piano_roll.add_track(2);
+    state.session.piano_roll.add_track(InstrumentId::new(1));
+    state.session.piano_roll.add_track(InstrumentId::new(2));
     state.session.piano_roll.toggle_note(0, 60, 0, 480, 100);
 
     let mut alice = common::RawClient::connect(&addr).unwrap();
@@ -934,7 +934,7 @@ fn test_piano_roll_per_track_sends_track_patches() {
             assert!(patch.piano_roll.is_none(), "full piano_roll should be absent for per-track edit");
             let track_patches = patch.piano_roll_track_patches
                 .expect("piano_roll_track_patches should be present");
-            assert!(track_patches.contains_key(&1), "track for instrument 1 should be in patches");
+            assert!(track_patches.contains_key(&InstrumentId::new(1)), "track for instrument 1 should be in patches");
             assert_eq!(track_patches.len(), 1, "only the edited track should be in patches");
         }
         other => panic!("Expected StatePatchUpdate, got {:?}", other),
@@ -947,7 +947,7 @@ fn test_piano_roll_structural_sends_full() {
     let addr = server.local_addr().unwrap().to_string();
 
     let mut state = common::make_test_state(&server);
-    state.session.piano_roll.add_track(1);
+    state.session.piano_roll.add_track(InstrumentId::new(1));
 
     let mut alice = common::RawClient::connect(&addr).unwrap();
     alice.send_hello("Alice", vec![], false).unwrap();
@@ -978,7 +978,7 @@ fn test_piano_roll_targeted_then_structural() {
     let addr = server.local_addr().unwrap().to_string();
 
     let mut state = common::make_test_state(&server);
-    state.session.piano_roll.add_track(1);
+    state.session.piano_roll.add_track(InstrumentId::new(1));
 
     let mut alice = common::RawClient::connect(&addr).unwrap();
     alice.send_hello("Alice", vec![], false).unwrap();
@@ -1020,8 +1020,8 @@ fn test_piano_roll_threshold_coalescing() {
 
     // 2 tracks: threshold is >1, so dirtying both → full piano_roll
     let mut state = common::make_test_state(&server);
-    state.session.piano_roll.add_track(1);
-    state.session.piano_roll.add_track(2);
+    state.session.piano_roll.add_track(InstrumentId::new(1));
+    state.session.piano_roll.add_track(InstrumentId::new(2));
 
     let mut alice = common::RawClient::connect(&addr).unwrap();
     alice.send_hello("Alice", vec![], false).unwrap();

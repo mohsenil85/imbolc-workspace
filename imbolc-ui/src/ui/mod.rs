@@ -27,4 +27,4 @@ pub use pane::{Action, ArrangementAction, AutomationAction, BusAction, ChopperAc
 pub use piano_keyboard::{PianoKeyboard, translate_key};
 pub use ratatui_impl::RatatuiBackend;
 pub use render::{Rect, RenderBuf};
-pub use style::{Color, Style, selected_style, selected_style_bold};
+pub use style::{Color, Style};

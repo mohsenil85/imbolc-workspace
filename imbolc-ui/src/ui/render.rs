@@ -70,6 +70,7 @@ impl<'a> RenderBuf<'a> {
 
     /// Fill a horizontal line with a background color.
     /// Useful for extending selection highlighting across the full width.
+    #[allow(dead_code)]
     pub fn fill_line_bg(&mut self, x: u16, y: u16, width: u16, style: Style) {
         for col in x..x.saturating_add(width) {
             self.set_cell(col, y, ' ', style);

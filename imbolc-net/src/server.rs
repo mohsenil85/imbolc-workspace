@@ -1423,8 +1423,8 @@ mod tests {
     fn dirty_instrument_targeted_actions() {
         // VstParam and targeted InstrumentAction go into dirty_instruments
         let cases: Vec<NetworkAction> = vec![
-            NetworkAction::VstParam(VstParamAction::SetParam(0, VstTarget::Source, 0, 0.5)),
-            NetworkAction::Instrument(InstrumentAction::AdjustFilterCutoff(5, 0.1)),
+            NetworkAction::VstParam(VstParamAction::SetParam(InstrumentId::new(0), VstTarget::Source, 0, 0.5)),
+            NetworkAction::Instrument(InstrumentAction::AdjustFilterCutoff(InstrumentId::new(5), 0.1)),
         ];
         for action in &cases {
             let mut d = DirtyFlags::default();
@@ -1476,7 +1476,7 @@ mod tests {
         // Automation → automation flag
         let mut d = DirtyFlags::default();
         d.mark_from_action(&NetworkAction::Automation(AutomationAction::AddLane(
-            AutomationTarget::Instrument(0, InstrumentParameter::Standard(ParameterTarget::Level)),
+            AutomationTarget::Instrument(InstrumentId::new(0), InstrumentParameter::Standard(ParameterTarget::Level)),
         )), None);
         assert!(d.automation, "automation dirty");
         assert!(!d.session, "session clean for Automation");
@@ -1530,16 +1530,16 @@ mod tests {
     fn dirty_instrument_targeted_vs_structural() {
         let mut d = DirtyFlags::default();
         d.mark_from_action(&NetworkAction::Instrument(
-            InstrumentAction::AdjustFilterCutoff(5, 0.1),
+            InstrumentAction::AdjustFilterCutoff(InstrumentId::new(5), 0.1),
         ), None);
-        assert_eq!(d.dirty_instruments, HashSet::from([5]));
+        assert_eq!(d.dirty_instruments, HashSet::from([InstrumentId::new(5)]));
         assert!(!d.instruments_structural);
     }
 
     #[test]
     fn dirty_instrument_delete_is_structural() {
         let mut d = DirtyFlags::default();
-        d.mark_from_action(&NetworkAction::Instrument(InstrumentAction::Delete(5)), None);
+        d.mark_from_action(&NetworkAction::Instrument(InstrumentAction::Delete(InstrumentId::new(5))), None);
         assert!(d.instruments_structural);
         assert!(d.piano_roll_structural, "instrument delete should also mark piano_roll_structural");
     }
@@ -1559,9 +1559,9 @@ mod tests {
     fn dirty_vst_param_is_targeted() {
         let mut d = DirtyFlags::default();
         d.mark_from_action(&NetworkAction::VstParam(
-            VstParamAction::SetParam(3, VstTarget::Source, 0, 0.5),
+            VstParamAction::SetParam(InstrumentId::new(3), VstTarget::Source, 0, 0.5),
         ), None);
-        assert_eq!(d.dirty_instruments, HashSet::from([3]));
+        assert_eq!(d.dirty_instruments, HashSet::from([InstrumentId::new(3)]));
         assert!(!d.instruments_structural);
     }
 
@@ -1576,12 +1576,12 @@ mod tests {
     fn dirty_accumulated_instruments() {
         let mut d = DirtyFlags::default();
         d.mark_from_action(&NetworkAction::Instrument(
-            InstrumentAction::AdjustFilterCutoff(2, 0.1),
+            InstrumentAction::AdjustFilterCutoff(InstrumentId::new(2), 0.1),
         ), None);
         d.mark_from_action(&NetworkAction::Instrument(
-            InstrumentAction::AdjustFilterCutoff(7, 0.2),
+            InstrumentAction::AdjustFilterCutoff(InstrumentId::new(7), 0.2),
         ), None);
-        assert_eq!(d.dirty_instruments, HashSet::from([2, 7]));
+        assert_eq!(d.dirty_instruments, HashSet::from([InstrumentId::new(2), InstrumentId::new(7)]));
         assert!(!d.instruments_structural);
     }
 
@@ -1595,13 +1595,13 @@ mod tests {
     #[test]
     fn any_true_for_each_flag() {
         for setter in [
-            (|d: &mut DirtyFlags| { d.dirty_piano_roll_tracks.insert(0); }) as fn(&mut DirtyFlags),
+            (|d: &mut DirtyFlags| { d.dirty_piano_roll_tracks.insert(InstrumentId::new(0)); }) as fn(&mut DirtyFlags),
             |d: &mut DirtyFlags| d.piano_roll_structural = true,
             |d: &mut DirtyFlags| d.arrangement = true,
             |d: &mut DirtyFlags| d.automation = true,
             |d: &mut DirtyFlags| d.mixer = true,
             |d: &mut DirtyFlags| d.session = true,
-            |d: &mut DirtyFlags| { d.dirty_instruments.insert(0); },
+            |d: &mut DirtyFlags| { d.dirty_instruments.insert(InstrumentId::new(0)); },
             |d: &mut DirtyFlags| d.instruments_structural = true,
             |d: &mut DirtyFlags| d.ownership = true,
             |d: &mut DirtyFlags| d.privileged_client = true,
@@ -1615,13 +1615,13 @@ mod tests {
     #[test]
     fn clear_resets_all() {
         let mut d = DirtyFlags {
-            dirty_piano_roll_tracks: HashSet::from([0, 1]),
+            dirty_piano_roll_tracks: HashSet::from([InstrumentId::new(0), InstrumentId::new(1)]),
             piano_roll_structural: true,
             arrangement: true,
             automation: true,
             mixer: true,
             session: true,
-            dirty_instruments: HashSet::from([0, 1, 2]),
+            dirty_instruments: HashSet::from([InstrumentId::new(0), InstrumentId::new(1), InstrumentId::new(2)]),
             instruments_structural: true,
             ownership: true,
             privileged_client: true,

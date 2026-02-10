@@ -3,6 +3,7 @@ mod common;
 use std::time::Duration;
 use imbolc_net::server::NetServer;
 use imbolc_net::protocol::ServerMessage;
+use imbolc_types::InstrumentId;
 
 #[test]
 fn test_two_clients_independent_ownership() {
@@ -12,7 +13,7 @@ fn test_two_clients_independent_ownership() {
 
     // Alice owns 0, 1
     let mut alice = common::RawClient::connect(&addr).unwrap();
-    alice.send_hello("Alice", vec![0, 1], false).unwrap();
+    alice.send_hello("Alice", vec![InstrumentId::new(0), InstrumentId::new(1)], false).unwrap();
     common::drive_until_clients(&mut server, &state, 1, Duration::from_secs(2));
 
     let alice_welcome = alice.recv().unwrap();
@@ -27,7 +28,7 @@ fn test_two_clients_independent_ownership() {
 
     // Bob owns 2, 3
     let mut bob = common::RawClient::connect(&addr).unwrap();
-    bob.send_hello("Bob", vec![2, 3], false).unwrap();
+    bob.send_hello("Bob", vec![InstrumentId::new(2), InstrumentId::new(3)], false).unwrap();
     common::drive_until_clients(&mut server, &state, 2, Duration::from_secs(2));
 
     let bob_welcome = bob.recv().unwrap();

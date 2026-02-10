@@ -32,6 +32,7 @@ pub struct MouseEvent {
 pub enum AppEvent {
     Key(InputEvent),
     Mouse(MouseEvent),
+    #[allow(dead_code)]
     Resize(u16, u16),
 }
 

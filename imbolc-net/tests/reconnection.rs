@@ -3,6 +3,7 @@ mod common;
 use std::time::Duration;
 use imbolc_net::server::NetServer;
 use imbolc_net::protocol::{ClientMessage, PrivilegeLevel, ServerMessage, SessionToken};
+use imbolc_types::InstrumentId;
 
 #[test]
 fn test_graceful_disconnect_suspends_session() {
@@ -12,7 +13,7 @@ fn test_graceful_disconnect_suspends_session() {
 
     // Alice connects with instruments 0, 1
     let mut alice = common::RawClient::connect(&addr).unwrap();
-    alice.send_hello("Alice", vec![0, 1], false).unwrap();
+    alice.send_hello("Alice", vec![InstrumentId::new(0), InstrumentId::new(1)], false).unwrap();
     common::drive_until_clients(&mut server, &state, 1, Duration::from_secs(2));
 
     let welcome = alice.recv().unwrap();
@@ -42,7 +43,7 @@ fn test_reconnect_with_valid_token() {
 
     // Alice connects with instruments 0, 1 and privilege
     let mut alice = common::RawClient::connect(&addr).unwrap();
-    alice.send_hello("Alice", vec![0, 1], true).unwrap();
+    alice.send_hello("Alice", vec![InstrumentId::new(0), InstrumentId::new(1)], true).unwrap();
     common::drive_until_clients(&mut server, &state, 1, Duration::from_secs(2));
 
     let welcome = alice.recv().unwrap();
@@ -73,8 +74,8 @@ fn test_reconnect_with_valid_token() {
     match reconnect_msg {
         ServerMessage::ReconnectSuccessful { restored_instruments, privilege, .. } => {
             assert_eq!(restored_instruments.len(), 2);
-            assert!(restored_instruments.contains(&0));
-            assert!(restored_instruments.contains(&1));
+            assert!(restored_instruments.contains(&InstrumentId::new(0)));
+            assert!(restored_instruments.contains(&InstrumentId::new(1)));
             assert_eq!(privilege, PrivilegeLevel::Privileged);
         }
         other => panic!("Expected ReconnectSuccessful, got {:?}", other),

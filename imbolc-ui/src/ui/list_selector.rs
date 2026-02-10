@@ -79,12 +79,14 @@ impl ListSelector {
     }
 
     /// Reset selection and scroll to beginning.
+    #[allow(dead_code)]
     pub fn reset(&mut self) {
         self.selected = 0;
         self.scroll_offset = 0;
     }
 
     /// Combined helper: select next, then adjust scroll.
+    #[allow(dead_code)]
     pub fn next_and_scroll<F>(&mut self, len: usize, visible_rows: usize, skip: F)
     where
         F: Fn(usize) -> bool,
@@ -94,6 +96,7 @@ impl ListSelector {
     }
 
     /// Combined helper: select prev, then adjust scroll.
+    #[allow(dead_code)]
     pub fn prev_and_scroll<F>(&mut self, len: usize, visible_rows: usize, skip: F)
     where
         F: Fn(usize) -> bool,

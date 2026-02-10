@@ -17,6 +17,7 @@ pub fn center_rect(area: Rect, width: u16, height: u16) -> Rect {
 
 /// Render a centered dialog frame with border and title, return inner area.
 /// Combines center_rect and draw_block into a single helper for modal dialogs.
+#[allow(dead_code)]
 pub fn render_dialog_frame(
     area: Rect,
     buf: &mut RenderBuf,
