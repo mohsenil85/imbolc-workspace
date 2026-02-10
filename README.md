@@ -6,6 +6,7 @@ Under the hood it's a Rust application powered by SuperCollider for audio synthe
 
 ## Quick start
 
+- **Terminal requirement:** The TUI requires a terminal that supports the [Kitty keyboard protocol](https://sw.kovidgoyal.net/kitty/keyboard-protocol/), such as [Kitty](https://sw.kovidgoyal.net/kitty/) or [Ghostty](https://ghostty.org/). The default macOS Terminal and GNOME Terminal are not supported.
 - Install Rust (edition 2021) and SuperCollider (`scsynth` on PATH; `sclang` needed for SynthDef compilation).
 - Compile SynthDefs: `imbolc-core/bin/compile-synthdefs`
 - Run the TUI: `cargo run -p imbolc-ui --release`
@@ -18,6 +19,24 @@ IMBOLC_NO_AUDIO=1 cargo run -p imbolc-ui
 ```
 
 Optional: override SynthDef location with `IMBOLC_SYNTHDEFS_DIR=/path/to/synthdefs`.
+
+### Linux dependencies (Debian/Ubuntu)
+
+The GUI crate (`imbolc-gui`) uses Dioxus/WebKit and needs several system libraries. On Debian/Ubuntu:
+
+```bash
+sudo apt-get install -y \
+  pkg-config \
+  libglib2.0-dev \
+  libgtk-3-dev \
+  libsoup-3.0-dev \
+  libjavascriptcoregtk-4.1-dev \
+  libwebkit2gtk-4.1-dev \
+  libxdo-dev \
+  libclang-dev
+```
+
+The TUI crate (`imbolc-ui`) only requires `libclang-dev` (for SQLite bindgen).
 
 ## Features
 
