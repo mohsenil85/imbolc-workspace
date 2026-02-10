@@ -4,7 +4,7 @@ Guide for AI agents working on this codebase.
 
 ## What This Is
 
-A terminal-based DAW (Digital Audio Workstation) in Rust. Uses ratatui for TUI rendering and SuperCollider via OSC for audio synthesis. Instruments combine an oscillator source, filter, effects chain, LFO, envelope, and mixer controls into a single unit. Instruments are sequenced via piano roll.
+A terminal-based DAW (Digital Audio Workstation) in Rust. Uses ratatui for TUI rendering and SuperCollider via OSC for audio synthesis. Instruments combine a source, processing chain (filters/EQ/effects), LFO, envelope, and mixer controls into a single unit. Instruments are sequenced via piano roll.
 
 ## Directory Structure
 
@@ -23,9 +23,9 @@ Core library lives in `../imbolc-core/`. Types are in `../imbolc-types/`. See th
 | Type | Location | What It Is |
 |------|----------|------------|
 | `AppState` | `imbolc-core/src/state/mod.rs` | Top-level state, owned by `main.rs`, passed to panes as `&AppState` |
-| `Instrument` | `imbolc-types/src/state/instrument/` | One instrument: source + filter + effects + LFO + envelope + mixer |
+| `Instrument` | `imbolc-types/src/state/instrument/` | One instrument: source + processing chain + LFO + envelope + mixer |
 | `InstrumentState` | `imbolc-types/src/state/instrument_state.rs` | Collection of instruments and selection state |
-| `SessionState` | `imbolc-types/src/state/session.rs` | Global session data: buses, mixer, piano roll, automation |
+| `SessionState` | `imbolc-types/src/state/session.rs` | Global session data: arrangement, mixer, piano roll, automation |
 | `InstrumentId` | `imbolc-types/src/lib.rs` | `u32` — unique identifier for instruments |
 | `SourceType` | `imbolc-types/src/state/instrument/source_type.rs` | Oscillator/Source types (Saw/Sin/etc, AudioIn, BusIn, PitchedSampler, Kit, Custom, VST) |
 | `EffectSlot` | `imbolc-types/src/state/instrument/effect.rs` | One effect in the chain: type + params + enabled + VST param values/state path |
@@ -37,14 +37,16 @@ Core library lives in `../imbolc-core/`. Types are in `../imbolc-types/`. See th
 
 ## Panes
 
-Single-file panes (20):
+Single-file panes (23):
 - `add_effect_pane.rs` — Effect selector modal
 - `add_pane.rs` — Add instrument/bus modal
+- `checkpoint_list_pane.rs` — Checkpoint list
 - `command_palette_pane.rs` — Command palette
 - `confirm_pane.rs` — Confirmation dialog
 - `eq_pane.rs` — EQ editor
 - `file_browser_pane.rs` — File browser for samples
 - `frame_edit_pane.rs` — Frame/layout settings
+- `groove_pane.rs` — Groove settings
 - `help_pane.rs` — Help overlay
 - `home_pane.rs` — Home/welcome screen
 - `instrument_pane.rs` — Instrument list
@@ -57,6 +59,7 @@ Single-file panes (20):
 - `save_as_pane.rs` — Save as dialog
 - `sequencer_pane.rs` — Drum sequencer
 - `track_pane.rs` — Track view
+- `tuner_pane.rs` — Reference tuner
 - `waveform_pane.rs` — Waveform display
 
 Module panes (input/rendering split, 7):
@@ -140,7 +143,7 @@ When adding a new action:
 
 ### Navigation
 
-Pane switching uses function keys: `F1`=instrument, `F2`=piano roll / sequencer / waveform (context-driven), `F3`=track, `F4`=mixer, `F5`=server, `F7`=automation. `` ` ``/`~` for back/forward. `?` for context-sensitive help. `Ctrl+f` opens the frame settings.
+Pane switching uses function keys: `F1`=instrument, `F2`=piano roll / sequencer / waveform (context-driven), `F3`=track, `F4`=mixer, `F5`=server, `F6`=docs, `F7`=automation, `F8`=EQ, `F9`=groove, `F10`=tuner. `` ` ``/`~` for back/forward. `?` for context-sensitive help. `Ctrl+f` opens the frame settings.
 
 Number keys select instruments: `1`-`9` select instruments 1-9, `0` selects 10, `_` enters two-digit instrument selection.
 

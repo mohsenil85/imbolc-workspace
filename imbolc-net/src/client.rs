@@ -370,8 +370,24 @@ impl RemoteDispatcher {
                     ServerUpdate::Patch(patch) => {
                         if patch.seq > self.last_seq {
                             self.last_seq = patch.seq;
+                            let full_session = patch.session.is_some();
                             if let Some(session) = patch.session {
                                 self.state.session = session;
+                            }
+                            // Granular subsystem patches (only apply if full session wasn't sent)
+                            if !full_session {
+                                if let Some(pr) = patch.piano_roll {
+                                    self.state.session.piano_roll = pr;
+                                }
+                                if let Some(arr) = patch.arrangement {
+                                    self.state.session.arrangement = arr;
+                                }
+                                if let Some(auto) = patch.automation {
+                                    self.state.session.automation = auto;
+                                }
+                                if let Some(mix) = patch.mixer {
+                                    self.state.session.mixer = mix;
+                                }
                             }
                             if let Some(instruments) = patch.instruments {
                                 self.state.instruments = instruments;

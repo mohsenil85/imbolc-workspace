@@ -78,9 +78,9 @@ src/
 | Type | Location | What It Is |
 |------|----------|------------|
 | `AppState` | `src/state/mod.rs` | Top-level state, passed to panes as `&AppState` |
-| `Instrument` | `imbolc-types/src/state/instrument/` | One instrument: source + filter + effects + LFO + envelope |
+| `Instrument` | `imbolc-types/src/state/instrument/` | One instrument: source + processing chain + LFO + envelope + mixer |
 | `InstrumentState` | `imbolc-types/src/state/instrument_state.rs` | Collection of instruments and selection state |
-| `SessionState` | `imbolc-types/src/state/session.rs` | Global session data: buses, mixer, transport |
+| `SessionState` | `imbolc-types/src/state/session.rs` | Global session data: arrangement, mixer, automation, transport |
 | `SourceType` | `imbolc-types/src/state/instrument/source_type.rs` | Oscillator/Source types (Saw/Sin/etc, AudioIn, BusIn, etc.) |
 | `EffectSlot` | `imbolc-types/src/state/instrument/effect.rs` | One effect in the chain |
 | `Action` | `imbolc-types/src/action.rs` | Action enum dispatched by the TUI binary |
@@ -106,7 +106,7 @@ Top-level dispatch is in `src/dispatch/mod.rs`. Each `Action` variant routes to 
 | `Server(a)` | `server.rs` | SC server start/stop, device config |
 | `Midi(a)` | `midi.rs` | MIDI CC mapping |
 | `VstParam(a)` | `vst_param.rs` | VST parameter editing |
-| `Undo/Redo` | inline in `mod.rs` | Pop undo/redo stack, AudioDirty::all() |
+| `Undo/Redo` | inline in `mod.rs` | Pop undo/redo stack, audio dirty based on scope |
 
 **Instrument sub-handlers** (`src/dispatch/instrument/`):
 
@@ -139,21 +139,25 @@ Every undoable action pushes a scoped snapshot before mutation:
 - `Session` — session state only
 - `Full` — both session + instruments
 
-Undo/Redo pops the stack, swaps state, sets `AudioDirty::all()`.
+Undo/Redo pops the stack, swaps state, and sets audio dirty based on scope (`SingleInstrument` → targeted routing; others → full rebuild).
 
 ### Dirty Flags (AudioDirty)
 
 `AudioDirty` is `Copy` (must stay Copy). Boolean flags OR on merge. Targeted param flags use `Option<(...)>`.
 
 - **Structural**: `instruments`, `session`, `piano_roll`, `automation`, `routing`, `mixer_params`
-- **Targeted optimization**: `routing_instrument: Option<InstrumentId>` (single-instrument rebuild)
+- **Targeted routing**:
+  - `routing_instruments: [Option<InstrumentId>; 4]` (up to 4 per frame)
+  - `routing_add_instrument: Option<InstrumentId>`
+  - `routing_delete_instrument: Option<InstrumentId>`
+  - `routing_bus_processing: bool`
 - **Real-time /n_set**: `filter_param`, `effect_param`, `lfo_param`, `bus_effect_param`, `layer_group_effect_param`
 
 See `CODE_MAP.md` at workspace root for the complete field-by-field reference.
 
 ### Persistence Triggers
 
-- **Save**: explicit (`SessionAction::Save/SaveAs`), async background thread, SQLite relational schema v7+
+- **Save**: explicit (`SessionAction::Save/SaveAs`), async background thread, SQLite relational schema v12
 - **Load**: explicit (`SessionAction::Load/LoadFrom`), async, replaces entire state
 - **Checkpoints**: labeled snapshots within project DB (create/restore)
 - `project.dirty` flag set on all undoable actions, cleared after save
@@ -191,7 +195,7 @@ Musical defaults (`[defaults]` section): `bpm`, `key`, `scale`, `tuning_a4`, `ti
 - Format: SQLite database (`.imbolc` / `.sqlite`)
 - Save/load: `save_project()` / `load_project()` in `src/state/persistence/mod.rs`
 - Default path: `~/.config/imbolc/default.sqlite`
-- Persists: instruments, params, effects, filters, sends, modulations, buses, mixer, piano roll, automation, sampler configs, custom synthdefs, drum sequencer, midi settings, VST plugins, VST param values, VST state paths
+- Persists: session settings, instruments + processing chains, mixer/buses/layer groups, piano roll + arrangement, automation lanes, sampler + drum sequencer + chopper, MIDI mappings, custom synthdefs, VST registry + param/state values, checkpoints
 
 ## SynthDefs
 
@@ -218,7 +222,7 @@ SynthDef(\imbolc_example, { |out=1024, freq_in=(-1), gate_in=(-1), vel_in=(-1),
 
 1. Create file in appropriate subdirectory: `synthdefs/defs/<category>/<name>.scd`
 2. Follow the template above (note `dirname.dirname.dirname` for correct output path)
-3. Compile: `cd synthdefs && sclang compile.scd`
+3. Compile: `../bin/compile-synthdefs` (or `cd synthdefs && sclang compile.scd`)
 4. Add corresponding `SourceType` variant in `imbolc-types/src/state/instrument/source_type.rs`
 
 ### SuperCollider var declaration rule

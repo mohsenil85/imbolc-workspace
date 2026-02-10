@@ -77,6 +77,16 @@ const PATCH_BROADCAST_INTERVAL_MS: u128 = 33;
 /// Tracks which subsystems have changed since last broadcast.
 #[derive(Debug, Default)]
 pub struct DirtyFlags {
+    /// Piano roll subsystem changed.
+    pub piano_roll: bool,
+    /// Arrangement subsystem changed.
+    pub arrangement: bool,
+    /// Automation subsystem changed.
+    pub automation: bool,
+    /// Mixer subsystem changed (buses, layer groups).
+    pub mixer: bool,
+    /// Session "remainder" — musical settings, registries, rare changes, undo/redo.
+    /// When set, sends the full SessionState (which includes all subsystems).
     pub session: bool,
     /// Per-instrument targeted edits (e.g. filter cutoff on instrument 5).
     pub dirty_instruments: HashSet<InstrumentId>,
@@ -119,17 +129,26 @@ impl DirtyFlags {
             NetworkAction::Sequencer(_) => {
                 self.instruments_structural = true;
             }
-            NetworkAction::PianoRoll(_)
-            | NetworkAction::Arrangement(_)
-            | NetworkAction::Automation(_)
-            | NetworkAction::Session(_)
-            | NetworkAction::Server(_)
-            | NetworkAction::Bus(_)
-            | NetworkAction::LayerGroup(_)
-            | NetworkAction::Chopper(_) => {
+            NetworkAction::PianoRoll(_) => {
+                self.piano_roll = true;
+            }
+            NetworkAction::Arrangement(_) => {
+                self.arrangement = true;
+            }
+            NetworkAction::Automation(_) => {
+                self.automation = true;
+            }
+            NetworkAction::Bus(_) | NetworkAction::LayerGroup(_) => {
+                self.mixer = true;
+            }
+            NetworkAction::Session(_) | NetworkAction::Server(_) | NetworkAction::Chopper(_) => {
                 self.session = true;
             }
-            NetworkAction::Mixer(_) | NetworkAction::Midi(_) => {
+            NetworkAction::Mixer(_) => {
+                self.mixer = true;
+                self.instruments_structural = true;
+            }
+            NetworkAction::Midi(_) => {
                 self.session = true;
                 self.instruments_structural = true;
             }
@@ -142,7 +161,11 @@ impl DirtyFlags {
     }
 
     fn any(&self) -> bool {
-        self.session
+        self.piano_roll
+            || self.arrangement
+            || self.automation
+            || self.mixer
+            || self.session
             || !self.dirty_instruments.is_empty()
             || self.instruments_structural
             || self.ownership
@@ -150,6 +173,10 @@ impl DirtyFlags {
     }
 
     fn clear(&mut self) {
+        self.piano_roll = false;
+        self.arrangement = false;
+        self.automation = false;
+        self.mixer = false;
         self.session = false;
         self.dirty_instruments.clear();
         self.instruments_structural = false;
@@ -845,12 +872,26 @@ impl NetServer {
             None
         };
 
+        // If dirty.session is set, send full SessionState (includes all subsystems).
+        // Otherwise, send only the specific subsystems that changed.
+        let (session, piano_roll, arrangement, automation, mixer) = if self.dirty.session {
+            (Some(state.session.clone()), None, None, None, None)
+        } else {
+            (
+                None,
+                if self.dirty.piano_roll { Some(state.session.piano_roll.clone()) } else { None },
+                if self.dirty.arrangement { Some(state.session.arrangement.clone()) } else { None },
+                if self.dirty.automation { Some(state.session.automation.clone()) } else { None },
+                if self.dirty.mixer { Some(state.session.mixer.clone()) } else { None },
+            )
+        };
+
         let patch = StatePatch {
-            session: if self.dirty.session {
-                Some(state.session.clone())
-            } else {
-                None
-            },
+            session,
+            piano_roll,
+            arrangement,
+            automation,
+            mixer,
             instruments,
             instrument_patches,
             ownership: if self.dirty.ownership {
@@ -1147,16 +1188,11 @@ mod tests {
     }
 
     #[test]
-    fn dirty_session_actions() {
+    fn dirty_session_remainder_actions() {
+        // These actions mark the "session" (remainder) flag — sends full SessionState
         let cases: Vec<NetworkAction> = vec![
-            NetworkAction::PianoRoll(PianoRollAction::PlayStop),
-            NetworkAction::Arrangement(ArrangementAction::TogglePlayMode),
-            NetworkAction::Automation(AutomationAction::AddLane(
-                AutomationTarget::Instrument(0, InstrumentParameter::Standard(ParameterTarget::Level)),
-            )),
             NetworkAction::Session(SessionAction::Save),
             NetworkAction::Server(ServerAction::Connect),
-            NetworkAction::Bus(BusAction::Add),
             NetworkAction::Chopper(ChopperAction::LoadSample),
         ];
         for action in &cases {
@@ -1168,17 +1204,49 @@ mod tests {
     }
 
     #[test]
-    fn dirty_mixer_and_midi_mark_both() {
-        let cases: Vec<NetworkAction> = vec![
-            NetworkAction::Mixer(MixerAction::Move(1)),
-            NetworkAction::Midi(MidiAction::ConnectPort(0)),
-        ];
-        for action in &cases {
-            let mut d = DirtyFlags::default();
-            d.mark_from_action(action);
-            assert!(d.session, "session dirty for {:?}", action);
-            assert!(d.instruments_structural, "instruments_structural for {:?}", action);
-        }
+    fn dirty_subsystem_actions() {
+        // PianoRoll → piano_roll flag
+        let mut d = DirtyFlags::default();
+        d.mark_from_action(&NetworkAction::PianoRoll(PianoRollAction::PlayStop));
+        assert!(d.piano_roll, "piano_roll dirty");
+        assert!(!d.session, "session clean for PianoRoll");
+
+        // Arrangement → arrangement flag
+        let mut d = DirtyFlags::default();
+        d.mark_from_action(&NetworkAction::Arrangement(ArrangementAction::TogglePlayMode));
+        assert!(d.arrangement, "arrangement dirty");
+        assert!(!d.session, "session clean for Arrangement");
+
+        // Automation → automation flag
+        let mut d = DirtyFlags::default();
+        d.mark_from_action(&NetworkAction::Automation(AutomationAction::AddLane(
+            AutomationTarget::Instrument(0, InstrumentParameter::Standard(ParameterTarget::Level)),
+        )));
+        assert!(d.automation, "automation dirty");
+        assert!(!d.session, "session clean for Automation");
+
+        // Bus → mixer flag
+        let mut d = DirtyFlags::default();
+        d.mark_from_action(&NetworkAction::Bus(BusAction::Add));
+        assert!(d.mixer, "mixer dirty for Bus");
+        assert!(!d.session, "session clean for Bus");
+    }
+
+    #[test]
+    fn dirty_mixer_marks_mixer_and_instruments() {
+        let mut d = DirtyFlags::default();
+        d.mark_from_action(&NetworkAction::Mixer(MixerAction::Move(1)));
+        assert!(d.mixer, "mixer dirty for Mixer");
+        assert!(d.instruments_structural, "instruments_structural for Mixer");
+        assert!(!d.session, "session clean for Mixer");
+    }
+
+    #[test]
+    fn dirty_midi_marks_session_and_instruments() {
+        let mut d = DirtyFlags::default();
+        d.mark_from_action(&NetworkAction::Midi(MidiAction::ConnectPort(0)));
+        assert!(d.session, "session dirty for Midi");
+        assert!(d.instruments_structural, "instruments_structural for Midi");
     }
 
     #[test]
@@ -1269,7 +1337,11 @@ mod tests {
     #[test]
     fn any_true_for_each_flag() {
         for setter in [
-            (|d: &mut DirtyFlags| d.session = true) as fn(&mut DirtyFlags),
+            (|d: &mut DirtyFlags| d.piano_roll = true) as fn(&mut DirtyFlags),
+            |d: &mut DirtyFlags| d.arrangement = true,
+            |d: &mut DirtyFlags| d.automation = true,
+            |d: &mut DirtyFlags| d.mixer = true,
+            |d: &mut DirtyFlags| d.session = true,
             |d: &mut DirtyFlags| { d.dirty_instruments.insert(0); },
             |d: &mut DirtyFlags| d.instruments_structural = true,
             |d: &mut DirtyFlags| d.ownership = true,
@@ -1284,6 +1356,10 @@ mod tests {
     #[test]
     fn clear_resets_all() {
         let mut d = DirtyFlags {
+            piano_roll: true,
+            arrangement: true,
+            automation: true,
+            mixer: true,
             session: true,
             dirty_instruments: HashSet::from([0, 1, 2]),
             instruments_structural: true,
@@ -1292,6 +1368,10 @@ mod tests {
         };
         d.clear();
         assert!(!d.any());
+        assert!(!d.piano_roll);
+        assert!(!d.arrangement);
+        assert!(!d.automation);
+        assert!(!d.mixer);
         assert!(!d.session);
         assert!(d.dirty_instruments.is_empty());
         assert!(!d.instruments_structural);

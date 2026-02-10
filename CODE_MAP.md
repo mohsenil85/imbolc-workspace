@@ -26,8 +26,8 @@ Comprehensive code map for agents. Read this first to avoid re-exploring.
 | `Click(a)` | `dispatch_click` (inline) | Click track toggle/volume |
 | `Tuner(a)` | `dispatch_tuner` (inline) | Reference pitch play/stop |
 | `AudioFeedback(f)` | `audio_feedback::dispatch_audio_feedback` | Process audio thread feedback |
-| `Undo` | inline | Pop undo stack, apply, full audio rebuild |
-| `Redo` | inline | Pop redo stack, apply, full audio rebuild |
+| `Undo` | inline | Pop undo stack, apply, audio dirty based on undo scope |
+| `Redo` | inline | Pop redo stack, apply, audio dirty based on undo scope |
 | `None` | inline | No-op |
 | `ExitPerformanceMode` | inline | No-op (handled in UI) |
 | `PushLayer(_)` | inline | No-op (handled in UI) |
@@ -87,9 +87,7 @@ AppState (imbolc-core/src/state/mod.rs)
 │   └── instruments: Vec<Instrument>
 │       └── Instrument
 │           ├── id, name, source: SourceType, source_params
-│           ├── filter: Option<FilterConfig> (type, cutoff, resonance)
-│           ├── eq: Option<EqConfig>
-│           ├── effects: Vec<EffectSlot> (type, params, enabled)
+│           ├── processing_chain: Vec<ProcessingStage> (filters/EQ/effects)
 │           ├── lfo: LfoConfig (enabled, rate, depth, shape, targets)
 │           ├── amp_envelope: EnvConfig (ADSR)
 │           ├── Mixer: level, pan, mute, solo, active, output_target, channel_config, sends
@@ -97,7 +95,9 @@ AppState (imbolc-core/src/state/mod.rs)
 │           ├── drum_sequencer: Option<DrumSequencerState>
 │           ├── vst_param_values, vst_state_path
 │           ├── arpeggiator, chord_shape
-│           ├── layer_group: Option<u32>
+│           ├── convolution_ir_path
+│           ├── layer_group: Option<u32>, layer_octave_offset
+│           ├── next_effect_id
 │           └── groove: GrooveConfig (swing, humanize, timing)
 │
 ├── clipboard: Clipboard
@@ -119,12 +119,15 @@ AppState (imbolc-core/src/state/mod.rs)
 
 | Flag | Type | When to set | Audio engine response |
 |---|---|---|---|
-| `instruments` | `bool` | Instrument add/delete, source type change, effect chain change | Rebuild instrument synth chains |
-| `session` | `bool` | BPM, key, scale, tuning, time signature change | Update session-level parameters |
-| `piano_roll` | `bool` | Note add/delete/modify, loop change | Update playback schedule |
-| `automation` | `bool` | Automation lane/point change | Update automation playback |
-| `routing` | `bool` | Output target change, bus add/remove, layer group change | Full SC node graph rebuild |
-| `routing_instrument` | `Option<InstrumentId>` | Single instrument routing change | Rebuild only that instrument's chain (ignored if `routing` is true) |
+| `instruments` | `bool` | Instrument add/delete, source/processing chain change | Rebuild instrument chains |
+| `session` | `bool` | BPM/key/scale/time signature/humanize changes | Update session snapshot |
+| `piano_roll` | `bool` | Note edits, loop change | Update piano-roll snapshot |
+| `automation` | `bool` | Automation lane/point change | Update automation snapshot |
+| `routing` | `bool` | Structural routing changes | Full SC node graph rebuild |
+| `routing_instruments` | `[Option<InstrumentId>; 4]` | Targeted per-instrument rebuild | Rebuild only those instrument chains |
+| `routing_add_instrument` | `Option<InstrumentId>` | Add instrument without teardown | Build new chain + sends |
+| `routing_delete_instrument` | `Option<InstrumentId>` | Delete instrument without teardown | Free nodes/voices/sends for that instrument |
+| `routing_bus_processing` | `bool` | Bus/layer-group effect changes | Rebuild GROUP_BUS_PROCESSING only |
 | `mixer_params` | `bool` | Level/pan/mute/solo on instruments/buses/groups | Update mixer node params |
 
 ### Targeted param flags (send /n_set, no rebuild)
@@ -137,7 +140,12 @@ AppState (imbolc-core/src/state/mod.rs)
 | `bus_effect_param` | `Option<(u8, EffectId, usize, f32)>` | Direct bus effect update |
 | `layer_group_effect_param` | `Option<(u32, EffectId, usize, f32)>` | Direct layer group effect update |
 
-**Merge rules**: Booleans OR. `routing_instrument`: if both sides specify different IDs → escalates to `routing = true`. Targeted params: last wins.
+**Merge rules**:
+- Booleans OR.
+- `routing_instruments` collects unique IDs up to 4; overflow escalates to `routing = true`.
+- `routing_add_instrument` / `routing_delete_instrument` conflicts escalate to `routing = true`.
+- Full `routing` overrides targeted routing flags.
+- Targeted params: last writer wins.
 
 ## Module Maps
 
@@ -184,6 +192,13 @@ AppState (imbolc-core/src/state/mod.rs)
 | `commands.rs` | `AudioCmd` and `AudioFeedback` enums |
 | `playback.rs` | Playback scheduling, sequencer tick, lookahead |
 | `arp_state.rs` | `ArpPlayState` — runtime arpeggiator state |
+| `arpeggiator_tick.rs` | Arpeggiator tick scheduling |
+| `drum_tick.rs` | Drum sequencer tick scheduling |
+| `click_tick.rs` | Click track tick scheduling |
+| `action_projection.rs` | Action → audio-thread projection |
+| `snapshot.rs` | State snapshot type aliases |
+| `event_log.rs` | Event log for projectable actions + snapshots |
+| `osc_sender.rs` | Background OSC bundle sender |
 | `engine/mod.rs` | `AudioEngine` — SC backend, node map, bus tracking |
 | `engine/backend.rs` | `AudioBackend` trait, OSC socket I/O |
 | `engine/server.rs` | SC server boot/kill, device enumeration |
@@ -197,7 +212,8 @@ AppState (imbolc-core/src/state/mod.rs)
 | `engine/vst.rs` | VST hosting, param discovery |
 | `bus_allocator.rs` | SC audio/control bus allocation |
 | `triple_buffer.rs` | Lock-free state transfer (main → audio thread) |
-| `snapshot.rs` | State snapshot type aliases |
+| `paths.rs` | SynthDef path resolution |
+| `devices.rs` | Audio device enumeration |
 | `osc_client.rs` | OSC message construction |
 | `osc_sender.rs` | Background OSC sender thread |
 | `event_log.rs` | Time-ordered event log for pre-scheduling |

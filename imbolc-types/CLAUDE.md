@@ -50,7 +50,7 @@ src/
 | Type | Location | Purpose |
 |------|----------|---------|
 | `InstrumentId` | `lib.rs` | `u32` — unique identifier for instruments |
-| `Instrument` | `state/instrument/mod.rs` | Source + filter + effects + LFO + envelope + mixer |
+| `Instrument` | `state/instrument/mod.rs` | Source + processing chain + LFO + envelope + mixer |
 | `SourceType` | `state/instrument/source_type.rs` | Oscillator types: Saw, Sin, AudioIn, BusIn, Sampler, VST, etc. |
 | `EffectSlot` | `state/instrument/effect.rs` | One effect in chain: type + params + enabled + VST state |
 | `FilterType` | `state/instrument/filter.rs` | Filter types: LowPass, HighPass, BandPass, Notch |
@@ -58,7 +58,7 @@ src/
 | `Param` / `ParamValue` | `param.rs` | Generic parameter with Float/Int/Bool values |
 | `Dispatcher` | `dispatch.rs` | Trait for action dispatch implementations |
 | `InstrumentState` | `state/instrument_state.rs` | Collection of instruments + selection state |
-| `SessionState` | `state/session.rs` | Global session: buses, mixer, transport, BPM |
+| `SessionState` | `state/session.rs` | Global session: arrangement, mixer, automation, transport |
 | `PianoRollState` | `state/piano_roll.rs` | Tracks, notes, grid settings |
 | `AutomationState` | `state/automation.rs` | Automation lanes and points |
 | `DrumSequencerState` | `state/drum_sequencer.rs` | Drum patterns and steps |
@@ -82,20 +82,20 @@ AppState (defined in imbolc-core, composed of types from here)
 └── instruments: InstrumentState
     └── instruments: Vec<Instrument>
         ├── source: SourceType + source_params
-        ├── filter: Option<FilterConfig>
-        ├── eq: Option<EqConfig>
-        ├── effects: Vec<EffectSlot>
+        ├── processing_chain: Vec<ProcessingStage> (filters/EQ/effects)
         ├── lfo: LfoConfig, amp_envelope: EnvConfig
-        ├── Mixer: level, pan, mute, solo, output_target, sends
+        ├── Mixer: level, pan, mute, solo, output_target, channel_config, sends
         ├── sampler_config, drum_sequencer (source-dependent)
         ├── arpeggiator, chord_shape
-        ├── layer_group: Option<u32>
+        ├── convolution_ir_path
+        ├── layer_group: Option<u32>, layer_octave_offset
+        ├── next_effect_id
         └── groove: GrooveConfig
 ```
 
 ## Key Enum Categories
 
-### SourceType (56 built-in + 2 parametric)
+### SourceType (built-ins + Custom/VST)
 
 - **Oscillators**: Saw, Sin, Sqr, Tri, Noise, Pulse, SuperSaw, Sync
 - **FM/Modulation**: Ring, FBSin, FM, PhaseMod, FMBell, FMBrass
@@ -110,7 +110,7 @@ AppState (defined in imbolc-core, composed of types from here)
 - **Samplers**: PitchedSampler, TimeStretch, Kit
 - **External**: Custom(CustomSynthDefId), Vst(VstPluginId)
 
-### EffectType (40 built-in + 1 parametric)
+### EffectType (built-ins + VST)
 
 - **Time**: Delay, Reverb, SpringReverb
 - **Dynamics**: Gate, TapeComp, SidechainComp, Limiter, MultibandComp

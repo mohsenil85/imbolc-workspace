@@ -1,4 +1,6 @@
-# SC-Based Audio Engine Modules (Reason-clone, TUI)
+# SC-Based Audio Engine Modules (Imbolc)
+
+This is a pragmatic checklist of what the SuperCollider-backed engine needs and how Imbolc implements it today. Items marked “Future” are aspirational.
 
 ## What SuperCollider Gives You (scsynth)
 - Real-time DSP graph (UGens), mixing, node graph
@@ -18,65 +20,56 @@
 ## Audio Engine Modules (on top of scsynth)
 
 ### 1) Server Runtime Manager
-- Boot/quit/reboot scsynth, detect failure, auto-reconnect
-- Configure device, sample rate, block size, I/O channels
-- Manage server options (memory, max nodes, wire buffers, etc.)
-- Health monitoring (CPU/load/node counts, status)
+- Boot/quit/restart scsynth, detect failure, auto-reconnect
+- Configure device, sample rate, buffer size, I/O channels
+- Health monitoring (CPU/load, status replies)
 
 ### 2) OSC Transport Layer
-- OSC client with batching
-- Time-tagged OSC bundles (for timing correctness)
-- Fencing/acks via `/sync` (know when state is applied)
-- Separate queues: RT-critical control vs slow operations (disk/buffer loads)
+- OSC client with batching + time-tagged bundles
+- Dedicated OSC sender thread for timed bundles
+- Priority/normal command channels for RT vs non-RT control
 
 ### 3) SynthDef & Node Library
-- Compile/load SynthDefs (or ship precompiled)
-- Versioning of SynthDefs (project references stable versions)
-- Parameter schema extraction (for UI/automation)
-- Registry mapping DAW “device types” → SynthDefs + wiring templates
+- Compile/load SynthDefs (shipped precompiled, rebuild via scripts)
+- Parameter schemas for UI + automation targets
+- Registry mapping device types → SynthDefs + wiring templates
 
 ### 4) Bus & Routing Allocator
-- Allocate/track audio buses + control buses deterministically
-- Maintain group hierarchy (master → tracks → device chains)
-- Enforce processing order: instrument → inserts → sends → fader → bus → master
+- Deterministic audio/control bus allocation
+- Fixed group hierarchy: sources → processing → output → bus processing → record/safety
+- Incremental routing rebuilds for targeted changes (add/delete instrument, bus FX)
 
 ### 5) Clock / Transport Bridge (Timeline Master)
-- Prefer: **app is master**, SC follows
-- App transport + tempo map drives:
-  - timestamped note/event scheduling
-  - tempo changes
-  - loop points and seeks
+- App is master, SC follows
+- App transport drives timestamped scheduling, tempo changes, loop points
 
 ### 6) Event Scheduler (Clips/Automation → OSC)
-- Convert MIDI clips + automation lanes into timestamped bundles
-- Lookahead scheduling window (e.g., 100–500ms)
-- Seeking: kill/rebuild playing nodes, re-chase automation at playhead
-- Loop handling with deterministic state re-init
+- Convert notes + automation lanes into timestamped bundles
+- Lookahead window computed from buffer size + jitter margin
+- Loop handling with high-water mark scanning
 
 ### 7) Recording & Rendering Pipeline
 **Live recording**
 - Input routing to SC buses
-- Capture to disk (SC server recording or external capture)
-- Latency compensation / alignment to timeline
+- Disk recording via SC `DiskOut` (master recording)
 
 **Export/bounce**
-- Prefer: NRT render via SC score files (“project → score” exporter)
-- Fallback: real-time bounce (acceptable for v1, annoying long-term)
+- Real-time master bounce + stem export (per-instrument)
+- **Future:** NRT render via SC score files
 
 ### 8) State Reconciler (Project ↔ Server)
 - Apply diffs: create/remove/move nodes, change params, reroute buses
-- Use `/sync` fencing to ensure applied state
+- Incremental rebuilds where possible; full rebuilds only for structural changes
 - Stable ID mapping: project device instance IDs ↔ SC node IDs/bus IDs
 
 ### 9) Metering / Analysis Feeds
-- Meters via analysis synths + `SendReply` / control buses
-- Decimate for UI (terminal doesn’t need high-rate updates)
-- Peak hold / RMS integration if needed
+- Analysis synths for peak/RMS, spectrum, scope
+- Lock-free shared monitor data for UI rendering
 
 ---
 
 ## Hard Constraints (don’t lie to yourself)
-- SC is not a DAW timeline engine: your app must own timeline semantics
+- SC is not a DAW timeline engine: the app owns timeline semantics
 - Timing needs timestamped bundles + lookahead; immediate OSC will jitter
 - Seek/loop require “rebuild to known state” strategies
 - Reliable bounce/export is required for a non-toy system
@@ -84,9 +77,9 @@
 ---
 
 ## Minimal v1 That Makes Music
-- Server Runtime Manager
-- OSC Transport Layer (timestamped bundles + `/sync`)
-- Bus & Routing Allocator
-- SynthDef/Node Library (basic synth + basic FX)
-- Event Scheduler (notes + minimal automation)
-- Either: basic recording OR basic NRT export (pick one first)
+- Server runtime manager
+- OSC transport (timestamped bundles)
+- Bus & routing allocator
+- SynthDef/node library (basic synth + basic FX)
+- Event scheduler (notes + automation)
+- Basic recording + real-time export

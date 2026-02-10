@@ -266,6 +266,10 @@ fn test_roundtrip_server_reconnect_failed() {
 fn test_roundtrip_state_patch_update() {
     let patch = StatePatch {
         session: Some(SessionState::new()),
+        piano_roll: None,
+        arrangement: None,
+        automation: None,
+        mixer: None,
         instruments: None,
         instrument_patches: None,
         ownership: None,
@@ -325,6 +329,10 @@ fn test_roundtrip_network_action_variants() {
 fn test_roundtrip_state_patch_all_none() {
     let patch = StatePatch {
         session: None,
+        piano_roll: None,
+        arrangement: None,
+        automation: None,
+        mixer: None,
         instruments: None,
         instrument_patches: None,
         ownership: None,
@@ -334,6 +342,10 @@ fn test_roundtrip_state_patch_all_none() {
     let json = serde_json::to_string(&patch).unwrap();
     let rt: StatePatch = serde_json::from_str(&json).unwrap();
     assert!(rt.session.is_none());
+    assert!(rt.piano_roll.is_none());
+    assert!(rt.arrangement.is_none());
+    assert!(rt.automation.is_none());
+    assert!(rt.mixer.is_none());
     assert!(rt.instruments.is_none());
     assert!(rt.ownership.is_none());
     assert!(rt.privileged_client.is_none());
@@ -345,6 +357,10 @@ fn test_roundtrip_state_patch_all_none() {
 fn test_roundtrip_state_patch_privileged_client_cleared() {
     let patch = StatePatch {
         session: None,
+        piano_roll: None,
+        arrangement: None,
+        automation: None,
+        mixer: None,
         instruments: None,
         instrument_patches: None,
         ownership: None,
@@ -361,20 +377,21 @@ fn test_roundtrip_state_patch_privileged_client_cleared() {
 #[test]
 fn test_roundtrip_state_patch_privileged_client_all_variants() {
     // None = no change
-    let p1 = StatePatch { session: None, instruments: None, instrument_patches: None, ownership: None, privileged_client: None, seq: 1 };
+    let p1 = StatePatch { session: None, piano_roll: None, arrangement: None, automation: None, mixer: None, instruments: None, instrument_patches: None, ownership: None, privileged_client: None, seq: 1 };
     let j1 = serde_json::to_string(&p1).unwrap();
     let r1: StatePatch = serde_json::from_str(&j1).unwrap();
     assert_eq!(r1.privileged_client, None);
 
     // Some(None) = changed to nobody
-    let p2 = StatePatch { session: None, instruments: None, instrument_patches: None, ownership: None, privileged_client: Some(None), seq: 2 };
+    let p2 = StatePatch { session: None, piano_roll: None, arrangement: None, automation: None, mixer: None, instruments: None, instrument_patches: None, ownership: None, privileged_client: Some(None), seq: 2 };
     let j2 = serde_json::to_string(&p2).unwrap();
     let r2: StatePatch = serde_json::from_str(&j2).unwrap();
     assert_eq!(r2.privileged_client, Some(None));
 
     // Some(Some(...)) = changed to Alice
     let p3 = StatePatch {
-        session: None, instruments: None, instrument_patches: None, ownership: None,
+        session: None, piano_roll: None, arrangement: None, automation: None, mixer: None,
+        instruments: None, instrument_patches: None, ownership: None,
         privileged_client: Some(Some((ClientId::new(1), "Alice".into()))),
         seq: 3,
     };
@@ -397,6 +414,10 @@ fn test_roundtrip_state_patch_with_instrument_patches() {
 
     let patch = StatePatch {
         session: None,
+        piano_roll: None,
+        arrangement: None,
+        automation: None,
+        mixer: None,
         instruments: None,
         instrument_patches: Some(patches),
         ownership: None,
@@ -418,6 +439,10 @@ fn test_roundtrip_state_patch_instrument_patches_absent() {
     // When instrument_patches is None, the field should be absent from JSON
     let patch = StatePatch {
         session: None,
+        piano_roll: None,
+        arrangement: None,
+        automation: None,
+        mixer: None,
         instruments: None,
         instrument_patches: None,
         ownership: None,

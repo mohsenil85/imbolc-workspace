@@ -4,7 +4,7 @@ Cross-platform GUI for Imbolc DAW using Dioxus.
 
 ## What This Is
 
-A Dioxus-based desktop GUI alternative to the terminal UI (imbolc-ui). Provides the same functionality but with a graphical interface. Shares all core logic via imbolc-core and imbolc-types.
+A Dioxus-based desktop GUI alternative to the terminal UI (imbolc-ui). It is **experimental** and not yet feature-parity with the TUI, focusing on transport, arrangement, mixer, and basic instrument editing. Shares core logic via imbolc-core and imbolc-types.
 
 ## Directory Structure
 

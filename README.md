@@ -49,7 +49,7 @@ Optional: override SynthDef location with `IMBOLC_SYNTHDEFS_DIR=/path/to/synthde
 
 ### UI
 
-- TUI with 27 panes: instruments, instrument editor, piano roll, sequencer, track/arrangement, mixer, automation, EQ, VST params, server control, waveform/spectrum/oscilloscope/level meter, project browser, docs, command palette, help, groove, tuner, checkpoints, and more.
+- TUI with 30 panes: instruments, instrument editor, piano roll, sequencer, track/arrangement, mixer, automation, EQ, VST params, server control, waveform/spectrum/oscilloscope/level meter, project browser, docs, command palette, help, groove, tuner, checkpoints, and more.
 - Keyboard-first navigation with contextual help and command palette.
 - Performance mode: piano/pad overlay (`/`).
 - Full undo/redo history and clipboard.
@@ -95,7 +95,7 @@ Current gaps:
 
 Setup notes:
 - Install the VSTPlugin extension in SuperCollider.
-- Generate wrapper SynthDefs: `sclang imbolc-core/synthdefs/compile_vst.scd`, then load synthdefs from the Server pane.
+- Generate wrapper SynthDefs: `imbolc-core/bin/compile-vst-synthdefs` (or `sclang imbolc-core/synthdefs/compile_vst.scd`), then load synthdefs from the Server pane.
 
 ## Architecture
 
@@ -131,7 +131,7 @@ Scope-aware `UndoEntry` variants (`SingleInstrument`, `Session`, `Full`). A scop
 
 ### Networking
 
-LAN collaboration via `imbolc-net` (feature-flagged: `--features net` / `mdns`): single audio server, multiple clients, control data over TCP (no audio over network, no drift correction needed). Per-instrument dirty flags with `InstrumentPatch` delta updates, rate-limited at ~30 Hz with threshold coalescing (falls back to full snapshot when >50% of instruments are dirty).
+LAN collaboration via `imbolc-net` (feature-flagged: `--features net` / `mdns`): single audio server, multiple clients, control data over TCP (no audio over network, no drift correction needed). Per-instrument dirty flags drive `StatePatch` delta updates, rate-limited at ~30 Hz with threshold coalescing (falls back to full snapshot when >50% of instruments are dirty).
 
 ### Routing
 

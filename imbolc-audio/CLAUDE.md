@@ -68,5 +68,5 @@ Implemented by `AppState` in imbolc-core.
 
 ```bash
 cargo build -p imbolc-audio
-cargo test -p imbolc-audio    # 84 tests
+cargo test -p imbolc-audio
 ```

@@ -19,6 +19,9 @@ document as a guide to intent and conventions, not an exhaustive list.
 | `Ctrl+S` | Save project as... |
 | `Ctrl+l` | Load session |
 | `Ctrl+o` | Open project browser |
+| `Ctrl+f` | Frame edit (session settings) |
+| `Ctrl+m` | MIDI settings |
+| `Ctrl+k` | Checkpoints list |
 | `Ctrl+z` | Undo |
 | `Ctrl+Z` | Redo |
 | `F1` | Instruments |
@@ -26,18 +29,25 @@ document as a guide to intent and conventions, not an exhaustive list.
 | `F3` | Track |
 | `F4` | Mixer |
 | `F5` | Server |
+| `F6` | Docs (selected instrument) |
+| `Shift+F6` | Learn (topic browser) |
 | `F7` | Automation |
 | `F8` | Parametric EQ |
+| `F9` | Groove |
+| `F10` | Tuner |
 | `` ` `` / `~` | Back / Forward |
-| `Ctrl+f` | Frame edit (session settings) |
-| `Ctrl+m` | MIDI settings |
 | `?` | Context help |
 | `:` | Command Palette |
+| `;` | Pane switcher |
 | `/` | Toggle piano keyboard |
+| `Space` | Play/Stop |
+| `M` | Toggle metronome |
+| `T` | Cycle UI theme |
 | `.` | Toggle master mute |
 | `Ctrl+r` | Toggle master recording |
 | `1`-`9`, `0` | Select instrument 1-10 |
 | `_` | Two-digit instrument select |
+| `<` / `>` | Previous / next instrument |
 | `Ctrl+n` | Add instrument |
 | `Ctrl+d` | Delete instrument |
 | `Ctrl+c` | Copy |
@@ -74,10 +84,13 @@ These are representative examples; check `keybindings.toml` for the full list.
 |-----|--------|
 | `Space` | Play/Stop |
 | `n` | Capture clip from piano roll |
+| `N` | Create empty clip (1 bar) |
 | `p` | Place clip |
 | `Enter` | Edit clip |
 | `d` | Delete placement |
+| `D` | Delete clip |
 | `y` | Duplicate placement |
+| `m` | Toggle Song/Pattern mode |
 
 ### Sequencer
 | Key | Action |
@@ -86,6 +99,8 @@ These are representative examples; check `keybindings.toml` for the full list.
 | `Space` | Play/Stop |
 | `s` | Load sample |
 | `c` | Sample chopper |
+| `g` | Cycle step grid |
+| `x` | Clear pad steps |
 | `Shift+Arrows` | Extend selection |
 
 ### Mixer
@@ -96,13 +111,16 @@ These are representative examples; check `keybindings.toml` for the full list.
 | `o` / `O` | Cycle output target (forward/back) |
 | `a` | Add effect (detail view) |
 | `e` | Toggle effect (detail view) |
+| `Tab` | Cycle section |
+| `g` | Toggle send |
 
 ### Automation
 | Key | Action |
 |-----|--------|
+| `Tab` | Switch focus (lane list / timeline) |
 | `Enter` | Place/remove point |
 | `a` | Add lane |
-| `r` | Toggle recording |
+| `r` | Toggle automation recording |
 | `R` | Arm/disarm lane |
 
 ### Server

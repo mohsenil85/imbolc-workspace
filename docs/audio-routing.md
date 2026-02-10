@@ -42,14 +42,14 @@ In our layout:
 
 SuperCollider processes synths in order on the server. A synth reading from a bus must come **after** the synth writing to it, otherwise it reads stale data from the previous cycle (one-sample delay).
 
-We handle this with **groups + deterministic creation order**: sources, then processing, then output. This guarantees bus writers run before readers within the same audio block.
+We handle this with **groups + deterministic creation order**: sources, then processing, then output, then bus processing. This guarantees bus writers run before readers within the same audio block.
 
 ```
 Execution order:
-  1. MIDI module     (writes freq/gate to control buses)
-  2. SawOsc          (reads freq/gate, writes audio to bus 16)
-  3. LPF             (reads audio from bus 16, writes to bus 18)
-  4. Output          (reads audio from bus 18, writes to hardware bus 0)
+  1. imbolc_midi      (writes freq/gate/vel to control buses)
+  2. Source synth     (reads control buses, writes audio to bus 16)
+  3. Filter/EQ/FX     (reads bus 16, writes to bus 18)
+  4. Output synth     (reads bus 18, writes to hardware bus 0)
 ```
 
 ## Insert vs Send Routing
@@ -100,7 +100,7 @@ SynthDef(\source_with_send, { |out=16, send_bus=20, send_level=0|
 
 The reverb on bus 20 processes whatever lands there, and its output goes to the main bus. Because `Out.ar` sums, multiple channels sending to bus 20 all mix together into one reverb.
 
-In imbolc, each instrument has per-bus send levels (`instrument.sends`). The audio engine creates `imbolc_send` nodes that tap the instrument's source bus and write into the target bus before the bus output stage.
+In imbolc, each instrument has per-bus sends (`instrument.sends`) with a tap point (`PreInsert` or `PostInsert`). The audio engine creates `imbolc_send` nodes that read from the selected tap bus (pre- or post-insert) and write into the target bus audio bus. Layer groups use the same pattern in the bus-processing stage.
 
 ## Mixer Architecture
 
@@ -116,9 +116,13 @@ Each mixer channel corresponds to one Output module and controls:
 | Solo      | Silences all non-soloed channels |
 | Output    | Where this channel routes to (master or a bus) |
 
+Layer groups aggregate multiple instruments into a shared mixer strip. A layer group has its own effects/EQ, sends, and output target (master or bus). Instruments assigned to a group route into the group bus before bus/master processing.
+
 ### Signal Flow Through the Mixer
 
 ```
+
+If an instrument is part of a layer group, its output first goes to the layer group's processing bus. The group output then routes to master or a bus, just like an instrument output.
 Channel fader → Pan → Mute/Solo logic → Output target
                                               │
                                     ┌─────────┼──────────┐
@@ -182,8 +186,10 @@ SuperCollider has **groups** - containers for synths that control execution orde
 
 - Group 100: sources (oscillators, samplers, audio in)
 - Group 200: processing (filters, insert FX, mixer processing)
-- Group 300: output (instrument outputs, bus outputs, sends)
+- Group 300: output (instrument outputs, instrument sends)
+- Group 350: bus + layer-group processing and bus outputs
 - Group 400: recording nodes
+- Group 999: safety limiter / analysis
 
 ```
 Group 1 (sources):
@@ -199,7 +205,7 @@ Group 3 (output):
   Reverb synth (on send bus)
   Output synth
 
-Group order guarantees: sources → processing → output
+Group order guarantees: sources → processing → output → bus processing
 ```
 
 ## References

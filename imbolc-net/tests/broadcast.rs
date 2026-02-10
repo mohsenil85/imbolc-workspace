@@ -3,7 +3,11 @@ mod common;
 use std::time::{Duration, Instant};
 use imbolc_net::server::NetServer;
 use imbolc_net::protocol::{NetworkAction, ServerMessage};
-use imbolc_types::{InstrumentAction, MixerAction, ServerAction, SourceType, VstParamAction, VstTarget};
+use imbolc_types::{
+    ArrangementAction, AutomationAction, AutomationTarget, BusAction, InstrumentAction,
+    InstrumentParameter, MixerAction, ParameterTarget, PianoRollAction, ServerAction, SourceType,
+    VstParamAction, VstTarget,
+};
 
 #[test]
 fn test_metering_broadcast() {
@@ -150,10 +154,10 @@ fn test_patch_instruments_only() {
     }
 }
 
-// ── Patch correctness: both session + instruments ───────────────
+// ── Patch correctness: mixer + instruments ──────────────────────
 
 #[test]
-fn test_patch_session_and_instruments() {
+fn test_patch_mixer_and_instruments() {
     let mut server = NetServer::bind("127.0.0.1:0").unwrap();
     let addr = server.local_addr().unwrap().to_string();
     let state = common::make_test_state(&server);
@@ -163,7 +167,7 @@ fn test_patch_session_and_instruments() {
     common::drive_until_clients(&mut server, &state, 1, Duration::from_secs(2));
     let _welcome = alice.recv().unwrap();
 
-    // Mixer marks both session + instruments
+    // Mixer marks mixer (granular) + instruments_structural
     server.mark_dirty(&NetworkAction::Mixer(MixerAction::Move(1)));
 
     let state = common::make_test_state(&server);
@@ -172,7 +176,8 @@ fn test_patch_session_and_instruments() {
     let msg = alice.recv().unwrap();
     match msg {
         ServerMessage::StatePatchUpdate { patch } => {
-            assert!(patch.session.is_some(), "session should be present");
+            assert!(patch.session.is_none(), "session should be absent (Mixer is granular)");
+            assert!(patch.mixer.is_some(), "mixer should be present");
             assert!(patch.instruments.is_some(), "instruments should be present");
         }
         other => panic!("Expected StatePatchUpdate, got {:?}", other),
@@ -704,4 +709,158 @@ fn test_broken_client_detected_on_broadcast() {
 
     assert_eq!(server.client_count(), 0,
         "Client with broken connection should be suspended after repeated writes");
+}
+
+// ── Subsystem-level session patch granularity ───────────────────
+
+#[test]
+fn test_piano_roll_only_sends_piano_roll() {
+    let mut server = NetServer::bind("127.0.0.1:0").unwrap();
+    let addr = server.local_addr().unwrap().to_string();
+    let state = common::make_test_state(&server);
+
+    let mut alice = common::RawClient::connect(&addr).unwrap();
+    alice.send_hello("Alice", vec![], false).unwrap();
+    common::drive_until_clients(&mut server, &state, 1, Duration::from_secs(2));
+    let _welcome = alice.recv().unwrap();
+
+    server.mark_dirty(&NetworkAction::PianoRoll(PianoRollAction::PlayStop));
+
+    let state = common::make_test_state(&server);
+    server.broadcast_state_patch(&state);
+
+    let msg = alice.recv().unwrap();
+    match msg {
+        ServerMessage::StatePatchUpdate { patch } => {
+            assert!(patch.piano_roll.is_some(), "piano_roll should be present");
+            assert!(patch.session.is_none(), "session should be absent");
+            assert!(patch.arrangement.is_none(), "arrangement should be absent");
+            assert!(patch.automation.is_none(), "automation should be absent");
+            assert!(patch.mixer.is_none(), "mixer should be absent");
+            assert!(patch.instruments.is_none(), "instruments should be absent");
+        }
+        other => panic!("Expected StatePatchUpdate, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_arrangement_only_sends_arrangement() {
+    let mut server = NetServer::bind("127.0.0.1:0").unwrap();
+    let addr = server.local_addr().unwrap().to_string();
+    let state = common::make_test_state(&server);
+
+    let mut alice = common::RawClient::connect(&addr).unwrap();
+    alice.send_hello("Alice", vec![], false).unwrap();
+    common::drive_until_clients(&mut server, &state, 1, Duration::from_secs(2));
+    let _welcome = alice.recv().unwrap();
+
+    server.mark_dirty(&NetworkAction::Arrangement(ArrangementAction::TogglePlayMode));
+
+    let state = common::make_test_state(&server);
+    server.broadcast_state_patch(&state);
+
+    let msg = alice.recv().unwrap();
+    match msg {
+        ServerMessage::StatePatchUpdate { patch } => {
+            assert!(patch.arrangement.is_some(), "arrangement should be present");
+            assert!(patch.session.is_none(), "session should be absent");
+            assert!(patch.piano_roll.is_none(), "piano_roll should be absent");
+            assert!(patch.automation.is_none(), "automation should be absent");
+            assert!(patch.mixer.is_none(), "mixer should be absent");
+        }
+        other => panic!("Expected StatePatchUpdate, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_mixer_only_sends_mixer() {
+    let mut server = NetServer::bind("127.0.0.1:0").unwrap();
+    let addr = server.local_addr().unwrap().to_string();
+    let state = common::make_test_state(&server);
+
+    let mut alice = common::RawClient::connect(&addr).unwrap();
+    alice.send_hello("Alice", vec![], false).unwrap();
+    common::drive_until_clients(&mut server, &state, 1, Duration::from_secs(2));
+    let _welcome = alice.recv().unwrap();
+
+    server.mark_dirty(&NetworkAction::Bus(BusAction::Add));
+
+    let state = common::make_test_state(&server);
+    server.broadcast_state_patch(&state);
+
+    let msg = alice.recv().unwrap();
+    match msg {
+        ServerMessage::StatePatchUpdate { patch } => {
+            assert!(patch.mixer.is_some(), "mixer should be present");
+            assert!(patch.session.is_none(), "session should be absent");
+            assert!(patch.piano_roll.is_none(), "piano_roll should be absent");
+            assert!(patch.arrangement.is_none(), "arrangement should be absent");
+            assert!(patch.automation.is_none(), "automation should be absent");
+        }
+        other => panic!("Expected StatePatchUpdate, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_undo_sends_full_session() {
+    let mut server = NetServer::bind("127.0.0.1:0").unwrap();
+    let addr = server.local_addr().unwrap().to_string();
+    let state = common::make_test_state(&server);
+
+    let mut alice = common::RawClient::connect(&addr).unwrap();
+    alice.send_hello("Alice", vec![], false).unwrap();
+    common::drive_until_clients(&mut server, &state, 1, Duration::from_secs(2));
+    let _welcome = alice.recv().unwrap();
+
+    server.mark_dirty(&NetworkAction::Undo);
+
+    let state = common::make_test_state(&server);
+    server.broadcast_state_patch(&state);
+
+    let msg = alice.recv().unwrap();
+    match msg {
+        ServerMessage::StatePatchUpdate { patch } => {
+            assert!(patch.session.is_some(), "session should be present (undo sends full)");
+            // When full session is sent, granular fields should be absent
+            assert!(patch.piano_roll.is_none(), "piano_roll absent when full session");
+            assert!(patch.arrangement.is_none(), "arrangement absent when full session");
+            assert!(patch.automation.is_none(), "automation absent when full session");
+            assert!(patch.mixer.is_none(), "mixer absent when full session");
+            assert!(patch.instruments.is_some(), "instruments should be present (undo is structural)");
+        }
+        other => panic!("Expected StatePatchUpdate, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_mixed_subsystems_no_full_session() {
+    let mut server = NetServer::bind("127.0.0.1:0").unwrap();
+    let addr = server.local_addr().unwrap().to_string();
+    let state = common::make_test_state(&server);
+
+    let mut alice = common::RawClient::connect(&addr).unwrap();
+    alice.send_hello("Alice", vec![], false).unwrap();
+    common::drive_until_clients(&mut server, &state, 1, Duration::from_secs(2));
+    let _welcome = alice.recv().unwrap();
+
+    // Mark both PianoRoll and Automation dirty
+    server.mark_dirty(&NetworkAction::PianoRoll(PianoRollAction::PlayStop));
+    server.mark_dirty(&NetworkAction::Automation(AutomationAction::AddLane(
+        AutomationTarget::Instrument(0, InstrumentParameter::Standard(ParameterTarget::Level)),
+    )));
+
+    let state = common::make_test_state(&server);
+    server.broadcast_state_patch(&state);
+
+    let msg = alice.recv().unwrap();
+    match msg {
+        ServerMessage::StatePatchUpdate { patch } => {
+            assert!(patch.piano_roll.is_some(), "piano_roll should be present");
+            assert!(patch.automation.is_some(), "automation should be present");
+            assert!(patch.session.is_none(), "session should be absent (no remainder change)");
+            assert!(patch.arrangement.is_none(), "arrangement should be absent");
+            assert!(patch.mixer.is_none(), "mixer should be absent");
+        }
+        other => panic!("Expected StatePatchUpdate, got {:?}", other),
+    }
 }

@@ -76,17 +76,23 @@ env = EnvGen.kr(...);      // assign later
 
 ## Compiling
 
-From the `synthdefs/` directory:
+From the repo root (recommended):
+
+```bash
+imbolc-core/bin/compile-synthdefs
+```
+
+From the `synthdefs/` directory (direct):
 
 ```bash
 sclang compile.scd
 ```
 
-This loads all `.scd` files from subdirectories and writes `.scsyndef` files to the synthdefs directory.
+Both commands load all `.scd` files from subdirectories and write `.scsyndef` files to the synthdefs directory.
 
 ## Adding a New SynthDef
 
 1. Create a new file in the appropriate subdirectory
 2. Use the template above (note: `dirname.dirname.dirname` goes up 3 levels to write to synthdefs/)
-3. Run `sclang compile.scd` to verify it compiles
+3. Run `imbolc-core/bin/compile-synthdefs` (or `sclang compile.scd` from `synthdefs/`) to verify it compiles
 4. Add a corresponding `SourceType` variant in `imbolc-types/src/state/instrument/source_type.rs` if it's a new instrument type

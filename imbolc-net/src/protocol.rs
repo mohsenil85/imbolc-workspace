@@ -7,9 +7,10 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 use imbolc_types::{
-    ArrangementAction, AutomationAction, BusAction, ChopperAction, Instrument, InstrumentAction,
-    InstrumentId, InstrumentState, LayerGroupAction, MidiAction, MixerAction, PianoRollAction,
-    SequencerAction, ServerAction, SessionAction, SessionState, VstParamAction,
+    ArrangementAction, ArrangementState, AutomationAction, AutomationState, BusAction,
+    ChopperAction, Instrument, InstrumentAction, InstrumentId, InstrumentState, LayerGroupAction,
+    MidiAction, MixerAction, MixerState, PianoRollAction, PianoRollState, SequencerAction,
+    ServerAction, SessionAction, SessionState, VstParamAction,
 };
 
 /// Unique identifier for a connected client.
@@ -122,7 +123,18 @@ pub struct NetworkState {
 /// A partial state update containing only changed subsystems.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StatePatch {
+    /// Full session state (sent for "remainder" changes: settings, registries, undo/redo).
+    /// When present, granular subsystem fields are skipped (full session includes them).
     pub session: Option<SessionState>,
+    /// Granular session subsystem patches (only used when `session` is `None`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub piano_roll: Option<PianoRollState>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub arrangement: Option<ArrangementState>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub automation: Option<AutomationState>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mixer: Option<MixerState>,
     pub instruments: Option<InstrumentState>,
     /// Per-instrument delta patches (mutually exclusive with `instruments`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
