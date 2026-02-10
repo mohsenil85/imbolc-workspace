@@ -349,7 +349,7 @@ impl AudioEngine {
             };
 
             // Determine output destination: layer group bus, mixer bus, or master (0)
-            let output_bus = if let Some(group_id) = instrument.layer_group {
+            let output_bus = if let Some(group_id) = instrument.layer.group {
                 self.layer_group_audio_buses.get(&group_id).copied().unwrap_or(0) as f32
             } else {
                 match instrument.output_target {

@@ -37,6 +37,20 @@ impl Default for NoteInputConfig {
     }
 }
 
+/// Layer group membership and octave offset for an instrument.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
+pub struct LayerConfig {
+    pub group: Option<u32>,
+    pub octave_offset: i8,
+}
+
+impl LayerConfig {
+    /// Apply layer octave offset to a pitch, clamping to MIDI range 0..=127.
+    pub fn offset_pitch(&self, pitch: u8) -> u8 {
+        ((pitch as i16) + (self.octave_offset as i16 * 12)).clamp(0, 127) as u8
+    }
+}
+
 /// Whether an instrument's signal chain is mono or stereo.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum ChannelConfig {
@@ -423,10 +437,8 @@ pub struct Instrument {
     pub note_input: NoteInputConfig,
     /// Path to loaded impulse response file for convolution reverb
     pub convolution_ir_path: Option<String>,
-    /// Layer group ID: instruments sharing the same group sound together
-    pub layer_group: Option<u32>,
-    /// Per-instrument octave offset for layer groups (-4 to +4, default 0)
-    pub layer_octave_offset: i8,
+    /// Layer group membership and octave offset
+    pub layer: LayerConfig,
     /// Counter for allocating unique EffectIds
     pub next_effect_id: EffectId,
     /// Per-track groove settings (swing, humanization, timing offset)
@@ -471,8 +483,7 @@ impl Instrument {
             vst_state_path: None,
             note_input: NoteInputConfig::default(),
             convolution_ir_path: None,
-            layer_group: None,
-            layer_octave_offset: 0,
+            layer: LayerConfig::default(),
             next_effect_id: EffectId::new(0),
             groove: GrooveConfig::default(),
         }
@@ -665,7 +676,7 @@ impl Instrument {
 
     /// Apply layer octave offset to a pitch, clamping to MIDI range 0..=127.
     pub fn offset_pitch(&self, pitch: u8) -> u8 {
-        ((pitch as i16) + (self.layer_octave_offset as i16 * 12)).clamp(0, 127) as u8
+        self.layer.offset_pitch(pitch)
     }
 
     /// Recalculate next_effect_id from existing effects in the chain (used after loading).
@@ -981,7 +992,7 @@ mod tests {
     #[test]
     fn offset_pitch_identity_at_zero() {
         let inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
-        assert_eq!(inst.layer_octave_offset, 0);
+        assert_eq!(inst.layer.octave_offset, 0);
         assert_eq!(inst.offset_pitch(60), 60);
         assert_eq!(inst.offset_pitch(0), 0);
         assert_eq!(inst.offset_pitch(127), 127);
@@ -990,7 +1001,7 @@ mod tests {
     #[test]
     fn offset_pitch_positive() {
         let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
-        inst.layer_octave_offset = 2;
+        inst.layer.octave_offset = 2;
         assert_eq!(inst.offset_pitch(60), 84);
         assert_eq!(inst.offset_pitch(48), 72);
     }
@@ -998,21 +1009,21 @@ mod tests {
     #[test]
     fn offset_pitch_negative() {
         let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
-        inst.layer_octave_offset = -3;
+        inst.layer.octave_offset = -3;
         assert_eq!(inst.offset_pitch(60), 24);
     }
 
     #[test]
     fn offset_pitch_clamps_high() {
         let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
-        inst.layer_octave_offset = 4;
+        inst.layer.octave_offset = 4;
         assert_eq!(inst.offset_pitch(120), 127);
     }
 
     #[test]
     fn offset_pitch_clamps_low() {
         let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
-        inst.layer_octave_offset = -4;
+        inst.layer.octave_offset = -4;
         assert_eq!(inst.offset_pitch(10), 0);
     }
 

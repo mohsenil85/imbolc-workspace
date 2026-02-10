@@ -1192,7 +1192,7 @@ mod tests {
             let inst_id = state.add_instrument(SourceType::Saw);
             // Assign instrument to layer group 1 so the group bus gets allocated
             if let Some(inst) = state.instruments.instrument_mut(inst_id) {
-                inst.layer_group = Some(1);
+                inst.layer.group = Some(1);
             }
             // Create a layer group mixer and add a reverb effect
             state.session.mixer.add_layer_group_mixer(1, &[BusId::new(1)]);
@@ -1225,7 +1225,7 @@ mod tests {
             let mut state = AppState::new();
             let inst_id = state.add_instrument(SourceType::Saw);
             if let Some(inst) = state.instruments.instrument_mut(inst_id) {
-                inst.layer_group = Some(1);
+                inst.layer.group = Some(1);
             }
             state.session.mixer.add_layer_group_mixer(1, &[BusId::new(1)]);
             let gm = state.session.mixer.layer_group_mixer_mut(1).unwrap();

@@ -62,7 +62,7 @@ impl InstrumentState {
 
     pub fn remove_instrument(&mut self, id: InstrumentId) {
         // Capture layer group before removal for singleton cleanup
-        let old_group = self.instrument(id).and_then(|i| i.layer_group);
+        let old_group = self.instrument(id).and_then(|i| i.layer.group);
 
         if let Some(pos) = self.instruments.iter().position(|s| s.id == id) {
             self.instruments.remove(pos);
@@ -86,12 +86,12 @@ impl InstrumentState {
             let remaining: Vec<InstrumentId> = self
                 .instruments
                 .iter()
-                .filter(|i| i.layer_group == Some(g))
+                .filter(|i| i.layer.group == Some(g))
                 .map(|i| i.id)
                 .collect();
             if remaining.len() == 1 {
                 if let Some(inst) = self.instrument_mut(remaining[0]) {
-                    inst.layer_group = None;
+                    inst.layer.group = None;
                 }
             }
         }
@@ -182,7 +182,7 @@ impl InstrumentState {
         let mut groups: Vec<u32> = self
             .instruments
             .iter()
-            .filter_map(|i| i.layer_group)
+            .filter_map(|i| i.layer.group)
             .collect();
         groups.sort_unstable();
         groups.dedup();
@@ -192,12 +192,12 @@ impl InstrumentState {
     /// Returns all instrument IDs in the same layer group as `id` (including `id` itself).
     /// If the instrument has no layer group, returns just `vec![id]`.
     pub fn layer_group_members(&self, id: InstrumentId) -> Vec<InstrumentId> {
-        let group = self.instrument(id).and_then(|inst| inst.layer_group);
+        let group = self.instrument(id).and_then(|inst| inst.layer.group);
         match group {
             Some(g) => self
                 .instruments
                 .iter()
-                .filter(|inst| inst.layer_group == Some(g))
+                .filter(|inst| inst.layer.group == Some(g))
                 .map(|inst| inst.id)
                 .collect(),
             None => vec![id],
@@ -305,8 +305,8 @@ mod tests {
         let _id3 = state.add_instrument(SourceType::Sqr);
 
         let group = state.next_layer_group();
-        state.instrument_mut(id1).unwrap().layer_group = Some(group);
-        state.instrument_mut(id2).unwrap().layer_group = Some(group);
+        state.instrument_mut(id1).unwrap().layer.group = Some(group);
+        state.instrument_mut(id2).unwrap().layer.group = Some(group);
 
         let members = state.layer_group_members(id1);
         assert_eq!(members.len(), 2);
@@ -329,13 +329,13 @@ mod tests {
         let id2 = state.add_instrument(SourceType::Sin);
 
         let group = state.next_layer_group();
-        state.instrument_mut(id1).unwrap().layer_group = Some(group);
-        state.instrument_mut(id2).unwrap().layer_group = Some(group);
+        state.instrument_mut(id1).unwrap().layer.group = Some(group);
+        state.instrument_mut(id2).unwrap().layer.group = Some(group);
 
         state.remove_instrument(id1);
 
         // id2 should have layer_group cleared (group of 1 is meaningless)
-        assert_eq!(state.instrument(id2).unwrap().layer_group, None);
+        assert_eq!(state.instrument(id2).unwrap().layer.group, None);
     }
 
     #[test]

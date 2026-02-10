@@ -165,7 +165,7 @@ fn layer_group() -> AppState {
 /// Helper: get the layer group ID from the first instrument.
 fn group_id(s: &AppState) -> u32 {
     s.instruments.instruments[0]
-        .layer_group
+        .layer.group
         .expect("fixture should have layer group")
 }
 

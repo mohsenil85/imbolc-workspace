@@ -197,7 +197,7 @@ pub(super) fn load_instruments(conn: &Connection, instruments: &mut InstrumentSt
         inst.output_target = decode_output_target(&r.output_target);
         inst.channel_config = decode_channel_config(&r.channel_config);
         inst.convolution_ir_path = r.convolution_ir_path;
-        inst.layer_group = r.layer_group;
+        inst.layer.group = r.layer_group;
         inst.next_effect_id = imbolc_types::EffectId::new(r.next_effect_id);
         inst.note_input.arpeggiator = arpeggiator;
         inst.note_input.chord_shape = chord_shape;
@@ -211,7 +211,7 @@ pub(super) fn load_instruments(conn: &Connection, instruments: &mut InstrumentSt
                 params![r.id],
                 |row| row.get(0),
             ).unwrap_or(0);
-            inst.layer_octave_offset = offset.clamp(-4, 4) as i8;
+            inst.layer.octave_offset = offset.clamp(-4, 4) as i8;
         }
 
         // Source params

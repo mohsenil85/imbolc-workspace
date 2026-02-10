@@ -108,7 +108,7 @@ impl MixerPane {
                 let instrument = &state.instruments.instruments[idx];
                 let is_selected = matches!(state.session.mixer.selection, MixerSelection::Instrument(s) if s == idx);
 
-                let label = if instrument.layer_group.is_some() {
+                let label = if instrument.layer.group.is_some() {
                     format!("I{}L", instrument.id)
                 } else {
                     format!("I{}", instrument.id)

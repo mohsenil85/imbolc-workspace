@@ -381,7 +381,7 @@ fn project_instrument(
         }
         InstrumentAction::AdjustLayerOctaveOffset(id, delta) => {
             if let Some(inst) = instruments.instrument_mut(*id) {
-                inst.layer_octave_offset = (inst.layer_octave_offset + delta).clamp(-4, 4);
+                inst.layer.octave_offset = (inst.layer.octave_offset + delta).clamp(-4, 4);
             }
             true
         }
@@ -557,18 +557,18 @@ fn project_link_layer(
     if a == b {
         return;
     }
-    let group_b = instruments.instrument(b).and_then(|i| i.layer_group);
-    let group_a = instruments.instrument(a).and_then(|i| i.layer_group);
+    let group_b = instruments.instrument(b).and_then(|i| i.layer.group);
+    let group_a = instruments.instrument(a).and_then(|i| i.layer.group);
     let group_id = match (group_a, group_b) {
         (_, Some(g)) => g,
         (Some(g), None) => g,
         (None, None) => instruments.next_layer_group(),
     };
     if let Some(inst) = instruments.instrument_mut(a) {
-        inst.layer_group = Some(group_id);
+        inst.layer.group = Some(group_id);
     }
     if let Some(inst) = instruments.instrument_mut(b) {
-        inst.layer_group = Some(group_id);
+        inst.layer.group = Some(group_id);
     }
     // Auto-create LayerGroupMixer if new group
     let bus_ids: Vec<BusId> = session.mixer.bus_ids().collect();
@@ -582,19 +582,19 @@ fn project_unlink_layer(
     session: &mut SessionState,
     id: InstrumentId,
 ) {
-    let old_group = instruments.instrument(id).and_then(|i| i.layer_group);
+    let old_group = instruments.instrument(id).and_then(|i| i.layer.group);
     if let Some(inst) = instruments.instrument_mut(id) {
-        inst.layer_group = None;
+        inst.layer.group = None;
     }
     if let Some(g) = old_group {
         let remaining: Vec<InstrumentId> = instruments.instruments.iter()
-            .filter(|i| i.layer_group == Some(g))
+            .filter(|i| i.layer.group == Some(g))
             .map(|i| i.id)
             .collect();
         if remaining.len() <= 1 {
             if remaining.len() == 1 {
                 if let Some(inst) = instruments.instrument_mut(remaining[0]) {
-                    inst.layer_group = None;
+                    inst.layer.group = None;
                 }
             }
             session.mixer.remove_layer_group_mixer(g);

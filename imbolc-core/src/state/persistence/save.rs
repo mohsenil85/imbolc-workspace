@@ -226,7 +226,7 @@ fn save_instruments(conn: &Connection, instruments: &InstrumentState) -> SqlResu
             output_target,
             channel_config,
             inst.convolution_ir_path.as_deref(),
-            inst.layer_group,
+            inst.layer.group,
             inst.next_effect_id.get(),
             eq_enabled,
             inst.note_input.arpeggiator.enabled as i32,
@@ -243,7 +243,7 @@ fn save_instruments(conn: &Connection, instruments: &InstrumentState) -> SqlResu
             groove.timing_offset_ms,
             groove_time_sig_num,
             groove_time_sig_denom,
-            inst.layer_octave_offset as i32,
+            inst.layer.octave_offset as i32,
         ])?;
 
         // Source params

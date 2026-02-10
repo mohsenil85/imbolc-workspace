@@ -290,9 +290,9 @@ impl Pane for InstrumentPane {
 
             let source_c = source_color(instrument.source);
 
-            let layer_str = match instrument.layer_group {
-                Some(g) if instrument.layer_octave_offset != 0 => {
-                    format!(" [L{}:{:+}]", g, instrument.layer_octave_offset)
+            let layer_str = match instrument.layer.group {
+                Some(g) if instrument.layer.octave_offset != 0 => {
+                    format!(" [L{}:{:+}]", g, instrument.layer.octave_offset)
                 }
                 Some(g) => format!(" [L{}]", g),
                 None => String::new(),
