@@ -174,14 +174,16 @@ AppState (imbolc-core/src/state/mod.rs)
 | `audio_feedback.rs` | Audio feedback processing |
 | `side_effects.rs` | `AudioSideEffect` enum (voice spawn, sample free, etc.) |
 
-### imbolc-core: audio/
+### imbolc-audio: src/ (separate crate, re-exported by core as `pub use imbolc_audio as audio`)
 
 | File | Purpose |
 |---|---|
+| `lib.rs` | Crate root, `AudioStateProvider` trait, re-exports |
 | `handle.rs` | `AudioHandle` — main-thread API, sends `AudioCmd` to audio thread |
 | `audio_thread.rs` | Audio thread main loop, processes commands |
 | `commands.rs` | `AudioCmd` and `AudioFeedback` enums |
 | `playback.rs` | Playback scheduling, sequencer tick, lookahead |
+| `arp_state.rs` | `ArpPlayState` — runtime arpeggiator state |
 | `engine/mod.rs` | `AudioEngine` — SC backend, node map, bus tracking |
 | `engine/backend.rs` | `AudioBackend` trait, OSC socket I/O |
 | `engine/server.rs` | SC server boot/kill, device enumeration |

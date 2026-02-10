@@ -33,7 +33,7 @@ Core library lives in `../imbolc-core/`. Types are in `../imbolc-types/`. See th
 | `Pane` | `src/ui/pane.rs` | Trait: `id()`, `handle_action()`, `handle_raw_input()`, `handle_mouse()`, `render()`, `keymap()` |
 | `PaneManager` | `src/ui/pane.rs` | Owns all panes, manages active pane, coordinates input |
 | `LocalDispatcher` | `imbolc-core/src/dispatch/local.rs` | Owns state, provides dispatch |
-| `AudioHandle` | `imbolc-core/src/audio/handle.rs` | Main-thread interface; sends AudioCmd via MPSC channel to audio thread |
+| `AudioHandle` | `imbolc-audio/src/handle.rs` | Main-thread interface; sends AudioCmd via MPSC channel to audio thread |
 
 ## Panes
 

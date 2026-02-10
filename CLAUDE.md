@@ -7,7 +7,8 @@ Multi-crate Rust workspace for Imbolc, a terminal-based DAW (Digital Audio Works
 ```
 imbolc/
 ├── imbolc-ui/      Terminal UI binary (ratatui + crossterm)
-├── imbolc-core/    Core engine (state, dispatch, audio, persistence)
+├── imbolc-core/    Core engine (state, dispatch, persistence)
+├── imbolc-audio/   Audio engine (SuperCollider OSC, playback, routing)
 ├── imbolc-types/   Shared type definitions
 └── imbolc-net/     Network/collaboration layer
 ```
@@ -17,8 +18,13 @@ imbolc/
 ```
 imbolc-types  (leaf crate, no internal deps)
      │
+     ├──────────────────┐
+     ▼                  ▼
+imbolc-audio          imbolc-net
+(audio engine)        (collaboration)
+     │
      ▼
-imbolc-core   (state, dispatch, audio engine)
+imbolc-core   (state, dispatch, persistence)
      │
      ▼
 imbolc-ui     (terminal interface)
@@ -38,7 +44,8 @@ cargo run -p imbolc-ui      # Run the DAW
 | Crate | Purpose | Key Files |
 |-------|---------|-----------|
 | `imbolc-types` | Shared types: Instrument, Action, SourceType, etc. | `src/state/`, `src/action.rs` |
-| `imbolc-core` | State management, action dispatch, SuperCollider audio | `src/dispatch/`, `src/audio/` |
+| `imbolc-audio` | Audio engine: SuperCollider OSC, playback, routing | `src/engine/`, `src/handle.rs` |
+| `imbolc-core` | State management, action dispatch, persistence | `src/dispatch/`, `src/state/` |
 | `imbolc-ui` | Terminal rendering, panes, keybindings | `src/panes/`, `src/ui/` |
 
 ## Code Map
@@ -50,7 +57,8 @@ cargo run -p imbolc-ui      # Run the DAW
 Each crate has its own `CLAUDE.md` with detailed guidance:
 
 - [imbolc-ui/CLAUDE.md](imbolc-ui/CLAUDE.md) — UI architecture, pane system, keybindings
-- [imbolc-core/CLAUDE.md](imbolc-core/CLAUDE.md) — State, dispatch, audio engine
+- [imbolc-core/CLAUDE.md](imbolc-core/CLAUDE.md) — State, dispatch, persistence
+- [imbolc-audio/CLAUDE.md](imbolc-audio/CLAUDE.md) — Audio engine, SuperCollider, playback
 - [imbolc-types/CLAUDE.md](imbolc-types/CLAUDE.md) — Shared type definitions
 - [imbolc-net/CLAUDE.md](imbolc-net/CLAUDE.md) — Network protocol, LAN collaboration
 

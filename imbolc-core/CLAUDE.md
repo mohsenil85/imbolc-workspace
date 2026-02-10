@@ -4,7 +4,7 @@ Guide for AI agents working on imbolc-core.
 
 ## What This Is
 
-The core library for imbolc, a terminal-based DAW (Digital Audio Workstation) in Rust. Contains action dispatch, audio engine (SuperCollider via OSC), persistence, and domain logic. The TUI binary lives in `../imbolc-ui/`. Types are in `../imbolc-types/`. See the workspace root [../CLAUDE.md](../CLAUDE.md) for overview.
+The core library for imbolc, a terminal-based DAW (Digital Audio Workstation) in Rust. Contains action dispatch, persistence, and domain logic. The audio engine lives in `../imbolc-audio/` (re-exported here as `pub use imbolc_audio as audio`). The TUI binary lives in `../imbolc-ui/`. Types are in `../imbolc-types/`. See the workspace root [../CLAUDE.md](../CLAUDE.md) for overview.
 
 ## Directory Structure
 
@@ -28,37 +28,12 @@ synthdefs/           — SuperCollider SynthDef source files
     midi/                — MIDI output
 
 src/
-  lib.rs           — Crate root, re-exports
+  lib.rs           — Crate root, re-exports (includes `pub use imbolc_audio as audio`)
   action.rs        — Re-exports Action from imbolc-types, DispatchResult
   config.rs        — TOML config loading (musical defaults)
   paths.rs         — Path resolution utilities
   scd_parser.rs    — SuperCollider .scd file parser
   vst3_probe.rs    — VST3 plugin discovery
-
-  audio/           — SuperCollider OSC client and audio engine
-    mod.rs           — Module exports
-    handle.rs        — AudioHandle (main-thread interface)
-    audio_thread.rs  — AudioThread (runs in separate thread)
-    commands.rs      — AudioCmd and AudioFeedback enums
-    playback.rs      — Playback scheduling, sequencer tick
-    engine/          — Audio engine internals
-      mod.rs           — Engine state
-      backend.rs       — SuperCollider backend
-      server.rs        — Server communication
-      voices.rs        — Voice management
-      voice_allocator.rs — Polyphonic voice allocation
-      routing.rs       — Bus routing
-      samples.rs       — Sample loading
-      recording.rs     — Audio recording
-      automation.rs    — Automation playback
-      vst.rs           — VST hosting
-      node_registry.rs — SC node tracking
-    osc_client.rs    — OSC message sending
-    bus_allocator.rs — SC bus allocation
-    snapshot.rs      — State snapshots for audio thread
-    triple_buffer.rs — Lock-free state transfer
-    drum_tick.rs     — Drum sequencer tick
-    arpeggiator_tick.rs — Arpeggiator tick
 
   dispatch/        — Action handler (all state mutation happens here)
     mod.rs           — Main dispatch_action(), re-exports
@@ -96,7 +71,7 @@ src/
     (other state files re-export from imbolc-types)
 ```
 
-**Note:** State types (Instrument, SessionState, etc.) are defined in `imbolc-types`. This crate re-exports them and provides the dispatch/audio implementation.
+**Note:** State types (Instrument, SessionState, etc.) are defined in `imbolc-types`. Audio engine is in `imbolc-audio` (re-exported here as `pub use imbolc_audio as audio`). This crate re-exports both and provides the dispatch/persistence implementation.
 
 ## Key Types
 
@@ -110,7 +85,7 @@ src/
 | `EffectSlot` | `imbolc-types/src/state/instrument/effect.rs` | One effect in the chain |
 | `Action` | `imbolc-types/src/action.rs` | Action enum dispatched by the TUI binary |
 | `LocalDispatcher` | `src/dispatch/local.rs` | Owns state, dispatches actions |
-| `AudioHandle` | `src/audio/handle.rs` | Main-thread interface; sends AudioCmd to audio thread |
+| `AudioHandle` | `imbolc-audio/src/handle.rs` | Main-thread interface; sends AudioCmd to audio thread |
 
 ## Dispatch Sub-Handler Routing
 
@@ -150,27 +125,9 @@ Top-level dispatch is in `src/dispatch/mod.rs`. Each `Action` variant routes to 
 | `layer.rs` | LinkLayer, UnlinkLayer |
 | `sample.rs` | LoadSampleResult |
 
-## Audio Engine Modules
+## Audio Engine
 
-| Module | Purpose |
-|---|---|
-| `handle.rs` | `AudioHandle` — main-thread API, sends `AudioCmd` via channel |
-| `audio_thread.rs` | Audio thread loop, reads triple buffer snapshots |
-| `engine/mod.rs` | `AudioEngine` — SC backend, node map, voice allocator |
-| `engine/routing.rs` | Amortized 5-phase SC node graph rebuild (TearDown → AllocBuses → BuildInstrument → BuildOutputs → Finalize) |
-| `engine/voice_allocator.rs` | Polyphonic voice pool (16/instrument), stealing by score, control bus recycling |
-| `engine/voices.rs` | Voice spawning, note-off envelopes |
-| `engine/backend.rs` | `AudioBackend` trait, OSC socket I/O |
-| `engine/server.rs` | SC server boot/kill, device enumeration |
-| `engine/samples.rs` | Sample buffer management |
-| `engine/recording.rs` | Disk recording, export, stem bounce |
-| `engine/automation.rs` | Automation playback, curve evaluation |
-| `triple_buffer.rs` | Lock-free state transfer (main → audio thread, 3 slots: front/middle/back) |
-| `event_log.rs` | Time-ordered event log for playback pre-scheduling |
-| `osc_sender.rs` | Background OSC sender thread |
-| `bus_allocator.rs` | SC audio/control bus allocation |
-| `playback.rs` | Sequencer tick, lookahead scheduling |
-| `drum_tick.rs` / `arpeggiator_tick.rs` / `click_tick.rs` | Per-feature playback ticks |
+The audio engine now lives in the `imbolc-audio` crate. See [../imbolc-audio/CLAUDE.md](../imbolc-audio/CLAUDE.md) for module details. This crate re-exports it as `pub use imbolc_audio as audio`, so `imbolc_core::audio::X` paths still work for downstream crates.
 
 ## State Mutation Patterns
 
