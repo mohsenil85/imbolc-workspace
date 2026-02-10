@@ -180,23 +180,22 @@ bridge between the two representations.
 - Cursor stability after `MoveStage`: recalculate `selected_row` from
   the stage's new chain index
 
-### A7. Persistence (`imbolc-core/src/state/persistence/`) — compatibility done, new tables pending
+### ~~A7. Persistence (`imbolc-core/src/state/persistence/`)~~ ✓
 
-**Compilation compatibility done.** Save/load uses accessor methods
-(`filter()`, `eq()`, `effects()`) for saving, and reconstructs
-`processing_chain` from existing filter/eq/effects tables on load
-(filter → EQ → effects order). Blob serialization uses
-`#[serde(default)]` on `processing_chain` for backward compat. All 14
-persistence tests pass.
+**Done.** Bumped `SCHEMA_VERSION` 11→12. Added
+`instrument_processing_chain` table `(instrument_id, position,
+stage_type, effect_id)` as an ordering index — stage data stays in
+existing tables. On save, `save_processing_chain()` writes one row per
+chain stage. On load, reads ordering rows and places already-loaded
+filter/EQ/effects into the chain in persisted order. Legacy fallback
+(filter → EQ → effects) for databases without the table or with no
+rows. `instrument_eq_bands` was already present from earlier schema
+versions. 2 new round-trip tests (`round_trip_processing_chain_order`,
+`round_trip_processing_chain_interleaved`). 278 core tests pass.
 
-**Remaining (preserves chain ordering across save/load):**
-- Add `instrument_processing_chain` table: `(instrument_id, position,
-  stage_type, effect_id)` — currently chain order is lost on save
-  (always reconstructed as filter → EQ → effects)
-- Add `instrument_eq_bands` table: `(instrument_id, band_index, freq,
-  gain, q)` — EQ band data is not currently persisted (only
-  `eq_enabled` flag exists)
-- Bump `SCHEMA_VERSION`
+**Files:** `schema.rs` (v12, new table, DELETE), `save.rs`
+(`save_processing_chain()` + call site), `load.rs` (conditional chain
+reconstruction with `table_exists` check), `tests.rs` (2 tests).
 
 ### ~~A8. Network (`imbolc-net`)~~ ✓
 
@@ -369,10 +368,10 @@ Instrument struct, and delivers the highest-value feature
 (reverb/compression buses). Phase A is larger and more invasive.
 
 1. ~~Phase B (bus effects)~~ — **Complete.** All B1–B7 done (B7 = layer group EQ).
-2. Phase A (flexible chain) — **Core complete.** A1–A5 done, A8 done.
-   Remaining: A3 (MoveEffect removal), A6 (full UI refactor), A7
-   (chain order persistence). The codebase compiles cleanly and all
-   628 tests pass (236 types + 276 core + 116 UI).
+2. Phase A (flexible chain) — **Nearly complete.** A1–A5, A7–A8 done.
+   Remaining: A3 (MoveEffect removal, blocked on A6), A6 (full UI
+   refactor). The codebase compiles cleanly and all 708 tests pass
+   (236 types + 278 core + 116 UI + 78 net).
 
 They share no code dependencies, so Phase A can't break Phase B. Bus
 effects stay as plain `Vec<EffectSlot>` (buses don't have filter/EQ,
