@@ -3,6 +3,7 @@ pub mod checkpoint;
 pub mod load;
 pub mod save;
 pub mod schema;
+#[cfg(test)]
 mod tests;
 
 pub use checkpoint::CheckpointInfo;
