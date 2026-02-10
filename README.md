@@ -178,7 +178,7 @@ cargo build
 cargo run -p imbolc-ui
 cargo run -p imbolc-gui
 cargo test
-cargo test -- --ignored     # Include tmux-based E2E tests
+cargo test -- --ignored     # Run tmux-based E2E examples (ignored by default)
 ```
 
 Network builds:
