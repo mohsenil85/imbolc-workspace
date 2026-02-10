@@ -62,6 +62,7 @@ fn test_state_broadcast_to_all() {
     // Broadcast state
     let state = common::make_test_state(&server);
     server.broadcast_state(&state);
+    server.flush_writer();
 
     // Both clients should receive the state update
     let alice_msg = alice.recv().unwrap();

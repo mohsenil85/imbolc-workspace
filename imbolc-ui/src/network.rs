@@ -72,8 +72,8 @@ pub fn run_server() -> std::io::Result<()> {
     let mut last_client_count = 0usize;
 
     loop {
-        // Flush pending outbox data for slow clients
-        server.flush_outboxes();
+        // Process feedback from writer thread (stalled clients)
+        server.process_writer_feedback();
 
         // Accept new connections (no state needed)
         server.accept_connections();
@@ -509,6 +509,7 @@ pub fn action_to_network_action(action: &Action) -> Option<imbolc_net::NetworkAc
         Action::PopLayer(_) => None,
         Action::SaveAndQuit => None,
         Action::Click(_) => None,
+        Action::Tuner(_) => None,
     }
 }
 

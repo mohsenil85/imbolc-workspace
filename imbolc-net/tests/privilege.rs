@@ -28,6 +28,9 @@ fn test_reject_unprivileged_transport() {
     let actions = common::drive_and_collect_actions(&mut server, &state, Duration::from_millis(200));
     assert!(actions.is_empty(), "Unprivileged server action should be rejected");
 
+    // Wait for writer thread to deliver the rejection
+    server.flush_writer();
+
     // Alice should receive an ActionRejected message
     let msg = alice.recv().unwrap();
     match msg {
@@ -71,6 +74,7 @@ fn test_privilege_transfer() {
     let state = common::make_test_state(&server);
     server.accept_connections();
     server.poll_actions(&state.session, &state.instruments);
+    server.flush_writer();
 
     // Bob should receive PrivilegeGranted
     let msg = bob.recv().unwrap();

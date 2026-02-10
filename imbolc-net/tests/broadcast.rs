@@ -22,6 +22,7 @@ fn test_metering_broadcast() {
 
     // Broadcast metering
     server.broadcast_metering(120, 128.0, (0.75, 0.65));
+    server.flush_writer();
 
     let msg = alice.recv().unwrap();
     match msg {
@@ -55,6 +56,7 @@ fn test_shutdown_broadcast() {
 
     // Broadcast shutdown
     server.broadcast_shutdown();
+    server.flush_writer();
 
     let alice_msg = alice.recv().unwrap();
     match alice_msg {
@@ -87,6 +89,7 @@ fn test_state_patch_broadcast() {
 
     let state = common::make_test_state(&server);
     server.broadcast_state_patch(&state);
+    server.flush_writer();
 
     let msg = alice.recv().unwrap();
     match msg {
@@ -114,6 +117,7 @@ fn test_full_sync_broadcast() {
 
     let state = common::make_test_state(&server);
     server.broadcast_full_sync(&state);
+    server.flush_writer();
 
     let msg = alice.recv().unwrap();
     match msg {
@@ -141,6 +145,7 @@ fn test_patch_instruments_only() {
 
     let state = common::make_test_state(&server);
     server.broadcast_state_patch(&state);
+    server.flush_writer();
 
     let msg = alice.recv().unwrap();
     match msg {
@@ -172,6 +177,7 @@ fn test_patch_mixer_and_instruments() {
 
     let state = common::make_test_state(&server);
     server.broadcast_state_patch(&state);
+    server.flush_writer();
 
     let msg = alice.recv().unwrap();
     match msg {
@@ -200,6 +206,7 @@ fn test_patch_no_broadcast_when_clean() {
     // Don't mark anything dirty — broadcast_state_patch should be a no-op
     let state = common::make_test_state(&server);
     server.broadcast_state_patch(&state);
+    server.flush_writer();
 
     // Set a short read timeout to confirm nothing arrives
     alice.reader.get_ref().set_read_timeout(Some(Duration::from_millis(200))).unwrap();
@@ -226,6 +233,7 @@ fn test_seq_increments() {
         server.reset_rate_limit();
         let state = common::make_test_state(&server);
         server.broadcast_state_patch(&state);
+        server.flush_writer();
 
         let msg = alice.recv().unwrap();
         match msg {
@@ -255,6 +263,7 @@ fn test_dirty_clears_after_patch() {
     server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::Add(SourceType::Saw)));
     let state = common::make_test_state(&server);
     server.broadcast_state_patch(&state);
+    server.flush_writer();
     let _msg1 = alice.recv().unwrap();
 
     // Second broadcast: session dirty (instruments should be clean now)
@@ -262,6 +271,7 @@ fn test_dirty_clears_after_patch() {
     server.reset_rate_limit();
     let state = common::make_test_state(&server);
     server.broadcast_state_patch(&state);
+    server.flush_writer();
 
     let msg2 = alice.recv().unwrap();
     match msg2 {
@@ -290,6 +300,7 @@ fn test_ownership_patch() {
     server.mark_ownership_dirty();
     let state = common::make_test_state(&server);
     server.broadcast_state_patch(&state);
+    server.flush_writer();
 
     let msg = alice.recv().unwrap();
     match msg {
@@ -330,6 +341,7 @@ fn test_privileged_client_patch_with_holder() {
     server.mark_ownership_dirty();
     let state = common::make_test_state(&server);
     server.broadcast_state_patch(&state);
+    server.flush_writer();
 
     let msg = bob.recv().unwrap();
     match msg {
@@ -363,6 +375,7 @@ fn test_patch_reaches_all_clients() {
     server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::Add(SourceType::Saw)));
     let state = common::make_test_state(&server);
     server.broadcast_state_patch(&state);
+    server.flush_writer();
 
     for (name, client) in [("Alice", &mut alice), ("Bob", &mut bob)] {
         let msg = client.recv().unwrap();
@@ -395,6 +408,7 @@ fn test_accumulated_actions_combined_patch() {
 
     let state = common::make_test_state(&server);
     server.broadcast_state_patch(&state);
+    server.flush_writer();
 
     let msg = alice.recv().unwrap();
     match msg {
@@ -427,6 +441,7 @@ fn test_patch_single_instrument_change() {
     server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::AdjustFilterCutoff(1, 0.1)));
     let state = common::make_test_state_with_instruments(&server, 4);
     server.broadcast_state_patch(&state);
+    server.flush_writer();
 
     let msg = alice.recv().unwrap();
     match msg {
@@ -455,6 +470,7 @@ fn test_patch_structural_sends_full_instruments() {
     server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::Add(SourceType::Saw)));
     let state = common::make_test_state_with_instruments(&server, 4);
     server.broadcast_state_patch(&state);
+    server.flush_writer();
 
     let msg = alice.recv().unwrap();
     match msg {
@@ -482,6 +498,7 @@ fn test_patch_targeted_then_structural() {
     server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::Add(SourceType::Saw)));
     let state = common::make_test_state_with_instruments(&server, 4);
     server.broadcast_state_patch(&state);
+    server.flush_writer();
 
     let msg = alice.recv().unwrap();
     match msg {
@@ -510,6 +527,7 @@ fn test_instrument_patches_roundtrip() {
     server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::AdjustFilterCutoff(2, 0.3)));
     let state = common::make_test_state_with_instruments(&server, 4);
     server.broadcast_state_patch(&state);
+    server.flush_writer();
 
     let msg = alice.recv().unwrap();
     match msg {
@@ -538,6 +556,7 @@ fn test_patch_rate_limiting() {
     server.mark_dirty(&NetworkAction::Server(ServerAction::Connect));
     let state = common::make_test_state(&server);
     server.broadcast_state_patch(&state);
+    server.flush_writer();
     let msg = alice.recv().unwrap();
     assert!(matches!(msg, ServerMessage::StatePatchUpdate { .. }));
 
@@ -545,6 +564,7 @@ fn test_patch_rate_limiting() {
     server.mark_dirty(&NetworkAction::Server(ServerAction::RecordMaster));
     let state = common::make_test_state(&server);
     server.broadcast_state_patch(&state);
+    server.flush_writer();
 
     // Should not receive anything (rate-limited)
     alice.reader.get_ref().set_read_timeout(Some(Duration::from_millis(200))).unwrap();
@@ -555,6 +575,7 @@ fn test_patch_rate_limiting() {
     server.reset_rate_limit();
     let state = common::make_test_state(&server);
     server.broadcast_state_patch(&state);
+    server.flush_writer();
 
     alice.reader.get_ref().set_read_timeout(Some(Duration::from_secs(5))).unwrap();
     let msg = alice.recv().unwrap();
@@ -584,6 +605,7 @@ fn test_patch_threshold_coalescing() {
     server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::AdjustFilterCutoff(2, 0.3)));
     let state = common::make_test_state_with_instruments(&server, 4);
     server.broadcast_state_patch(&state);
+    server.flush_writer();
 
     let msg = alice.recv().unwrap();
     match msg {
@@ -631,7 +653,8 @@ fn test_slow_client_does_not_block_fast_client() {
         server.reset_rate_limit();
         let state = common::make_test_state(&server);
         server.broadcast_state_patch(&state);
-        server.flush_outboxes();
+        server.flush_writer();
+        server.process_writer_feedback();
 
         // Try to read from Alice with a short timeout
         alice.reader.get_ref().set_read_timeout(Some(Duration::from_millis(200))).unwrap();
@@ -671,13 +694,14 @@ fn test_stalled_client_suspended_via_outbox_overflow() {
     drop(client);
     std::thread::sleep(Duration::from_millis(50));
 
-    // Inject frames into the outbox. When flush_outboxes tries to write them,
-    // the broken connection will cause an error, triggering suspension.
+    // Inject frames into the outbox. When the writer thread tries to write them,
+    // the broken connection will cause an error, sending ClientStalled feedback.
     server.inject_outbox_frames(10);
-    server.flush_outboxes();
+    server.flush_writer();
+    server.process_writer_feedback();
 
     assert_eq!(server.client_count(), 0,
-        "Client with broken connection should be suspended after flush_outboxes");
+        "Client with broken connection should be suspended after writer thread flush");
 }
 
 #[test]
@@ -701,6 +725,8 @@ fn test_broken_client_detected_on_broadcast() {
     // until the broken pipe is detected — should happen within a few writes.
     for _ in 0..10 {
         server.broadcast_shutdown();
+        server.flush_writer();
+        server.process_writer_feedback();
         if server.client_count() == 0 {
             break;
         }
@@ -728,6 +754,7 @@ fn test_piano_roll_only_sends_piano_roll() {
 
     let state = common::make_test_state(&server);
     server.broadcast_state_patch(&state);
+    server.flush_writer();
 
     let msg = alice.recv().unwrap();
     match msg {
@@ -758,6 +785,7 @@ fn test_arrangement_only_sends_arrangement() {
 
     let state = common::make_test_state(&server);
     server.broadcast_state_patch(&state);
+    server.flush_writer();
 
     let msg = alice.recv().unwrap();
     match msg {
@@ -787,6 +815,7 @@ fn test_mixer_only_sends_mixer() {
 
     let state = common::make_test_state(&server);
     server.broadcast_state_patch(&state);
+    server.flush_writer();
 
     let msg = alice.recv().unwrap();
     match msg {
@@ -816,6 +845,7 @@ fn test_undo_sends_full_session() {
 
     let state = common::make_test_state(&server);
     server.broadcast_state_patch(&state);
+    server.flush_writer();
 
     let msg = alice.recv().unwrap();
     match msg {
@@ -851,6 +881,7 @@ fn test_mixed_subsystems_no_full_session() {
 
     let state = common::make_test_state(&server);
     server.broadcast_state_patch(&state);
+    server.flush_writer();
 
     let msg = alice.recv().unwrap();
     match msg {

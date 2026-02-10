@@ -80,6 +80,16 @@ fn test_reconnect_with_valid_token() {
         other => panic!("Expected ReconnectSuccessful, got {:?}", other),
     }
 
+    // Server should send StateUpdate immediately after ReconnectSuccessful
+    let state_msg = alice2.recv().unwrap();
+    match state_msg {
+        ServerMessage::StateUpdate { state } => {
+            // Verify the state has the expected instruments
+            assert_eq!(state.instruments.instruments.len(), 3);
+        }
+        other => panic!("Expected StateUpdate after reconnect, got {:?}", other),
+    }
+
     assert_eq!(server.client_count(), 1);
 }
 

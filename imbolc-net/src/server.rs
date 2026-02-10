@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::io::{self, BufReader, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::mpsc::{self, Receiver, Sender};
-use std::thread;
+use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use log::{error, info, warn};
@@ -46,16 +46,20 @@ const MAX_OUTBOX_DEPTH: usize = 8;
 /// Write timeout for client sockets (10ms).
 const WRITE_TIMEOUT: Duration = Duration::from_millis(10);
 
-/// A connected client with its write half.
-struct ClientConnection {
+/// Client metadata — stays on the main thread.
+struct ClientInfo {
     name: String,
-    stream: TcpStream,
     /// Instruments this client owns (can mutate).
     owned_instruments: HashSet<InstrumentId>,
     /// Session token for reconnection.
     session_token: SessionToken,
     /// Last time we received any message from this client.
     last_seen: Instant,
+}
+
+/// Client write half — owned by the writer thread.
+struct ClientWriter {
+    stream: TcpStream,
     /// Per-client outbox for frames that couldn't be fully written.
     outbox: VecDeque<QueuedFrame>,
 }
@@ -185,13 +189,7 @@ impl DirtyFlags {
     }
 }
 
-impl ClientConnection {
-    /// Serialize and send a message through the outbox path.
-    fn send(&mut self, msg: &ServerMessage) -> io::Result<()> {
-        let frame = serialize_frame(msg)?;
-        self.send_frame(&frame, FrameKind::Control)
-    }
-
+impl ClientWriter {
     /// Try to write a frame directly; queue the remainder on partial write or timeout.
     fn send_frame(&mut self, data: &[u8], kind: FrameKind) -> io::Result<()> {
         // First try a direct write
@@ -283,6 +281,151 @@ impl ClientConnection {
     }
 }
 
+// ── Writer thread protocol ──────────────────────────────────────
+
+/// Commands sent from the main thread to the writer thread.
+enum WriterCommand {
+    /// Register a new client's write half after handshake.
+    AddClient { client_id: ClientId, stream: TcpStream },
+    /// Remove a client (suspended/disconnected).
+    RemoveClient { client_id: ClientId },
+    /// Broadcast pre-serialized frame to all clients.
+    Broadcast { frame: Vec<u8>, kind: FrameKind },
+    /// Send pre-serialized frame to one client.
+    SendTo { client_id: ClientId, frame: Vec<u8>, kind: FrameKind },
+    /// Block until all pending commands are processed (test sync).
+    Flush { done: Sender<()> },
+    /// Inject dummy frames into outboxes (test helper).
+    InjectFrames { count: usize },
+    /// Shut down.
+    Shutdown,
+}
+
+/// Feedback from the writer thread to the main thread.
+enum WriterFeedback {
+    /// Client write failed or outbox overflowed — main thread should suspend.
+    ClientStalled { client_id: ClientId },
+}
+
+/// The writer thread function — owns all client write halves.
+fn writer_thread(
+    cmd_rx: Receiver<WriterCommand>,
+    feedback_tx: Sender<WriterFeedback>,
+) {
+    let mut writers: HashMap<ClientId, ClientWriter> = HashMap::new();
+
+    loop {
+        // Drain all pending commands, deferring Flush responses
+        let mut got_command = false;
+        let mut pending_flushes: Vec<Sender<()>> = Vec::new();
+        loop {
+            match cmd_rx.try_recv() {
+                Ok(cmd) => {
+                    got_command = true;
+                    match cmd {
+                        WriterCommand::AddClient { client_id, stream } => {
+                            writers.insert(client_id, ClientWriter {
+                                stream,
+                                outbox: VecDeque::new(),
+                            });
+                        }
+                        WriterCommand::RemoveClient { client_id } => {
+                            writers.remove(&client_id);
+                        }
+                        WriterCommand::Broadcast { frame, kind } => {
+                            let mut stalled = Vec::new();
+                            for (&id, writer) in &mut writers {
+                                // Try to drain any pending outbox first
+                                if !writer.outbox.is_empty() {
+                                    match writer.flush_outbox() {
+                                        Err(_) => {
+                                            stalled.push(id);
+                                            continue;
+                                        }
+                                        Ok(_) => {}
+                                    }
+                                }
+                                // Send the new frame
+                                if let Err(_) = writer.send_frame(&frame, kind) {
+                                    stalled.push(id);
+                                    continue;
+                                }
+                                // Check stall threshold
+                                if writer.is_stalled() {
+                                    stalled.push(id);
+                                }
+                            }
+                            for id in stalled {
+                                writers.remove(&id);
+                                let _ = feedback_tx.send(WriterFeedback::ClientStalled { client_id: id });
+                            }
+                        }
+                        WriterCommand::SendTo { client_id, frame, kind } => {
+                            if let Some(writer) = writers.get_mut(&client_id) {
+                                if let Err(_) = writer.send_frame(&frame, kind) {
+                                    writers.remove(&client_id);
+                                    let _ = feedback_tx.send(WriterFeedback::ClientStalled { client_id });
+                                }
+                            }
+                        }
+                        WriterCommand::Flush { done } => {
+                            // Defer response until after outbox flush pass
+                            pending_flushes.push(done);
+                        }
+                        WriterCommand::InjectFrames { count } => {
+                            for writer in writers.values_mut() {
+                                for _ in 0..count {
+                                    writer.outbox.push_back(QueuedFrame {
+                                        data: vec![0u8; 64 * 1024],
+                                        offset: 0,
+                                        kind: FrameKind::Control,
+                                    });
+                                }
+                            }
+                        }
+                        WriterCommand::Shutdown => {
+                            return;
+                        }
+                    }
+                }
+                Err(mpsc::TryRecvError::Empty) => break,
+                Err(mpsc::TryRecvError::Disconnected) => return,
+            }
+        }
+
+        // One pass of outbox flushing across all writers
+        let mut stalled = Vec::new();
+        for (&id, writer) in &mut writers {
+            if !writer.outbox.is_empty() {
+                match writer.flush_outbox() {
+                    Err(_) => {
+                        stalled.push(id);
+                    }
+                    Ok(_) => {
+                        if writer.is_stalled() {
+                            stalled.push(id);
+                        }
+                    }
+                }
+            }
+        }
+        for id in stalled {
+            writers.remove(&id);
+            let _ = feedback_tx.send(WriterFeedback::ClientStalled { client_id: id });
+        }
+
+        // Respond to deferred flush requests (after outbox pass)
+        for done in pending_flushes.drain(..) {
+            let _ = done.send(());
+        }
+
+        // Sleep briefly if no commands were processed to avoid spinning
+        if !got_command {
+            thread::sleep(Duration::from_millis(1));
+        }
+    }
+}
+
 /// A pending connection awaiting Hello handshake.
 struct PendingConnection {
     stream: TcpStream,
@@ -291,8 +434,8 @@ struct PendingConnection {
 /// Network server that accepts client connections and coordinates actions.
 pub struct NetServer {
     listener: TcpListener,
-    /// Fully connected clients (completed Hello handshake).
-    clients: HashMap<ClientId, ClientConnection>,
+    /// Fully connected clients (completed Hello handshake) — metadata only.
+    clients: HashMap<ClientId, ClientInfo>,
     /// Clients awaiting Hello message.
     pending: HashMap<ClientId, PendingConnection>,
     action_rx: Receiver<(ClientId, ClientMessage)>,
@@ -317,6 +460,12 @@ pub struct NetServer {
     last_full_sync: Instant,
     /// Last time a patch broadcast was sent (for rate limiting).
     last_patch_broadcast: Instant,
+    /// Channel to send commands to the writer thread.
+    writer_tx: Sender<WriterCommand>,
+    /// Channel to receive feedback from the writer thread.
+    writer_feedback_rx: Receiver<WriterFeedback>,
+    /// Handle to the writer thread (joined on drop).
+    writer_handle: Option<JoinHandle<()>>,
 }
 
 impl NetServer {
@@ -326,6 +475,13 @@ impl NetServer {
         listener.set_nonblocking(true)?;
 
         let (action_tx, action_rx) = mpsc::channel();
+
+        // Spawn the writer thread
+        let (writer_tx, writer_rx) = mpsc::channel();
+        let (feedback_tx, feedback_rx) = mpsc::channel();
+        let writer_handle = thread::spawn(move || {
+            writer_thread(writer_rx, feedback_tx);
+        });
 
         info!("NetServer listening on {}", addr);
 
@@ -345,6 +501,9 @@ impl NetServer {
             force_full_sync: false,
             last_full_sync: Instant::now(),
             last_patch_broadcast: Instant::now() - Duration::from_secs(1),
+            writer_tx,
+            writer_feedback_rx: feedback_rx,
+            writer_handle: Some(writer_handle),
         })
     }
 
@@ -456,13 +615,30 @@ impl NetServer {
                                     continue;
                                 }
 
-                                self.clients.insert(client_id, ClientConnection {
-                                    name: suspended.client_name,
+                                // Send current state so the client isn't stale
+                                let net_state = NetworkState {
+                                    session: session.clone(),
+                                    instruments: instruments.clone(),
+                                    ownership: self.build_ownership_map(),
+                                    privileged_client: self.privileged_client_info(),
+                                };
+                                let state_msg = ServerMessage::StateUpdate { state: net_state };
+                                if let Err(e) = write_message(&mut pending.stream, &state_msg) {
+                                    error!("Failed to send state to reconnecting {:?}: {}", client_id, e);
+                                    continue;
+                                }
+
+                                // Send the write half to the writer thread
+                                let _ = self.writer_tx.send(WriterCommand::AddClient {
+                                    client_id,
                                     stream: pending.stream,
+                                });
+
+                                self.clients.insert(client_id, ClientInfo {
+                                    name: suspended.client_name,
                                     owned_instruments: suspended.owned_instruments,
                                     session_token,
                                     last_seen: Instant::now(),
-                                    outbox: VecDeque::new(),
                                 });
 
                                 info!("Client {:?} reconnected successfully", client_id);
@@ -531,14 +707,18 @@ impl NetServer {
                             continue;
                         }
 
-                        // Promote to full client
-                        self.clients.insert(client_id, ClientConnection {
-                            name: client_name.clone(),
+                        // Send the write half to the writer thread
+                        let _ = self.writer_tx.send(WriterCommand::AddClient {
+                            client_id,
                             stream: pending.stream,
+                        });
+
+                        // Promote to full client (metadata only)
+                        self.clients.insert(client_id, ClientInfo {
+                            name: client_name.clone(),
                             owned_instruments: granted.iter().copied().collect(),
                             session_token,
                             last_seen: Instant::now(),
-                            outbox: VecDeque::new(),
                         });
 
                         info!(
@@ -557,11 +737,7 @@ impl NetServer {
                 ClientMessage::Action(action) => {
                     // Validate ownership before accepting action
                     if let Err(reason) = self.validate_action(client_id, &action) {
-                        if let Some(client) = self.clients.get_mut(&client_id) {
-                            if let Err(e) = client.send(&ServerMessage::ActionRejected { reason: reason.clone() }) {
-                                warn!("Failed to send rejection to {:?}: {}", client_id, e);
-                            }
-                        }
+                        self.send_to_client(client_id, &ServerMessage::ActionRejected { reason: reason.clone() });
                         warn!("Action from {:?} rejected: {}", client_id, reason);
                         continue;
                     }
@@ -572,11 +748,7 @@ impl NetServer {
                     self.suspend_client(client_id);
                 }
                 ClientMessage::Ping => {
-                    if let Some(client) = self.clients.get_mut(&client_id) {
-                        if let Err(e) = client.send(&ServerMessage::Pong) {
-                            warn!("Failed to send pong to {:?}: {}", client_id, e);
-                        }
-                    }
+                    self.send_to_client(client_id, &ServerMessage::Pong);
                 }
                 ClientMessage::Pong => {
                     // Client responded to server heartbeat — last_seen updated below
@@ -600,9 +772,7 @@ impl NetServer {
         if let Some(current) = self.privileged_client {
             if current == client_id {
                 // Already privileged
-                if let Some(client) = self.clients.get_mut(&client_id) {
-                    let _ = client.send(&ServerMessage::PrivilegeGranted);
-                }
+                self.send_to_client(client_id, &ServerMessage::PrivilegeGranted);
                 return;
             }
 
@@ -611,9 +781,7 @@ impl NetServer {
                 .map(|c| c.name.clone())
                 .unwrap_or_else(|| "unknown".into());
 
-            if let Some(old_client) = self.clients.get_mut(&current) {
-                let _ = old_client.send(&ServerMessage::PrivilegeRevoked);
-            }
+            self.send_to_client(current, &ServerMessage::PrivilegeRevoked);
 
             info!(
                 "Privilege transferred from {:?} '{}' to {:?}",
@@ -623,9 +791,7 @@ impl NetServer {
 
         // Grant to new client
         self.privileged_client = Some(client_id);
-        if let Some(client) = self.clients.get_mut(&client_id) {
-            let _ = client.send(&ServerMessage::PrivilegeGranted);
-        }
+        self.send_to_client(client_id, &ServerMessage::PrivilegeGranted);
 
         info!("Client {:?} granted privilege", client_id);
     }
@@ -643,6 +809,9 @@ impl NetServer {
             if was_privileged {
                 self.privileged_client = None;
             }
+
+            // Tell the writer thread to drop this client's write half
+            let _ = self.writer_tx.send(WriterCommand::RemoveClient { client_id });
 
             // Create suspended session
             self.suspended_sessions.insert(client.session_token.clone(), SuspendedSession {
@@ -685,18 +854,8 @@ impl NetServer {
                 self.suspend_client(id);
             }
 
-            // Ping remaining clients
-            let ping = ServerMessage::Ping;
-            let mut disconnected = Vec::new();
-            for (&id, client) in &mut self.clients {
-                if let Err(e) = client.send(&ping) {
-                    warn!("Failed to ping client {:?}: {}", id, e);
-                    disconnected.push(id);
-                }
-            }
-            for id in disconnected {
-                self.suspend_client(id);
-            }
+            // Ping remaining clients via broadcast
+            self.broadcast(&ServerMessage::Ping, FrameKind::Control);
         }
 
         // Clean up expired suspended sessions
@@ -735,6 +894,7 @@ impl NetServer {
 
         // Remove from clients and release ownership
         if let Some(client) = self.clients.remove(&client_id) {
+            let _ = self.writer_tx.send(WriterCommand::RemoveClient { client_id });
             for id in client.owned_instruments {
                 self.ownership.remove(&id);
             }
@@ -1004,56 +1164,56 @@ impl NetServer {
 
     /// Inject large dummy frames into all clients' outboxes (for testing stall detection).
     ///
-    /// Pushes `count` large Control frames (64KB each) into each client's outbox.
-    /// Since Control frames are never dropped by the drop policy, and the frames
-    /// are too large to all fit in the TCP send buffer, this lets tests trigger
-    /// the stall threshold without needing the remote side to stop reading.
+    /// Sends a command to the writer thread to push `count` large Control frames (64KB each)
+    /// into each client's outbox.
     pub fn inject_outbox_frames(&mut self, count: usize) {
-        for client in self.clients.values_mut() {
-            for _ in 0..count {
-                client.outbox.push_back(QueuedFrame {
-                    data: vec![0u8; 64 * 1024], // 64KB per frame to saturate buffer
-                    offset: 0,
-                    kind: FrameKind::Control,
-                });
-            }
-        }
+        let _ = self.writer_tx.send(WriterCommand::InjectFrames { count });
     }
 
-    /// Flush all client outboxes, suspending any disconnected or stalled clients.
+    /// Process feedback from the writer thread (stalled clients).
     ///
     /// Call once per server loop iteration, before `accept_connections()`.
-    pub fn flush_outboxes(&mut self) {
-        let mut to_suspend = Vec::new();
-
-        for (&id, client) in &mut self.clients {
-            if !client.outbox.is_empty() {
-                match client.flush_outbox() {
-                    Err(e) => {
-                        warn!("Client {:?} write error during flush: {}", id, e);
-                        to_suspend.push(id);
-                    }
-                    Ok(_) => {
-                        if client.is_stalled() {
-                            warn!("Client {:?} '{}' stalled (outbox depth {}), suspending",
-                                id, client.name, client.outbox.len());
-                            to_suspend.push(id);
-                        }
-                    }
+    pub fn process_writer_feedback(&mut self) {
+        while let Ok(feedback) = self.writer_feedback_rx.try_recv() {
+            match feedback {
+                WriterFeedback::ClientStalled { client_id } => {
+                    warn!("Writer thread reports client {:?} stalled, suspending", client_id);
+                    self.suspend_client(client_id);
                 }
             }
         }
+    }
 
-        for id in to_suspend {
-            self.suspend_client(id);
+    /// Block until the writer thread has processed all pending commands.
+    ///
+    /// Used by tests to synchronize after broadcasts.
+    pub fn flush_writer(&self) {
+        let (tx, rx) = mpsc::channel();
+        let _ = self.writer_tx.send(WriterCommand::Flush { done: tx });
+        let _ = rx.recv_timeout(Duration::from_secs(5));
+    }
+
+    /// Send a message to a specific client via the writer thread.
+    fn send_to_client(&self, client_id: ClientId, msg: &ServerMessage) {
+        match serialize_frame(msg) {
+            Ok(frame) => {
+                let _ = self.writer_tx.send(WriterCommand::SendTo {
+                    client_id,
+                    frame,
+                    kind: FrameKind::Control,
+                });
+            }
+            Err(e) => {
+                error!("Failed to serialize message for {:?}: {}", client_id, e);
+            }
         }
     }
 
-    /// Send a message to all connected clients.
+    /// Send a message to all connected clients via the writer thread.
     ///
-    /// Serializes the message once and writes the pre-serialized frame to each client,
-    /// avoiding redundant JSON serialization per client. Slow clients get frames queued
-    /// in their outbox with the specified drop policy.
+    /// Serializes the message once, then sends the pre-serialized frame to the
+    /// writer thread for fan-out delivery. The writer thread handles outbox
+    /// queuing and stall detection.
     fn broadcast(&mut self, msg: &ServerMessage, kind: FrameKind) {
         let frame = match serialize_frame(msg) {
             Ok(f) => f,
@@ -1063,39 +1223,15 @@ impl NetServer {
             }
         };
 
-        let mut to_suspend = Vec::new();
+        let _ = self.writer_tx.send(WriterCommand::Broadcast { frame, kind });
+    }
+}
 
-        for (&id, client) in &mut self.clients {
-            // Try to drain any pending outbox first
-            if !client.outbox.is_empty() {
-                match client.flush_outbox() {
-                    Err(e) => {
-                        warn!("Client {:?} write error during broadcast flush: {}", id, e);
-                        to_suspend.push(id);
-                        continue;
-                    }
-                    Ok(_) => {}
-                }
-            }
-
-            // Send the new frame
-            if let Err(e) = client.send_frame(&frame, kind) {
-                warn!("Failed to send to client {:?}: {}", id, e);
-                to_suspend.push(id);
-                continue;
-            }
-
-            // Check if outbox overflow means client is too slow
-            if client.is_stalled() {
-                warn!("Client {:?} '{}' stalled (outbox depth {}), suspending",
-                    id, client.name, client.outbox.len());
-                to_suspend.push(id);
-            }
-        }
-
-        // Suspend disconnected/stalled clients (preserves ownership for reconnection)
-        for id in to_suspend {
-            self.suspend_client(id);
+impl Drop for NetServer {
+    fn drop(&mut self) {
+        let _ = self.writer_tx.send(WriterCommand::Shutdown);
+        if let Some(handle) = self.writer_handle.take() {
+            let _ = handle.join();
         }
     }
 }
@@ -1422,19 +1558,15 @@ mod tests {
         }
     }
 
-    /// Helper: create a ClientConnection with an outbox (no real socket needed for unit tests).
-    fn make_test_client(outbox: VecDeque<QueuedFrame>) -> ClientConnection {
+    /// Helper: create a ClientWriter with an outbox (no real socket needed for unit tests).
+    fn make_test_writer(outbox: VecDeque<QueuedFrame>) -> ClientWriter {
         // Use a loopback TCP connection — we only test the outbox logic, not actual I/O
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let addr = listener.local_addr().unwrap();
         let stream = TcpStream::connect(addr).unwrap();
         let _ = listener.accept().unwrap();
-        ClientConnection {
-            name: "test".into(),
+        ClientWriter {
             stream,
-            owned_instruments: HashSet::new(),
-            session_token: SessionToken::new(),
-            last_seen: Instant::now(),
             outbox,
         }
     }
@@ -1445,7 +1577,7 @@ mod tests {
         outbox.push_back(make_frame(FrameKind::Metering, 0));
         outbox.push_back(make_frame(FrameKind::Metering, 0));
         outbox.push_back(make_frame(FrameKind::Metering, 0));
-        let mut client = make_test_client(outbox);
+        let mut client = make_test_writer(outbox);
         // Queue a new metering frame — should drop the 3 pending ones
         client.queue_frame(vec![0u8; 50], FrameKind::Metering);
         assert_eq!(client.outbox.len(), 1, "only the new metering frame should remain");
@@ -1458,7 +1590,7 @@ mod tests {
         outbox.push_back(make_frame(FrameKind::StatePatch, 0));
         outbox.push_back(make_frame(FrameKind::Control, 0)); // control: not dropped
         outbox.push_back(make_frame(FrameKind::FullSync, 0));
-        let mut client = make_test_client(outbox);
+        let mut client = make_test_writer(outbox);
         client.queue_frame(vec![0u8; 50], FrameKind::StatePatch);
         // StatePatch drops unstarted StatePatch + FullSync, keeps Control
         assert_eq!(client.outbox.len(), 2);
@@ -1472,7 +1604,7 @@ mod tests {
         outbox.push_back(make_frame(FrameKind::StatePatch, 0));
         outbox.push_back(make_frame(FrameKind::StatePatch, 0));
         outbox.push_back(make_frame(FrameKind::FullSync, 0));
-        let mut client = make_test_client(outbox);
+        let mut client = make_test_writer(outbox);
         client.queue_frame(vec![0u8; 50], FrameKind::FullSync);
         // FullSync drops all unstarted patches + older full syncs
         assert_eq!(client.outbox.len(), 1);
@@ -1486,7 +1618,7 @@ mod tests {
         outbox.push_back(make_frame(FrameKind::StatePatch, 10)); // offset > 0 = partial
         outbox.push_back(make_frame(FrameKind::Metering, 5)); // offset > 0 = partial
         outbox.push_back(make_frame(FrameKind::StatePatch, 0)); // unstarted
-        let mut client = make_test_client(outbox);
+        let mut client = make_test_writer(outbox);
         // Queue FullSync — should drop only the unstarted StatePatch
         client.queue_frame(vec![0u8; 50], FrameKind::FullSync);
         assert_eq!(client.outbox.len(), 3);
@@ -1503,7 +1635,7 @@ mod tests {
         outbox.push_back(make_frame(FrameKind::Control, 0));
         outbox.push_back(make_frame(FrameKind::Control, 0));
         outbox.push_back(make_frame(FrameKind::Control, 0));
-        let mut client = make_test_client(outbox);
+        let mut client = make_test_writer(outbox);
         client.queue_frame(vec![0u8; 50], FrameKind::Control);
         // Control frames are never dropped
         assert_eq!(client.outbox.len(), 4);
@@ -1516,14 +1648,14 @@ mod tests {
         for _ in 0..MAX_OUTBOX_DEPTH {
             outbox.push_back(make_frame(FrameKind::Control, 0));
         }
-        let client = make_test_client(outbox);
+        let client = make_test_writer(outbox);
         assert!(!client.is_stalled(), "at threshold should not be stalled");
 
         let mut outbox2 = VecDeque::new();
         for _ in 0..=MAX_OUTBOX_DEPTH {
             outbox2.push_back(make_frame(FrameKind::Control, 0));
         }
-        let client2 = make_test_client(outbox2);
+        let client2 = make_test_writer(outbox2);
         assert!(client2.is_stalled(), "above threshold should be stalled");
     }
 }

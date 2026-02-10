@@ -45,6 +45,7 @@ pub fn drive_until_clients(
 ) {
     let start = Instant::now();
     while Instant::now().duration_since(start) < timeout {
+        server.process_writer_feedback();
         server.accept_connections();
         server.poll_actions(&state.session, &state.instruments);
         if server.client_count() >= expected {

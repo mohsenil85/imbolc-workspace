@@ -1,7 +1,7 @@
 # Scaling Analysis
 
 Analysis of scaling bottlenecks in Imbolc's local and network architectures,
-ranked by impact. Updated Feb 2026 after main-thread optimization pass.
+ranked by impact. Updated Feb 2026 after dedicated writer thread.
 
 ---
 
@@ -78,41 +78,40 @@ ranked by impact. Updated Feb 2026 after main-thread optimization pass.
 
 ## Network (imbolc-net) Scaling Issues
 
-### High Impact
+### Remaining
 
-1. **Subsystem-level granularity, not field-level**. `StatePatch` tracks dirty
-   at the `session`/`instruments` level. Adding one note sends the entire
-   `PianoRollState` (all tracks, all notes). Changing one instrument param
-   sends all instruments. As projects grow, these payloads go from ~50KB to
-   potentially 500KB+. Per-instrument delta patches mitigate the common case
-   (single param tweak), but session-level changes remain coarse.
+1. **JSON wire format**. ~3-5x larger than bincode, ~10-50x slower to
+   serialize. Main cost is in `StatePatch` and `FullStateSync` — these carry
+   nested structs with many floats (instrument params, automation points, mixer
+   levels). Metering is small (playhead + bpm + peaks) so JSON overhead there
+   is low in absolute terms, but it's sent at 30Hz so the per-frame cost adds
+   up. Serialization still happens on the main thread (writer thread only does
+   I/O), so this is now the main-thread bottleneck for network broadcasts.
 
-### Medium Impact
+2. **No state catchup on reconnect**. After `ReconnectSuccessful`, the client
+   waits for the next broadcast cycle to receive state. Gap is at most ~33ms
+   (one 30Hz cycle) but could be longer if nothing is dirty. Low impact —
+   trivial fix (send `FullStateSync` immediately after reconnect handshake).
 
-3. **JSON wire format**. Already flagged as a known tradeoff. ~3-5x larger
-   than bincode, ~10-50x slower to serialize. Metering at 30Hz x N clients
-   adds constant overhead.
-
-4. **Single-threaded server loop**. Everything — accept, poll, dispatch,
-   serialize, write — on one thread with 2ms sleep. Hard ceiling for client
-   count and action throughput.
-
-5. **No state catchup on reconnect**. After `ReconnectSuccessful`, the server
-   doesn't push current state immediately — the client waits for the next
-   broadcast cycle, leaving a stale-state gap.
+3. **Field-level state diffing**. Subsystem-level patches already avoid
+   sending unrelated subsystems, but within a subsystem the entire struct is
+   sent. E.g., adding one note sends the full `PianoRollState`. Impact scales
+   with project complexity — a project with 10k notes in the piano roll sends
+   all of them for any single-note edit. Would require delta encoding or
+   operation-based sync (CRDTs).
 
 ### Resolved
 
 - ~~Slow-client poisons the server~~ — **Resolved: per-client outbox with
-  drop policy.** `ClientConnection` uses raw `TcpStream` with 10ms
-  `SO_SNDTIMEO`. Per-client `VecDeque<QueuedFrame>` outbox with frame-kind
-  drop policy: Metering (keep latest), StatePatch/FullSync (supersede older),
-  Control (never drop). `flush_outboxes()` drains queues each loop iteration.
-  Clients exceeding `MAX_OUTBOX_DEPTH` are suspended.
+  drop policy.** `ClientWriter` uses raw `TcpStream` with 10ms `SO_SNDTIMEO`.
+  Per-client `VecDeque<QueuedFrame>` outbox with frame-kind drop policy:
+  Metering (keep latest), StatePatch/FullSync (supersede older), Control
+  (never drop). Writer thread flushes outboxes each iteration. Clients
+  exceeding `MAX_OUTBOX_DEPTH` are suspended via feedback channel.
 
 - ~~Per-client JSON re-serialization~~ — **Resolved: serialize-once broadcast.**
-  `broadcast()` now calls `serialize_frame()` once and writes the pre-serialized
-  bytes to each client via `send_raw()`.
+  `broadcast()` serializes once on the main thread, sends `Vec<u8>` to the
+  writer thread which writes it to each client.
 
 - ~~No action batching or throttling~~ — **Resolved: rate-limited broadcast.**
   `broadcast_state_patch()` is throttled at ~30 Hz. Dirty flags accumulate
@@ -130,26 +129,92 @@ ranked by impact. Updated Feb 2026 after main-thread optimization pass.
   (add/delete/undo) send full `InstrumentState`. Threshold coalescing sends
   full state when >50% of instruments are dirty.
 
+- ~~Single-threaded server loop~~ — **Resolved: dedicated writer thread.**
+  All socket writes moved to a dedicated writer thread. The main thread
+  serializes frames once, then sends the bytes via MPSC channel. The writer
+  thread owns all client write halves (`ClientWriter`), outboxes, and drop
+  policy. Stall detection feeds back to the main thread via a feedback channel.
+  Handshake writes (Welcome/ReconnectSuccessful) remain on the main thread
+  since they target pending streams before client registration.
+
+- ~~Coarse session-level patch granularity~~ — **Resolved: subsystem-level
+  session patches.** `DirtyFlags` now tracks `piano_roll`, `arrangement`,
+  `automation`, and `mixer` independently. `StatePatch` has 4 new optional
+  subsystem fields. Adding a note sends only `PianoRollState`, not the entire
+  `SessionState`. The `session` flag is reserved for rare "remainder" changes
+  (BPM, key, registries, undo/redo) that send the full session. Backward-
+  compatible: old clients deserialize unknown fields as `None`.
+
 ### What's Well-Designed in Net
 
 - No locks (ownership by construction)
-- Clean reader-thread → mpsc → main-thread pipeline
+- Dedicated writer thread (I/O off main thread)
+- Clean reader-thread → mpsc → main-thread → mpsc → writer-thread pipeline
 - Suspension preserving ownership for reconnect
 - Dirty flags avoiding no-op broadcasts
 - Rate-limited patch broadcasting (~30 Hz)
 - Per-instrument delta patches
 - Serialize-once broadcast
 - Per-client outbox with frame-kind drop policy (slow-client isolation)
+- Subsystem-level session patches (piano roll, arrangement, automation, mixer)
 
 ---
 
-## TODO
+## Recommended Next Steps
 
-Items remaining for future optimization work:
+Prioritized by effort/impact ratio:
 
-1. **Field-level state diffing** — reduce session-level patch granularity.
-   E.g., send only the changed notes in a track, not the entire PianoRollState.
+### 1. Reconnect state catchup (quick win)
 
-2. **Binary wire format** — switch from JSON to bincode or MessagePack for
-   smaller payloads and faster serialization. May require a protocol version
-   negotiation step.
+Send a `FullStateSync` immediately after `ReconnectSuccessful` handshake.
+Trivial change — a few lines in the reconnect path of `poll_actions()`.
+Eliminates the stale-state gap on reconnect.
+
+### 2. Binary wire format (high impact)
+
+Switch from JSON to bincode for the wire protocol. This is the single biggest
+remaining optimization because serialization is now the main-thread bottleneck
+for network broadcasts (writer thread handles I/O).
+
+**What it buys:**
+- ~3-5x smaller payloads (less channel + socket throughput)
+- ~10-50x faster serialization (less main-thread time per broadcast)
+- Biggest win on `StatePatch` and `FullStateSync` which carry deeply nested
+  structs with many floats (JSON float formatting is notoriously slow)
+
+**Approach:**
+- Use `bincode` (already serde-based, so all types work immediately)
+- Replace `serde_json` in `framing.rs` — the serialize-once + writer-thread
+  architecture means changes are localized to `serialize_frame()`,
+  `read_message()`, and `write_message()`
+- The length-prefixed framing (`[u32 len][payload]`) stays identical
+- No protocol version negotiation needed initially — this is a LAN-only
+  protocol with no backward-compatibility requirement across versions
+- Reader threads also benefit (faster deserialization of `ClientMessage`)
+
+**Complexity:** Low-medium. The framing layer is already cleanly separated.
+Main risk is debugging opaque binary payloads vs readable JSON during
+development. Consider keeping a JSON debug mode behind a feature flag.
+
+### 3. Field-level state diffing (complex, diminishing returns)
+
+Reduce within-subsystem patch sizes by sending only changed fields or
+operations rather than full subsystem snapshots.
+
+**Where it matters most:** Piano roll (can have thousands of notes), automation
+(many points per lane), arrangement (many clip placements).
+
+**Where it doesn't matter:** Mixer (small, flat struct), session remainder
+(BPM, key — tiny), metering (already minimal).
+
+**Approach options:**
+- **Operation-based**: Send the action itself instead of the resulting state
+  diff. Clients apply the same action locally. Simple but requires all actions
+  to be deterministic and all clients to have identical dispatch logic.
+- **Delta encoding**: Diff old vs new state, send only changed fields. More
+  robust but requires a diffing library or custom delta types.
+- **CRDT**: Conflict-free replicated data types. Overkill for the current
+  single-writer-per-subsystem model but future-proofs for concurrent editing.
+
+Not recommended until binary format is in place — JSON overhead currently
+dwarfs the redundant-data overhead.
