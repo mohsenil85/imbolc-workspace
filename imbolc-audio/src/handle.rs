@@ -374,12 +374,12 @@ impl AudioHandle {
         // Note: routing and mixer_params are handled by ForwardAction metadata fields
         // (rebuild_routing, rebuild_instrument_routing, mixer_dirty).
         // Targeted param updates bypass ForwardAction entirely via priority channel:
-        if let Some((instrument_id, param_kind, value)) = dirty.filter_param {
+        for &(instrument_id, param_kind, value) in dirty.filter_params.iter().flatten() {
             if let Err(e) = self.set_filter_param(instrument_id, param_kind.as_str(), value) {
                 log::warn!(target: "audio", "set_filter_param dropped: {}", e);
             }
         }
-        if let Some((instrument_id, effect_id, param_idx, value)) = dirty.effect_param {
+        for &(instrument_id, effect_id, param_idx, value) in dirty.effect_params.iter().flatten() {
             if let Some(inst) = state.instruments().instrument(instrument_id) {
                 if let Some(effect) = inst.effect_by_id(effect_id) {
                     if let Some(param) = effect.params.get(param_idx) {
@@ -390,12 +390,12 @@ impl AudioHandle {
                 }
             }
         }
-        if let Some((instrument_id, param_kind, value)) = dirty.lfo_param {
+        for &(instrument_id, param_kind, value) in dirty.lfo_params.iter().flatten() {
             if let Err(e) = self.set_lfo_param(instrument_id, param_kind.as_str(), value) {
                 log::warn!(target: "audio", "set_lfo_param dropped: {}", e);
             }
         }
-        if let Some((bus_id, effect_id, param_idx, value)) = dirty.bus_effect_param {
+        for &(bus_id, effect_id, param_idx, value) in dirty.bus_effect_params.iter().flatten() {
             if let Some(bus) = state.session().mixer.buses.iter().find(|b| b.id == bus_id) {
                 if let Some(effect) = bus.effect_by_id(effect_id) {
                     if let Some(param) = effect.params.get(param_idx) {
@@ -406,7 +406,7 @@ impl AudioHandle {
                 }
             }
         }
-        if let Some((group_id, effect_id, param_idx, value)) = dirty.layer_group_effect_param {
+        for &(group_id, effect_id, param_idx, value) in dirty.layer_group_effect_params.iter().flatten() {
             if let Some(gm) = state.session().mixer.layer_group_mixer(group_id) {
                 if let Some(effect) = gm.effect_by_id(effect_id) {
                     if let Some(param) = effect.params.get(param_idx) {

@@ -134,7 +134,7 @@ pub fn dispatch_bus(action: &BusAction, state: &mut AppState) -> DispatchResult 
             }
             result.audio_dirty.session = true;
             if let Some(value) = targeted_value {
-                result.audio_dirty.bus_effect_param = Some((*bus_id, *effect_id, *param_idx, value));
+                result.audio_dirty.set_bus_effect_param(*bus_id, *effect_id, *param_idx, value);
             }
         }
     }
@@ -210,7 +210,7 @@ pub fn dispatch_layer_group(
             }
             result.audio_dirty.session = true;
             if let Some(value) = targeted_value {
-                result.audio_dirty.layer_group_effect_param = Some((*group_id, *effect_id, *param_idx, value));
+                result.audio_dirty.set_layer_group_effect_param(*group_id, *effect_id, *param_idx, value);
             }
         }
 
@@ -401,7 +401,7 @@ mod tests {
             _ => panic!("expected float"),
         };
         assert_ne!(initial_val, new_val);
-        assert!(result.audio_dirty.bus_effect_param.is_some());
+        assert!(result.audio_dirty.bus_effect_params.iter().any(|p| p.is_some()));
     }
 
     // ========================================================================

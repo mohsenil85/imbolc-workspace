@@ -87,7 +87,7 @@ pub(super) fn handle_adjust_effect_param(
     result.audio_dirty.instruments = true;
     // Targeted param update: send /n_set directly to effect node
     if let Some(value) = targeted_value {
-        result.audio_dirty.effect_param = Some((id, effect_id, param_idx, value));
+        result.audio_dirty.set_effect_param(id, effect_id, param_idx, value);
     }
     if let Some((target, value)) = record_target {
         record_automation_point(state, target, value);

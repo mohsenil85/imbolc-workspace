@@ -81,7 +81,7 @@ pub(super) fn handle_adjust_filter_cutoff(
 
     result.audio_dirty.instruments = true;
     if let Some(cutoff) = new_cutoff {
-        result.audio_dirty.filter_param = Some((id, FilterParamKind::Cutoff, cutoff));
+        result.audio_dirty.set_filter_param(id, FilterParamKind::Cutoff, cutoff);
     }
     result
 }
@@ -119,7 +119,7 @@ pub(super) fn handle_adjust_filter_resonance(
 
     result.audio_dirty.instruments = true;
     if let Some(resonance) = new_resonance {
-        result.audio_dirty.filter_param = Some((id, FilterParamKind::Resonance, resonance));
+        result.audio_dirty.set_filter_param(id, FilterParamKind::Resonance, resonance);
     }
     result
 }

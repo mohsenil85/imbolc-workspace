@@ -254,22 +254,27 @@ pub struct AudioDirty {
     /// If `routing` is also true, this is ignored and a full rebuild is performed.
     pub routing_bus_processing: bool,
     pub mixer_params: bool,
-    /// Targeted filter param update: (instrument_id, param_kind, value).
+    /// Targeted filter param updates: (instrument_id, param_kind, value).
     /// Sends /n_set directly to the filter node without routing rebuild.
-    pub filter_param: Option<(InstrumentId, FilterParamKind, f32)>,
-    /// Targeted effect param update: (instrument_id, effect_id, param_index, value).
+    /// Supports up to 2 per frame (one per FilterParamKind); overflow escalates to instruments=true.
+    pub filter_params: [Option<(InstrumentId, FilterParamKind, f32)>; 2],
+    /// Targeted effect param updates: (instrument_id, effect_id, param_index, value).
     /// Sends /n_set directly to the effect node without routing rebuild.
     /// The param name is resolved from the instrument state at send time.
-    pub effect_param: Option<(InstrumentId, EffectId, usize, f32)>,
-    /// Targeted LFO param update: (instrument_id, param_kind, value).
+    /// Supports up to 4 per frame; overflow escalates to instruments=true.
+    pub effect_params: [Option<(InstrumentId, EffectId, usize, f32)>; 4],
+    /// Targeted LFO param updates: (instrument_id, param_kind, value).
     /// Sends /n_set directly to the LFO node without routing rebuild.
-    pub lfo_param: Option<(InstrumentId, LfoParamKind, f32)>,
-    /// Targeted bus effect param update: (bus_id, effect_id, param_index, value).
+    /// Supports up to 2 per frame (one per LfoParamKind); overflow escalates to instruments=true.
+    pub lfo_params: [Option<(InstrumentId, LfoParamKind, f32)>; 2],
+    /// Targeted bus effect param updates: (bus_id, effect_id, param_index, value).
     /// Sends /n_set directly to the bus effect node without routing rebuild.
-    pub bus_effect_param: Option<(u8, EffectId, usize, f32)>,
-    /// Targeted layer group effect param update: (group_id, effect_id, param_index, value).
+    /// Supports up to 4 per frame; overflow escalates to session=true.
+    pub bus_effect_params: [Option<(u8, EffectId, usize, f32)>; 4],
+    /// Targeted layer group effect param updates: (group_id, effect_id, param_index, value).
     /// Sends /n_set directly to the layer group effect node without routing rebuild.
-    pub layer_group_effect_param: Option<(u32, EffectId, usize, f32)>,
+    /// Supports up to 4 per frame; overflow escalates to session=true.
+    pub layer_group_effect_params: [Option<(u32, EffectId, usize, f32)>; 4],
 }
 
 impl AudioDirty {
@@ -285,11 +290,11 @@ impl AudioDirty {
             routing_delete_instrument: None,
             routing_bus_processing: false,
             mixer_params: true,
-            filter_param: None,
-            effect_param: None,
-            lfo_param: None,
-            bus_effect_param: None,
-            layer_group_effect_param: None,
+            filter_params: [None; 2],
+            effect_params: [None; 4],
+            lfo_params: [None; 2],
+            bus_effect_params: [None; 4],
+            layer_group_effect_params: [None; 4],
         }
     }
 
@@ -304,11 +309,11 @@ impl AudioDirty {
             || self.routing_delete_instrument.is_some()
             || self.routing_bus_processing
             || self.mixer_params
-            || self.filter_param.is_some()
-            || self.effect_param.is_some()
-            || self.lfo_param.is_some()
-            || self.bus_effect_param.is_some()
-            || self.layer_group_effect_param.is_some()
+            || self.filter_params.iter().any(|p| p.is_some())
+            || self.effect_params.iter().any(|p| p.is_some())
+            || self.lfo_params.iter().any(|p| p.is_some())
+            || self.bus_effect_params.iter().any(|p| p.is_some())
+            || self.layer_group_effect_params.iter().any(|p| p.is_some())
     }
 
     pub fn merge(&mut self, other: AudioDirty) {
@@ -366,21 +371,51 @@ impl AudioDirty {
         }
         self.routing_bus_processing |= other.routing_bus_processing;
         self.mixer_params |= other.mixer_params;
-        // Targeted param updates: last one wins (these are real-time tweaks)
-        if other.filter_param.is_some() {
-            self.filter_param = other.filter_param;
+        // Targeted param updates: accumulate into arrays, escalate on overflow.
+        for entry in other.filter_params.iter().flatten() {
+            if let Some(slot) = self.filter_params.iter_mut().find(|s| s.is_none()) {
+                *slot = Some(*entry);
+            } else {
+                self.instruments = true;
+                self.filter_params = [None; 2];
+                break;
+            }
         }
-        if other.effect_param.is_some() {
-            self.effect_param = other.effect_param;
+        for entry in other.effect_params.iter().flatten() {
+            if let Some(slot) = self.effect_params.iter_mut().find(|s| s.is_none()) {
+                *slot = Some(*entry);
+            } else {
+                self.instruments = true;
+                self.effect_params = [None; 4];
+                break;
+            }
         }
-        if other.lfo_param.is_some() {
-            self.lfo_param = other.lfo_param;
+        for entry in other.lfo_params.iter().flatten() {
+            if let Some(slot) = self.lfo_params.iter_mut().find(|s| s.is_none()) {
+                *slot = Some(*entry);
+            } else {
+                self.instruments = true;
+                self.lfo_params = [None; 2];
+                break;
+            }
         }
-        if other.bus_effect_param.is_some() {
-            self.bus_effect_param = other.bus_effect_param;
+        for entry in other.bus_effect_params.iter().flatten() {
+            if let Some(slot) = self.bus_effect_params.iter_mut().find(|s| s.is_none()) {
+                *slot = Some(*entry);
+            } else {
+                self.session = true;
+                self.bus_effect_params = [None; 4];
+                break;
+            }
         }
-        if other.layer_group_effect_param.is_some() {
-            self.layer_group_effect_param = other.layer_group_effect_param;
+        for entry in other.layer_group_effect_params.iter().flatten() {
+            if let Some(slot) = self.layer_group_effect_params.iter_mut().find(|s| s.is_none()) {
+                *slot = Some(*entry);
+            } else {
+                self.session = true;
+                self.layer_group_effect_params = [None; 4];
+                break;
+            }
         }
     }
 
@@ -397,6 +432,61 @@ impl AudioDirty {
             // Overflow — escalate to full rebuild
             self.routing = true;
             self.routing_instruments = [None; 4];
+        }
+    }
+
+    /// Set a targeted filter param update. Finds an empty slot in the array.
+    /// If all slots are full, escalates to instruments=true.
+    pub fn set_filter_param(&mut self, id: InstrumentId, kind: FilterParamKind, value: f32) {
+        if let Some(slot) = self.filter_params.iter_mut().find(|s| s.is_none()) {
+            *slot = Some((id, kind, value));
+        } else {
+            self.instruments = true;
+            self.filter_params = [None; 2];
+        }
+    }
+
+    /// Set a targeted effect param update. Finds an empty slot in the array.
+    /// If all slots are full, escalates to instruments=true.
+    pub fn set_effect_param(&mut self, id: InstrumentId, effect_id: EffectId, param_idx: usize, value: f32) {
+        if let Some(slot) = self.effect_params.iter_mut().find(|s| s.is_none()) {
+            *slot = Some((id, effect_id, param_idx, value));
+        } else {
+            self.instruments = true;
+            self.effect_params = [None; 4];
+        }
+    }
+
+    /// Set a targeted LFO param update. Finds an empty slot in the array.
+    /// If all slots are full, escalates to instruments=true.
+    pub fn set_lfo_param(&mut self, id: InstrumentId, kind: LfoParamKind, value: f32) {
+        if let Some(slot) = self.lfo_params.iter_mut().find(|s| s.is_none()) {
+            *slot = Some((id, kind, value));
+        } else {
+            self.instruments = true;
+            self.lfo_params = [None; 2];
+        }
+    }
+
+    /// Set a targeted bus effect param update. Finds an empty slot in the array.
+    /// If all slots are full, escalates to session=true.
+    pub fn set_bus_effect_param(&mut self, bus_id: u8, effect_id: EffectId, param_idx: usize, value: f32) {
+        if let Some(slot) = self.bus_effect_params.iter_mut().find(|s| s.is_none()) {
+            *slot = Some((bus_id, effect_id, param_idx, value));
+        } else {
+            self.session = true;
+            self.bus_effect_params = [None; 4];
+        }
+    }
+
+    /// Set a targeted layer group effect param update. Finds an empty slot in the array.
+    /// If all slots are full, escalates to session=true.
+    pub fn set_layer_group_effect_param(&mut self, group_id: u32, effect_id: EffectId, param_idx: usize, value: f32) {
+        if let Some(slot) = self.layer_group_effect_params.iter_mut().find(|s| s.is_none()) {
+            *slot = Some((group_id, effect_id, param_idx, value));
+        } else {
+            self.session = true;
+            self.layer_group_effect_params = [None; 4];
         }
     }
 
@@ -1020,5 +1110,172 @@ mod tests {
     fn lfo_param_kind_as_str() {
         assert_eq!(LfoParamKind::Rate.as_str(), "rate");
         assert_eq!(LfoParamKind::Depth.as_str(), "depth");
+    }
+
+    // ========================================================================
+    // Targeted param array merge tests
+    // ========================================================================
+
+    #[test]
+    fn merge_preserves_both_filter_params() {
+        let mut a = AudioDirty::default();
+        a.filter_params[0] = Some((1, FilterParamKind::Cutoff, 500.0));
+        let mut b = AudioDirty::default();
+        b.filter_params[0] = Some((1, FilterParamKind::Resonance, 0.7));
+        a.merge(b);
+        assert!(a.filter_params[0].is_some());
+        assert!(a.filter_params[1].is_some());
+        // Both params preserved
+        let kinds: Vec<FilterParamKind> = a.filter_params.iter().flatten().map(|p| p.1).collect();
+        assert!(kinds.contains(&FilterParamKind::Cutoff));
+        assert!(kinds.contains(&FilterParamKind::Resonance));
+        assert!(!a.instruments, "should not escalate when both slots fit");
+    }
+
+    #[test]
+    fn merge_filter_overflow_escalates() {
+        let mut a = AudioDirty::default();
+        a.filter_params = [
+            Some((1, FilterParamKind::Cutoff, 500.0)),
+            Some((1, FilterParamKind::Resonance, 0.7)),
+        ];
+        let mut b = AudioDirty::default();
+        b.filter_params[0] = Some((2, FilterParamKind::Cutoff, 1000.0));
+        a.merge(b);
+        assert!(a.instruments, "overflow should escalate to instruments=true");
+        assert!(a.filter_params.iter().all(|p| p.is_none()), "array should be cleared on overflow");
+    }
+
+    #[test]
+    fn merge_preserves_multiple_effect_params() {
+        let eid = 1u32;
+        let mut a = AudioDirty::default();
+        a.effect_params[0] = Some((1, eid, 0, 0.5));
+        let mut b = AudioDirty::default();
+        b.effect_params[0] = Some((1, eid, 1, 0.8));
+        let mut c = AudioDirty::default();
+        c.effect_params[0] = Some((2, eid, 0, 0.3));
+        let mut d = AudioDirty::default();
+        d.effect_params[0] = Some((2, eid, 1, 0.6));
+        a.merge(b);
+        a.merge(c);
+        a.merge(d);
+        let count = a.effect_params.iter().filter(|p| p.is_some()).count();
+        assert_eq!(count, 4, "all 4 effect params should be preserved");
+        assert!(!a.instruments);
+    }
+
+    #[test]
+    fn merge_effect_overflow_escalates() {
+        let eid = 1u32;
+        let mut a = AudioDirty::default();
+        // Fill all 4 slots
+        for i in 0..4 {
+            a.effect_params[i] = Some((1, eid, i, i as f32));
+        }
+        let mut b = AudioDirty::default();
+        b.effect_params[0] = Some((2, eid, 0, 99.0));
+        a.merge(b);
+        assert!(a.instruments, "overflow should escalate to instruments=true");
+        assert!(a.effect_params.iter().all(|p| p.is_none()));
+    }
+
+    #[test]
+    fn merge_preserves_both_lfo_params() {
+        let mut a = AudioDirty::default();
+        a.lfo_params[0] = Some((1, LfoParamKind::Rate, 5.0));
+        let mut b = AudioDirty::default();
+        b.lfo_params[0] = Some((1, LfoParamKind::Depth, 0.8));
+        a.merge(b);
+        assert!(a.lfo_params[0].is_some());
+        assert!(a.lfo_params[1].is_some());
+        assert!(!a.instruments);
+    }
+
+    #[test]
+    fn merge_lfo_overflow_escalates() {
+        let mut a = AudioDirty::default();
+        a.lfo_params = [
+            Some((1, LfoParamKind::Rate, 5.0)),
+            Some((1, LfoParamKind::Depth, 0.8)),
+        ];
+        let mut b = AudioDirty::default();
+        b.lfo_params[0] = Some((2, LfoParamKind::Rate, 10.0));
+        a.merge(b);
+        assert!(a.instruments, "overflow should escalate to instruments=true");
+        assert!(a.lfo_params.iter().all(|p| p.is_none()));
+    }
+
+    #[test]
+    fn merge_bus_effect_overflow_escalates_to_session() {
+        let eid = 1u32;
+        let mut a = AudioDirty::default();
+        for i in 0..4 {
+            a.bus_effect_params[i] = Some((1, eid, i, i as f32));
+        }
+        let mut b = AudioDirty::default();
+        b.bus_effect_params[0] = Some((2, eid, 0, 99.0));
+        a.merge(b);
+        assert!(a.session, "bus overflow should escalate to session=true");
+        assert!(!a.instruments, "bus overflow should NOT escalate to instruments");
+        assert!(a.bus_effect_params.iter().all(|p| p.is_none()));
+    }
+
+    #[test]
+    fn merge_layer_group_effect_overflow_escalates_to_session() {
+        let eid = 1u32;
+        let mut a = AudioDirty::default();
+        for i in 0..4 {
+            a.layer_group_effect_params[i] = Some((1, eid, i, i as f32));
+        }
+        let mut b = AudioDirty::default();
+        b.layer_group_effect_params[0] = Some((2, eid, 0, 99.0));
+        a.merge(b);
+        assert!(a.session, "layer group overflow should escalate to session=true");
+        assert!(!a.instruments);
+        assert!(a.layer_group_effect_params.iter().all(|p| p.is_none()));
+    }
+
+    #[test]
+    fn set_filter_param_fills_slots() {
+        let mut d = AudioDirty::default();
+        d.set_filter_param(1, FilterParamKind::Cutoff, 500.0);
+        assert!(d.filter_params[0].is_some());
+        assert!(d.filter_params[1].is_none());
+        d.set_filter_param(1, FilterParamKind::Resonance, 0.7);
+        assert!(d.filter_params[1].is_some());
+        assert!(!d.instruments);
+    }
+
+    #[test]
+    fn set_filter_param_overflow_escalates() {
+        let mut d = AudioDirty::default();
+        d.set_filter_param(1, FilterParamKind::Cutoff, 500.0);
+        d.set_filter_param(1, FilterParamKind::Resonance, 0.7);
+        d.set_filter_param(2, FilterParamKind::Cutoff, 1000.0);
+        assert!(d.instruments, "overflow should escalate");
+        assert!(d.filter_params.iter().all(|p| p.is_none()));
+    }
+
+    #[test]
+    fn any_detects_filter_params() {
+        let mut d = AudioDirty::default();
+        assert!(!d.any());
+        d.filter_params[0] = Some((1, FilterParamKind::Cutoff, 500.0));
+        assert!(d.any());
+    }
+
+    #[test]
+    fn any_detects_effect_params() {
+        let mut d = AudioDirty::default();
+        d.effect_params[0] = Some((1, 1u32, 0, 0.5));
+        assert!(d.any());
+    }
+
+    #[test]
+    fn any_detects_bus_effect_params() {
+        let mut d = AudioDirty::default();
+        d.bus_effect_params[0] = Some((1, 1u32, 0, 0.5));
+        assert!(d.any());
     }
 }

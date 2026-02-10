@@ -42,7 +42,7 @@ pub(super) fn handle_adjust_lfo_rate(
 
     result.audio_dirty.instruments = true;
     if let Some(rate) = new_rate {
-        result.audio_dirty.lfo_param = Some((id, LfoParamKind::Rate, rate));
+        result.audio_dirty.set_lfo_param(id, LfoParamKind::Rate, rate);
     }
 
     result
@@ -69,7 +69,7 @@ pub(super) fn handle_adjust_lfo_depth(
 
     result.audio_dirty.instruments = true;
     if let Some(depth) = new_depth {
-        result.audio_dirty.lfo_param = Some((id, LfoParamKind::Depth, depth));
+        result.audio_dirty.set_lfo_param(id, LfoParamKind::Depth, depth);
     }
 
     result
