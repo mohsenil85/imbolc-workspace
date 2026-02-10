@@ -49,17 +49,18 @@ and `next_effect_id` counter.
 
 ---
 
-## 5. Instrument is a 28-field god struct
+## 5. Instrument god struct (28 → 18 fields, partial progress)
 
 **Where:** `Instrument` in `imbolc-types/src/state/instrument/mod.rs`
 
-A drum pad carries `sampler_config`, `arpeggiator`, `chord_shape`,
-`vst_param_values`, `vst_state_path`. An audio-in carries effects and
-filter it'll never use. Every new feature adds another `Option<T>`
-field. Makes persistence migrations heavier and constructors noisy.
+Down from 28 to 18 fields after three extractions:
+- **`InstrumentMixer`** — level, pan, mute, solo, routing, sends
+- **`LayerConfig`** — group assignment, octave
+- **`NoteInputConfig`** — arpeggiator, chord shape
 
-Not urgent — works fine at current scale — but worth noting as
-friction grows with each new instrument feature.
+Remaining fields are a mix of source-type-specific `Option<T>`s (see
+#13) and core identity/state (name, source, effects, etc.). 18 fields
+is reasonable for now — the worst friction has been addressed.
 
 ---
 
@@ -95,26 +96,21 @@ All `AdjustEffectParam` variants (instrument, bus, layer group),
 
 ---
 
-## 9. All ID types are bare type aliases (IN PROGRESS — nearly complete)
+## ~~9. All ID types are bare type aliases~~ (FIXED)
 
-**Where:** `imbolc-types/src/lib.rs`
-
-All 5 ID types are now defined as newtypes with full trait derives
-(`Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize,
-Display`):
+**Fixed.** All 6 ID newtypes fully migrated across the entire workspace:
 
 ```rust
 pub struct InstrumentId(u32);
 pub struct EffectId(u32);
 pub struct CustomSynthDefId(u32);
 pub struct VstPluginId(u32);
-pub struct BusId(u8);  // with new() asserting > 0
+pub struct BusId(u8);       // with new() asserting > 0
+pub struct ParamIndex(usize);
 ```
 
-`BusId` fully migrated. The main codebase compiles. Down from ~43
-errors to ~4 remaining in `imbolc-net` test files
-(protocol_roundtrip.rs, broadcast.rs, ownership.rs) — raw integer
-literals need wrapping with `InstrumentId::new()`.
+Zero compilation errors. All 925 tests pass including 95 imbolc-net
+tests.
 
 ---
 
@@ -175,7 +171,7 @@ centralizing the check.
 | 7 | ~~Stringly-typed EQ params~~ | ~~**High**~~ FIXED | — |
 | 1 | ~~AudioDirty data loss~~ | ~~**Medium**~~ FIXED | — |
 | 2 | ~~Projection parity~~ | ~~**Medium**~~ FIXED | — |
-| 9 | ID type newtypes (nearly complete, ~4 net test errors) | **Medium** (wrong-ID bugs) | Small (mechanical) |
+| 9 | ~~ID type newtypes~~ | ~~**Medium**~~ FIXED | — |
 | 10 | ~~Persistence silent fallbacks~~ | ~~**Medium**~~ FIXED | — |
 | 11 | ~~Raw u8 bus IDs~~ | ~~**Medium**~~ FIXED | — |
 | 12 | ~~Sends/buses BTreeMap~~ | ~~**Medium**~~ FIXED | — |
@@ -183,4 +179,4 @@ centralizing the check.
 | 3 | Silent `is_running()` | **Low** (UX annoyance) | Small |
 | 4 | ~~Effect chain duplication~~ | ~~**Low**~~ FIXED | — |
 | 13 | Option fields vs SourceType | **Low** (wrong access) | Large |
-| 5 | Instrument god struct | **Low** (scaling friction) | Large |
+| 5 | Instrument god struct (28→18 fields) | **Low** (scaling friction) | Partial (3 extractions done) |

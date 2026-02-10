@@ -139,6 +139,8 @@ pub(super) fn dispatch_piano_roll(
                         }
                     }
                 }
+            } else if !state.session.piano_roll.recording {
+                return DispatchResult::with_status(imbolc_audio::ServerStatus::Stopped, "Audio engine not running");
             }
 
             // Record note only on the original track (not siblings)
@@ -195,6 +197,8 @@ pub(super) fn dispatch_piano_roll(
                         }
                     }
                 }
+            } else if !state.session.piano_roll.recording {
+                return DispatchResult::with_status(imbolc_audio::ServerStatus::Stopped, "Audio engine not running");
             }
 
             // Record chord notes only on the original track (not siblings)

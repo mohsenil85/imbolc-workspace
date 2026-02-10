@@ -735,6 +735,8 @@ pub(super) fn dispatch_chopper(
                                         rate: 1.0,
                                         offset_secs: 0.0,
                                     });
+                                } else {
+                                    return DispatchResult::with_status(imbolc_audio::ServerStatus::Stopped, "Audio engine not running");
                                 }
                             }
                         }

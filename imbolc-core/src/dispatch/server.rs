@@ -89,6 +89,8 @@ pub(super) fn dispatch_server(
                     audio.status(),
                     &format!("Recording to {}", path.display()),
                 );
+            } else {
+                result.push_status(imbolc_audio::ServerStatus::Stopped, "Audio engine not running");
             }
         }
         ServerAction::RecordInput => {
@@ -127,6 +129,8 @@ pub(super) fn dispatch_server(
                         &format!("Recording to {}", path.display()),
                     );
                 }
+            } else {
+                result.push_status(imbolc_audio::ServerStatus::Stopped, "Audio engine not running");
             }
         }
         ServerAction::Restart { input_device, output_device, buffer_size, sample_rate } => {

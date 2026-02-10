@@ -39,6 +39,8 @@ pub(super) fn handle_play_note(
                     }
                 }
             }
+        } else {
+            return DispatchResult::with_status(imbolc_audio::ServerStatus::Stopped, "Audio engine not running");
         }
     }
     DispatchResult::none()
@@ -82,6 +84,8 @@ pub(super) fn handle_play_notes(
                     }
                 }
             }
+        } else {
+            return DispatchResult::with_status(imbolc_audio::ServerStatus::Stopped, "Audio engine not running");
         }
     }
     DispatchResult::none()
@@ -110,6 +114,8 @@ pub(super) fn handle_play_drum_pad(
                             rate,
                             offset_secs: 0.0,
                         });
+                    } else {
+                        return DispatchResult::with_status(imbolc_audio::ServerStatus::Stopped, "Audio engine not running");
                     }
                 }
             }
