@@ -675,14 +675,6 @@ fn load_instruments(conn: &Connection, instruments: &mut InstrumentState) -> Sql
         // Create instrument with defaults, then override
         let mut inst = Instrument::new(r.id, source);
         inst.name = r.name;
-        // Build processing_chain from loaded filter/eq (effects added below)
-        inst.processing_chain.clear();
-        if let Some(f) = filter {
-            inst.processing_chain.push(ProcessingStage::Filter(f));
-        }
-        if let Some(e) = eq {
-            inst.processing_chain.push(ProcessingStage::Eq(e));
-        }
         inst.lfo = lfo;
         inst.amp_envelope = amp_envelope;
         inst.polyphonic = r.polyphonic != 0;
@@ -714,8 +706,67 @@ fn load_instruments(conn: &Connection, instruments: &mut InstrumentState) -> Sql
         // Source params
         inst.source_params = load_params(conn, "instrument_source_params", "instrument_id", r.id)?;
 
-        // Effects (append to processing_chain after filter/eq)
-        for effect in load_effects(conn, r.id)? {
+        // Load effects for chain assembly
+        let mut effects = load_effects(conn, r.id)?;
+        let mut filter = filter;
+        let mut eq = eq;
+
+        // Build processing_chain: use persisted ordering if available, else legacy fallback
+        inst.processing_chain.clear();
+        if table_exists(conn, "instrument_processing_chain")? {
+            let mut ord_stmt = conn.prepare(
+                "SELECT stage_type, effect_id FROM instrument_processing_chain \
+                 WHERE instrument_id = ?1 ORDER BY position"
+            )?;
+            let ordering: Vec<(String, Option<u32>)> = ord_stmt.query_map(params![r.id], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, Option<u32>>(1)?))
+            })?.collect::<SqlResult<_>>()?;
+
+            if ordering.is_empty() {
+                // No chain rows — use legacy order (filter → eq → effects)
+                if let Some(f) = filter.take() {
+                    inst.processing_chain.push(ProcessingStage::Filter(f));
+                }
+                if let Some(e) = eq.take() {
+                    inst.processing_chain.push(ProcessingStage::Eq(e));
+                }
+            } else {
+                for (stage_type, eff_id) in &ordering {
+                    match stage_type.as_str() {
+                        "filter" => {
+                            if let Some(f) = filter.take() {
+                                inst.processing_chain.push(ProcessingStage::Filter(f));
+                            }
+                        }
+                        "eq" => {
+                            if let Some(e) = eq.take() {
+                                inst.processing_chain.push(ProcessingStage::Eq(e));
+                            }
+                        }
+                        "effect" => {
+                            if let Some(eid) = eff_id {
+                                if let Some(idx) = effects.iter().position(|e| e.id == *eid) {
+                                    inst.processing_chain.push(
+                                        ProcessingStage::Effect(effects.remove(idx))
+                                    );
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        } else {
+            // Legacy fallback: filter → eq → effects
+            if let Some(f) = filter.take() {
+                inst.processing_chain.push(ProcessingStage::Filter(f));
+            }
+            if let Some(e) = eq.take() {
+                inst.processing_chain.push(ProcessingStage::Eq(e));
+            }
+        }
+        // Append any effects not covered by ordering (defensive)
+        for effect in effects {
             inst.processing_chain.push(ProcessingStage::Effect(effect));
         }
 

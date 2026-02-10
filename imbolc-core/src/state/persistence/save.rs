@@ -285,6 +285,9 @@ fn save_instruments(conn: &Connection, instruments: &InstrumentState) -> SqlResu
             }
         }
 
+        // Processing chain order
+        save_processing_chain(conn, inst.id, &inst.processing_chain)?;
+
         // VST param values
         for (param_idx, value) in &inst.vst_param_values {
             conn.execute(
@@ -374,6 +377,27 @@ fn save_effects_to(
         for (param_idx, value) in &effect.vst_param_values {
             conn.execute(&vst_sql, params![owner_id, effect.id, param_idx, value])?;
         }
+    }
+    Ok(())
+}
+
+fn save_processing_chain(
+    conn: &Connection,
+    instrument_id: u32,
+    chain: &[imbolc_types::ProcessingStage],
+) -> SqlResult<()> {
+    let mut stmt = conn.prepare(
+        "INSERT INTO instrument_processing_chain \
+         (instrument_id, position, stage_type, effect_id) \
+         VALUES (?1, ?2, ?3, ?4)"
+    )?;
+    for (pos, stage) in chain.iter().enumerate() {
+        let (stage_type, effect_id): (&str, Option<u32>) = match stage {
+            imbolc_types::ProcessingStage::Filter(_) => ("filter", None),
+            imbolc_types::ProcessingStage::Eq(_) => ("eq", None),
+            imbolc_types::ProcessingStage::Effect(e) => ("effect", Some(e.id)),
+        };
+        stmt.execute(params![instrument_id, pos as i32, stage_type, effect_id])?;
     }
     Ok(())
 }

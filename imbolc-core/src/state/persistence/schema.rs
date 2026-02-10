@@ -1,7 +1,7 @@
 use rusqlite::{Connection, Result as SqlResult};
 
 /// Schema version for the relational format.
-pub const SCHEMA_VERSION: i32 = 11;
+pub const SCHEMA_VERSION: i32 = 12;
 
 /// Create all tables for the relational schema.
 pub fn create_tables(conn: &Connection) -> SqlResult<()> {
@@ -223,6 +223,14 @@ CREATE TABLE IF NOT EXISTS instrument_eq_bands (
     q REAL NOT NULL,
     enabled INTEGER NOT NULL,
     PRIMARY KEY (instrument_id, band_index)
+);
+
+CREATE TABLE IF NOT EXISTS instrument_processing_chain (
+    instrument_id INTEGER NOT NULL,
+    position INTEGER NOT NULL,
+    stage_type TEXT NOT NULL,
+    effect_id INTEGER,
+    PRIMARY KEY (instrument_id, position)
 );
 
 CREATE TABLE IF NOT EXISTS instrument_vst_params (
@@ -697,6 +705,7 @@ DELETE FROM instrument_sends;
 DELETE FROM instrument_modulations;
 DELETE FROM instrument_filter_extra_params;
 DELETE FROM instrument_eq_bands;
+DELETE FROM instrument_processing_chain;
 DELETE FROM instrument_vst_params;
 DELETE FROM effect_vst_params;
 DELETE FROM mixer_buses;

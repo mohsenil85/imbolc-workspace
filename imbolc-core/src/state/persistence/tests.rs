@@ -870,6 +870,115 @@ mod tests {
     }
 
     #[test]
+    fn round_trip_processing_chain_order() {
+        use imbolc_types::ProcessingStage;
+
+        let mut session = SessionState::new();
+        let mut instruments = InstrumentState::new();
+        let inst_id = instruments.add_instrument(SourceType::Saw);
+
+        if let Some(inst) = instruments.instrument_mut(inst_id) {
+            // Add effect, filter, EQ → default order is Filter(0), EQ(1), Effect(2)
+            let effect_id = inst.add_effect(EffectType::Delay);
+            inst.set_filter(Some(FilterType::Hpf));
+            inst.toggle_eq();
+
+            // Reorder to: Effect → Filter → EQ
+            // Current chain after above: [Filter, EQ, Effect(Delay)]
+            // We want: [Effect(Delay), Filter, EQ]
+            inst.processing_chain.clear();
+            inst.processing_chain.push(ProcessingStage::Effect(
+                crate::state::instrument::EffectSlot::new(effect_id, EffectType::Delay),
+            ));
+            inst.processing_chain.push(ProcessingStage::Filter(
+                crate::state::instrument::FilterConfig::new(FilterType::Hpf),
+            ));
+            inst.processing_chain.push(ProcessingStage::Eq(
+                crate::state::instrument::EqConfig::default(),
+            ));
+        }
+
+        session.piano_roll.add_track(inst_id);
+
+        let path = temp_db_path();
+        save_project(&path, &session, &instruments).expect("save");
+        let (_, loaded_inst) = load_project(&path).expect("load");
+
+        let loaded = loaded_inst.instruments.iter().find(|i| i.id == inst_id).unwrap();
+        assert_eq!(loaded.processing_chain.len(), 3);
+        assert!(loaded.processing_chain[0].is_effect(), "expected Effect at position 0");
+        assert!(loaded.processing_chain[1].is_filter(), "expected Filter at position 1");
+        assert!(loaded.processing_chain[2].is_eq(), "expected EQ at position 2");
+
+        // Verify effect data
+        if let ProcessingStage::Effect(e) = &loaded.processing_chain[0] {
+            assert_eq!(e.effect_type, EffectType::Delay);
+        }
+        // Verify filter data
+        if let ProcessingStage::Filter(f) = &loaded.processing_chain[1] {
+            assert_eq!(f.filter_type, FilterType::Hpf);
+        }
+
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn round_trip_processing_chain_interleaved() {
+        use imbolc_types::ProcessingStage;
+
+        let mut session = SessionState::new();
+        let mut instruments = InstrumentState::new();
+        let inst_id = instruments.add_instrument(SourceType::Saw);
+
+        if let Some(inst) = instruments.instrument_mut(inst_id) {
+            // Build chain: Filter → Effect(Delay) → EQ → Effect(Reverb)
+            let delay_id = inst.add_effect(EffectType::Delay);
+            let reverb_id = inst.add_effect(EffectType::Reverb);
+
+            inst.processing_chain.clear();
+            inst.processing_chain.push(ProcessingStage::Filter(
+                crate::state::instrument::FilterConfig::new(FilterType::Lpf),
+            ));
+            inst.processing_chain.push(ProcessingStage::Effect(
+                crate::state::instrument::EffectSlot::new(delay_id, EffectType::Delay),
+            ));
+            inst.processing_chain.push(ProcessingStage::Eq(
+                crate::state::instrument::EqConfig::default(),
+            ));
+            inst.processing_chain.push(ProcessingStage::Effect(
+                crate::state::instrument::EffectSlot::new(reverb_id, EffectType::Reverb),
+            ));
+        }
+
+        session.piano_roll.add_track(inst_id);
+
+        let path = temp_db_path();
+        save_project(&path, &session, &instruments).expect("save");
+        let (_, loaded_inst) = load_project(&path).expect("load");
+
+        let loaded = loaded_inst.instruments.iter().find(|i| i.id == inst_id).unwrap();
+        assert_eq!(loaded.processing_chain.len(), 4);
+        assert!(loaded.processing_chain[0].is_filter(), "expected Filter at 0");
+        assert!(loaded.processing_chain[1].is_effect(), "expected Effect at 1");
+        assert!(loaded.processing_chain[2].is_eq(), "expected EQ at 2");
+        assert!(loaded.processing_chain[3].is_effect(), "expected Effect at 3");
+
+        // Verify effect identities
+        if let ProcessingStage::Effect(e) = &loaded.processing_chain[1] {
+            assert_eq!(e.effect_type, EffectType::Delay);
+        }
+        if let ProcessingStage::Effect(e) = &loaded.processing_chain[3] {
+            assert_eq!(e.effect_type, EffectType::Reverb);
+        }
+        // Verify filter type
+        if let ProcessingStage::Filter(f) = &loaded.processing_chain[0] {
+            assert_eq!(f.filter_type, FilterType::Lpf);
+        }
+
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
     fn round_trip_layer_octave_offset() {
         let mut session = SessionState::new();
         let mut instruments = InstrumentState::new();
