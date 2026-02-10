@@ -119,7 +119,12 @@ fn project_instrument(
 ) -> bool {
     match action {
         InstrumentAction::Add(source_type) => {
-            instruments.add_instrument(*source_type);
+            let id = instruments.add_instrument(*source_type);
+            session.piano_roll.add_track(id);
+            let bus_ids: Vec<u8> = session.bus_ids().collect();
+            if let Some(inst) = instruments.instrument_mut(id) {
+                inst.sync_sends_with_buses(&bus_ids);
+            }
             true
         }
         InstrumentAction::Delete(id) => {

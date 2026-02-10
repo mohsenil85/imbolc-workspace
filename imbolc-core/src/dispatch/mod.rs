@@ -14,6 +14,9 @@ mod session;
 pub mod side_effects;
 mod vst_param;
 
+#[cfg(test)]
+mod projection_parity;
+
 pub use local::LocalDispatcher;
 pub use side_effects::AudioSideEffect;
 
