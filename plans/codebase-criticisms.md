@@ -110,23 +110,28 @@ Not proposing per-effect typed enums (too much churn), but a
 
 ---
 
-## 9. All ID types are bare type aliases (PARTIAL — BusId done, rest open)
+## 9. All ID types are bare type aliases (IN PROGRESS — newtypes defined, migration incomplete)
 
 **Where:** `imbolc-types/src/lib.rs`
 
-`BusId` has been converted to a newtype (`struct BusId(u8)` with
-constructor enforcing id > 0). The remaining ID types are still bare
-aliases:
+All 5 ID types are now defined as newtypes:
 
 ```rust
-pub type InstrumentId = u32;
-pub type EffectId = u32;
-pub type CustomSynthDefId = u32;
-pub type VstPluginId = u32;
+pub struct InstrumentId(u32);
+pub struct EffectId(u32);
+pub struct CustomSynthDefId(u32);
+pub struct VstPluginId(u32);
+pub struct BusId(u8);  // with new() asserting > 0
 ```
 
-**Fix:** Same newtype treatment for the remaining IDs. Mechanical but
-touches many files.
+`BusId` is fully migrated. The other 4 newtypes are defined but the
+codebase still has ~43 compilation errors from mismatched types
+(e.g. passing raw `u32` where `InstrumentId` expected), missing
+`ToSql`/`FromSql` impls for persistence, and net test breakage.
+
+**Remaining work:** Fix compilation errors across persistence layer,
+dispatch handlers, and network tests. Mechanical but spread across
+many files.
 
 ---
 
@@ -140,12 +145,12 @@ decoders.
 
 ---
 
-## 11. Bus IDs are raw `u8` with no bounds enforcement (IN PROGRESS)
+## ~~11. Bus IDs are raw `u8` with no bounds enforcement~~ (FIXED)
 
-`BusId` newtype introduced in `imbolc-types/src/lib.rs` —
-`struct BusId(u8)` with `new()` asserting id > 0. Migration to use
-`BusId` throughout the codebase is in progress (compilation errors
-remain in action.rs, action_projection.rs, handle.rs, etc.).
+**Fixed.** `BusId` newtype with `new()` asserting id > 0 fully
+migrated across the codebase — no remaining compilation errors. All
+bus-related actions, dispatch handlers, audio engine, and persistence
+use `BusId` instead of raw `u8`.
 
 ---
 
@@ -203,9 +208,9 @@ centralizing the check.
 | 7 | ~~Stringly-typed EQ params~~ | ~~**High**~~ FIXED | — |
 | 1 | ~~AudioDirty data loss~~ | ~~**Medium**~~ FIXED | — |
 | 2 | ~~Projection parity~~ | ~~**Medium**~~ FIXED | — |
-| 9 | Bare ID type aliases (BusId done) | **Medium** (wrong-ID bugs) | Large (mechanical) |
+| 9 | ID type aliases (newtypes defined, migration incomplete) | **Medium** (wrong-ID bugs) | Large (mechanical) |
 | 10 | ~~Persistence silent fallbacks~~ | ~~**Medium**~~ FIXED | — |
-| 11 | Raw u8 bus IDs (IN PROGRESS) | **Medium** (invalid states) | Medium |
+| 11 | ~~Raw u8 bus IDs~~ | ~~**Medium**~~ FIXED | — |
 | 12 | Sends/buses sync invariant | **Medium** (forgotten sync) | Medium |
 | 8 | Raw usize param index | **Low** (index confusion) | Small |
 | 3 | Silent `is_running()` | **Low** (UX annoyance) | Small |
