@@ -1,5 +1,5 @@
 use crate::action::{DispatchResult, MixerAction};
-use crate::audio::AudioHandle;
+use imbolc_audio::AudioHandle;
 use crate::dispatch::helpers::{apply_bus_update, apply_layer_group_update, maybe_record_automation};
 use crate::state::automation::AutomationTarget;
 use crate::state::{AppState, MixerSelection};
@@ -352,7 +352,7 @@ pub(super) fn dispatch_mixer(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::audio::AudioHandle;
+    use imbolc_audio::AudioHandle;
 
     fn setup() -> (AppState, AudioHandle) {
         let mut state = AppState::new();

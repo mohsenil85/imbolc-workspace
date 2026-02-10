@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use super::backend::{AudioBackend, RawArg, ScBackend};
 use super::{AudioEngine, ServerStatus, GROUP_SOURCES, GROUP_PROCESSING, GROUP_OUTPUT, GROUP_BUS_PROCESSING, GROUP_RECORD, GROUP_SAFETY};
-use crate::audio::osc_client::{AudioMonitor, OscClient};
+use crate::osc_client::{AudioMonitor, OscClient};
 use regex::Regex;
 
 /// Result of spawning scsynth in a background thread.
@@ -41,7 +41,7 @@ fn spawn_scsynth(
     // Resolve "System Default" to actual device names so we always
     // pass -H to scsynth. Without -H, scsynth probes all devices
     // and can crash on incompatible ones (e.g. iPhone continuity mic).
-    let (default_output, default_input) = crate::audio::devices::default_device_names();
+    let (default_output, default_input) = crate::devices::default_device_names();
     let resolved_input = input_device.or(default_input);
     let resolved_output = output_device.or(default_output);
 

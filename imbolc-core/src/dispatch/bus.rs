@@ -1,5 +1,5 @@
 use crate::action::{BusAction, DispatchResult, LayerGroupAction, NavIntent};
-use crate::audio::AudioHandle;
+use imbolc_audio::AudioHandle;
 use crate::dispatch::side_effects::AudioSideEffect;
 use crate::state::{AppState, OutputTarget};
 
@@ -409,7 +409,7 @@ mod tests {
     // LayerGroup effect dispatch tests
     // ========================================================================
 
-    use crate::audio::AudioHandle;
+    use imbolc_audio::AudioHandle;
 
     fn setup_with_audio() -> (AppState, AudioHandle, Vec<AudioSideEffect>) {
         (AppState::new(), AudioHandle::new(), Vec::new())

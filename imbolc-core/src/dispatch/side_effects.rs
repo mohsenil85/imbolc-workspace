@@ -6,7 +6,7 @@
 
 use std::path::PathBuf;
 
-use crate::audio::AudioHandle;
+use imbolc_audio::AudioHandle;
 use crate::state::automation::AutomationTarget;
 use crate::state::{BufferId, InstrumentId};
 use crate::action::VstTarget;
@@ -326,7 +326,7 @@ fn apply_one(effect: &AudioSideEffect, audio: &mut AudioHandle) {
 
         // VST
         AudioSideEffect::SetVstParam { instrument_id, target, param_index, value } => {
-            use crate::audio::commands::AudioCmd;
+            use imbolc_audio::commands::AudioCmd;
             if let Err(e) = audio.send_cmd(AudioCmd::SetVstParam {
                 instrument_id: *instrument_id,
                 target: *target,
@@ -337,7 +337,7 @@ fn apply_one(effect: &AudioSideEffect, audio: &mut AudioHandle) {
             }
         }
         AudioSideEffect::QueryVstParams { instrument_id, target } => {
-            use crate::audio::commands::AudioCmd;
+            use imbolc_audio::commands::AudioCmd;
             if let Err(e) = audio.send_cmd(AudioCmd::QueryVstParams {
                 instrument_id: *instrument_id,
                 target: *target,
@@ -346,7 +346,7 @@ fn apply_one(effect: &AudioSideEffect, audio: &mut AudioHandle) {
             }
         }
         AudioSideEffect::SaveVstState { instrument_id, target, path } => {
-            use crate::audio::commands::AudioCmd;
+            use imbolc_audio::commands::AudioCmd;
             if let Err(e) = audio.send_cmd(AudioCmd::SaveVstState {
                 instrument_id: *instrument_id,
                 target: *target,

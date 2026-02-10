@@ -204,8 +204,8 @@ impl PianoRollPane {
             let filled = (progress * bar_width as f32) as usize;
             let empty = bar_width.saturating_sub(filled);
             let label = match export.kind {
-                imbolc_core::audio::commands::ExportKind::MasterBounce => "BOUNCING",
-                imbolc_core::audio::commands::ExportKind::StemExport => "STEMS",
+                imbolc_audio::commands::ExportKind::MasterBounce => "BOUNCING",
+                imbolc_audio::commands::ExportKind::StemExport => "STEMS",
             };
             let text = format!(
                 " {} [{}{}] {:.0}% ",

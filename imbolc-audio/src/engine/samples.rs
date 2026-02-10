@@ -2,7 +2,7 @@ use std::path::Path;
 
 use super::backend::RawArg;
 use super::AudioEngine;
-use crate::state::BufferId;
+use imbolc_types::BufferId;
 
 impl AudioEngine {
     pub fn load_synthdefs(&self, dir: &Path) -> Result<(), String> {

@@ -1,4 +1,4 @@
-use crate::audio::AudioHandle;
+use imbolc_audio::AudioHandle;
 use crate::state::AppState;
 use crate::action::DispatchResult;
 use crate::dispatch::side_effects::AudioSideEffect;

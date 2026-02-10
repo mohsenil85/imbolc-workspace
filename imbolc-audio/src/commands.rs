@@ -8,9 +8,9 @@
 use std::path::PathBuf;
 use std::sync::mpsc::Sender;
 
-use crate::action::VstTarget;
-use crate::state::automation::AutomationTarget;
-use crate::state::{BufferId, EffectId, InstrumentId};
+use imbolc_types::VstTarget;
+use imbolc_types::AutomationTarget;
+use imbolc_types::{BufferId, EffectId, InstrumentId};
 
 /// Commands sent from the main thread to the audio engine.
 ///

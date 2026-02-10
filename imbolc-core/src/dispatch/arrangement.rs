@@ -1,5 +1,5 @@
 use crate::action::{ArrangementAction, DispatchResult, NavIntent};
-use crate::audio::AudioHandle;
+use imbolc_audio::AudioHandle;
 use crate::state::arrangement::{ClipEditContext, PlayMode};
 use crate::state::AppState;
 

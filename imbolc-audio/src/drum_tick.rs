@@ -4,7 +4,7 @@ use std::time::Duration;
 use super::commands::AudioFeedback;
 use super::engine::AudioEngine;
 use super::snapshot::{InstrumentSnapshot, SessionSnapshot};
-use crate::state::InstrumentId;
+use imbolc_types::InstrumentId;
 
 pub fn tick_drum_sequencer(
     instruments: &mut InstrumentSnapshot,

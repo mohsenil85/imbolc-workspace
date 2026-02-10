@@ -12,7 +12,7 @@ use crossbeam_channel::{Receiver, Sender, TryRecvError};
 use imbolc_types::Action;
 
 use super::snapshot::{AutomationSnapshot, InstrumentSnapshot, PianoRollSnapshot, SessionSnapshot};
-use crate::state::InstrumentId;
+use imbolc_types::InstrumentId;
 
 /// A single entry in the event log.
 #[derive(Debug)]

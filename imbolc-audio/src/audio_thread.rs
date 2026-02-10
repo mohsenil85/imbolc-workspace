@@ -12,10 +12,10 @@ use super::event_log::{EventLogReader, LogEntry, LogEntryKind};
 use super::osc_client::AudioMonitor;
 use super::telemetry::AudioTelemetry;
 use super::ServerStatus;
-use crate::action::VstTarget;
-use crate::state::arpeggiator::ArpPlayState;
+use imbolc_types::VstTarget;
+use crate::arp_state::ArpPlayState;
 use super::snapshot::{AutomationSnapshot, InstrumentSnapshot, PianoRollSnapshot, SessionSnapshot};
-use crate::state::{InstrumentId, InstrumentState, SessionState};
+use imbolc_types::{InstrumentId, InstrumentState, SessionState};
 
 /// Deferred server connection: after spawning scsynth, wait before connecting
 /// so the server has time to initialize. Avoids blocking the audio thread.
@@ -60,7 +60,7 @@ struct ExportState {
 struct PendingVstQuery {
     instrument_id: InstrumentId,
     target: VstTarget,
-    vst_plugin_id: crate::state::vst_plugin::VstPluginId,
+    vst_plugin_id: imbolc_types::VstPluginId,
     node_id: i32,
     started_at: Instant,
     last_count: usize,
@@ -897,12 +897,12 @@ impl AudioThread {
     }
 
     /// Resolve the VstPluginId for a given instrument and target
-    fn resolve_vst_plugin_id(&self, instrument_id: u32, target: VstTarget) -> Option<crate::state::vst_plugin::VstPluginId> {
+    fn resolve_vst_plugin_id(&self, instrument_id: u32, target: VstTarget) -> Option<imbolc_types::VstPluginId> {
         let inst = self.instruments.instruments.iter()
             .find(|i| i.id == instrument_id)?;
         match target {
             VstTarget::Source => {
-                if let crate::state::SourceType::Vst(id) = inst.source {
+                if let imbolc_types::SourceType::Vst(id) = inst.source {
                     Some(id)
                 } else {
                     None
@@ -910,7 +910,7 @@ impl AudioThread {
             }
             VstTarget::Effect(effect_id) => {
                 inst.effect_by_id(effect_id).and_then(|effect| {
-                    if let crate::state::EffectType::Vst(id) = effect.effect_type {
+                    if let imbolc_types::EffectType::Vst(id) = effect.effect_type {
                         Some(id)
                     } else {
                         None

@@ -1,6 +1,6 @@
-use crate::state::automation::AutomationLane;
-use crate::state::piano_roll::PianoRollState;
-use crate::state::{InstrumentState, SessionState};
+use imbolc_types::AutomationLane;
+use imbolc_types::PianoRollState;
+use imbolc_types::{InstrumentState, SessionState};
 
 pub type InstrumentSnapshot = InstrumentState;
 pub type SessionSnapshot = SessionState;

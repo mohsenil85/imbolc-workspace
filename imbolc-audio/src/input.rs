@@ -9,7 +9,7 @@ use std::time::Instant;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, Host, Stream, StreamConfig};
 
-use crate::state::InstrumentId;
+use imbolc_types::InstrumentId;
 
 /// Ring buffer for audio capture
 pub struct RingBuffer {

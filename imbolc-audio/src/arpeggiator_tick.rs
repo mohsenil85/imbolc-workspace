@@ -2,7 +2,8 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use super::engine::AudioEngine;
-use crate::state::arpeggiator::{ArpDirection, ArpPlayState};
+use imbolc_types::ArpDirection;
+use crate::arp_state::ArpPlayState;
 use super::snapshot::{InstrumentSnapshot, SessionSnapshot};
 
 pub fn tick_arpeggiator(
@@ -15,7 +16,7 @@ pub fn tick_arpeggiator(
     elapsed: Duration,
 ) {
     // Collect instrument ids and arp configs to avoid borrow conflicts
-    let arp_instruments: Vec<(u32, crate::state::arpeggiator::ArpeggiatorConfig)> = instruments
+    let arp_instruments: Vec<(u32, imbolc_types::ArpeggiatorConfig)> = instruments
         .instruments
         .iter()
         .filter(|inst| inst.arpeggiator.enabled)

@@ -21,7 +21,7 @@ use std::path::PathBuf;
 use std::sync::mpsc::Sender;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::audio::AudioHandle;
+use imbolc_audio::AudioHandle;
 use crate::state::AppState;
 use crate::action::{Action, AudioDirty, ClickAction, DispatchResult, IoFeedback, TunerAction};
 use crate::state::undo::{is_undoable, undo_scope};

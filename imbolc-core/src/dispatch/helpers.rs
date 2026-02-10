@@ -86,7 +86,7 @@ where
 }
 
 /// Push bus mixer params effect if audio is running.
-pub fn apply_bus_update(audio: &crate::audio::AudioHandle, effects: &mut Vec<AudioSideEffect>, update: Option<(u8, f32, bool, f32)>) {
+pub fn apply_bus_update(audio: &imbolc_audio::AudioHandle, effects: &mut Vec<AudioSideEffect>, update: Option<(u8, f32, bool, f32)>) {
     if let Some((bus_id, level, mute, pan)) = update {
         if audio.is_running() {
             effects.push(AudioSideEffect::SetBusMixerParams { bus_id, level, mute, pan });
@@ -95,7 +95,7 @@ pub fn apply_bus_update(audio: &crate::audio::AudioHandle, effects: &mut Vec<Aud
 }
 
 /// Push layer group mixer params effect if audio is running.
-pub fn apply_layer_group_update(audio: &crate::audio::AudioHandle, effects: &mut Vec<AudioSideEffect>, update: Option<(u32, f32, bool, f32)>) {
+pub fn apply_layer_group_update(audio: &imbolc_audio::AudioHandle, effects: &mut Vec<AudioSideEffect>, update: Option<(u32, f32, bool, f32)>) {
     if let Some((group_id, level, mute, pan)) = update {
         if audio.is_running() {
             effects.push(AudioSideEffect::SetLayerGroupMixerParams { group_id, level, mute, pan });

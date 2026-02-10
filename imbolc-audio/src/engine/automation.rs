@@ -1,6 +1,6 @@
 use super::backend::{AudioBackend, BackendMessage, RawArg, build_n_set_message};
 use super::AudioEngine;
-use crate::state::{AutomationTarget, InstrumentState, SessionState};
+use imbolc_types::{AutomationTarget, InstrumentState, SessionState};
 use imbolc_types::{BusParameter, GlobalParameter, InstrumentParameter, ParameterTarget};
 
 impl AudioEngine {

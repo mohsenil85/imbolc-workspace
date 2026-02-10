@@ -1,9 +1,8 @@
 use super::AudioEngine;
-use super::{InstrumentNodes, ProcessingNodeRef, GROUP_SOURCES, GROUP_PROCESSING, GROUP_OUTPUT, GROUP_BUS_PROCESSING, VST_UGEN_INDEX};
+use super::{InstrumentNodes, GROUP_SOURCES, GROUP_PROCESSING, GROUP_OUTPUT, GROUP_BUS_PROCESSING, VST_UGEN_INDEX};
 use super::backend::RawArg;
 use std::collections::HashMap;
-use crate::state::{CustomSynthDefRegistry, EffectId, EffectType, FilterType, Instrument, InstrumentId, InstrumentState, LayerGroupMixer, MixerBus, ParameterTarget, ParamValue, SendTapPoint, SessionState, SourceType, SourceTypeExt};
-use imbolc_types::ProcessingStage;
+use imbolc_types::{CustomSynthDefRegistry, EffectId, EffectType, FilterType, Instrument, InstrumentId, InstrumentState, LayerGroupMixer, MixerBus, ParameterTarget, ParamValue, SendTapPoint, SessionState, SourceType, SourceTypeExt};
 
 /// State machine for amortized routing rebuild across multiple ticks.
 /// Each step performs a bounded amount of work so the audio thread is never
@@ -68,6 +67,7 @@ impl AudioEngine {
         let mut lfo_node: Option<i32> = None;
         let mut filter_node: Option<i32> = None;
         let mut effect_nodes: HashMap<EffectId, i32> = HashMap::new();
+        let mut effect_order: Vec<EffectId> = Vec::new();
 
         // Determine channel count based on channel config
         let is_mono = instrument.channel_config.is_mono();
@@ -103,16 +103,16 @@ impl AudioEngine {
 
             let bus_id = instrument.source_params.iter()
                 .find(|p| p.name == "bus")
-                .map(|p| match &p.value {
-                    crate::state::param::ParamValue::Int(v) => *v as u8,
+                .map(|p| match p.value {
+                    imbolc_types::ParamValue::Int(v) => v as u8,
                     _ => 1,
                 })
                 .unwrap_or(1);
             let bus_audio_bus = self.bus_audio_buses.get(&bus_id).copied().unwrap_or(16);
             let gain = instrument.source_params.iter()
                 .find(|p| p.name == "gain")
-                .map(|p| match &p.value {
-                    crate::state::param::ParamValue::Float(v) => *v,
+                .map(|p| match p.value {
+                    imbolc_types::ParamValue::Float(v) => v,
                     _ => 1.0,
                 })
                 .unwrap_or(1.0);
@@ -174,169 +174,166 @@ impl AudioEngine {
             None
         };
 
-        // Processing chain: iterate stages in user-defined order
+        // Filter (if present)
+        if let Some(filter) = instrument.filter() {
+            let node_id = self.next_node_id;
+            self.next_node_id += 1;
+            let filter_out_bus = self.bus_allocator.get_or_alloc_audio_bus_with_channels(
+                instrument.id, "filter_out", channels,
+            );
+
+            let cutoff_mod_bus = if instrument.lfo.enabled && instrument.lfo.target == ParameterTarget::FilterCutoff {
+                lfo_control_bus.map(|b| b as f32).unwrap_or(-1.0)
+            } else {
+                -1.0
+            };
+            let res_mod_bus = if instrument.lfo.enabled && instrument.lfo.target == ParameterTarget::FilterResonance {
+                lfo_control_bus.map(|b| b as f32).unwrap_or(-1.0)
+            } else {
+                -1.0
+            };
+
+            let mut params = vec![
+                ("in".to_string(), current_bus as f32),
+                ("out".to_string(), filter_out_bus as f32),
+                ("cutoff".to_string(), filter.cutoff.value),
+                ("resonance".to_string(), filter.resonance.value),
+                ("cutoff_mod_in".to_string(), cutoff_mod_bus),
+                ("res_mod_in".to_string(), res_mod_bus),
+            ];
+            for p in &filter.extra_params {
+                params.push((p.name.clone(), p.value.to_f32()));
+            }
+
+            let client = self.backend.as_ref().ok_or("Not connected")?;
+            client.create_synth(
+                Self::filter_synth_def(filter.filter_type, is_mono), node_id, GROUP_PROCESSING, &params,
+            ).map_err(|e| e.to_string())?;
+
+            filter_node = Some(node_id);
+            current_bus = filter_out_bus;
+        }
+
+        // EQ (12-band parametric, if present)
+        // Note: EQ doesn't have mono variants yet, stays stereo
         let mut eq_node: Option<i32> = None;
-        let mut processing_order: Vec<ProcessingNodeRef> = Vec::new();
+        if let Some(eq) = instrument.eq() {
+            let node_id = self.next_node_id;
+            self.next_node_id += 1;
+            let eq_out_bus = self.bus_allocator.get_or_alloc_audio_bus(instrument.id, "eq_out");
 
-        for stage in instrument.processing_chain.iter() {
-            match stage {
-                ProcessingStage::Filter(filter) => {
-                    let node_id = self.next_node_id;
-                    self.next_node_id += 1;
-                    let filter_out_bus = self.bus_allocator.get_or_alloc_audio_bus_with_channels(
-                        instrument.id, "filter_out", channels,
-                    );
+            let mut params: Vec<(String, f32)> = vec![
+                ("in".to_string(), current_bus as f32),
+                ("out".to_string(), eq_out_bus as f32),
+            ];
+            for (i, band) in eq.bands.iter().enumerate() {
+                params.push((format!("b{}_freq", i), band.freq));
+                params.push((format!("b{}_gain", i), band.gain));
+                params.push((format!("b{}_q", i), 1.0 / band.q)); // SC expects reciprocal Q
+                params.push((format!("b{}_on", i), if band.enabled { 1.0 } else { 0.0 }));
+            }
 
-                    let cutoff_mod_bus = if instrument.lfo.enabled && instrument.lfo.target == ParameterTarget::FilterCutoff {
-                        lfo_control_bus.map(|b| b as f32).unwrap_or(-1.0)
+            let client = self.backend.as_ref().ok_or("Not connected")?;
+            client.create_synth("imbolc_eq12", node_id, GROUP_PROCESSING, &params)
+                .map_err(|e| e.to_string())?;
+
+            eq_node = Some(node_id);
+            current_bus = eq_out_bus;
+        }
+
+        // Effects
+        for effect in instrument.effects() {
+            if !effect.enabled {
+                continue;
+            }
+            let node_id = self.next_node_id;
+            self.next_node_id += 1;
+            // Use mono bus unless the effect doesn't have a mono variant (inherently stereo)
+            let effect_channels = if is_mono && effect.effect_type.has_mono_variant() {
+                1
+            } else {
+                2
+            };
+            let effect_out_bus = self.bus_allocator.get_or_alloc_audio_bus_with_channels(
+                instrument.id,
+                &format!("fx_{}_out", effect.id),
+                effect_channels,
+            );
+
+            let mut params: Vec<(String, f32)> = vec![
+                ("in".to_string(), current_bus as f32),
+                ("out".to_string(), effect_out_bus as f32),
+            ];
+            for p in &effect.params {
+                if effect.effect_type == EffectType::SidechainComp && p.name == "sc_bus" {
+                    let bus_id = match p.value {
+                        ParamValue::Int(v) => v as u8,
+                        _ => 0,
+                    };
+                    let sidechain_in = if bus_id == 0 {
+                        0.0
+                    } else {
+                        self.bus_audio_buses.get(&bus_id).copied().unwrap_or(0) as f32
+                    };
+                    params.push(("sidechain_in".to_string(), sidechain_in));
+                    continue;
+                }
+                if effect.effect_type == EffectType::ConvolutionReverb && p.name == "ir_buffer" {
+                    let buffer_id = match p.value {
+                        ParamValue::Int(v) => v,
+                        _ => -1,
+                    };
+                    let sc_bufnum = if buffer_id >= 0 {
+                        self.buffer_map.get(&(buffer_id as u32)).copied().unwrap_or(-1) as f32
                     } else {
                         -1.0
                     };
-                    let res_mod_bus = if instrument.lfo.enabled && instrument.lfo.target == ParameterTarget::FilterResonance {
-                        lfo_control_bus.map(|b| b as f32).unwrap_or(-1.0)
-                    } else {
-                        -1.0
-                    };
-
-                    let mut params = vec![
-                        ("in".to_string(), current_bus as f32),
-                        ("out".to_string(), filter_out_bus as f32),
-                        ("cutoff".to_string(), filter.cutoff.value),
-                        ("resonance".to_string(), filter.resonance.value),
-                        ("cutoff_mod_in".to_string(), cutoff_mod_bus),
-                        ("res_mod_in".to_string(), res_mod_bus),
-                    ];
-                    for p in &filter.extra_params {
-                        params.push((p.name.clone(), p.value.to_f32()));
-                    }
-
-                    let client = self.backend.as_ref().ok_or("Not connected")?;
-                    client.create_synth(
-                        Self::filter_synth_def(filter.filter_type, is_mono), node_id, GROUP_PROCESSING, &params,
-                    ).map_err(|e| e.to_string())?;
-
-                    filter_node = Some(node_id);
-                    processing_order.push(ProcessingNodeRef::Filter);
-                    current_bus = filter_out_bus;
+                    params.push(("ir_buffer".to_string(), sc_bufnum));
+                    continue;
                 }
-                ProcessingStage::Eq(eq) => {
-                    let node_id = self.next_node_id;
-                    self.next_node_id += 1;
-                    let eq_out_bus = self.bus_allocator.get_or_alloc_audio_bus(instrument.id, "eq_out");
+                params.push((p.name.clone(), p.value.to_f32()));
+            }
 
-                    let mut params: Vec<(String, f32)> = vec![
-                        ("in".to_string(), current_bus as f32),
-                        ("out".to_string(), eq_out_bus as f32),
-                    ];
-                    for (i, band) in eq.bands.iter().enumerate() {
-                        params.push((format!("b{}_freq", i), band.freq));
-                        params.push((format!("b{}_gain", i), band.gain));
-                        params.push((format!("b{}_q", i), 1.0 / band.q)); // SC expects reciprocal Q
-                        params.push((format!("b{}_on", i), if band.enabled { 1.0 } else { 0.0 }));
-                    }
-
-                    let client = self.backend.as_ref().ok_or("Not connected")?;
-                    client.create_synth("imbolc_eq12", node_id, GROUP_PROCESSING, &params)
-                        .map_err(|e| e.to_string())?;
-
-                    eq_node = Some(node_id);
-                    processing_order.push(ProcessingNodeRef::Eq);
-                    current_bus = eq_out_bus;
-                }
-                ProcessingStage::Effect(effect) => {
-                    if !effect.enabled {
-                        continue;
-                    }
-                    let node_id = self.next_node_id;
-                    self.next_node_id += 1;
-                    // Use mono bus unless the effect doesn't have a mono variant (inherently stereo)
-                    let effect_channels = if is_mono && effect.effect_type.has_mono_variant() {
-                        1
-                    } else {
-                        2
-                    };
-                    let effect_out_bus = self.bus_allocator.get_or_alloc_audio_bus_with_channels(
-                        instrument.id,
-                        &format!("fx_{}_out", effect.id),
-                        effect_channels,
-                    );
-
-                    let mut params: Vec<(String, f32)> = vec![
-                        ("in".to_string(), current_bus as f32),
-                        ("out".to_string(), effect_out_bus as f32),
-                    ];
-                    for p in &effect.params {
-                        if effect.effect_type == EffectType::SidechainComp && p.name == "sc_bus" {
-                            let bus_id = match &p.value {
-                                ParamValue::Int(v) => *v as u8,
-                                _ => 0,
-                            };
-                            let sidechain_in = if bus_id == 0 {
-                                0.0
-                            } else {
-                                self.bus_audio_buses.get(&bus_id).copied().unwrap_or(0) as f32
-                            };
-                            params.push(("sidechain_in".to_string(), sidechain_in));
-                            continue;
+            // Inject LFO mod bus if targeting this effect type
+            if instrument.lfo.enabled {
+                if let Some(lfo_bus) = lfo_control_bus {
+                    match (instrument.lfo.target, effect.effect_type) {
+                        (ParameterTarget::DelayTime, EffectType::Delay) => {
+                            params.push(("time_mod_in".to_string(), lfo_bus as f32));
                         }
-                        if effect.effect_type == EffectType::ConvolutionReverb && p.name == "ir_buffer" {
-                            let buffer_id = match &p.value {
-                                ParamValue::Int(v) => *v,
-                                _ => -1,
-                            };
-                            let sc_bufnum = if buffer_id >= 0 {
-                                self.buffer_map.get(&(buffer_id as u32)).copied().unwrap_or(-1) as f32
-                            } else {
-                                -1.0
-                            };
-                            params.push(("ir_buffer".to_string(), sc_bufnum));
-                            continue;
+                        (ParameterTarget::DelayFeedback, EffectType::Delay) => {
+                            params.push(("feedback_mod_in".to_string(), lfo_bus as f32));
                         }
-                        params.push((p.name.clone(), p.value.to_f32()));
-                    }
-
-                    // Inject LFO mod bus if targeting this effect type
-                    if instrument.lfo.enabled {
-                        if let Some(lfo_bus) = lfo_control_bus {
-                            match (instrument.lfo.target, effect.effect_type) {
-                                (ParameterTarget::DelayTime, EffectType::Delay) => {
-                                    params.push(("time_mod_in".to_string(), lfo_bus as f32));
-                                }
-                                (ParameterTarget::DelayFeedback, EffectType::Delay) => {
-                                    params.push(("feedback_mod_in".to_string(), lfo_bus as f32));
-                                }
-                                (ParameterTarget::ReverbMix, EffectType::Reverb) => {
-                                    params.push(("mix_mod_in".to_string(), lfo_bus as f32));
-                                }
-                                (ParameterTarget::GateRate, EffectType::Gate) => {
-                                    params.push(("rate_mod_in".to_string(), lfo_bus as f32));
-                                }
-                                _ => {}
-                            }
+                        (ParameterTarget::ReverbMix, EffectType::Reverb) => {
+                            params.push(("mix_mod_in".to_string(), lfo_bus as f32));
                         }
-                    }
-
-                    let client = self.backend.as_ref().ok_or("Not connected")?;
-                    let use_mono_effect = is_mono && effect.effect_type.has_mono_variant();
-                    client.create_synth(
-                        Self::effect_synth_def(effect.effect_type, use_mono_effect), node_id, GROUP_PROCESSING, &params,
-                    ).map_err(|e| e.to_string())?;
-
-                    // For VST effects, open the plugin after creating the node
-                    if let EffectType::Vst(vst_id) = effect.effect_type {
-                        if let Some(plugin) = session.vst_plugins.get(vst_id) {
-                            let _ = client.send_unit_cmd(
-                                node_id, VST_UGEN_INDEX, "/open",
-                                vec![RawArg::Str(plugin.plugin_path.to_string_lossy().to_string())],
-                            );
+                        (ParameterTarget::GateRate, EffectType::Gate) => {
+                            params.push(("rate_mod_in".to_string(), lfo_bus as f32));
                         }
+                        _ => {}
                     }
-
-                    effect_nodes.insert(effect.id, node_id);
-                    processing_order.push(ProcessingNodeRef::Effect(effect.id));
-                    current_bus = effect_out_bus;
                 }
             }
+
+            let client = self.backend.as_ref().ok_or("Not connected")?;
+            let use_mono_effect = is_mono && effect.effect_type.has_mono_variant();
+            client.create_synth(
+                Self::effect_synth_def(effect.effect_type, use_mono_effect), node_id, GROUP_PROCESSING, &params,
+            ).map_err(|e| e.to_string())?;
+
+            // For VST effects, open the plugin after creating the node
+            if let EffectType::Vst(vst_id) = effect.effect_type {
+                if let Some(plugin) = session.vst_plugins.get(vst_id) {
+                    let _ = client.send_unit_cmd(
+                        node_id, VST_UGEN_INDEX, "/open",
+                        vec![RawArg::Str(plugin.plugin_path.to_string_lossy().to_string())],
+                    );
+                }
+            }
+
+            effect_nodes.insert(effect.id, node_id);
+            effect_order.push(effect.id);
+            current_bus = effect_out_bus;
         }
 
         // Output synth
@@ -356,10 +353,10 @@ impl AudioEngine {
                 self.layer_group_audio_buses.get(&group_id).copied().unwrap_or(0) as f32
             } else {
                 match instrument.output_target {
-                    crate::state::instrument::OutputTarget::Bus(id) => {
+                    imbolc_types::OutputTarget::Bus(id) => {
                         self.bus_audio_buses.get(&id).copied().unwrap_or(0) as f32
                     }
-                    crate::state::instrument::OutputTarget::Master => 0.0,
+                    imbolc_types::OutputTarget::Master => 0.0,
                 }
             };
 
@@ -388,7 +385,7 @@ impl AudioEngine {
             filter: filter_node,
             eq: eq_node,
             effects: effect_nodes,
-            processing_order,
+            effect_order,
             output: output_node_id,
         };
         for nid in inst_nodes.all_node_ids() {
@@ -516,8 +513,8 @@ impl AudioEngine {
             ];
             for p in &effect.params {
                 if effect.effect_type == EffectType::SidechainComp && p.name == "sc_bus" {
-                    let sc_bus_id = match &p.value {
-                        ParamValue::Int(v) => *v as u8,
+                    let sc_bus_id = match p.value {
+                        ParamValue::Int(v) => v as u8,
                         _ => 0,
                     };
                     let sidechain_in = if sc_bus_id == 0 {
@@ -529,8 +526,8 @@ impl AudioEngine {
                     continue;
                 }
                 if effect.effect_type == EffectType::ConvolutionReverb && p.name == "ir_buffer" {
-                    let buffer_id = match &p.value {
-                        ParamValue::Int(v) => *v,
+                    let buffer_id = match p.value {
+                        ParamValue::Int(v) => v,
                         _ => -1,
                     };
                     let sc_bufnum = if buffer_id >= 0 {
@@ -626,8 +623,8 @@ impl AudioEngine {
             ];
             for p in &effect.params {
                 if effect.effect_type == EffectType::SidechainComp && p.name == "sc_bus" {
-                    let sc_bus_id = match &p.value {
-                        ParamValue::Int(v) => *v as u8,
+                    let sc_bus_id = match p.value {
+                        ParamValue::Int(v) => v as u8,
                         _ => 0,
                     };
                     let sidechain_in = if sc_bus_id == 0 {
@@ -639,8 +636,8 @@ impl AudioEngine {
                     continue;
                 }
                 if effect.effect_type == EffectType::ConvolutionReverb && p.name == "ir_buffer" {
-                    let buffer_id = match &p.value {
-                        ParamValue::Int(v) => *v,
+                    let buffer_id = match p.value {
+                        ParamValue::Int(v) => v,
                         _ => -1,
                     };
                     let sc_bufnum = if buffer_id >= 0 {
@@ -787,10 +784,10 @@ impl AudioEngine {
 
                 // Group output destination
                 let group_out = match group_mixer.output_target {
-                    crate::state::instrument::OutputTarget::Bus(id) => {
+                    imbolc_types::OutputTarget::Bus(id) => {
                         self.bus_audio_buses.get(&id).copied().unwrap_or(0) as f32
                     }
-                    crate::state::instrument::OutputTarget::Master => 0.0,
+                    imbolc_types::OutputTarget::Master => 0.0,
                 };
 
                 let params = vec![
@@ -1060,10 +1057,10 @@ impl AudioEngine {
                         let mute = session.mixer.effective_layer_group_mute(group_mixer);
 
                         let group_out = match group_mixer.output_target {
-                            crate::state::instrument::OutputTarget::Bus(id) => {
+                            imbolc_types::OutputTarget::Bus(id) => {
                                 self.bus_audio_buses.get(&id).copied().unwrap_or(0) as f32
                             }
-                            crate::state::instrument::OutputTarget::Master => 0.0,
+                            imbolc_types::OutputTarget::Master => 0.0,
                         };
 
                         let params = vec![

@@ -1,4 +1,4 @@
-use crate::audio::AudioHandle;
+use imbolc_audio::AudioHandle;
 use crate::state::automation::AutomationTarget;
 use crate::state::{AppState, ClipboardContents};
 use crate::action::{AutomationAction, DispatchResult};
@@ -179,7 +179,7 @@ pub(crate) fn record_automation_point(state: &mut AppState, target: AutomationTa
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::audio::AudioHandle;
+    use imbolc_audio::AudioHandle;
     use crate::state::automation::AutomationLaneId;
 
     fn setup() -> (AppState, AudioHandle) {

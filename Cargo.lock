@@ -2806,6 +2806,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "imbolc-audio"
+version = "0.1.0"
+dependencies = [
+ "cpal",
+ "crossbeam-channel",
+ "dirs 5.0.1",
+ "hound",
+ "imbolc-types",
+ "libloading 0.8.9",
+ "log",
+ "regex",
+ "rosc",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "vst3",
+]
+
+[[package]]
 name = "imbolc-core"
 version = "0.1.0"
 dependencies = [
@@ -2813,6 +2832,7 @@ dependencies = [
  "crossbeam-channel",
  "dirs 5.0.1",
  "hound",
+ "imbolc-audio",
  "imbolc-types",
  "libloading 0.8.9",
  "log",
@@ -2869,6 +2889,7 @@ dependencies = [
  "dirs 5.0.1",
  "hostname",
  "hound",
+ "imbolc-audio",
  "imbolc-core",
  "imbolc-net",
  "imbolc-types",

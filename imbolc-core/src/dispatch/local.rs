@@ -5,7 +5,7 @@ use std::sync::mpsc::Sender;
 use imbolc_types::{Action, Dispatcher, DispatchResult};
 
 use crate::action::IoFeedback;
-use crate::audio::AudioHandle;
+use imbolc_audio::AudioHandle;
 use crate::state::AppState;
 
 use super::dispatch_action;

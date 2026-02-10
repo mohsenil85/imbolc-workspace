@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use crate::state::InstrumentId;
+use imbolc_types::InstrumentId;
 
 use super::VoiceChain;
 

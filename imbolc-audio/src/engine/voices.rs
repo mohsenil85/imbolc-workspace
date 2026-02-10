@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use super::backend::{AudioBackend, BackendMessage, RawArg};
 use super::{AudioEngine, VoiceChain, GROUP_SOURCES};
-use crate::state::{BufferId, InstrumentId, InstrumentState, ParameterTarget, ParamValue, SessionState};
+use imbolc_types::{BufferId, InstrumentId, InstrumentState, ParameterTarget, ParamValue, SessionState};
 
 /// Anti-click fade time for voice stealing/freeing.
 /// Must exceed the midi control node's gate release (10ms) plus margin
@@ -366,9 +366,9 @@ impl AudioEngine {
             let get_param = |name: &str, default: f32| -> f32 {
                 instrument.source_params.iter()
                     .find(|p| p.name == name)
-                    .map(|p| match &p.value {
-                        ParamValue::Float(v) => *v,
-                        ParamValue::Int(v) => *v as f32,
+                    .map(|p| match p.value {
+                        ParamValue::Float(v) => v,
+                        ParamValue::Int(v) => v as f32,
                         _ => default,
                     })
                     .unwrap_or(default)

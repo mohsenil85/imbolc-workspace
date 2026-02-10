@@ -48,7 +48,7 @@
 //! - [`scd_parser`] — SuperCollider .scd file parser
 
 pub mod action;
-pub mod audio;
+pub use imbolc_audio as audio;
 pub mod config;
 pub mod dispatch;
 pub mod midi;

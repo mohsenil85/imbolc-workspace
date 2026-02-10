@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use crate::audio::AudioHandle;
+use imbolc_audio::AudioHandle;
 use crate::state::AppState;
 use crate::state::automation::AutomationTarget;
 use crate::action::{DispatchResult, VstParamAction, VstTarget};

@@ -1,4 +1,4 @@
-use crate::audio::AudioHandle;
+use imbolc_audio::AudioHandle;
 use crate::state::AppState;
 use crate::state::piano_roll::Note;
 use crate::state::{ClipboardContents, ClipboardNote};
@@ -228,10 +228,10 @@ pub(super) fn dispatch_piano_roll(
         PianoRollAction::RenderToWav(instrument_id) => {
             let instrument_id = *instrument_id;
             if state.io.pending_render.is_some() || state.io.pending_export.is_some() {
-                return DispatchResult::with_status(crate::audio::ServerStatus::Running, "Already rendering or exporting");
+                return DispatchResult::with_status(imbolc_audio::ServerStatus::Running, "Already rendering or exporting");
             }
             if !audio.is_running() {
-                return DispatchResult::with_status(crate::audio::ServerStatus::Stopped, "Audio engine not running");
+                return DispatchResult::with_status(imbolc_audio::ServerStatus::Stopped, "Audio engine not running");
             }
 
             let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
@@ -260,7 +260,7 @@ pub(super) fn dispatch_piano_roll(
                 path,
             });
 
-            let mut result = DispatchResult::with_status(crate::audio::ServerStatus::Running, "Rendering...");
+            let mut result = DispatchResult::with_status(imbolc_audio::ServerStatus::Running, "Rendering...");
             result.audio_dirty.piano_roll = true;
             return result;
         }
@@ -301,13 +301,13 @@ pub(super) fn dispatch_piano_roll(
         }
         PianoRollAction::BounceToWav => {
             if state.io.pending_render.is_some() || state.io.pending_export.is_some() {
-                return DispatchResult::with_status(crate::audio::ServerStatus::Running, "Already rendering or exporting");
+                return DispatchResult::with_status(imbolc_audio::ServerStatus::Running, "Already rendering or exporting");
             }
             if !audio.is_running() {
-                return DispatchResult::with_status(crate::audio::ServerStatus::Stopped, "Audio engine not running");
+                return DispatchResult::with_status(imbolc_audio::ServerStatus::Stopped, "Audio engine not running");
             }
             if state.instruments.instruments.is_empty() {
-                return DispatchResult::with_status(crate::audio::ServerStatus::Stopped, "No instruments");
+                return DispatchResult::with_status(imbolc_audio::ServerStatus::Stopped, "No instruments");
             }
 
             let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
@@ -321,7 +321,7 @@ pub(super) fn dispatch_piano_roll(
 
             let pr = &mut state.session.piano_roll;
             state.io.pending_export = Some(crate::state::PendingExport {
-                kind: crate::audio::commands::ExportKind::MasterBounce,
+                kind: imbolc_audio::commands::ExportKind::MasterBounce,
                 was_looping: pr.looping,
                 paths: vec![path.clone()],
             });
@@ -334,7 +334,7 @@ pub(super) fn dispatch_piano_roll(
             effects.push(AudioSideEffect::StartMasterBounce { path });
 
             let mut result = DispatchResult::with_status(
-                crate::audio::ServerStatus::Running,
+                imbolc_audio::ServerStatus::Running,
                 "Bouncing to WAV...",
             );
             result.audio_dirty.piano_roll = true;
@@ -342,13 +342,13 @@ pub(super) fn dispatch_piano_roll(
         }
         PianoRollAction::ExportStems => {
             if state.io.pending_render.is_some() || state.io.pending_export.is_some() {
-                return DispatchResult::with_status(crate::audio::ServerStatus::Running, "Already rendering or exporting");
+                return DispatchResult::with_status(imbolc_audio::ServerStatus::Running, "Already rendering or exporting");
             }
             if !audio.is_running() {
-                return DispatchResult::with_status(crate::audio::ServerStatus::Stopped, "Audio engine not running");
+                return DispatchResult::with_status(imbolc_audio::ServerStatus::Stopped, "Audio engine not running");
             }
             if state.instruments.instruments.is_empty() {
-                return DispatchResult::with_status(crate::audio::ServerStatus::Stopped, "No instruments");
+                return DispatchResult::with_status(imbolc_audio::ServerStatus::Stopped, "No instruments");
             }
 
             let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
@@ -375,7 +375,7 @@ pub(super) fn dispatch_piano_roll(
 
             let pr = &mut state.session.piano_roll;
             state.io.pending_export = Some(crate::state::PendingExport {
-                kind: crate::audio::commands::ExportKind::StemExport,
+                kind: imbolc_audio::commands::ExportKind::StemExport,
                 was_looping: pr.looping,
                 paths,
             });
@@ -388,7 +388,7 @@ pub(super) fn dispatch_piano_roll(
             effects.push(AudioSideEffect::StartStemExport { stems });
 
             let mut result = DispatchResult::with_status(
-                crate::audio::ServerStatus::Running,
+                imbolc_audio::ServerStatus::Running,
                 format!("Exporting stems..."),
             );
             result.audio_dirty.piano_roll = true;
@@ -407,7 +407,7 @@ pub(super) fn dispatch_piano_roll(
                 state.io.export_progress = 0.0;
                 effects.push(AudioSideEffect::ResetPlayhead);
                 let mut result = DispatchResult::with_status(
-                    crate::audio::ServerStatus::Running,
+                    imbolc_audio::ServerStatus::Running,
                     "Export cancelled",
                 );
                 result.audio_dirty.piano_roll = true;
@@ -479,7 +479,7 @@ pub(super) fn dispatch_piano_roll(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::audio::AudioHandle;
+    use imbolc_audio::AudioHandle;
     use crate::state::ClipboardContents;
 
     fn setup() -> (AppState, AudioHandle, Vec<AudioSideEffect>) {
@@ -528,7 +528,7 @@ mod tests {
     fn play_stop_noop_while_exporting() {
         let (mut state, audio, mut effects) = setup();
         state.io.pending_export = Some(crate::state::PendingExport {
-            kind: crate::audio::commands::ExportKind::MasterBounce,
+            kind: imbolc_audio::commands::ExportKind::MasterBounce,
             was_looping: false,
             paths: vec![],
         });

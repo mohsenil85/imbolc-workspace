@@ -1,6 +1,6 @@
 use crate::action::{DispatchResult, NavIntent, VstTarget};
-use crate::audio::commands::AudioFeedback;
-use crate::audio::AudioHandle;
+use imbolc_audio::commands::AudioFeedback;
+use imbolc_audio::AudioHandle;
 use crate::state::AppState;
 use super::side_effects::AudioSideEffect;
 
@@ -133,10 +133,10 @@ pub fn dispatch_audio_feedback(
             result.reset_playhead = true;
 
             let message = match kind {
-                crate::audio::commands::ExportKind::MasterBounce => {
+                imbolc_audio::commands::ExportKind::MasterBounce => {
                     format!("Bounce complete: {}", paths.first().map(|p| p.display().to_string()).unwrap_or_default())
                 }
-                crate::audio::commands::ExportKind::StemExport => {
+                imbolc_audio::commands::ExportKind::StemExport => {
                     format!("Stem export complete: {} files", paths.len())
                 }
             };
@@ -160,7 +160,7 @@ pub fn dispatch_audio_feedback(
             }
         }
         AudioFeedback::ServerCrashed { message } => {
-            result.push_status(crate::audio::ServerStatus::Error, format!("SERVER CRASHED: {}", message));
+            result.push_status(imbolc_audio::ServerStatus::Error, format!("SERVER CRASHED: {}", message));
             state.session.piano_roll.playing = false;
             state.audio.playing = false;
             result.stop_playback = true;

@@ -16,9 +16,9 @@ use imbolc_types::{
     BusAction, LayerGroupAction, VstParamAction, SessionAction, ClickAction, VstTarget,
     InstrumentId, MixerSelection, FilterType, OutputTarget,
 };
-use crate::state::instrument::Instrument;
-use crate::state::piano_roll::Note;
-use crate::state::{InstrumentState, SessionState, SourceType, EffectType};
+use imbolc_types::Instrument;
+use imbolc_types::Note;
+use imbolc_types::{InstrumentState, SessionState, SourceType, EffectType};
 
 /// Check whether an action can be incrementally projected on the audio thread.
 /// Returns false for actions that require full state sync (undo/redo, arrangement,
@@ -157,6 +157,12 @@ fn project_instrument(
             }
             true
         }
+        InstrumentAction::MoveStage(id, chain_idx, direction) => {
+            if let Some(instrument) = instruments.instrument_mut(*id) {
+                instrument.move_stage(*chain_idx, *direction);
+            }
+            true
+        }
         InstrumentAction::SetFilter(id, filter_type) => {
             if let Some(instrument) = instruments.instrument_mut(*id) {
                 instrument.set_filter(*filter_type);
@@ -165,7 +171,7 @@ fn project_instrument(
         }
         InstrumentAction::ToggleEffectBypass(id, effect_id) => {
             if let Some(instrument) = instruments.instrument_mut(*id) {
-                if let Some(effect) = instrument.effect_by_id_mut(*effect_id) {
+                if let Some(effect) = instrument.effects_mut().find(|e| e.id == *effect_id) {
                     effect.enabled = !effect.enabled;
                 }
             }
@@ -215,20 +221,20 @@ fn project_instrument(
         }
         InstrumentAction::AdjustEffectParam(id, effect_id, param_idx, delta) => {
             if let Some(instrument) = instruments.instrument_mut(*id) {
-                if let Some(effect) = instrument.effect_by_id_mut(*effect_id) {
+                if let Some(effect) = instrument.effects_mut().find(|e| e.id == *effect_id) {
                     if let Some(param) = effect.params.get_mut(*param_idx) {
                         use imbolc_types::ParamValue;
                         match &mut param.value {
-                            ParamValue::Float(v) => {
+                            ParamValue::Float(ref mut v) => {
                                 let range = param.max - param.min;
                                 *v = (*v + delta * range * 0.02).clamp(param.min, param.max);
                             }
-                            ParamValue::Int(v) => {
+                            ParamValue::Int(ref mut v) => {
                                 let range = param.max - param.min;
                                 *v = (*v + (delta * range * 0.02) as i32)
                                     .clamp(param.min as i32, param.max as i32);
                             }
-                            ParamValue::Bool(v) => {
+                            ParamValue::Bool(ref mut v) => {
                                 *v = !*v;
                             }
                         }
@@ -331,7 +337,7 @@ fn project_instrument(
             let buffer_id = instruments.next_sampler_buffer_id;
             instruments.next_sampler_buffer_id += 1;
             if let Some(instrument) = instruments.instrument_mut(*instrument_id) {
-                if let Some(effect) = instrument.effect_by_id_mut(*effect_id) {
+                if let Some(effect) = instrument.effects_mut().find(|e| e.id == *effect_id) {
                     if let Some(param) = effect.params.iter_mut().find(|p| p.name == "ir_buffer") {
                         param.value = imbolc_types::ParamValue::Int(buffer_id as i32);
                     }
@@ -532,19 +538,6 @@ fn project_instrument(
         InstrumentAction::ToggleChannelConfig(id) => {
             if let Some(inst) = instruments.instrument_mut(*id) {
                 inst.channel_config = inst.channel_config.toggle();
-            }
-            true
-        }
-        // Processing chain reordering
-        InstrumentAction::MoveStage(id, stage_idx, direction) => {
-            if let Some(inst) = instruments.instrument_mut(*id) {
-                let len = inst.processing_chain.len();
-                if *stage_idx < len {
-                    let new_idx = (*stage_idx as isize + *direction as isize).clamp(0, len as isize - 1) as usize;
-                    if new_idx != *stage_idx {
-                        inst.processing_chain.swap(*stage_idx, new_idx);
-                    }
-                }
             }
             true
         }
@@ -1260,13 +1253,13 @@ fn project_bus(
                     if let Some(param) = effect.params.get_mut(*param_idx) {
                         let range = param.max - param.min;
                         match &mut param.value {
-                            crate::state::ParamValue::Float(v) => {
+                            imbolc_types::ParamValue::Float(ref mut v) => {
                                 *v = (*v + delta * range * 0.02).clamp(param.min, param.max);
                             }
-                            crate::state::ParamValue::Int(v) => {
+                            imbolc_types::ParamValue::Int(ref mut v) => {
                                 *v = (*v + (delta * range * 0.02) as i32).clamp(param.min as i32, param.max as i32);
                             }
-                            crate::state::ParamValue::Bool(b) => {
+                            imbolc_types::ParamValue::Bool(ref mut b) => {
                                 *b = !*b;
                             }
                         }
@@ -1315,13 +1308,13 @@ fn project_layer_group(
                     if let Some(param) = effect.params.get_mut(*param_idx) {
                         let range = param.max - param.min;
                         match &mut param.value {
-                            crate::state::ParamValue::Float(v) => {
+                            imbolc_types::ParamValue::Float(ref mut v) => {
                                 *v = (*v + delta * range * 0.02).clamp(param.min, param.max);
                             }
-                            crate::state::ParamValue::Int(v) => {
+                            imbolc_types::ParamValue::Int(ref mut v) => {
                                 *v = (*v + (delta * range * 0.02) as i32).clamp(param.min as i32, param.max as i32);
                             }
-                            crate::state::ParamValue::Bool(b) => {
+                            imbolc_types::ParamValue::Bool(ref mut b) => {
                                 *b = !*b;
                             }
                         }

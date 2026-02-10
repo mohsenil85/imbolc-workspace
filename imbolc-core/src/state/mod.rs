@@ -332,6 +332,11 @@ impl AppState {
     }
 }
 
+impl imbolc_audio::AudioStateProvider for AppState {
+    fn session(&self) -> &SessionState { &self.session }
+    fn instruments(&self) -> &InstrumentState { &self.instruments }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

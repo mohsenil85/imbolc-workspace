@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use crate::audio::AudioHandle;
+use imbolc_audio::AudioHandle;
 use crate::state::AppState;
 use crate::action::{DispatchResult, ServerAction};
 use super::side_effects::AudioSideEffect;

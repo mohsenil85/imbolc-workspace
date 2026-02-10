@@ -21,11 +21,11 @@ use super::commands::{AudioCmd, AudioFeedback};
 use super::event_log::{EventLogWriter, LogEntryKind};
 use super::osc_client::AudioMonitor;
 use super::ServerStatus;
-use crate::action::AudioDirty;
-use crate::state::arrangement::{ArrangementState, PlayMode};
-use crate::state::automation::{AutomationLane, AutomationTarget};
-use crate::state::piano_roll::Note;
-use crate::state::{AppState, BufferId, EffectId, InstrumentId};
+use imbolc_types::AudioDirty;
+use imbolc_types::{ArrangementState, PlayMode};
+use imbolc_types::{AutomationLane, AutomationTarget};
+use imbolc_types::Note;
+use imbolc_types::{BufferId, EffectId, InstrumentId};
 
 /// Audio-owned read state: values that the audio thread is the authority on.
 /// UI reads these for display; audio feedback updates them.
@@ -266,7 +266,7 @@ impl AudioHandle {
         }
     }
 
-    pub fn sync_state(&mut self, state: &AppState) {
+    pub fn sync_state(&mut self, state: &dyn crate::AudioStateProvider) {
         self.send_full_sync(state, true);
     }
 
@@ -295,13 +295,13 @@ impl AudioHandle {
 
     /// Send full state replacement to the audio thread (for undo/redo/load/unprojectable actions).
     /// Appends a LogEntryKind::Checkpoint to the event log.
-    fn send_full_sync(&mut self, state: &AppState, rebuild_routing: bool) {
+    fn send_full_sync(&mut self, state: &dyn crate::AudioStateProvider, rebuild_routing: bool) {
         // Compute piano roll and automation snapshots
-        let piano_roll = if state.session.arrangement.play_mode == PlayMode::Song
-            && state.session.arrangement.editing_clip.is_none()
+        let piano_roll = if state.session().arrangement.play_mode == PlayMode::Song
+            && state.session().arrangement.editing_clip.is_none()
         {
-            let mut flat_pr = state.session.piano_roll.clone();
-            let (flattened, arr_len, _) = self.arrangement_cache.get_or_compute(&state.session.arrangement);
+            let mut flat_pr = state.session().piano_roll.clone();
+            let (flattened, arr_len, _) = self.arrangement_cache.get_or_compute(&state.session().arrangement);
             for (&instrument_id, track) in &mut flat_pr.tracks {
                 track.notes = flattened.get(&instrument_id).cloned().unwrap_or_default();
             }
@@ -311,23 +311,23 @@ impl AudioHandle {
             }
             flat_pr
         } else {
-            state.session.piano_roll.clone()
+            state.session().piano_roll.clone()
         };
 
-        let automation_lanes = if state.session.arrangement.play_mode == PlayMode::Song
-            && state.session.arrangement.editing_clip.is_none()
+        let automation_lanes = if state.session().arrangement.play_mode == PlayMode::Song
+            && state.session().arrangement.editing_clip.is_none()
         {
-            let (_, _, flattened_auto) = self.arrangement_cache.get_or_compute(&state.session.arrangement);
-            let mut merged = state.session.automation.lanes.clone();
+            let (_, _, flattened_auto) = self.arrangement_cache.get_or_compute(&state.session().arrangement);
+            let mut merged = state.session().automation.lanes.clone();
             merged.extend(flattened_auto.iter().cloned());
             merged
         } else {
-            state.session.automation.lanes.clone()
+            state.session().automation.lanes.clone()
         };
 
         self.event_log.append(LogEntryKind::Checkpoint {
-            instruments: state.instruments.clone(),
-            session: state.session.clone(),
+            instruments: state.instruments().clone(),
+            session: state.session().clone(),
             piano_roll,
             automation_lanes,
             rebuild_routing,
@@ -335,13 +335,13 @@ impl AudioHandle {
     }
 
     /// Append flattened piano roll / automation for Song mode if dirty.
-    fn send_flattened_if_needed(&mut self, state: &AppState, dirty: &AudioDirty) {
+    fn send_flattened_if_needed(&mut self, state: &dyn crate::AudioStateProvider, dirty: &AudioDirty) {
         if dirty.piano_roll {
-            if state.session.arrangement.play_mode == PlayMode::Song
-                && state.session.arrangement.editing_clip.is_none()
+            if state.session().arrangement.play_mode == PlayMode::Song
+                && state.session().arrangement.editing_clip.is_none()
             {
-                let mut flat_pr = state.session.piano_roll.clone();
-                let (flattened, arr_len, _) = self.arrangement_cache.get_or_compute(&state.session.arrangement);
+                let mut flat_pr = state.session().piano_roll.clone();
+                let (flattened, arr_len, _) = self.arrangement_cache.get_or_compute(&state.session().arrangement);
                 for (&instrument_id, track) in &mut flat_pr.tracks {
                     track.notes = flattened.get(&instrument_id).cloned().unwrap_or_default();
                 }
@@ -354,11 +354,11 @@ impl AudioHandle {
             // In Live/clip-edit mode, ForwardAction updates session.piano_roll directly
         }
         if dirty.automation {
-            if state.session.arrangement.play_mode == PlayMode::Song
-                && state.session.arrangement.editing_clip.is_none()
+            if state.session().arrangement.play_mode == PlayMode::Song
+                && state.session().arrangement.editing_clip.is_none()
             {
-                let (_, _, flattened_auto) = self.arrangement_cache.get_or_compute(&state.session.arrangement);
-                let mut merged = state.session.automation.lanes.clone();
+                let (_, _, flattened_auto) = self.arrangement_cache.get_or_compute(&state.session().arrangement);
+                let mut merged = state.session().automation.lanes.clone();
                 merged.extend(flattened_auto.iter().cloned());
                 self.event_log.append(LogEntryKind::AutomationUpdate(merged));
             }
@@ -367,7 +367,7 @@ impl AudioHandle {
     }
 
     /// Send targeted param updates (filter/effect/LFO knob tweaks via priority channel).
-    fn send_routing_and_params(&self, state: &AppState, dirty: &AudioDirty) {
+    fn send_routing_and_params(&self, state: &dyn crate::AudioStateProvider, dirty: &AudioDirty) {
         // Note: routing and mixer_params are handled by ForwardAction metadata fields
         // (rebuild_routing, rebuild_instrument_routing, mixer_dirty).
         // Targeted param updates bypass ForwardAction entirely via priority channel:
@@ -377,7 +377,7 @@ impl AudioHandle {
             }
         }
         if let Some((instrument_id, effect_id, param_idx, value)) = dirty.effect_param {
-            if let Some(inst) = state.instruments.instrument(instrument_id) {
+            if let Some(inst) = state.instruments().instrument(instrument_id) {
                 if let Some(effect) = inst.effect_by_id(effect_id) {
                     if let Some(param) = effect.params.get(param_idx) {
                         if let Err(e) = self.set_effect_param(instrument_id, effect_id, &param.name, value) {
@@ -393,7 +393,7 @@ impl AudioHandle {
             }
         }
         if let Some((bus_id, effect_id, param_idx, value)) = dirty.bus_effect_param {
-            if let Some(bus) = state.session.mixer.buses.iter().find(|b| b.id == bus_id) {
+            if let Some(bus) = state.session().mixer.buses.iter().find(|b| b.id == bus_id) {
                 if let Some(effect) = bus.effect_by_id(effect_id) {
                     if let Some(param) = effect.params.get(param_idx) {
                         if let Err(e) = self.set_bus_effect_param(bus_id, effect_id, &param.name, value) {
@@ -404,7 +404,7 @@ impl AudioHandle {
             }
         }
         if let Some((group_id, effect_id, param_idx, value)) = dirty.layer_group_effect_param {
-            if let Some(gm) = state.session.mixer.layer_group_mixer(group_id) {
+            if let Some(gm) = state.session().mixer.layer_group_mixer(group_id) {
                 if let Some(effect) = gm.effect_by_id(effect_id) {
                     if let Some(param) = effect.params.get(param_idx) {
                         if let Err(e) = self.set_layer_group_effect_param(group_id, effect_id, &param.name, value) {
@@ -421,7 +421,7 @@ impl AudioHandle {
     /// When `needs_full_sync` is true (unprojectable action or direct state mutation),
     /// sends a FullStateSync. Otherwise, only sends Song-mode flattening and targeted
     /// params — ForwardAction already handled state projection and routing/mixer.
-    pub fn apply_dirty(&mut self, state: &AppState, dirty: AudioDirty, needs_full_sync: bool) {
+    pub fn apply_dirty(&mut self, state: &dyn crate::AudioStateProvider, dirty: AudioDirty, needs_full_sync: bool) {
         if !dirty.any() {
             return;
         }

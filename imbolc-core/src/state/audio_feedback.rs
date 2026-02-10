@@ -1,6 +1,6 @@
 //! Audio feedback state from the audio thread.
 
-use crate::audio::ServerStatus;
+use imbolc_audio::ServerStatus;
 use imbolc_types::VisualizationState;
 
 /// State updated from the audio thread each frame.

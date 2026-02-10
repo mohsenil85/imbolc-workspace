@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::state::InstrumentId;
+use imbolc_types::InstrumentId;
 
 type ModuleId = InstrumentId;
 

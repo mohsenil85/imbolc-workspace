@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 
 use super::backend::{BackendMessage, RawArg, BUNDLE_IMMEDIATE};
 use super::{AudioEngine, GROUP_RECORD};
-use crate::state::InstrumentId;
+use imbolc_types::InstrumentId;
 
 /// State for an active disk recording session
 pub(super) struct RecordingState {

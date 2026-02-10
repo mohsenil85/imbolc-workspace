@@ -1,6 +1,6 @@
 // Re-export core crate modules so crate::state, crate::audio, etc. resolve throughout the binary
 pub use imbolc_core::action;
-pub use imbolc_core::audio;
+pub use imbolc_audio as audio;
 pub use imbolc_core::config;
 pub use imbolc_core::dispatch;
 pub use imbolc_core::midi;

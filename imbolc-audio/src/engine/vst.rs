@@ -1,7 +1,7 @@
 use super::backend::RawArg;
 use super::AudioEngine;
 use super::VST_UGEN_INDEX;
-use crate::state::InstrumentId;
+use imbolc_types::InstrumentId;
 
 impl AudioEngine {
     /// Send MIDI note-on to a VSTi persistent source node

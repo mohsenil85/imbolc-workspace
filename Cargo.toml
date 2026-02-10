@@ -6,6 +6,7 @@ members = [
     "imbolc-types",
     "imbolc-net",
     "imbolc-gui",
+    "imbolc-audio",
 ]
 
 [workspace.dependencies]

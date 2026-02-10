@@ -1,4 +1,4 @@
-use crate::audio::AudioHandle;
+use imbolc_audio::AudioHandle;
 use crate::state::drum_sequencer::{DrumPattern, DrumStep, euclidean_rhythm};
 use crate::state::sampler::Slice;
 use crate::state::{AppState, ClipboardContents};
@@ -398,7 +398,7 @@ pub(super) fn dispatch_sequencer(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::audio::AudioHandle;
+    use imbolc_audio::AudioHandle;
 
     fn setup() -> (AppState, AudioHandle) {
         let mut state = AppState::new();

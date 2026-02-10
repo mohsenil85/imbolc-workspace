@@ -4,9 +4,9 @@ use std::time::Duration;
 
 use super::commands::AudioFeedback;
 use super::engine::AudioEngine;
-use crate::state::arpeggiator::ArpPlayState;
+use crate::arp_state::ArpPlayState;
 use super::snapshot::{AutomationSnapshot, InstrumentSnapshot, PianoRollSnapshot, SessionSnapshot};
-use crate::state::automation::AutomationTarget;
+use imbolc_types::AutomationTarget;
 use imbolc_types::SwingGrid;
 
 fn next_random(state: &mut u64) -> f32 {
@@ -302,8 +302,8 @@ pub fn tick_playback(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::state::piano_roll::PianoRollState;
-    use crate::state::{InstrumentState, SessionState};
+    use imbolc_types::PianoRollState;
+    use imbolc_types::{InstrumentState, SessionState};
     use imbolc_types::SourceType;
     use std::sync::mpsc;
 

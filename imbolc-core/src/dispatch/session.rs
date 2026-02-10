@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 use std::sync::mpsc::Sender;
-use crate::audio::AudioHandle;
+use imbolc_audio::AudioHandle;
 use crate::scd_parser;
 use crate::state::{AppState, CustomSynthDef, ParamSpec};
 use crate::action::{DispatchResult, IoFeedback, NavIntent, SessionAction};

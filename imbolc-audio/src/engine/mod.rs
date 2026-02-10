@@ -16,7 +16,7 @@ use std::time::Instant;
 
 use backend::AudioBackend;
 use super::bus_allocator::BusAllocator;
-use crate::state::{BufferId, EffectId, InstrumentId};
+use imbolc_types::{BufferId, EffectId, InstrumentId};
 use node_registry::NodeRegistry;
 use voice_allocator::VoiceAllocator;
 
@@ -83,14 +83,6 @@ pub struct VoiceChain {
     pub control_buses: (i32, i32, i32),
 }
 
-/// Identifies a processing node in the signal chain order.
-#[derive(Debug, Clone)]
-pub enum ProcessingNodeRef {
-    Filter,
-    Eq,
-    Effect(EffectId),
-}
-
 #[derive(Debug, Clone)]
 pub struct InstrumentNodes {
     pub source: Option<i32>,
@@ -98,8 +90,8 @@ pub struct InstrumentNodes {
     pub filter: Option<i32>,
     pub eq: Option<i32>,
     pub effects: HashMap<EffectId, i32>,
-    /// Ordered list of processing stages matching the actual signal chain order
-    pub processing_order: Vec<ProcessingNodeRef>,
+    /// Ordered list of effect IDs matching the signal chain order (only enabled effects)
+    pub effect_order: Vec<EffectId>,
     pub output: i32,
 }
 
@@ -108,17 +100,11 @@ impl InstrumentNodes {
         let mut ids = Vec::new();
         if let Some(id) = self.source { ids.push(id); }
         if let Some(id) = self.lfo { ids.push(id); }
-        for pnr in &self.processing_order {
-            match pnr {
-                ProcessingNodeRef::Filter => {
-                    if let Some(id) = self.filter { ids.push(id); }
-                }
-                ProcessingNodeRef::Eq => {
-                    if let Some(id) = self.eq { ids.push(id); }
-                }
-                ProcessingNodeRef::Effect(eid) => {
-                    if let Some(&nid) = self.effects.get(eid) { ids.push(nid); }
-                }
+        if let Some(id) = self.filter { ids.push(id); }
+        if let Some(id) = self.eq { ids.push(id); }
+        for eid in &self.effect_order {
+            if let Some(&nid) = self.effects.get(eid) {
+                ids.push(nid);
             }
         }
         ids.push(self.output);
@@ -381,9 +367,38 @@ impl Default for AudioEngine {
 mod tests {
     use super::*;
     use super::voice_allocator::MAX_VOICES_PER_INSTRUMENT;
-    use crate::audio::engine::backend::NullBackend;
-    use crate::state::{AppState, AutomationTarget, ParamValue};
-    use crate::state::instrument::{EffectType, FilterType, SourceType};
+    use crate::engine::backend::NullBackend;
+    use imbolc_types::{AutomationTarget, ParamValue};
+    use imbolc_types::{EffectType, FilterType, SourceType};
+    use imbolc_types::state::mixer::DEFAULT_BUS_COUNT;
+
+    /// Test-only stand-in for AppState (which lives in imbolc-core).
+    struct AppState {
+        pub session: imbolc_types::SessionState,
+        pub instruments: imbolc_types::InstrumentState,
+    }
+
+    impl AppState {
+        fn new() -> Self {
+            Self {
+                session: imbolc_types::SessionState::new_with_defaults(
+                    imbolc_types::session::MusicalSettings::default(),
+                    DEFAULT_BUS_COUNT,
+                ),
+                instruments: imbolc_types::InstrumentState::new(),
+            }
+        }
+
+        fn add_instrument(&mut self, source: imbolc_types::SourceType) -> imbolc_types::InstrumentId {
+            let id = self.instruments.add_instrument(source);
+            self.session.piano_roll.add_track(id);
+            let bus_ids: Vec<u8> = self.session.bus_ids().collect();
+            if let Some(inst) = self.instruments.instrument_mut(id) {
+                inst.sync_sends_with_buses(&bus_ids);
+            }
+            id
+        }
+    }
 
     fn connect_engine() -> AudioEngine {
         let mut engine = AudioEngine::new();
@@ -828,9 +843,9 @@ mod tests {
 
     mod backend_routing_tests {
         use super::*;
-        use crate::audio::engine::backend::{TestBackend, TestOp, SharedTestBackend};
-        use crate::state::instrument::OutputTarget;
-        use crate::state::SendTapPoint;
+        use crate::engine::backend::{TestBackend, TestOp, SharedTestBackend};
+        use imbolc_types::OutputTarget;
+        use imbolc_types::SendTapPoint;
         use std::sync::Arc;
 
         fn engine_with_test_backend() -> (AudioEngine, Arc<TestBackend>) {
@@ -1000,7 +1015,7 @@ mod tests {
             let inst_id = state.add_instrument(SourceType::AudioIn);
             if let Some(inst) = state.instruments.instrument_mut(inst_id) {
                 inst.lfo.enabled = true;
-                inst.lfo.target = crate::state::ParameterTarget::Pan;
+                inst.lfo.target = imbolc_types::ParameterTarget::Pan;
                 inst.lfo.rate = 2.0;
                 inst.lfo.depth = 0.5;
             }
