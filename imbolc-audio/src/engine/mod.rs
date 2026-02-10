@@ -1109,8 +1109,8 @@ mod tests {
             // Add reverb + delay to bus 1
             let bus = &mut state.session.mixer.buses[0];
             assert_eq!(bus.id, BusId::new(1));
-            let reverb_id = bus.add_effect(EffectType::Reverb);
-            let delay_id = bus.add_effect(EffectType::Delay);
+            let reverb_id = bus.effect_chain.add_effect(EffectType::Reverb);
+            let delay_id = bus.effect_chain.add_effect(EffectType::Delay);
             engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild");
             // Verify synths created in GROUP_BUS_PROCESSING
             let synths = backend.synths_created();
@@ -1129,7 +1129,7 @@ mod tests {
             let mut state = AppState::new();
             state.add_instrument(SourceType::Saw);
             let bus = &mut state.session.mixer.buses[0];
-            bus.add_effect(EffectType::Reverb);
+            bus.effect_chain.add_effect(EffectType::Reverb);
             engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild");
             let synths = backend.synths_created();
             // Reverb should read from bus_audio
@@ -1197,7 +1197,7 @@ mod tests {
             // Create a layer group mixer and add a reverb effect
             state.session.mixer.add_layer_group_mixer(1, &[BusId::new(1)]);
             let gm = state.session.mixer.layer_group_mixer_mut(1).unwrap();
-            let effect_id = gm.add_effect(EffectType::Reverb);
+            let effect_id = gm.effect_chain.add_effect(EffectType::Reverb);
             engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild");
             let synths = backend.synths_created();
             let group_reverb = synths.iter().find(|op| matches!(op, TestOp::CreateSynth { def_name, group_id, .. } if def_name == "imbolc_reverb" && *group_id == GROUP_BUS_PROCESSING));
@@ -1211,7 +1211,7 @@ mod tests {
             let mut state = AppState::new();
             state.add_instrument(SourceType::Saw);
             let bus = &mut state.session.mixer.buses[0];
-            let effect_id = bus.add_effect(EffectType::Reverb);
+            let effect_id = bus.effect_chain.add_effect(EffectType::Reverb);
             engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild");
             backend.clear();
             engine.set_bus_effect_param(BusId::new(1), effect_id, "mix", 0.6).expect("set param");
@@ -1229,7 +1229,7 @@ mod tests {
             }
             state.session.mixer.add_layer_group_mixer(1, &[BusId::new(1)]);
             let gm = state.session.mixer.layer_group_mixer_mut(1).unwrap();
-            let effect_id = gm.add_effect(EffectType::Delay);
+            let effect_id = gm.effect_chain.add_effect(EffectType::Delay);
             engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild");
             backend.clear();
             engine.set_layer_group_effect_param(1, effect_id, "time", 0.4).expect("set param");
@@ -1243,7 +1243,7 @@ mod tests {
             let mut state = AppState::new();
             state.add_instrument(SourceType::Saw);
             let bus = &mut state.session.mixer.buses[0];
-            bus.add_effect(EffectType::Reverb);
+            bus.effect_chain.add_effect(EffectType::Reverb);
             engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("first build");
             let first_node = *engine.bus_effect_node_map.values().next().expect("has bus effect node");
             backend.clear();
@@ -1260,9 +1260,9 @@ mod tests {
             let mut state = AppState::new();
             state.add_instrument(SourceType::Saw);
             let bus = &mut state.session.mixer.buses[0];
-            let delay_id = bus.add_effect(EffectType::Delay);
-            if let Some(effect) = bus.effect_by_id_mut(delay_id) { effect.enabled = false; }
-            bus.add_effect(EffectType::Reverb);
+            let delay_id = bus.effect_chain.add_effect(EffectType::Delay);
+            if let Some(effect) = bus.effect_chain.effect_by_id_mut(delay_id) { effect.enabled = false; }
+            bus.effect_chain.add_effect(EffectType::Reverb);
             engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild");
             // Count effect synths in GROUP_BUS_PROCESSING (exclude bus_out synths)
             let delay_count = backend.count(|op| matches!(op, TestOp::CreateSynth { def_name, group_id, .. } if def_name == "imbolc_delay" && *group_id == GROUP_BUS_PROCESSING));

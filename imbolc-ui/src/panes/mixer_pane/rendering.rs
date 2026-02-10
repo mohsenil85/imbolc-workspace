@@ -550,7 +550,7 @@ impl MixerPane {
 
                 let mut ey = inner_y + 1;
                 let mut cursor_pos = 0;
-                for (ei, effect) in gm.effects.iter().enumerate() {
+                for (ei, effect) in gm.effect_chain.effects.iter().enumerate() {
                     if ey >= inner_y + inner_h { break; }
 
                     let bypass_char = if effect.enabled { '\u{25CF}' } else { '\u{25CB}' };
@@ -582,7 +582,7 @@ impl MixerPane {
                         cursor_pos += 1;
                     }
                 }
-                if gm.effects.is_empty() {
+                if gm.effect_chain.effects.is_empty() {
                     Self::write_str(buf, inner_x, inner_y + 1, "(no effects)", dim);
                 }
             }
@@ -711,7 +711,7 @@ impl MixerPane {
 
                 let mut ey = inner_y + 1;
                 let mut cursor_pos = 0;
-                for (ei, effect) in bus.effects.iter().enumerate() {
+                for (ei, effect) in bus.effect_chain.effects.iter().enumerate() {
                     if ey >= inner_y + inner_h { break; }
 
                     let bypass_char = if effect.enabled { '\u{25CF}' } else { '\u{25CB}' };
@@ -743,7 +743,7 @@ impl MixerPane {
                         cursor_pos += 1;
                     }
                 }
-                if bus.effects.is_empty() {
+                if bus.effect_chain.effects.is_empty() {
                     Self::write_str(buf, inner_x, inner_y + 1, "(no effects)", dim);
                 }
             }

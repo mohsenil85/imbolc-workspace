@@ -1213,25 +1213,25 @@ fn project_bus(
         }
         BusAction::AddEffect(bus_id, effect_type) => {
             if let Some(bus) = session.bus_mut(*bus_id) {
-                bus.add_effect(*effect_type);
+                bus.effect_chain.add_effect(*effect_type);
             }
             true
         }
         BusAction::RemoveEffect(bus_id, effect_id) => {
             if let Some(bus) = session.bus_mut(*bus_id) {
-                bus.remove_effect(*effect_id);
+                bus.effect_chain.remove_effect(*effect_id);
             }
             true
         }
         BusAction::MoveEffect(bus_id, effect_id, direction) => {
             if let Some(bus) = session.bus_mut(*bus_id) {
-                bus.move_effect(*effect_id, *direction);
+                bus.effect_chain.move_effect(*effect_id, *direction);
             }
             true
         }
         BusAction::ToggleEffectBypass(bus_id, effect_id) => {
             if let Some(bus) = session.bus_mut(*bus_id) {
-                if let Some(effect) = bus.effect_by_id_mut(*effect_id) {
+                if let Some(effect) = bus.effect_chain.effect_by_id_mut(*effect_id) {
                     effect.enabled = !effect.enabled;
                 }
             }
@@ -1239,7 +1239,7 @@ fn project_bus(
         }
         BusAction::AdjustEffectParam(bus_id, effect_id, param_idx, delta) => {
             if let Some(bus) = session.bus_mut(*bus_id) {
-                if let Some(effect) = bus.effect_by_id_mut(*effect_id) {
+                if let Some(effect) = bus.effect_chain.effect_by_id_mut(*effect_id) {
                     if let Some(param) = effect.params.get_mut(param_idx.get()) {
                         let range = param.max - param.min;
                         match &mut param.value {
@@ -1268,25 +1268,25 @@ fn project_layer_group(
     match action {
         LayerGroupAction::AddEffect(group_id, effect_type) => {
             if let Some(gm) = session.mixer.layer_group_mixer_mut(*group_id) {
-                gm.add_effect(*effect_type);
+                gm.effect_chain.add_effect(*effect_type);
             }
             true
         }
         LayerGroupAction::RemoveEffect(group_id, effect_id) => {
             if let Some(gm) = session.mixer.layer_group_mixer_mut(*group_id) {
-                gm.remove_effect(*effect_id);
+                gm.effect_chain.remove_effect(*effect_id);
             }
             true
         }
         LayerGroupAction::MoveEffect(group_id, effect_id, direction) => {
             if let Some(gm) = session.mixer.layer_group_mixer_mut(*group_id) {
-                gm.move_effect(*effect_id, *direction);
+                gm.effect_chain.move_effect(*effect_id, *direction);
             }
             true
         }
         LayerGroupAction::ToggleEffectBypass(group_id, effect_id) => {
             if let Some(gm) = session.mixer.layer_group_mixer_mut(*group_id) {
-                if let Some(effect) = gm.effect_by_id_mut(*effect_id) {
+                if let Some(effect) = gm.effect_chain.effect_by_id_mut(*effect_id) {
                     effect.enabled = !effect.enabled;
                 }
             }
@@ -1294,7 +1294,7 @@ fn project_layer_group(
         }
         LayerGroupAction::AdjustEffectParam(group_id, effect_id, param_idx, delta) => {
             if let Some(gm) = session.mixer.layer_group_mixer_mut(*group_id) {
-                if let Some(effect) = gm.effect_by_id_mut(*effect_id) {
+                if let Some(effect) = gm.effect_chain.effect_by_id_mut(*effect_id) {
                     if let Some(param) = effect.params.get_mut(param_idx.get()) {
                         let range = param.max - param.min;
                         match &mut param.value {

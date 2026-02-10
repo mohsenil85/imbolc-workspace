@@ -504,6 +504,73 @@ impl EffectSlot {
     }
 }
 
+/// Shared effect chain used by MixerBus and LayerGroupMixer.
+/// Instruments use ProcessingStage instead (flexible filter/EQ/effects ordering).
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct EffectChain {
+    #[serde(default)]
+    pub effects: Vec<EffectSlot>,
+    #[serde(default)]
+    pub next_effect_id: EffectId,
+}
+
+impl EffectChain {
+    /// Add an effect and return its stable EffectId.
+    pub fn add_effect(&mut self, effect_type: EffectType) -> EffectId {
+        let id = self.next_effect_id;
+        self.next_effect_id = EffectId::new(self.next_effect_id.get() + 1);
+        self.effects.push(EffectSlot::new(id, effect_type));
+        id
+    }
+
+    /// Find an effect by its stable EffectId.
+    pub fn effect_by_id(&self, id: EffectId) -> Option<&EffectSlot> {
+        self.effects.iter().find(|e| e.id == id)
+    }
+
+    /// Find a mutable effect by its stable EffectId.
+    pub fn effect_by_id_mut(&mut self, id: EffectId) -> Option<&mut EffectSlot> {
+        self.effects.iter_mut().find(|e| e.id == id)
+    }
+
+    /// Get the position of an effect in the chain by EffectId.
+    pub fn effect_position(&self, id: EffectId) -> Option<usize> {
+        self.effects.iter().position(|e| e.id == id)
+    }
+
+    /// Remove an effect by its EffectId, returns true if removed.
+    pub fn remove_effect(&mut self, id: EffectId) -> bool {
+        if let Some(pos) = self.effect_position(id) {
+            self.effects.remove(pos);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Move an effect up or down by its EffectId.
+    pub fn move_effect(&mut self, id: EffectId, direction: i8) -> bool {
+        if let Some(pos) = self.effect_position(id) {
+            let new_pos = (pos as i8 + direction).max(0) as usize;
+            if new_pos < self.effects.len() {
+                self.effects.swap(pos, new_pos);
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Recalculate next_effect_id from existing effects (used after loading).
+    pub fn recalculate_next_effect_id(&mut self) {
+        self.next_effect_id = self
+            .effects
+            .iter()
+            .map(|e| e.id.get())
+            .max()
+            .map_or(EffectId::new(0), |m| EffectId::new(m + 1));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -576,6 +643,83 @@ mod tests {
         assert!(slot.enabled);
         assert_eq!(slot.effect_type, EffectType::Delay);
         assert!(!slot.params.is_empty());
+    }
+
+    // --- EffectChain tests ---
+
+    #[test]
+    fn effect_chain_default_empty() {
+        let chain = EffectChain::default();
+        assert!(chain.effects.is_empty());
+        assert_eq!(chain.next_effect_id, EffectId::new(0));
+    }
+
+    #[test]
+    fn effect_chain_add_effect() {
+        let mut chain = EffectChain::default();
+        let id = chain.add_effect(EffectType::Reverb);
+        assert_eq!(id, EffectId::new(0));
+        assert_eq!(chain.effects.len(), 1);
+        assert_eq!(chain.effects[0].effect_type, EffectType::Reverb);
+        assert_eq!(chain.next_effect_id, EffectId::new(1));
+    }
+
+    #[test]
+    fn effect_chain_add_multiple() {
+        let mut chain = EffectChain::default();
+        let id0 = chain.add_effect(EffectType::Reverb);
+        let id1 = chain.add_effect(EffectType::Delay);
+        assert_eq!(id0, EffectId::new(0));
+        assert_eq!(id1, EffectId::new(1));
+        assert_eq!(chain.effects.len(), 2);
+        assert_eq!(chain.next_effect_id, EffectId::new(2));
+    }
+
+    #[test]
+    fn effect_chain_lookup_by_id() {
+        let mut chain = EffectChain::default();
+        let id = chain.add_effect(EffectType::Reverb);
+        assert!(chain.effect_by_id(id).is_some());
+        assert_eq!(chain.effect_by_id(id).unwrap().effect_type, EffectType::Reverb);
+        assert!(chain.effect_by_id(EffectId::new(999)).is_none());
+    }
+
+    #[test]
+    fn effect_chain_remove() {
+        let mut chain = EffectChain::default();
+        let id = chain.add_effect(EffectType::Reverb);
+        assert!(chain.remove_effect(id));
+        assert!(chain.effects.is_empty());
+        assert!(!chain.remove_effect(id));
+    }
+
+    #[test]
+    fn effect_chain_move_effect() {
+        let mut chain = EffectChain::default();
+        let id0 = chain.add_effect(EffectType::Reverb);
+        let id1 = chain.add_effect(EffectType::Delay);
+        assert!(chain.move_effect(id0, 1));
+        assert_eq!(chain.effects[0].id, id1);
+        assert_eq!(chain.effects[1].id, id0);
+        assert!(!chain.move_effect(id0, 1)); // already at end
+    }
+
+    #[test]
+    fn effect_chain_recalculate() {
+        let mut chain = EffectChain::default();
+        chain.add_effect(EffectType::Reverb);
+        chain.add_effect(EffectType::Delay);
+        chain.next_effect_id = EffectId::new(0);
+        chain.recalculate_next_effect_id();
+        assert_eq!(chain.next_effect_id, EffectId::new(2));
+    }
+
+    #[test]
+    fn effect_chain_recalculate_empty() {
+        let mut chain = EffectChain::default();
+        chain.next_effect_id = EffectId::new(5);
+        chain.recalculate_next_effect_id();
+        assert_eq!(chain.next_effect_id, EffectId::new(0));
     }
 }
 

@@ -21,16 +21,15 @@ pub(super) fn load_mixer(conn: &Connection, session: &mut SessionState) -> SqlRe
             pan: row.get(3)?,
             mute: row.get::<_, i32>(4)? != 0,
             solo: row.get::<_, i32>(5)? != 0,
-            effects: Vec::new(),
-            next_effect_id: imbolc_types::EffectId::new(0),
+            effect_chain: imbolc_types::EffectChain::default(),
         })
     })?;
 
     for bus in buses {
         let mut bus = bus?;
         if has_bus_effects {
-            bus.effects = load_effects_from(conn, "bus_effects", "bus_effect_params", "bus_effect_vst_params", "bus_id", bus.id.get() as u32)?;
-            bus.recalculate_next_effect_id();
+            bus.effect_chain.effects = load_effects_from(conn, "bus_effects", "bus_effect_params", "bus_effect_vst_params", "bus_id", bus.id.get() as u32)?;
+            bus.effect_chain.recalculate_next_effect_id();
         }
         session.mixer.buses.push(bus);
     }
@@ -108,14 +107,13 @@ pub(super) fn load_layer_group_mixers(conn: &Connection, session: &mut SessionSt
             solo: solo != 0,
             output_target,
             sends,
-            effects: Vec::new(),
-            next_effect_id: imbolc_types::EffectId::new(0),
+            effect_chain: imbolc_types::EffectChain::default(),
             eq: None,
         };
 
         if has_group_effects {
-            gm.effects = load_effects_from(conn, "layer_group_effects", "layer_group_effect_params", "layer_group_effect_vst_params", "group_id", group_id)?;
-            gm.recalculate_next_effect_id();
+            gm.effect_chain.effects = load_effects_from(conn, "layer_group_effects", "layer_group_effect_params", "layer_group_effect_vst_params", "group_id", group_id)?;
+            gm.effect_chain.recalculate_next_effect_id();
         }
 
         // Load EQ if the table exists

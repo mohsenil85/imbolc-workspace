@@ -132,7 +132,7 @@ fn rich() -> AppState {
 
     // Bus 1 gets a Delay effect
     if let Some(bus) = s.session.bus_mut(BusId::new(1)) {
-        bus.add_effect(EffectType::Delay);
+        bus.effect_chain.add_effect(EffectType::Delay);
     }
 
     s
@@ -143,7 +143,7 @@ fn bus_effect() -> AppState {
     let mut s = minimal();
     s.add_instrument(SourceType::Saw);
     if let Some(bus) = s.session.bus_mut(BusId::new(1)) {
-        bus.add_effect(EffectType::Delay);
+        bus.effect_chain.add_effect(EffectType::Delay);
     }
     s
 }
@@ -813,7 +813,7 @@ fn parity_bus_add_effect() {
 #[test]
 fn parity_bus_remove_effect() {
     let mut s = bus_effect();
-    let eid = s.session.bus(BusId::new(1)).unwrap().effects[0].id;
+    let eid = s.session.bus(BusId::new(1)).unwrap().effect_chain.effects[0].id;
     assert_parity(&mut s, &Action::Bus(BusAction::RemoveEffect(BusId::new(1), eid)));
 }
 
@@ -821,15 +821,15 @@ fn parity_bus_remove_effect() {
 fn parity_bus_move_effect() {
     let mut s = bus_effect();
     // Add second effect so we can move
-    s.session.bus_mut(BusId::new(1)).unwrap().add_effect(EffectType::Reverb);
-    let eid = s.session.bus(BusId::new(1)).unwrap().effects[0].id;
+    s.session.bus_mut(BusId::new(1)).unwrap().effect_chain.add_effect(EffectType::Reverb);
+    let eid = s.session.bus(BusId::new(1)).unwrap().effect_chain.effects[0].id;
     assert_parity(&mut s, &Action::Bus(BusAction::MoveEffect(BusId::new(1), eid, 1)));
 }
 
 #[test]
 fn parity_bus_toggle_effect_bypass() {
     let mut s = bus_effect();
-    let eid = s.session.bus(BusId::new(1)).unwrap().effects[0].id;
+    let eid = s.session.bus(BusId::new(1)).unwrap().effect_chain.effects[0].id;
     assert_parity(
         &mut s,
         &Action::Bus(BusAction::ToggleEffectBypass(BusId::new(1), eid)),
@@ -839,7 +839,7 @@ fn parity_bus_toggle_effect_bypass() {
 #[test]
 fn parity_bus_adjust_effect_param() {
     let mut s = bus_effect();
-    let eid = s.session.bus(BusId::new(1)).unwrap().effects[0].id;
+    let eid = s.session.bus(BusId::new(1)).unwrap().effect_chain.effects[0].id;
     assert_parity(
         &mut s,
         &Action::Bus(BusAction::AdjustEffectParam(BusId::new(1), eid, ParamIndex::new(0), 1.0)),
@@ -869,8 +869,8 @@ fn parity_layer_group_remove_effect() {
         .mixer
         .layer_group_mixer_mut(gid)
         .unwrap()
-        .add_effect(EffectType::Reverb);
-    let eid = s.session.mixer.layer_group_mixer(gid).unwrap().effects[0].id;
+        .effect_chain.add_effect(EffectType::Reverb);
+    let eid = s.session.mixer.layer_group_mixer(gid).unwrap().effect_chain.effects[0].id;
     assert_parity(
         &mut s,
         &Action::LayerGroup(LayerGroupAction::RemoveEffect(gid, eid)),
@@ -885,13 +885,13 @@ fn parity_layer_group_move_effect() {
         .mixer
         .layer_group_mixer_mut(gid)
         .unwrap()
-        .add_effect(EffectType::Reverb);
+        .effect_chain.add_effect(EffectType::Reverb);
     s.session
         .mixer
         .layer_group_mixer_mut(gid)
         .unwrap()
-        .add_effect(EffectType::Delay);
-    let eid = s.session.mixer.layer_group_mixer(gid).unwrap().effects[0].id;
+        .effect_chain.add_effect(EffectType::Delay);
+    let eid = s.session.mixer.layer_group_mixer(gid).unwrap().effect_chain.effects[0].id;
     assert_parity(
         &mut s,
         &Action::LayerGroup(LayerGroupAction::MoveEffect(gid, eid, 1)),
@@ -906,8 +906,8 @@ fn parity_layer_group_toggle_effect_bypass() {
         .mixer
         .layer_group_mixer_mut(gid)
         .unwrap()
-        .add_effect(EffectType::Limiter);
-    let eid = s.session.mixer.layer_group_mixer(gid).unwrap().effects[0].id;
+        .effect_chain.add_effect(EffectType::Limiter);
+    let eid = s.session.mixer.layer_group_mixer(gid).unwrap().effect_chain.effects[0].id;
     assert_parity(
         &mut s,
         &Action::LayerGroup(LayerGroupAction::ToggleEffectBypass(gid, eid)),
@@ -922,8 +922,8 @@ fn parity_layer_group_adjust_effect_param() {
         .mixer
         .layer_group_mixer_mut(gid)
         .unwrap()
-        .add_effect(EffectType::Reverb);
-    let eid = s.session.mixer.layer_group_mixer(gid).unwrap().effects[0].id;
+        .effect_chain.add_effect(EffectType::Reverb);
+    let eid = s.session.mixer.layer_group_mixer(gid).unwrap().effect_chain.effects[0].id;
     assert_parity(
         &mut s,
         &Action::LayerGroup(LayerGroupAction::AdjustEffectParam(gid, eid, ParamIndex::new(0), 1.0)),

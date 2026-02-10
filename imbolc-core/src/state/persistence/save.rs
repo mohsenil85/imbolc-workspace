@@ -609,7 +609,7 @@ fn save_mixer(conn: &Connection, session: &SessionState) -> SqlResult<()> {
             params![bus.id.get() as i32, bus.name, bus.level, bus.pan, bus.mute as i32, bus.solo as i32],
         )?;
 
-        save_effects_to(conn, "bus_effects", "bus_effect_params", "bus_effect_vst_params", "bus_id", bus.id.get() as u32, &bus.effects)?;
+        save_effects_to(conn, "bus_effects", "bus_effect_params", "bus_effect_vst_params", "bus_id", bus.id.get() as u32, &bus.effect_chain.effects)?;
     }
 
     conn.execute(
@@ -654,7 +654,7 @@ fn save_layer_group_mixers(conn: &Connection, session: &SessionState) -> SqlResu
             }
         }
 
-        save_effects_to(conn, "layer_group_effects", "layer_group_effect_params", "layer_group_effect_vst_params", "group_id", gm.group_id, &gm.effects)?;
+        save_effects_to(conn, "layer_group_effects", "layer_group_effect_params", "layer_group_effect_vst_params", "group_id", gm.group_id, &gm.effect_chain.effects)?;
     }
     Ok(())
 }

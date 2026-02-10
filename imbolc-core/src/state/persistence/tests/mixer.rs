@@ -17,18 +17,18 @@ fn round_trip_bus_effects() {
 
     // Add effects to bus 1
     let bus = session.mixer.bus_mut(BusId::new(1)).unwrap();
-    let reverb_id = bus.add_effect(EffectType::Reverb);
-    let delay_id = bus.add_effect(EffectType::Delay);
+    let reverb_id = bus.effect_chain.add_effect(EffectType::Reverb);
+    let delay_id = bus.effect_chain.add_effect(EffectType::Delay);
 
     // Modify a param on the reverb
-    if let Some(effect) = bus.effect_by_id_mut(reverb_id) {
+    if let Some(effect) = bus.effect_chain.effect_by_id_mut(reverb_id) {
         if let Some(param) = effect.params.get_mut(0) {
             param.value = ParamValue::Float(0.77);
         }
     }
 
     // Disable the delay and set VST fields
-    if let Some(effect) = bus.effect_by_id_mut(delay_id) {
+    if let Some(effect) = bus.effect_chain.effect_by_id_mut(delay_id) {
         effect.enabled = false;
         effect.vst_state_path = Some(PathBuf::from("/tmp/delay.vststate"));
         effect.vst_param_values = vec![(0, 0.42), (3, 0.88)];
@@ -40,11 +40,11 @@ fn round_trip_bus_effects() {
 
     // Bus 1 should have 2 effects
     let loaded_bus = loaded_session.mixer.buses.iter().find(|b| b.id == BusId::new(1)).unwrap();
-    assert_eq!(loaded_bus.effects.len(), 2);
-    assert_eq!(loaded_bus.next_effect_id, 2);
+    assert_eq!(loaded_bus.effect_chain.effects.len(), 2);
+    assert_eq!(loaded_bus.effect_chain.next_effect_id, imbolc_types::EffectId::new(2));
 
     // Reverb (id=0)
-    let loaded_reverb = loaded_bus.effect_by_id(reverb_id).unwrap();
+    let loaded_reverb = loaded_bus.effect_chain.effect_by_id(reverb_id).unwrap();
     assert_eq!(loaded_reverb.effect_type, EffectType::Reverb);
     assert!(loaded_reverb.enabled);
     match loaded_reverb.params[0].value {
@@ -53,7 +53,7 @@ fn round_trip_bus_effects() {
     }
 
     // Delay (id=1)
-    let loaded_delay = loaded_bus.effect_by_id(delay_id).unwrap();
+    let loaded_delay = loaded_bus.effect_chain.effect_by_id(delay_id).unwrap();
     assert_eq!(loaded_delay.effect_type, EffectType::Delay);
     assert!(!loaded_delay.enabled);
     assert_eq!(loaded_delay.vst_state_path.as_deref(), Some(std::path::Path::new("/tmp/delay.vststate")));
@@ -63,7 +63,7 @@ fn round_trip_bus_effects() {
 
     // Bus 2 should have no effects
     let loaded_bus2 = loaded_session.mixer.buses.iter().find(|b| b.id == BusId::new(2)).unwrap();
-    assert!(loaded_bus2.effects.is_empty());
+    assert!(loaded_bus2.effect_chain.effects.is_empty());
 
     std::fs::remove_file(&path).ok();
 }
@@ -85,11 +85,11 @@ fn round_trip_layer_group_effects() {
 
     // Add effects to layer group mixer
     let gm = session.mixer.layer_group_mixer_mut(1).unwrap();
-    let comp_id = gm.add_effect(EffectType::TapeComp);
-    let lim_id = gm.add_effect(EffectType::Limiter);
+    let comp_id = gm.effect_chain.add_effect(EffectType::TapeComp);
+    let lim_id = gm.effect_chain.add_effect(EffectType::Limiter);
 
     // Modify a param on the compressor
-    if let Some(effect) = gm.effect_by_id_mut(comp_id) {
+    if let Some(effect) = gm.effect_chain.effect_by_id_mut(comp_id) {
         if let Some(param) = effect.params.get_mut(0) {
             param.value = ParamValue::Float(0.65);
         }
@@ -102,17 +102,17 @@ fn round_trip_layer_group_effects() {
     let (loaded_session, _) = load_project(&path).expect("load");
 
     let loaded_gm = loaded_session.mixer.layer_group_mixers.iter().find(|g| g.group_id == 1).unwrap();
-    assert_eq!(loaded_gm.effects.len(), 2);
-    assert_eq!(loaded_gm.next_effect_id, 2);
+    assert_eq!(loaded_gm.effect_chain.effects.len(), 2);
+    assert_eq!(loaded_gm.effect_chain.next_effect_id, imbolc_types::EffectId::new(2));
 
-    let loaded_comp = loaded_gm.effect_by_id(comp_id).unwrap();
+    let loaded_comp = loaded_gm.effect_chain.effect_by_id(comp_id).unwrap();
     assert_eq!(loaded_comp.effect_type, EffectType::TapeComp);
     match loaded_comp.params[0].value {
         ParamValue::Float(v) => assert!((v - 0.65).abs() < 0.01),
         _ => panic!("Expected float param"),
     }
 
-    let loaded_lim = loaded_gm.effect_by_id(lim_id).unwrap();
+    let loaded_lim = loaded_gm.effect_chain.effect_by_id(lim_id).unwrap();
     assert_eq!(loaded_lim.effect_type, EffectType::Limiter);
 
     std::fs::remove_file(&path).ok();

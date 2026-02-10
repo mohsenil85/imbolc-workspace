@@ -287,11 +287,11 @@ mod tests {
         use crate::state::instrument::EffectType;
         use crate::EffectId;
         let mut bus = MixerBus::new(BusId::new(1));
-        let id = bus.add_effect(EffectType::Reverb);
+        let id = bus.effect_chain.add_effect(EffectType::Reverb);
         assert_eq!(id, EffectId::new(0));
-        assert_eq!(bus.effects.len(), 1);
-        assert_eq!(bus.effects[0].effect_type, EffectType::Reverb);
-        assert_eq!(bus.next_effect_id, EffectId::new(1));
+        assert_eq!(bus.effect_chain.effects.len(), 1);
+        assert_eq!(bus.effect_chain.effects[0].effect_type, EffectType::Reverb);
+        assert_eq!(bus.effect_chain.next_effect_id, EffectId::new(1));
     }
 
     #[test]
@@ -299,12 +299,12 @@ mod tests {
         use crate::state::instrument::EffectType;
         use crate::EffectId;
         let mut bus = MixerBus::new(BusId::new(1));
-        let id0 = bus.add_effect(EffectType::Reverb);
-        let id1 = bus.add_effect(EffectType::Delay);
+        let id0 = bus.effect_chain.add_effect(EffectType::Reverb);
+        let id1 = bus.effect_chain.add_effect(EffectType::Delay);
         assert_eq!(id0, EffectId::new(0));
         assert_eq!(id1, EffectId::new(1));
-        assert_eq!(bus.effects.len(), 2);
-        assert_eq!(bus.next_effect_id, EffectId::new(2));
+        assert_eq!(bus.effect_chain.effects.len(), 2);
+        assert_eq!(bus.effect_chain.next_effect_id, EffectId::new(2));
     }
 
     #[test]
@@ -312,34 +312,34 @@ mod tests {
         use crate::state::instrument::EffectType;
         use crate::EffectId;
         let mut bus = MixerBus::new(BusId::new(1));
-        let id = bus.add_effect(EffectType::Reverb);
-        assert!(bus.effect_by_id(id).is_some());
-        assert_eq!(bus.effect_by_id(id).unwrap().effect_type, EffectType::Reverb);
-        assert!(bus.effect_by_id(EffectId::new(999)).is_none());
+        let id = bus.effect_chain.add_effect(EffectType::Reverb);
+        assert!(bus.effect_chain.effect_by_id(id).is_some());
+        assert_eq!(bus.effect_chain.effect_by_id(id).unwrap().effect_type, EffectType::Reverb);
+        assert!(bus.effect_chain.effect_by_id(EffectId::new(999)).is_none());
     }
 
     #[test]
     fn bus_remove_effect() {
         use crate::state::instrument::EffectType;
         let mut bus = MixerBus::new(BusId::new(1));
-        let id = bus.add_effect(EffectType::Reverb);
-        assert!(bus.remove_effect(id));
-        assert!(bus.effects.is_empty());
-        assert!(!bus.remove_effect(id)); // already removed
+        let id = bus.effect_chain.add_effect(EffectType::Reverb);
+        assert!(bus.effect_chain.remove_effect(id));
+        assert!(bus.effect_chain.effects.is_empty());
+        assert!(!bus.effect_chain.remove_effect(id)); // already removed
     }
 
     #[test]
     fn bus_move_effect() {
         use crate::state::instrument::EffectType;
         let mut bus = MixerBus::new(BusId::new(1));
-        let id0 = bus.add_effect(EffectType::Reverb);
-        let id1 = bus.add_effect(EffectType::Delay);
+        let id0 = bus.effect_chain.add_effect(EffectType::Reverb);
+        let id1 = bus.effect_chain.add_effect(EffectType::Delay);
         // Move first effect down
-        assert!(bus.move_effect(id0, 1));
-        assert_eq!(bus.effects[0].id, id1);
-        assert_eq!(bus.effects[1].id, id0);
+        assert!(bus.effect_chain.move_effect(id0, 1));
+        assert_eq!(bus.effect_chain.effects[0].id, id1);
+        assert_eq!(bus.effect_chain.effects[1].id, id0);
         // Move beyond bounds fails
-        assert!(!bus.move_effect(id0, 1));
+        assert!(!bus.effect_chain.move_effect(id0, 1));
     }
 
     #[test]
@@ -347,11 +347,11 @@ mod tests {
         use crate::state::instrument::EffectType;
         use crate::EffectId;
         let mut bus = MixerBus::new(BusId::new(1));
-        bus.add_effect(EffectType::Reverb);
-        bus.add_effect(EffectType::Delay);
-        bus.next_effect_id = EffectId::new(0); // simulate loading
-        bus.recalculate_next_effect_id();
-        assert_eq!(bus.next_effect_id, EffectId::new(2));
+        bus.effect_chain.add_effect(EffectType::Reverb);
+        bus.effect_chain.add_effect(EffectType::Delay);
+        bus.effect_chain.next_effect_id = EffectId::new(0); // simulate loading
+        bus.effect_chain.recalculate_next_effect_id();
+        assert_eq!(bus.effect_chain.next_effect_id, EffectId::new(2));
     }
 
     // ========================================================================
@@ -363,29 +363,29 @@ mod tests {
         use crate::state::instrument::{EffectType, LayerGroupMixer};
         use crate::EffectId;
         let mut gm = LayerGroupMixer::new(1, &[BusId::new(1), BusId::new(2)]);
-        let id = gm.add_effect(EffectType::TapeComp);
+        let id = gm.effect_chain.add_effect(EffectType::TapeComp);
         assert_eq!(id, EffectId::new(0));
-        assert_eq!(gm.effects.len(), 1);
-        assert_eq!(gm.effects[0].effect_type, EffectType::TapeComp);
+        assert_eq!(gm.effect_chain.effects.len(), 1);
+        assert_eq!(gm.effect_chain.effects[0].effect_type, EffectType::TapeComp);
     }
 
     #[test]
     fn layer_group_remove_effect() {
         use crate::state::instrument::{EffectType, LayerGroupMixer};
         let mut gm = LayerGroupMixer::new(1, &[]);
-        let id = gm.add_effect(EffectType::Limiter);
-        assert!(gm.remove_effect(id));
-        assert!(gm.effects.is_empty());
+        let id = gm.effect_chain.add_effect(EffectType::Limiter);
+        assert!(gm.effect_chain.remove_effect(id));
+        assert!(gm.effect_chain.effects.is_empty());
     }
 
     #[test]
     fn layer_group_move_effect() {
         use crate::state::instrument::{EffectType, LayerGroupMixer};
         let mut gm = LayerGroupMixer::new(1, &[]);
-        let id0 = gm.add_effect(EffectType::Reverb);
-        let id1 = gm.add_effect(EffectType::Delay);
-        assert!(gm.move_effect(id0, 1));
-        assert_eq!(gm.effects[0].id, id1);
-        assert_eq!(gm.effects[1].id, id0);
+        let id0 = gm.effect_chain.add_effect(EffectType::Reverb);
+        let id1 = gm.effect_chain.add_effect(EffectType::Delay);
+        assert!(gm.effect_chain.move_effect(id0, 1));
+        assert_eq!(gm.effect_chain.effects[0].id, id1);
+        assert_eq!(gm.effect_chain.effects[1].id, id0);
     }
 }

@@ -496,7 +496,7 @@ impl AudioEngine {
     ) -> Result<i32, String> {
         let mut current_bus = bus_audio;
 
-        for effect in &bus.effects {
+        for effect in &bus.effect_chain.effects {
             if !effect.enabled {
                 continue;
             }
@@ -606,7 +606,7 @@ impl AudioEngine {
             current_bus = eq_out_bus;
         }
 
-        for effect in &gm.effects {
+        for effect in &gm.effect_chain.effects {
             if !effect.enabled {
                 continue;
             }

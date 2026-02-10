@@ -218,7 +218,7 @@ impl MixerPane {
         let Some(bus_id) = self.detail_bus_id() else { return 0 };
         let Some(bus) = state.session.bus(bus_id) else { return 0 };
         match self.bus_detail_section {
-            BusDetailSection::Effects => crate::state::effects_max_cursor(&bus.effects),
+            BusDetailSection::Effects => crate::state::effects_max_cursor(&bus.effect_chain.effects),
             BusDetailSection::Output => 1, // pan, level
         }
     }
@@ -228,7 +228,7 @@ impl MixerPane {
         let Some(gid) = self.detail_group_id() else { return 0 };
         let Some(gm) = state.session.mixer.layer_group_mixer(gid) else { return 0 };
         match self.group_detail_section {
-            GroupDetailSection::Effects => crate::state::effects_max_cursor(&gm.effects),
+            GroupDetailSection::Effects => crate::state::effects_max_cursor(&gm.effect_chain.effects),
             GroupDetailSection::Sends => gm.sends.len().saturating_sub(1),
             GroupDetailSection::Output => 1, // pan, level
         }
@@ -238,14 +238,14 @@ impl MixerPane {
     fn decode_bus_effect_cursor(&self, state: &AppState) -> Option<(crate::state::EffectId, Option<imbolc_types::ParamIndex>)> {
         let bus_id = self.detail_bus_id()?;
         let bus = state.session.bus(bus_id)?;
-        crate::state::decode_effect_cursor_from_slice(&bus.effects, self.detail_cursor)
+        crate::state::decode_effect_cursor_from_slice(&bus.effect_chain.effects, self.detail_cursor)
     }
 
     /// Decode group effect cursor into (effect_id, param_index) where None = header
     fn decode_group_effect_cursor(&self, state: &AppState) -> Option<(crate::state::EffectId, Option<imbolc_types::ParamIndex>)> {
         let gid = self.detail_group_id()?;
         let gm = state.session.mixer.layer_group_mixer(gid)?;
-        crate::state::decode_effect_cursor_from_slice(&gm.effects, self.detail_cursor)
+        crate::state::decode_effect_cursor_from_slice(&gm.effect_chain.effects, self.detail_cursor)
     }
 
     /// Get the current effect target based on detail mode (for add_effect pane bridging)
@@ -423,8 +423,8 @@ mod tests {
     fn bus_detail_remove_effect() {
         let mut pane = MixerPane::new(Keymap::new());
         let mut state = AppState::new();
-        state.session.bus_mut(BusId::new(1)).unwrap().add_effect(crate::state::EffectType::Reverb);
-        let effect_id = state.session.bus(BusId::new(1)).unwrap().effects[0].id;
+        state.session.bus_mut(BusId::new(1)).unwrap().effect_chain.add_effect(crate::state::EffectType::Reverb);
+        let effect_id = state.session.bus(BusId::new(1)).unwrap().effect_chain.effects[0].id;
 
         state.session.mixer.selection = MixerSelection::Bus(BusId::new(1));
         pane.handle_action(ActionId::Mixer(MixerActionId::EnterDetail), &dummy_event(), &state);
@@ -458,8 +458,8 @@ mod tests {
         let mut pane = MixerPane::new(Keymap::new());
         let mut state = AppState::new();
         state.session.mixer.add_layer_group_mixer(1, &[]);
-        state.session.mixer.layer_group_mixer_mut(1).unwrap().add_effect(crate::state::EffectType::Delay);
-        let effect_id = state.session.mixer.layer_group_mixer(1).unwrap().effects[0].id;
+        state.session.mixer.layer_group_mixer_mut(1).unwrap().effect_chain.add_effect(crate::state::EffectType::Delay);
+        let effect_id = state.session.mixer.layer_group_mixer(1).unwrap().effect_chain.effects[0].id;
 
         state.session.mixer.selection = MixerSelection::LayerGroup(1);
         pane.handle_action(ActionId::Mixer(MixerActionId::EnterDetail), &dummy_event(), &state);

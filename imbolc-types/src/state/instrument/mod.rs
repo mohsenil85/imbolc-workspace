@@ -128,9 +128,7 @@ pub struct MixerBus {
     pub mute: bool,
     pub solo: bool,
     #[serde(default)]
-    pub effects: Vec<EffectSlot>,
-    #[serde(default)]
-    pub next_effect_id: EffectId,
+    pub effect_chain: EffectChain,
 }
 
 impl MixerBus {
@@ -142,64 +140,8 @@ impl MixerBus {
             pan: 0.0,
             mute: false,
             solo: false,
-            effects: Vec::new(),
-            next_effect_id: EffectId::new(0),
+            effect_chain: EffectChain::default(),
         }
-    }
-
-    /// Add an effect and return its stable EffectId.
-    pub fn add_effect(&mut self, effect_type: EffectType) -> EffectId {
-        let id = self.next_effect_id;
-        self.next_effect_id = EffectId::new(self.next_effect_id.get() + 1);
-        self.effects.push(EffectSlot::new(id, effect_type));
-        id
-    }
-
-    /// Find an effect by its stable EffectId.
-    pub fn effect_by_id(&self, id: EffectId) -> Option<&EffectSlot> {
-        self.effects.iter().find(|e| e.id == id)
-    }
-
-    /// Find a mutable effect by its stable EffectId.
-    pub fn effect_by_id_mut(&mut self, id: EffectId) -> Option<&mut EffectSlot> {
-        self.effects.iter_mut().find(|e| e.id == id)
-    }
-
-    /// Get the position of an effect in the chain by EffectId.
-    pub fn effect_position(&self, id: EffectId) -> Option<usize> {
-        self.effects.iter().position(|e| e.id == id)
-    }
-
-    /// Remove an effect by its EffectId, returns true if removed.
-    pub fn remove_effect(&mut self, id: EffectId) -> bool {
-        if let Some(pos) = self.effect_position(id) {
-            self.effects.remove(pos);
-            true
-        } else {
-            false
-        }
-    }
-
-    /// Move an effect up or down by its EffectId.
-    pub fn move_effect(&mut self, id: EffectId, direction: i8) -> bool {
-        if let Some(pos) = self.effect_position(id) {
-            let new_pos = (pos as i8 + direction).max(0) as usize;
-            if new_pos < self.effects.len() {
-                self.effects.swap(pos, new_pos);
-                return true;
-            }
-        }
-        false
-    }
-
-    /// Recalculate next_effect_id from existing effects (used after loading).
-    pub fn recalculate_next_effect_id(&mut self) {
-        self.next_effect_id = self
-            .effects
-            .iter()
-            .map(|e| e.id.get())
-            .max()
-            .map_or(EffectId::new(0), |m| EffectId::new(m + 1));
     }
 }
 
@@ -215,9 +157,7 @@ pub struct LayerGroupMixer {
     #[serde(deserialize_with = "deserialize_sends")]
     pub sends: BTreeMap<BusId, MixerSend>,
     #[serde(default)]
-    pub effects: Vec<EffectSlot>,
-    #[serde(default)]
-    pub next_effect_id: EffectId,
+    pub effect_chain: EffectChain,
     #[serde(default)]
     pub eq: Option<EqConfig>,
 }
@@ -233,8 +173,7 @@ impl LayerGroupMixer {
             solo: false,
             output_target: OutputTarget::Master,
             sends: BTreeMap::new(),
-            effects: Vec::new(),
-            next_effect_id: EffectId::new(0),
+            effect_chain: EffectChain::default(),
             eq: Some(EqConfig::default()),
         }
     }
@@ -259,61 +198,6 @@ impl LayerGroupMixer {
         if let Some(send) = self.sends.get_mut(&bus_id) {
             send.enabled = false;
         }
-    }
-
-    /// Add an effect and return its stable EffectId.
-    pub fn add_effect(&mut self, effect_type: EffectType) -> EffectId {
-        let id = self.next_effect_id;
-        self.next_effect_id = EffectId::new(self.next_effect_id.get() + 1);
-        self.effects.push(EffectSlot::new(id, effect_type));
-        id
-    }
-
-    /// Find an effect by its stable EffectId.
-    pub fn effect_by_id(&self, id: EffectId) -> Option<&EffectSlot> {
-        self.effects.iter().find(|e| e.id == id)
-    }
-
-    /// Find a mutable effect by its stable EffectId.
-    pub fn effect_by_id_mut(&mut self, id: EffectId) -> Option<&mut EffectSlot> {
-        self.effects.iter_mut().find(|e| e.id == id)
-    }
-
-    /// Get the position of an effect in the chain by EffectId.
-    pub fn effect_position(&self, id: EffectId) -> Option<usize> {
-        self.effects.iter().position(|e| e.id == id)
-    }
-
-    /// Remove an effect by its EffectId, returns true if removed.
-    pub fn remove_effect(&mut self, id: EffectId) -> bool {
-        if let Some(pos) = self.effect_position(id) {
-            self.effects.remove(pos);
-            true
-        } else {
-            false
-        }
-    }
-
-    /// Move an effect up or down by its EffectId.
-    pub fn move_effect(&mut self, id: EffectId, direction: i8) -> bool {
-        if let Some(pos) = self.effect_position(id) {
-            let new_pos = (pos as i8 + direction).max(0) as usize;
-            if new_pos < self.effects.len() {
-                self.effects.swap(pos, new_pos);
-                return true;
-            }
-        }
-        false
-    }
-
-    /// Recalculate next_effect_id from existing effects (used after loading).
-    pub fn recalculate_next_effect_id(&mut self) {
-        self.next_effect_id = self
-            .effects
-            .iter()
-            .map(|e| e.id.get())
-            .max()
-            .map_or(EffectId::new(0), |m| EffectId::new(m + 1));
     }
 }
 
