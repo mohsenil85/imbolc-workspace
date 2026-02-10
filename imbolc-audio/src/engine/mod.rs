@@ -524,7 +524,7 @@ mod tests {
             .unwrap();
         engine
             .apply_automation(
-                &AutomationTarget::effect_param(inst_id, 1, 0),
+                &AutomationTarget::effect_param(inst_id, EffectId::new(1), 0),
                 0.7,
                 &mut state.instruments,
                 &state.session,
@@ -658,7 +658,7 @@ mod tests {
     #[test]
     fn test_same_pitch_retrigger() {
         let mut engine = connect_engine();
-        let inst_id = 1;
+        let inst_id = InstrumentId::new(1);
 
         // Add a voice at pitch 60
         engine.voice_allocator.add(make_voice(inst_id, 60, 0.8, 100));
@@ -678,7 +678,7 @@ mod tests {
     #[test]
     fn test_released_voices_stolen_first() {
         let mut engine = connect_engine();
-        let inst_id = 1;
+        let inst_id = InstrumentId::new(1);
 
         // Fill to limit with active voices (pitches 40..40+N, all unique)
         for i in 0..MAX_VOICES_PER_INSTRUMENT {
@@ -709,7 +709,7 @@ mod tests {
     #[test]
     fn test_lowest_velocity_stolen() {
         let mut engine = connect_engine();
-        let inst_id = 1;
+        let inst_id = InstrumentId::new(1);
 
         // Fill to limit — all same age, varying velocity (pitches 40..40+N)
         for i in 0..MAX_VOICES_PER_INSTRUMENT {
@@ -733,7 +733,7 @@ mod tests {
     #[test]
     fn test_age_tiebreaker() {
         let mut engine = connect_engine();
-        let inst_id = 1;
+        let inst_id = InstrumentId::new(1);
 
         // Fill to limit — all same velocity, varying age (pitches 40..40+N)
         for i in 0..MAX_VOICES_PER_INSTRUMENT {
@@ -757,7 +757,7 @@ mod tests {
     #[test]
     fn test_cleanup_expired_voices() {
         let mut engine = connect_engine();
-        let inst_id = 1;
+        let inst_id = InstrumentId::new(1);
 
         // Add a voice released long ago (should be cleaned up)
         engine.voice_allocator.add(make_released_voice(inst_id, 60, 0.5, 5000, 0.5));
@@ -777,7 +777,7 @@ mod tests {
     #[test]
     fn test_process_node_ends_removes_voice() {
         let mut engine = connect_engine();
-        let inst_id = 1;
+        let inst_id = InstrumentId::new(1);
         let group_id = 5000;
         let midi_node_id = 5001;
         let source_node = 5002;

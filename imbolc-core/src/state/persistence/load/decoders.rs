@@ -29,14 +29,15 @@ pub(crate) fn decode_scale(s: &str) -> crate::state::music::Scale {
 
 pub(crate) fn decode_source_type(s: &str) -> crate::state::instrument::SourceType {
     use crate::state::instrument::SourceType;
+    use imbolc_types::{CustomSynthDefId, VstPluginId};
     if let Some(rest) = s.strip_prefix("Custom:") {
         if let Ok(id) = rest.parse::<u32>() {
-            return SourceType::Custom(id);
+            return SourceType::Custom(CustomSynthDefId::new(id));
         }
     }
     if let Some(rest) = s.strip_prefix("Vst:") {
         if let Ok(id) = rest.parse::<u32>() {
-            return SourceType::Vst(id);
+            return SourceType::Vst(VstPluginId::new(id));
         }
     }
     match s {
@@ -76,9 +77,10 @@ pub(crate) fn decode_source_type(s: &str) -> crate::state::instrument::SourceTyp
 
 pub(crate) fn decode_effect_type(s: &str) -> crate::state::instrument::EffectType {
     use crate::state::instrument::EffectType;
+    use imbolc_types::VstPluginId;
     if let Some(rest) = s.strip_prefix("Vst:") {
         if let Ok(id) = rest.parse::<u32>() {
-            return EffectType::Vst(id);
+            return EffectType::Vst(VstPluginId::new(id));
         }
     }
     match s {
@@ -159,12 +161,12 @@ pub(crate) fn decode_parameter_target(s: &str) -> crate::state::instrument::Para
         let parts: Vec<&str> = rest.splitn(2, ':').collect();
         if parts.len() == 2 {
             if let (Ok(eid), Ok(pidx)) = (parts[0].parse::<u32>(), parts[1].parse::<usize>()) {
-                return ParameterTarget::EffectParam(eid, pidx);
+                return ParameterTarget::EffectParam(imbolc_types::EffectId::new(eid), pidx);
             }
         }
     }
     if let Some(rest) = s.strip_prefix("EffectBypass:") {
-        if let Ok(eid) = rest.parse::<u32>() { return ParameterTarget::EffectBypass(eid); }
+        if let Ok(eid) = rest.parse::<u32>() { return ParameterTarget::EffectBypass(imbolc_types::EffectId::new(eid)); }
     }
     if let Some(rest) = s.strip_prefix("EqBandFreq:") {
         if let Ok(idx) = rest.parse::<usize>() { return ParameterTarget::EqBandFreq(idx); }
@@ -356,7 +358,7 @@ pub(crate) fn decode_automation_target(
         "GlobalTimeSignature" => AutomationTarget::Global(GlobalParameter::TimeSignature),
         _ => {
             // It's an instrument parameter target
-            let inst_id = target_inst_id.unwrap_or(0) as u32;
+            let inst_id = imbolc_types::InstrumentId::new(target_inst_id.unwrap_or(0) as u32);
             let param_target = decode_parameter_target(target_type);
             AutomationTarget::Instrument(inst_id, InstrumentParameter::Standard(param_target))
         }

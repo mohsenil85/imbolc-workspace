@@ -241,7 +241,7 @@ impl Pane for InstrumentEditPane {
         // Get the currently selected instrument ID
         let instrument_id = state.instruments.selected_instrument()
             .map(|inst| inst.id)
-            .unwrap_or(0);
+            .unwrap_or(InstrumentId::new(0));
         // Flatten all released pitches (handles chords)
         released.into_iter()
             .map(|(_, pitches)| {
@@ -327,10 +327,11 @@ mod tests {
     use crate::state::{FilterConfig, FilterType, EffectSlot, EffectType};
     use crate::ui::action_id::{ActionId, InstrumentEditActionId};
     use crate::ui::input::{InputEvent, KeyCode, Modifiers};
+    use imbolc_types::{EffectId, InstrumentId};
 
     fn make_pane_with_chain(chain: Vec<ProcessingStage>) -> InstrumentEditPane {
         let mut pane = InstrumentEditPane::default();
-        pane.instrument_id = Some(1);
+        pane.instrument_id = Some(InstrumentId::new(1));
         pane.source = SourceType::Saw;
         pane.source_params = SourceType::Saw.default_params();
         pane.processing_chain = chain;
@@ -344,7 +345,7 @@ mod tests {
     #[test]
     fn test_section_navigation_reordered_chain() {
         // Chain: [Effect, Filter] — effect comes first
-        let effect = EffectSlot::new(0, EffectType::Delay);
+        let effect = EffectSlot::new(EffectId::new(0), EffectType::Delay);
         let filter = FilterConfig::new(FilterType::Lpf);
         let pane = make_pane_with_chain(vec![
             ProcessingStage::Effect(effect),
@@ -366,7 +367,7 @@ mod tests {
 
     #[test]
     fn test_tab_cycling_visits_each_stage() {
-        let effect = EffectSlot::new(0, EffectType::Delay);
+        let effect = EffectSlot::new(EffectId::new(0), EffectType::Delay);
         let filter = FilterConfig::new(FilterType::Lpf);
         let mut pane = make_pane_with_chain(vec![
             ProcessingStage::Effect(effect),
@@ -403,7 +404,7 @@ mod tests {
     #[test]
     fn test_cursor_stability_after_move_stage() {
         let filter = FilterConfig::new(FilterType::Lpf);
-        let effect = EffectSlot::new(0, EffectType::Delay);
+        let effect = EffectSlot::new(EffectId::new(0), EffectType::Delay);
         let mut pane = make_pane_with_chain(vec![
             ProcessingStage::Filter(filter),
             ProcessingStage::Effect(effect),
@@ -430,7 +431,7 @@ mod tests {
 
     #[test]
     fn test_toggle_filter_with_existing_chain() {
-        let effect = EffectSlot::new(0, EffectType::Delay);
+        let effect = EffectSlot::new(EffectId::new(0), EffectType::Delay);
         let mut pane = make_pane_with_chain(vec![
             ProcessingStage::Effect(effect),
         ]);

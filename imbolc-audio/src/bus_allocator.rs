@@ -107,18 +107,22 @@ impl Default for BusAllocator {
 mod tests {
     use super::*;
 
+    fn id(n: u32) -> InstrumentId {
+        InstrumentId::new(n)
+    }
+
     #[test]
     fn test_audio_bus_allocation() {
         let mut alloc = BusAllocator::new();
 
-        let bus1 = alloc.get_or_alloc_audio_bus(1, "out");
+        let bus1 = alloc.get_or_alloc_audio_bus(id(1), "out");
         assert_eq!(bus1, 16); // First bus starts at 16
 
-        let bus2 = alloc.get_or_alloc_audio_bus(2, "out");
+        let bus2 = alloc.get_or_alloc_audio_bus(id(2), "out");
         assert_eq!(bus2, 18); // Next stereo pair
 
         // Same module/port returns same bus
-        let bus1_again = alloc.get_or_alloc_audio_bus(1, "out");
+        let bus1_again = alloc.get_or_alloc_audio_bus(id(1), "out");
         assert_eq!(bus1_again, 16);
     }
 
@@ -126,13 +130,13 @@ mod tests {
     fn test_control_bus_allocation() {
         let mut alloc = BusAllocator::new();
 
-        let bus1 = alloc.get_or_alloc_control_bus(1, "freq");
+        let bus1 = alloc.get_or_alloc_control_bus(id(1), "freq");
         assert_eq!(bus1, 0);
 
-        let bus2 = alloc.get_or_alloc_control_bus(1, "gate");
+        let bus2 = alloc.get_or_alloc_control_bus(id(1), "gate");
         assert_eq!(bus2, 1);
 
-        let bus3 = alloc.get_or_alloc_control_bus(2, "out");
+        let bus3 = alloc.get_or_alloc_control_bus(id(2), "out");
         assert_eq!(bus3, 2);
     }
 
@@ -140,28 +144,28 @@ mod tests {
     fn test_free_module_buses() {
         let mut alloc = BusAllocator::new();
 
-        alloc.get_or_alloc_audio_bus(1, "out");
-        alloc.get_or_alloc_control_bus(1, "freq");
-        alloc.get_or_alloc_audio_bus(2, "out");
+        alloc.get_or_alloc_audio_bus(id(1), "out");
+        alloc.get_or_alloc_control_bus(id(1), "freq");
+        alloc.get_or_alloc_audio_bus(id(2), "out");
 
-        alloc.free_module_buses(1);
+        alloc.free_module_buses(id(1));
 
-        assert!(alloc.get_audio_bus(1, "out").is_none());
-        assert!(alloc.get_control_bus(1, "freq").is_none());
-        assert!(alloc.get_audio_bus(2, "out").is_some());
+        assert!(alloc.get_audio_bus(id(1), "out").is_none());
+        assert!(alloc.get_control_bus(id(1), "freq").is_none());
+        assert!(alloc.get_audio_bus(id(2), "out").is_some());
     }
 
     #[test]
     fn test_reset() {
         let mut alloc = BusAllocator::new();
 
-        alloc.get_or_alloc_audio_bus(1, "out");
-        alloc.get_or_alloc_control_bus(1, "freq");
+        alloc.get_or_alloc_audio_bus(id(1), "out");
+        alloc.get_or_alloc_control_bus(id(1), "freq");
 
         alloc.reset();
 
         // After reset, new allocations start fresh
-        let bus = alloc.get_or_alloc_audio_bus(1, "out");
+        let bus = alloc.get_or_alloc_audio_bus(id(1), "out");
         assert_eq!(bus, 16);
     }
 
@@ -170,19 +174,19 @@ mod tests {
         let mut alloc = BusAllocator::new();
 
         // Allocate mono bus
-        let bus1 = alloc.get_or_alloc_audio_bus_with_channels(1, "out", 1);
+        let bus1 = alloc.get_or_alloc_audio_bus_with_channels(id(1), "out", 1);
         assert_eq!(bus1, 16);
 
         // Next mono bus is adjacent
-        let bus2 = alloc.get_or_alloc_audio_bus_with_channels(2, "out", 1);
+        let bus2 = alloc.get_or_alloc_audio_bus_with_channels(id(2), "out", 1);
         assert_eq!(bus2, 17);
 
         // Stereo bus follows
-        let bus3 = alloc.get_or_alloc_audio_bus(3, "out");
+        let bus3 = alloc.get_or_alloc_audio_bus(id(3), "out");
         assert_eq!(bus3, 18);
 
         // Same module/port returns same bus
-        let bus1_again = alloc.get_or_alloc_audio_bus_with_channels(1, "out", 1);
+        let bus1_again = alloc.get_or_alloc_audio_bus_with_channels(id(1), "out", 1);
         assert_eq!(bus1_again, 16);
     }
 }

@@ -1356,7 +1356,7 @@ fn project_layer_group(
 // ============================================================================
 
 /// Get the VstPluginId for a given instrument and target
-fn get_vst_plugin_id(instrument: &Instrument, target: VstTarget) -> Option<u32> {
+fn get_vst_plugin_id(instrument: &Instrument, target: VstTarget) -> Option<imbolc_types::VstPluginId> {
     match target {
         VstTarget::Source => {
             if let SourceType::Vst(id) = instrument.source {
@@ -1525,7 +1525,7 @@ fn project_session(
                 .map(|s| s.to_string_lossy().to_string())
                 .unwrap_or_else(|| "VST Plugin".to_string());
             let plugin = VstPlugin {
-                id: 0,
+                id: imbolc_types::VstPluginId::new(0),
                 name,
                 plugin_path: path.clone(),
                 kind: *kind,

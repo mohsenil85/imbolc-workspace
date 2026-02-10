@@ -179,11 +179,12 @@ impl Default for PianoRollState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::InstrumentId;
 
     #[test]
     fn toggle_note_adds_and_removes() {
         let mut pr = PianoRollState::new();
-        pr.add_track(1);
+        pr.add_track(InstrumentId::new(1));
         pr.toggle_note(0, 60, 0, 480, 100);
         assert_eq!(pr.track_at(0).unwrap().notes.len(), 1);
         pr.toggle_note(0, 60, 0, 480, 100);
@@ -193,7 +194,7 @@ mod tests {
     #[test]
     fn notes_in_range_filters_by_tick() {
         let mut pr = PianoRollState::new();
-        pr.add_track(1);
+        pr.add_track(InstrumentId::new(1));
         pr.toggle_note(0, 60, 0, 480, 100);
         pr.toggle_note(0, 61, 480, 480, 100);
         let notes = pr.notes_in_range(0, 0, 480);
@@ -229,7 +230,7 @@ mod tests {
     #[test]
     fn notes_stay_sorted_after_toggle() {
         let mut pr = PianoRollState::new();
-        pr.add_track(1);
+        pr.add_track(InstrumentId::new(1));
         pr.toggle_note(0, 60, 480, 480, 100);
         pr.toggle_note(0, 62, 0, 480, 100);
         pr.toggle_note(0, 64, 240, 480, 100);

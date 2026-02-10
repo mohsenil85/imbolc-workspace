@@ -7,7 +7,7 @@ use crate::ui::{
     Action, BusAction, InputEvent, InstrumentAction, LayerGroupAction, MixerAction, MouseButton,
     MouseEvent, MouseEventKind, NavAction, Rect,
 };
-use imbolc_types::BusId;
+use imbolc_types::{BusId, EffectId};
 
 impl MixerPane {
     pub(super) fn handle_action_impl(
@@ -509,7 +509,7 @@ impl MixerPane {
             ActionId::Mixer(MixerActionId::MoveUp) => {
                 if self.bus_detail_section == BusDetailSection::Effects {
                     if let Some((ei, _)) = self.decode_bus_effect_cursor(state) {
-                        if ei > 0 {
+                        if ei > EffectId::new(0) {
                             return Action::Bus(BusAction::MoveEffect(bus_id, ei, -1));
                         }
                     }
@@ -628,7 +628,7 @@ impl MixerPane {
             ActionId::Mixer(MixerActionId::MoveUp) => {
                 if self.group_detail_section == GroupDetailSection::Effects {
                     if let Some((ei, _)) = self.decode_group_effect_cursor(state) {
-                        if ei > 0 {
+                        if ei > EffectId::new(0) {
                             return Action::LayerGroup(LayerGroupAction::MoveEffect(gid, ei, -1));
                         }
                     }

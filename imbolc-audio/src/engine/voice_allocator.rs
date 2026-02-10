@@ -252,6 +252,10 @@ mod tests {
     use super::*;
     use std::time::Duration;
 
+    fn id(n: u32) -> InstrumentId {
+        InstrumentId::new(n)
+    }
+
     fn make_voice(inst_id: InstrumentId, pitch: u8, group_id: i32, buses: (i32, i32, i32)) -> VoiceChain {
         VoiceChain {
             instrument_id: inst_id,
@@ -284,10 +288,10 @@ mod tests {
     fn test_control_buses_returned_on_cleanup_expired() {
         let mut alloc = VoiceAllocator::new();
         let buses = alloc.alloc_control_buses();
-        alloc.add(make_expired_voice(1, 60, 100, buses));
+        alloc.add(make_expired_voice(id(1), 60, 100, buses));
         // Also add a live voice that should NOT be cleaned up
         let buses2 = alloc.alloc_control_buses();
-        alloc.add(make_voice(1, 72, 200, buses2));
+        alloc.add(make_voice(id(1), 72, 200, buses2));
 
         assert_eq!(alloc.control_bus_pool_size(), 0);
         let expired = alloc.cleanup_expired();
@@ -302,8 +306,8 @@ mod tests {
         let mut alloc = VoiceAllocator::new();
         let buses1 = alloc.alloc_control_buses();
         let buses2 = alloc.alloc_control_buses();
-        alloc.add(make_voice(1, 60, 100, buses1));
-        alloc.add(make_voice(1, 72, 200, buses2));
+        alloc.add(make_voice(id(1), 60, 100, buses1));
+        alloc.add(make_voice(id(1), 72, 200, buses2));
 
         assert_eq!(alloc.control_bus_pool_size(), 0);
         let drained = alloc.drain_all();
@@ -316,11 +320,11 @@ mod tests {
     fn test_control_buses_returned_on_steal() {
         let mut alloc = VoiceAllocator::new();
         let buses = alloc.alloc_control_buses();
-        alloc.add(make_voice(1, 60, 100, buses));
+        alloc.add(make_voice(id(1), 60, 100, buses));
 
         assert_eq!(alloc.control_bus_pool_size(), 0);
         // Same-pitch retrigger should steal and return buses
-        let stolen = alloc.steal_voices(1, 60);
+        let stolen = alloc.steal_voices(id(1), 60);
         assert_eq!(stolen.len(), 1);
         assert_eq!(alloc.control_bus_pool_size(), 1);
     }
@@ -329,9 +333,9 @@ mod tests {
     fn test_remove_by_group_id() {
         let mut alloc = VoiceAllocator::new();
         let buses = alloc.alloc_control_buses();
-        alloc.add(make_voice(1, 60, 100, buses));
+        alloc.add(make_voice(id(1), 60, 100, buses));
         let buses2 = alloc.alloc_control_buses();
-        alloc.add(make_voice(1, 72, 200, buses2));
+        alloc.add(make_voice(id(1), 72, 200, buses2));
 
         assert_eq!(alloc.control_bus_pool_size(), 0);
         let removed = alloc.remove_by_group_id(100);
@@ -345,7 +349,7 @@ mod tests {
     fn test_remove_by_group_id_not_found() {
         let mut alloc = VoiceAllocator::new();
         let buses = alloc.alloc_control_buses();
-        alloc.add(make_voice(1, 60, 100, buses));
+        alloc.add(make_voice(id(1), 60, 100, buses));
 
         let removed = alloc.remove_by_group_id(999);
         assert!(removed.is_none());
@@ -359,12 +363,12 @@ mod tests {
         let buses1 = alloc.alloc_control_buses();
         let buses2 = alloc.alloc_control_buses();
         let buses3 = alloc.alloc_control_buses();
-        alloc.add(make_voice(1, 60, 100, buses1));
-        alloc.add(make_voice(2, 72, 200, buses2)); // different instrument
-        alloc.add(make_voice(1, 84, 300, buses3));
+        alloc.add(make_voice(id(1), 60, 100, buses1));
+        alloc.add(make_voice(id(2), 72, 200, buses2)); // different instrument
+        alloc.add(make_voice(id(1), 84, 300, buses3));
 
         assert_eq!(alloc.control_bus_pool_size(), 0);
-        let drained = alloc.drain_instrument(1);
+        let drained = alloc.drain_instrument(id(1));
         assert_eq!(drained.len(), 2);
         assert_eq!(alloc.control_bus_pool_size(), 2);
         assert_eq!(alloc.chains().len(), 1); // instrument 2 voice remains

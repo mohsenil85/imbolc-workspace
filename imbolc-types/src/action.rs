@@ -1120,9 +1120,9 @@ mod tests {
     #[test]
     fn merge_preserves_both_filter_params() {
         let mut a = AudioDirty::default();
-        a.filter_params[0] = Some((1, FilterParamKind::Cutoff, 500.0));
+        a.filter_params[0] = Some((InstrumentId::new(1), FilterParamKind::Cutoff, 500.0));
         let mut b = AudioDirty::default();
-        b.filter_params[0] = Some((1, FilterParamKind::Resonance, 0.7));
+        b.filter_params[0] = Some((InstrumentId::new(1), FilterParamKind::Resonance, 0.7));
         a.merge(b);
         assert!(a.filter_params[0].is_some());
         assert!(a.filter_params[1].is_some());
@@ -1137,11 +1137,11 @@ mod tests {
     fn merge_filter_overflow_escalates() {
         let mut a = AudioDirty::default();
         a.filter_params = [
-            Some((1, FilterParamKind::Cutoff, 500.0)),
-            Some((1, FilterParamKind::Resonance, 0.7)),
+            Some((InstrumentId::new(1), FilterParamKind::Cutoff, 500.0)),
+            Some((InstrumentId::new(1), FilterParamKind::Resonance, 0.7)),
         ];
         let mut b = AudioDirty::default();
-        b.filter_params[0] = Some((2, FilterParamKind::Cutoff, 1000.0));
+        b.filter_params[0] = Some((InstrumentId::new(2), FilterParamKind::Cutoff, 1000.0));
         a.merge(b);
         assert!(a.instruments, "overflow should escalate to instruments=true");
         assert!(a.filter_params.iter().all(|p| p.is_none()), "array should be cleared on overflow");
@@ -1149,15 +1149,15 @@ mod tests {
 
     #[test]
     fn merge_preserves_multiple_effect_params() {
-        let eid = 1u32;
+        let eid = EffectId::new(1);
         let mut a = AudioDirty::default();
-        a.effect_params[0] = Some((1, eid, 0, 0.5));
+        a.effect_params[0] = Some((InstrumentId::new(1), eid, 0, 0.5));
         let mut b = AudioDirty::default();
-        b.effect_params[0] = Some((1, eid, 1, 0.8));
+        b.effect_params[0] = Some((InstrumentId::new(1), eid, 1, 0.8));
         let mut c = AudioDirty::default();
-        c.effect_params[0] = Some((2, eid, 0, 0.3));
+        c.effect_params[0] = Some((InstrumentId::new(2), eid, 0, 0.3));
         let mut d = AudioDirty::default();
-        d.effect_params[0] = Some((2, eid, 1, 0.6));
+        d.effect_params[0] = Some((InstrumentId::new(2), eid, 1, 0.6));
         a.merge(b);
         a.merge(c);
         a.merge(d);
@@ -1168,14 +1168,14 @@ mod tests {
 
     #[test]
     fn merge_effect_overflow_escalates() {
-        let eid = 1u32;
+        let eid = EffectId::new(1);
         let mut a = AudioDirty::default();
         // Fill all 4 slots
         for i in 0..4 {
-            a.effect_params[i] = Some((1, eid, i, i as f32));
+            a.effect_params[i] = Some((InstrumentId::new(1), eid, i, i as f32));
         }
         let mut b = AudioDirty::default();
-        b.effect_params[0] = Some((2, eid, 0, 99.0));
+        b.effect_params[0] = Some((InstrumentId::new(2), eid, 0, 99.0));
         a.merge(b);
         assert!(a.instruments, "overflow should escalate to instruments=true");
         assert!(a.effect_params.iter().all(|p| p.is_none()));
@@ -1184,9 +1184,9 @@ mod tests {
     #[test]
     fn merge_preserves_both_lfo_params() {
         let mut a = AudioDirty::default();
-        a.lfo_params[0] = Some((1, LfoParamKind::Rate, 5.0));
+        a.lfo_params[0] = Some((InstrumentId::new(1), LfoParamKind::Rate, 5.0));
         let mut b = AudioDirty::default();
-        b.lfo_params[0] = Some((1, LfoParamKind::Depth, 0.8));
+        b.lfo_params[0] = Some((InstrumentId::new(1), LfoParamKind::Depth, 0.8));
         a.merge(b);
         assert!(a.lfo_params[0].is_some());
         assert!(a.lfo_params[1].is_some());
@@ -1197,11 +1197,11 @@ mod tests {
     fn merge_lfo_overflow_escalates() {
         let mut a = AudioDirty::default();
         a.lfo_params = [
-            Some((1, LfoParamKind::Rate, 5.0)),
-            Some((1, LfoParamKind::Depth, 0.8)),
+            Some((InstrumentId::new(1), LfoParamKind::Rate, 5.0)),
+            Some((InstrumentId::new(1), LfoParamKind::Depth, 0.8)),
         ];
         let mut b = AudioDirty::default();
-        b.lfo_params[0] = Some((2, LfoParamKind::Rate, 10.0));
+        b.lfo_params[0] = Some((InstrumentId::new(2), LfoParamKind::Rate, 10.0));
         a.merge(b);
         assert!(a.instruments, "overflow should escalate to instruments=true");
         assert!(a.lfo_params.iter().all(|p| p.is_none()));
@@ -1209,7 +1209,7 @@ mod tests {
 
     #[test]
     fn merge_bus_effect_overflow_escalates_to_session() {
-        let eid = 1u32;
+        let eid = EffectId::new(1);
         let mut a = AudioDirty::default();
         for i in 0..4 {
             a.bus_effect_params[i] = Some((BusId::new(1), eid, i, i as f32));
@@ -1224,7 +1224,7 @@ mod tests {
 
     #[test]
     fn merge_layer_group_effect_overflow_escalates_to_session() {
-        let eid = 1u32;
+        let eid = EffectId::new(1);
         let mut a = AudioDirty::default();
         for i in 0..4 {
             a.layer_group_effect_params[i] = Some((1, eid, i, i as f32));
@@ -1240,10 +1240,10 @@ mod tests {
     #[test]
     fn set_filter_param_fills_slots() {
         let mut d = AudioDirty::default();
-        d.set_filter_param(1, FilterParamKind::Cutoff, 500.0);
+        d.set_filter_param(InstrumentId::new(1), FilterParamKind::Cutoff, 500.0);
         assert!(d.filter_params[0].is_some());
         assert!(d.filter_params[1].is_none());
-        d.set_filter_param(1, FilterParamKind::Resonance, 0.7);
+        d.set_filter_param(InstrumentId::new(1), FilterParamKind::Resonance, 0.7);
         assert!(d.filter_params[1].is_some());
         assert!(!d.instruments);
     }
@@ -1251,9 +1251,9 @@ mod tests {
     #[test]
     fn set_filter_param_overflow_escalates() {
         let mut d = AudioDirty::default();
-        d.set_filter_param(1, FilterParamKind::Cutoff, 500.0);
-        d.set_filter_param(1, FilterParamKind::Resonance, 0.7);
-        d.set_filter_param(2, FilterParamKind::Cutoff, 1000.0);
+        d.set_filter_param(InstrumentId::new(1), FilterParamKind::Cutoff, 500.0);
+        d.set_filter_param(InstrumentId::new(1), FilterParamKind::Resonance, 0.7);
+        d.set_filter_param(InstrumentId::new(2), FilterParamKind::Cutoff, 1000.0);
         assert!(d.instruments, "overflow should escalate");
         assert!(d.filter_params.iter().all(|p| p.is_none()));
     }
@@ -1262,21 +1262,21 @@ mod tests {
     fn any_detects_filter_params() {
         let mut d = AudioDirty::default();
         assert!(!d.any());
-        d.filter_params[0] = Some((1, FilterParamKind::Cutoff, 500.0));
+        d.filter_params[0] = Some((InstrumentId::new(1), FilterParamKind::Cutoff, 500.0));
         assert!(d.any());
     }
 
     #[test]
     fn any_detects_effect_params() {
         let mut d = AudioDirty::default();
-        d.effect_params[0] = Some((1, 1u32, 0, 0.5));
+        d.effect_params[0] = Some((InstrumentId::new(1), EffectId::new(1), 0, 0.5));
         assert!(d.any());
     }
 
     #[test]
     fn any_detects_bus_effect_params() {
         let mut d = AudioDirty::default();
-        d.bus_effect_params[0] = Some((BusId::new(1), 1u32, 0, 0.5));
+        d.bus_effect_params[0] = Some((BusId::new(1), EffectId::new(1), 0, 0.5));
         assert!(d.any());
     }
 }

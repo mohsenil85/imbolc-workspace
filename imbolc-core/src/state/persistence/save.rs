@@ -58,7 +58,7 @@ fn save_session(
             format!("{:?}", session.scale),
             session.tuning_a4,
             session.snap as i32,
-            instruments.next_id,
+            instruments.next_id.get(),
             instruments.next_sampler_buffer_id,
             instruments.selected.map(|s| s as i64),
             instruments.next_layer_group_id,
@@ -200,7 +200,7 @@ fn save_instruments(conn: &Connection, instruments: &InstrumentState) -> SqlResu
         let groove_swing_grid = groove.swing_grid.as_ref().map(|g| format!("{:?}", g));
 
         inst_stmt.execute(params![
-            inst.id,
+            inst.id.get(),
             inst.name,
             pos as i32,
             source_type,
@@ -227,7 +227,7 @@ fn save_instruments(conn: &Connection, instruments: &InstrumentState) -> SqlResu
             channel_config,
             inst.convolution_ir_path.as_deref(),
             inst.layer_group,
-            inst.next_effect_id,
+            inst.next_effect_id.get(),
             eq_enabled,
             inst.arpeggiator.enabled as i32,
             format!("{:?}", inst.arpeggiator.direction),
@@ -247,28 +247,28 @@ fn save_instruments(conn: &Connection, instruments: &InstrumentState) -> SqlResu
         ])?;
 
         // Source params
-        save_params(conn, "instrument_source_params", "instrument_id", inst.id, &inst.source_params)?;
+        save_params(conn, "instrument_source_params", "instrument_id", inst.id.get(), &inst.source_params)?;
 
         // Effects
         let effects: Vec<_> = inst.effects().cloned().collect();
-        save_effects(conn, inst.id, &effects)?;
+        save_effects(conn, inst.id.get(), &effects)?;
 
         // Sends
         for send in &inst.sends {
             conn.execute(
                 "INSERT INTO instrument_sends (instrument_id, bus_id, level, enabled, tap_point)
                  VALUES (?1, ?2, ?3, ?4, ?5)",
-                params![inst.id, send.bus_id.get() as i32, send.level, send.enabled as i32, encode_tap_point(send.tap_point)],
+                params![inst.id.get(), send.bus_id.get() as i32, send.level, send.enabled as i32, encode_tap_point(send.tap_point)],
             )?;
         }
 
         // Filter modulations
         if let Some(f) = inst.filter() {
-            save_modulation(conn, inst.id, "cutoff", &f.cutoff.mod_source)?;
-            save_modulation(conn, inst.id, "resonance", &f.resonance.mod_source)?;
+            save_modulation(conn, inst.id.get(), "cutoff", &f.cutoff.mod_source)?;
+            save_modulation(conn, inst.id.get(), "resonance", &f.resonance.mod_source)?;
 
             // Filter extra params
-            save_params(conn, "instrument_filter_extra_params", "instrument_id", inst.id, &f.extra_params)?;
+            save_params(conn, "instrument_filter_extra_params", "instrument_id", inst.id.get(), &f.extra_params)?;
         }
 
         // EQ bands
@@ -278,7 +278,7 @@ fn save_instruments(conn: &Connection, instruments: &InstrumentState) -> SqlResu
                     "INSERT INTO instrument_eq_bands (instrument_id, band_index, band_type, freq, gain, q, enabled)
                      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
                     params![
-                        inst.id, i as i32, format!("{:?}", band.band_type),
+                        inst.id.get(), i as i32, format!("{:?}", band.band_type),
                         band.freq, band.gain, band.q, band.enabled as i32,
                     ],
                 )?;
@@ -286,25 +286,25 @@ fn save_instruments(conn: &Connection, instruments: &InstrumentState) -> SqlResu
         }
 
         // Processing chain order
-        save_processing_chain(conn, inst.id, &inst.processing_chain)?;
+        save_processing_chain(conn, inst.id.get(), &inst.processing_chain)?;
 
         // VST param values
         for (param_idx, value) in &inst.vst_param_values {
             conn.execute(
                 "INSERT INTO instrument_vst_params (instrument_id, param_index, value)
                  VALUES (?1, ?2, ?3)",
-                params![inst.id, param_idx, value],
+                params![inst.id.get(), param_idx, value],
             )?;
         }
 
         // Sampler config
         if let Some(ref config) = inst.sampler_config {
-            save_sampler_config(conn, inst.id, config)?;
+            save_sampler_config(conn, inst.id.get(), config)?;
         }
 
         // Drum sequencer
         if let Some(ref seq) = inst.drum_sequencer {
-            save_drum_sequencer(conn, inst.id, seq)?;
+            save_drum_sequencer(conn, inst.id.get(), seq)?;
         }
     }
 
@@ -354,7 +354,7 @@ fn save_effects_to(
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             effects_table, owner_col
         );
-        conn.execute(&sql, params![owner_id, effect.id, pos as i32, effect_type, effect.enabled as i32, vst_state])?;
+        conn.execute(&sql, params![owner_id, effect.id.get(), pos as i32, effect_type, effect.enabled as i32, vst_state])?;
 
         // Effect params
         let param_sql = format!(
@@ -365,7 +365,7 @@ fn save_effects_to(
         let mut stmt = conn.prepare(&param_sql)?;
         for (ppos, p) in effect.params.iter().enumerate() {
             let (vtype, vf, vi, vb) = encode_param_value(&p.value);
-            stmt.execute(params![owner_id, effect.id, ppos as i32, p.name, vtype, vf, vi, vb, p.min, p.max])?;
+            stmt.execute(params![owner_id, effect.id.get(), ppos as i32, p.name, vtype, vf, vi, vb, p.min, p.max])?;
         }
 
         // Effect VST param values
@@ -375,7 +375,7 @@ fn save_effects_to(
             vst_table, owner_col
         );
         for (param_idx, value) in &effect.vst_param_values {
-            conn.execute(&vst_sql, params![owner_id, effect.id, param_idx, value])?;
+            conn.execute(&vst_sql, params![owner_id, effect.id.get(), param_idx, value])?;
         }
     }
     Ok(())
@@ -395,7 +395,7 @@ fn save_processing_chain(
         let (stage_type, effect_id): (&str, Option<u32>) = match stage {
             imbolc_types::ProcessingStage::Filter(_) => ("filter", None),
             imbolc_types::ProcessingStage::Eq(_) => ("eq", None),
-            imbolc_types::ProcessingStage::Effect(e) => ("effect", Some(e.id)),
+            imbolc_types::ProcessingStage::Effect(e) => ("effect", Some(e.id.get())),
         };
         stmt.execute(params![instrument_id, pos as i32, stage_type, effect_id])?;
     }
@@ -441,7 +441,7 @@ fn save_modulation(
                     "INSERT INTO instrument_modulations (instrument_id, target_param, mod_type,
                         source_instrument_id, source_param_name)
                      VALUES (?1, ?2, 'InstrumentParam', ?3, ?4)",
-                    params![instrument_id, target_param, src_id, param_name],
+                    params![instrument_id, target_param, src_id.get(), param_name],
                 )?;
             }
         }
@@ -523,7 +523,7 @@ fn save_drum_sequencer(
                 pad.slice_end,
                 pad.reverse as i32,
                 pad.pitch as i32,
-                pad.instrument_id.map(|id| id as i64),
+                pad.instrument_id.map(|id| id.get() as i64),
                 pad.trigger_freq,
             ],
         )?;
@@ -691,7 +691,7 @@ fn save_piano_roll(conn: &Connection, session: &SessionState) -> SqlResult<()> {
             conn.execute(
                 "INSERT INTO piano_roll_tracks (instrument_id, position, polyphonic)
                  VALUES (?1, ?2, ?3)",
-                params![inst_id, pos as i32, track.polyphonic as i32],
+                params![inst_id.get(), pos as i32, track.polyphonic as i32],
             )?;
 
             for note in &track.notes {
@@ -699,7 +699,7 @@ fn save_piano_roll(conn: &Connection, session: &SessionState) -> SqlResult<()> {
                     "INSERT INTO piano_roll_notes (id, track_instrument_id, tick, duration, pitch, velocity, probability)
                      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
                     params![
-                        note_id, inst_id,
+                        note_id, inst_id.get(),
                         note.tick as i64, note.duration as i64,
                         note.pitch as i32, note.velocity as i32,
                         note.probability,
@@ -753,7 +753,7 @@ fn save_custom_synthdefs(conn: &Connection, session: &SessionState) -> SqlResult
             "INSERT INTO custom_synthdefs (id, name, synthdef_name, source_path)
              VALUES (?1, ?2, ?3, ?4)",
             params![
-                synth.id, synth.name, synth.synthdef_name,
+                synth.id.get(), synth.name, synth.synthdef_name,
                 synth.source_path.to_string_lossy().to_string(),
             ],
         )?;
@@ -762,7 +762,7 @@ fn save_custom_synthdefs(conn: &Connection, session: &SessionState) -> SqlResult
             conn.execute(
                 "INSERT INTO custom_synthdef_params (synthdef_id, position, name, default_val, min_val, max_val)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-                params![synth.id, pos as i32, param.name, param.default, param.min, param.max],
+                params![synth.id.get(), pos as i32, param.name, param.default, param.min, param.max],
             )?;
         }
     }
@@ -779,7 +779,7 @@ fn save_vst_plugins(conn: &Connection, session: &SessionState) -> SqlResult<()> 
             "INSERT INTO vst_plugins (id, name, plugin_path, kind)
              VALUES (?1, ?2, ?3, ?4)",
             params![
-                plugin.id, plugin.name,
+                plugin.id.get(), plugin.name,
                 plugin.plugin_path.to_string_lossy().to_string(),
                 format!("{:?}", plugin.kind),
             ],
@@ -790,7 +790,7 @@ fn save_vst_plugins(conn: &Connection, session: &SessionState) -> SqlResult<()> 
                 "INSERT INTO vst_plugin_params (plugin_id, position, param_index, name, default_val, label)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                 params![
-                    plugin.id, pos as i32, param.index,
+                    plugin.id.get(), pos as i32, param.index,
                     param.name, param.default, param.label.as_deref(),
                 ],
             )?;
@@ -809,7 +809,7 @@ fn save_midi_recording(conn: &Connection, session: &SessionState) -> SqlResult<(
         "INSERT INTO midi_recording_settings (id, live_input_instrument, note_passthrough, channel_filter)
          VALUES (1, ?1, ?2, ?3)",
         params![
-            midi.live_input_instrument.map(|id| id as i64),
+            midi.live_input_instrument.map(|id| id.get() as i64),
             midi.note_passthrough as i32,
             midi.channel_filter.map(|ch| ch as i32),
         ],
@@ -876,7 +876,7 @@ fn save_arrangement(conn: &Connection, session: &SessionState) -> SqlResult<()> 
         conn.execute(
             "INSERT INTO arrangement_clips (id, name, instrument_id, length_ticks)
              VALUES (?1, ?2, ?3, ?4)",
-            params![clip.id, clip.name, clip.instrument_id, clip.length_ticks as i64],
+            params![clip.id, clip.name, clip.instrument_id.get(), clip.length_ticks as i64],
         )?;
 
         // Clip notes
@@ -924,7 +924,7 @@ fn save_arrangement(conn: &Connection, session: &SessionState) -> SqlResult<()> 
             "INSERT INTO arrangement_placements (id, clip_id, instrument_id, start_tick, length_override)
              VALUES (?1, ?2, ?3, ?4, ?5)",
             params![
-                placement.id, placement.clip_id, placement.instrument_id,
+                placement.id, placement.clip_id, placement.instrument_id.get(),
                 placement.start_tick as i64,
                 placement.length_override.map(|l| l as i64),
             ],
@@ -1004,7 +1004,7 @@ pub fn encode_automation_target(
                 _ => None,
             };
             let param_name = encode_parameter_target(param_target);
-            (param_name, Some(*inst_id as i64), None, None, None, target_extra)
+            (param_name, Some(inst_id.get() as i64), None, None, None, target_extra)
         }
         AutomationTarget::Bus(bus_id, BusParameter::Level) => {
             ("BusLevel".to_string(), None, Some(bus_id.get() as i64), None, None, None)

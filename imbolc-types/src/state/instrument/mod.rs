@@ -142,14 +142,14 @@ impl MixerBus {
             mute: false,
             solo: false,
             effects: Vec::new(),
-            next_effect_id: 0,
+            next_effect_id: EffectId::new(0),
         }
     }
 
     /// Add an effect and return its stable EffectId.
     pub fn add_effect(&mut self, effect_type: EffectType) -> EffectId {
         let id = self.next_effect_id;
-        self.next_effect_id += 1;
+        self.next_effect_id = EffectId::new(self.next_effect_id.get() + 1);
         self.effects.push(EffectSlot::new(id, effect_type));
         id
     }
@@ -196,9 +196,9 @@ impl MixerBus {
         self.next_effect_id = self
             .effects
             .iter()
-            .map(|e| e.id)
+            .map(|e| e.id.get())
             .max()
-            .map_or(0, |m| m + 1);
+            .map_or(EffectId::new(0), |m| EffectId::new(m + 1));
     }
 }
 
@@ -233,7 +233,7 @@ impl LayerGroupMixer {
             output_target: OutputTarget::Master,
             sends,
             effects: Vec::new(),
-            next_effect_id: 0,
+            next_effect_id: EffectId::new(0),
             eq: Some(EqConfig::default()),
         }
     }
@@ -272,7 +272,7 @@ impl LayerGroupMixer {
     /// Add an effect and return its stable EffectId.
     pub fn add_effect(&mut self, effect_type: EffectType) -> EffectId {
         let id = self.next_effect_id;
-        self.next_effect_id += 1;
+        self.next_effect_id = EffectId::new(self.next_effect_id.get() + 1);
         self.effects.push(EffectSlot::new(id, effect_type));
         id
     }
@@ -319,9 +319,9 @@ impl LayerGroupMixer {
         self.next_effect_id = self
             .effects
             .iter()
-            .map(|e| e.id)
+            .map(|e| e.id.get())
             .max()
-            .map_or(0, |m| m + 1);
+            .map_or(EffectId::new(0), |m| EffectId::new(m + 1));
     }
 }
 
@@ -584,7 +584,7 @@ impl Instrument {
             convolution_ir_path: None,
             layer_group: None,
             layer_octave_offset: 0,
-            next_effect_id: 0,
+            next_effect_id: EffectId::new(0),
             groove: GrooveConfig::default(),
         }
     }
@@ -743,7 +743,7 @@ impl Instrument {
     /// Add an effect to the end of the chain. Returns its stable EffectId.
     pub fn add_effect(&mut self, effect_type: EffectType) -> EffectId {
         let id = self.next_effect_id;
-        self.next_effect_id += 1;
+        self.next_effect_id = EffectId::new(self.next_effect_id.get() + 1);
         self.processing_chain.push(ProcessingStage::Effect(EffectSlot::new(id, effect_type)));
         id
     }
@@ -780,9 +780,9 @@ impl Instrument {
     pub fn recalculate_next_effect_id(&mut self) {
         self.next_effect_id = self
             .effects()
-            .map(|e| e.id)
+            .map(|e| e.id.get())
             .max()
-            .map_or(0, |m| m + 1);
+            .map_or(EffectId::new(0), |m| EffectId::new(m + 1));
     }
 
     /// Sync sends with current bus IDs. Adds missing sends, keeps existing ones.
@@ -841,10 +841,11 @@ impl Instrument {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::VstPluginId;
 
     #[test]
     fn row_count_basic() {
-        let inst = Instrument::new(1, SourceType::Saw);
+        let inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
         let count = inst.total_editable_rows();
         // Saw: no sample row, default params + processing(empty=1) + lfo(4) + env(4)
         let expected = inst.source_params.len().max(1) + 1 + 4 + 4;
@@ -853,13 +854,13 @@ mod tests {
 
     #[test]
     fn section_for_row_first_is_source() {
-        let inst = Instrument::new(1, SourceType::Saw);
+        let inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
         assert_eq!(inst.section_for_row(0), InstrumentSection::Source);
     }
 
     #[test]
     fn row_info_returns_local_index() {
-        let inst = Instrument::new(1, SourceType::Saw);
+        let inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
         let source_rows = inst.source_params.len().max(1);
         // First row after source section should be Processing(0) with local_idx 0
         let (section, local_idx) = inst.row_info(source_rows);
@@ -869,7 +870,7 @@ mod tests {
 
     #[test]
     fn row_info_roundtrips_all_sections() {
-        let mut inst = Instrument::new(1, SourceType::Saw);
+        let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
         inst.toggle_filter();
         inst.add_effect(EffectType::Delay);
         let total = inst.total_editable_rows();
@@ -893,7 +894,7 @@ mod tests {
 
     #[test]
     fn vst_has_no_envelope_rows() {
-        let inst = Instrument::new(1, SourceType::Vst(0));
+        let inst = Instrument::new(InstrumentId::new(1), SourceType::Vst(VstPluginId::new(0)));
         let total = inst.total_editable_rows();
         for i in 0..total {
             assert_ne!(inst.section_for_row(i), InstrumentSection::Envelope);
@@ -902,14 +903,14 @@ mod tests {
 
     #[test]
     fn decode_effect_cursor_empty() {
-        let inst = Instrument::new(1, SourceType::Saw);
+        let inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
         assert!(inst.effects().next().is_none());
         assert_eq!(inst.decode_effect_cursor(0), None);
     }
 
     #[test]
     fn decode_effect_cursor_with_effects() {
-        let mut inst = Instrument::new(1, SourceType::Saw);
+        let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
         let id1 = inst.add_effect(EffectType::Delay);
         let id2 = inst.add_effect(EffectType::Reverb);
         assert_eq!(inst.decode_effect_cursor(0), Some((id1, None)));
@@ -919,7 +920,7 @@ mod tests {
 
     #[test]
     fn timestretch_has_sampler_config_and_correct_params() {
-        let inst = Instrument::new(1, SourceType::TimeStretch);
+        let inst = Instrument::new(InstrumentId::new(1), SourceType::TimeStretch);
         assert!(inst.sampler_config.is_some());
         let param_names: Vec<&str> = inst.source_params.iter().map(|p| p.name.as_str()).collect();
         assert!(param_names.contains(&"stretch"));
@@ -932,7 +933,7 @@ mod tests {
 
     #[test]
     fn timestretch_has_sample_row_in_count() {
-        let inst = Instrument::new(1, SourceType::TimeStretch);
+        let inst = Instrument::new(InstrumentId::new(1), SourceType::TimeStretch);
         let count = inst.total_editable_rows();
         // TimeStretch: 1 sample row + params + processing(empty=1) + lfo(4) + env(4)
         let expected = 1 + inst.source_params.len().max(1) + 1 + 4 + 4;
@@ -985,7 +986,7 @@ mod tests {
 
     #[test]
     fn instrument_add_remove_effect() {
-        let mut inst = Instrument::new(1, SourceType::Saw);
+        let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
         let id = inst.add_effect(EffectType::Delay);
         assert!(inst.effect_by_id(id).is_some());
         assert!(inst.remove_effect(id));
@@ -994,7 +995,7 @@ mod tests {
 
     #[test]
     fn decode_effect_cursor_from_slice_navigates_headers_and_params() {
-        let mut inst = Instrument::new(1, SourceType::Saw);
+        let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
         let id1 = inst.add_effect(EffectType::Delay);
         let id2 = inst.add_effect(EffectType::Reverb);
         let effects: Vec<_> = inst.effects().cloned().collect();
@@ -1013,7 +1014,7 @@ mod tests {
     fn effects_max_cursor_empty_and_populated() {
         assert_eq!(effects_max_cursor(&[]), 0);
 
-        let mut inst = Instrument::new(1, SourceType::Saw);
+        let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
         inst.add_effect(EffectType::Delay);
         inst.add_effect(EffectType::Reverb);
         let effects: Vec<_> = inst.effects().cloned().collect();
@@ -1023,7 +1024,7 @@ mod tests {
 
     #[test]
     fn offset_pitch_identity_at_zero() {
-        let inst = Instrument::new(1, SourceType::Saw);
+        let inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
         assert_eq!(inst.layer_octave_offset, 0);
         assert_eq!(inst.offset_pitch(60), 60);
         assert_eq!(inst.offset_pitch(0), 0);
@@ -1032,7 +1033,7 @@ mod tests {
 
     #[test]
     fn offset_pitch_positive() {
-        let mut inst = Instrument::new(1, SourceType::Saw);
+        let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
         inst.layer_octave_offset = 2;
         assert_eq!(inst.offset_pitch(60), 84);
         assert_eq!(inst.offset_pitch(48), 72);
@@ -1040,21 +1041,21 @@ mod tests {
 
     #[test]
     fn offset_pitch_negative() {
-        let mut inst = Instrument::new(1, SourceType::Saw);
+        let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
         inst.layer_octave_offset = -3;
         assert_eq!(inst.offset_pitch(60), 24);
     }
 
     #[test]
     fn offset_pitch_clamps_high() {
-        let mut inst = Instrument::new(1, SourceType::Saw);
+        let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
         inst.layer_octave_offset = 4;
         assert_eq!(inst.offset_pitch(120), 127);
     }
 
     #[test]
     fn offset_pitch_clamps_low() {
-        let mut inst = Instrument::new(1, SourceType::Saw);
+        let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
         inst.layer_octave_offset = -4;
         assert_eq!(inst.offset_pitch(10), 0);
     }
@@ -1096,7 +1097,7 @@ mod tests {
     fn processing_stage_is_methods() {
         let f = ProcessingStage::Filter(FilterConfig::new(FilterType::Lpf));
         let e = ProcessingStage::Eq(EqConfig::default());
-        let fx = ProcessingStage::Effect(EffectSlot::new(0, EffectType::Delay));
+        let fx = ProcessingStage::Effect(EffectSlot::new(EffectId::new(0), EffectType::Delay));
         assert!(f.is_filter());
         assert!(!f.is_eq());
         assert!(!f.is_effect());
@@ -1120,11 +1121,11 @@ mod tests {
 
     #[test]
     fn processing_stage_row_count_effect() {
-        let delay = ProcessingStage::Effect(EffectSlot::new(0, EffectType::Delay));
+        let delay = ProcessingStage::Effect(EffectSlot::new(EffectId::new(0), EffectType::Delay));
         let delay_params = EffectType::Delay.default_params().len();
         assert_eq!(delay.row_count(), 1 + delay_params);
 
-        let vst = ProcessingStage::Effect(EffectSlot::new(1, EffectType::Vst(0)));
+        let vst = ProcessingStage::Effect(EffectSlot::new(EffectId::new(1), EffectType::Vst(VstPluginId::new(0))));
         assert_eq!(vst.row_count(), 1);
     }
 
@@ -1132,7 +1133,7 @@ mod tests {
 
     #[test]
     fn filter_accessors() {
-        let mut inst = Instrument::new(1, SourceType::Saw);
+        let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
         assert!(inst.filter().is_none());
         assert_eq!(inst.filters().count(), 0);
 
@@ -1146,7 +1147,7 @@ mod tests {
 
     #[test]
     fn eq_accessors() {
-        let mut inst = Instrument::new(1, SourceType::Saw);
+        let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
         assert!(inst.eq().is_none());
         assert!(!inst.has_eq());
 
@@ -1160,7 +1161,7 @@ mod tests {
 
     #[test]
     fn effects_accessors() {
-        let mut inst = Instrument::new(1, SourceType::Saw);
+        let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
         assert_eq!(inst.effects().count(), 0);
 
         let id1 = inst.add_effect(EffectType::Delay);
@@ -1174,7 +1175,7 @@ mod tests {
 
     #[test]
     fn effect_by_id_through_mixed_chain() {
-        let mut inst = Instrument::new(1, SourceType::Saw);
+        let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
         inst.processing_chain.push(ProcessingStage::Filter(FilterConfig::new(FilterType::Lpf)));
         let id = inst.add_effect(EffectType::Delay);
         inst.processing_chain.push(ProcessingStage::Eq(EqConfig::default()));
@@ -1186,7 +1187,7 @@ mod tests {
 
     #[test]
     fn toggle_filter_insert_remove() {
-        let mut inst = Instrument::new(1, SourceType::Saw);
+        let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
         assert!(inst.filter().is_none());
         inst.toggle_filter();
         assert!(inst.filter().is_some());
@@ -1197,7 +1198,7 @@ mod tests {
 
     #[test]
     fn set_filter_replace_insert_remove() {
-        let mut inst = Instrument::new(1, SourceType::Saw);
+        let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
         inst.set_filter(Some(FilterType::Hpf));
         assert_eq!(inst.filter().unwrap().filter_type, FilterType::Hpf);
         inst.set_filter(Some(FilterType::Bpf));
@@ -1209,7 +1210,7 @@ mod tests {
 
     #[test]
     fn toggle_eq_single_instance_and_position() {
-        let mut inst = Instrument::new(1, SourceType::Saw);
+        let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
         inst.processing_chain.push(ProcessingStage::Filter(FilterConfig::new(FilterType::Lpf)));
         inst.add_effect(EffectType::Delay);
         inst.toggle_eq();
@@ -1221,7 +1222,7 @@ mod tests {
 
     #[test]
     fn add_remove_effect_chain_integrity() {
-        let mut inst = Instrument::new(1, SourceType::Saw);
+        let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
         inst.processing_chain.push(ProcessingStage::Filter(FilterConfig::new(FilterType::Lpf)));
         let id1 = inst.add_effect(EffectType::Delay);
         let id2 = inst.add_effect(EffectType::Reverb);
@@ -1236,7 +1237,7 @@ mod tests {
 
     #[test]
     fn move_stage_reorder() {
-        let mut inst = Instrument::new(1, SourceType::Saw);
+        let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
         let id = inst.add_effect(EffectType::Delay);
         inst.processing_chain.insert(0, ProcessingStage::Filter(FilterConfig::new(FilterType::Lpf)));
         assert!(inst.processing_chain[0].is_filter());
@@ -1248,7 +1249,7 @@ mod tests {
 
     #[test]
     fn move_stage_boundary_cases() {
-        let mut inst = Instrument::new(1, SourceType::Saw);
+        let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
         inst.add_effect(EffectType::Delay);
         assert!(!inst.move_stage(0, 1)); // only 1 element
         assert!(!inst.move_stage(0, -1));
@@ -1259,7 +1260,7 @@ mod tests {
 
     #[test]
     fn nav_empty_chain() {
-        let inst = Instrument::new(1, SourceType::Saw);
+        let inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
         let source_rows = inst.source_params.len().max(1);
         let (section, local) = inst.row_info(source_rows);
         assert_eq!(section, InstrumentSection::Processing(0));
@@ -1268,7 +1269,7 @@ mod tests {
 
     #[test]
     fn nav_filter_only() {
-        let mut inst = Instrument::new(1, SourceType::Saw);
+        let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
         inst.toggle_filter();
         let source_rows = inst.source_params.len().max(1);
         let (section, local) = inst.row_info(source_rows);
@@ -1282,7 +1283,7 @@ mod tests {
 
     #[test]
     fn nav_effects_only() {
-        let mut inst = Instrument::new(1, SourceType::Saw);
+        let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
         inst.add_effect(EffectType::Delay);
         let source_rows = inst.source_params.len().max(1);
         let delay_rows = 1 + EffectType::Delay.default_params().len();
@@ -1295,7 +1296,7 @@ mod tests {
 
     #[test]
     fn nav_mixed_order_effect_filter_eq() {
-        let mut inst = Instrument::new(1, SourceType::Saw);
+        let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
         inst.add_effect(EffectType::Delay);
         inst.processing_chain.push(ProcessingStage::Filter(FilterConfig::new(FilterType::Lpf)));
         inst.processing_chain.push(ProcessingStage::Eq(EqConfig::default()));
@@ -1317,9 +1318,9 @@ mod tests {
 
     #[test]
     fn nav_different_stage_sizes() {
-        let mut inst = Instrument::new(1, SourceType::Saw);
+        let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
         inst.processing_chain.push(ProcessingStage::Filter(FilterConfig::new(FilterType::Vowel)));
-        inst.processing_chain.push(ProcessingStage::Effect(EffectSlot::new(0, EffectType::Vst(0))));
+        inst.processing_chain.push(ProcessingStage::Effect(EffectSlot::new(EffectId::new(0), EffectType::Vst(VstPluginId::new(0)))));
 
         let source_rows = inst.source_params.len().max(1);
         let vowel_rows = 4;
@@ -1336,7 +1337,7 @@ mod tests {
 
     #[test]
     fn row_count_with_processing_chain() {
-        let mut inst = Instrument::new(1, SourceType::Saw);
+        let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
         let base = inst.total_editable_rows();
         inst.toggle_filter();
         let with_filter = inst.total_editable_rows();
@@ -1348,7 +1349,7 @@ mod tests {
 
     #[test]
     fn section_for_row_roundtrips_all() {
-        let mut inst = Instrument::new(1, SourceType::Saw);
+        let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
         inst.toggle_filter();
         inst.add_effect(EffectType::Delay);
         let total = inst.total_editable_rows();
@@ -1374,7 +1375,7 @@ mod tests {
 
     #[test]
     fn chain_index_queries() {
-        let mut inst = Instrument::new(1, SourceType::Saw);
+        let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
         let id = inst.add_effect(EffectType::Delay);
         inst.processing_chain.insert(0, ProcessingStage::Filter(FilterConfig::new(FilterType::Lpf)));
         inst.processing_chain.insert(1, ProcessingStage::Eq(EqConfig::default()));
@@ -1385,11 +1386,11 @@ mod tests {
 
     #[test]
     fn recalculate_next_effect_id() {
-        let mut inst = Instrument::new(1, SourceType::Saw);
+        let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
         inst.add_effect(EffectType::Delay);
         inst.add_effect(EffectType::Reverb);
-        inst.next_effect_id = 0;
+        inst.next_effect_id = EffectId::new(0);
         inst.recalculate_next_effect_id();
-        assert_eq!(inst.next_effect_id, 2);
+        assert_eq!(inst.next_effect_id, EffectId::new(2));
     }
 }

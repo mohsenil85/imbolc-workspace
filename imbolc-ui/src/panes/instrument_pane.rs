@@ -5,6 +5,7 @@ use crate::state::{AppState, OwnershipDisplayStatus, SourceType};
 use crate::ui::layout_helpers::center_rect;
 use crate::ui::{Rect, RenderBuf, Action, NavAction, InstrumentAction, PianoRollAction, SessionAction, Color, InputEvent, KeyCode, Keymap, MouseEvent, MouseEventKind, MouseButton, PadKeyboard, Pane, PianoKeyboard, Style, ToggleResult, translate_key};
 use crate::ui::action_id::{ActionId, InstrumentListActionId, ModeActionId};
+use imbolc_types::InstrumentId;
 
 fn source_color(source: SourceType) -> Color {
     match source {
@@ -426,7 +427,7 @@ impl Pane for InstrumentPane {
         // Get the currently selected instrument ID
         let instrument_id = state.instruments.selected_instrument()
             .map(|inst| inst.id)
-            .unwrap_or(0);
+            .unwrap_or(InstrumentId::new(0));
         // Flatten all released pitches (handles chords)
         released.into_iter()
             .map(|(_, pitches)| {

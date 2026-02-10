@@ -285,34 +285,37 @@ mod tests {
     #[test]
     fn bus_add_effect() {
         use crate::state::instrument::EffectType;
+        use crate::EffectId;
         let mut bus = MixerBus::new(BusId::new(1));
         let id = bus.add_effect(EffectType::Reverb);
-        assert_eq!(id, 0);
+        assert_eq!(id, EffectId::new(0));
         assert_eq!(bus.effects.len(), 1);
         assert_eq!(bus.effects[0].effect_type, EffectType::Reverb);
-        assert_eq!(bus.next_effect_id, 1);
+        assert_eq!(bus.next_effect_id, EffectId::new(1));
     }
 
     #[test]
     fn bus_add_multiple_effects() {
         use crate::state::instrument::EffectType;
+        use crate::EffectId;
         let mut bus = MixerBus::new(BusId::new(1));
         let id0 = bus.add_effect(EffectType::Reverb);
         let id1 = bus.add_effect(EffectType::Delay);
-        assert_eq!(id0, 0);
-        assert_eq!(id1, 1);
+        assert_eq!(id0, EffectId::new(0));
+        assert_eq!(id1, EffectId::new(1));
         assert_eq!(bus.effects.len(), 2);
-        assert_eq!(bus.next_effect_id, 2);
+        assert_eq!(bus.next_effect_id, EffectId::new(2));
     }
 
     #[test]
     fn bus_effect_by_id() {
         use crate::state::instrument::EffectType;
+        use crate::EffectId;
         let mut bus = MixerBus::new(BusId::new(1));
         let id = bus.add_effect(EffectType::Reverb);
         assert!(bus.effect_by_id(id).is_some());
         assert_eq!(bus.effect_by_id(id).unwrap().effect_type, EffectType::Reverb);
-        assert!(bus.effect_by_id(999).is_none());
+        assert!(bus.effect_by_id(EffectId::new(999)).is_none());
     }
 
     #[test]
@@ -342,12 +345,13 @@ mod tests {
     #[test]
     fn bus_recalculate_next_effect_id() {
         use crate::state::instrument::EffectType;
+        use crate::EffectId;
         let mut bus = MixerBus::new(BusId::new(1));
         bus.add_effect(EffectType::Reverb);
         bus.add_effect(EffectType::Delay);
-        bus.next_effect_id = 0; // simulate loading
+        bus.next_effect_id = EffectId::new(0); // simulate loading
         bus.recalculate_next_effect_id();
-        assert_eq!(bus.next_effect_id, 2);
+        assert_eq!(bus.next_effect_id, EffectId::new(2));
     }
 
     // ========================================================================
@@ -357,9 +361,10 @@ mod tests {
     #[test]
     fn layer_group_add_effect() {
         use crate::state::instrument::{EffectType, LayerGroupMixer};
+        use crate::EffectId;
         let mut gm = LayerGroupMixer::new(1, &[BusId::new(1), BusId::new(2)]);
         let id = gm.add_effect(EffectType::TapeComp);
-        assert_eq!(id, 0);
+        assert_eq!(id, EffectId::new(0));
         assert_eq!(gm.effects.len(), 1);
         assert_eq!(gm.effects[0].effect_type, EffectType::TapeComp);
     }

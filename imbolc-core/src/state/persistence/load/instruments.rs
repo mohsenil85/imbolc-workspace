@@ -184,7 +184,7 @@ pub(super) fn load_instruments(conn: &Connection, instruments: &mut InstrumentSt
         let chord_shape = r.chord_shape.as_deref().map(decode_chord_shape);
 
         // Create instrument with defaults, then override
-        let mut inst = Instrument::new(r.id, source);
+        let mut inst = Instrument::new(imbolc_types::InstrumentId::new(r.id), source);
         inst.name = r.name;
         inst.lfo = lfo;
         inst.amp_envelope = amp_envelope;
@@ -198,7 +198,7 @@ pub(super) fn load_instruments(conn: &Connection, instruments: &mut InstrumentSt
         inst.channel_config = decode_channel_config(&r.channel_config);
         inst.convolution_ir_path = r.convolution_ir_path;
         inst.layer_group = r.layer_group;
-        inst.next_effect_id = r.next_effect_id;
+        inst.next_effect_id = imbolc_types::EffectId::new(r.next_effect_id);
         inst.arpeggiator = arpeggiator;
         inst.chord_shape = chord_shape;
         inst.vst_state_path = r.vst_state_path.map(PathBuf::from);
@@ -256,7 +256,7 @@ pub(super) fn load_instruments(conn: &Connection, instruments: &mut InstrumentSt
                         }
                         "effect" => {
                             if let Some(eid) = eff_id {
-                                if let Some(idx) = effects.iter().position(|e| e.id == *eid) {
+                                if let Some(idx) = effects.iter().position(|e| e.id == imbolc_types::EffectId::new(*eid)) {
                                     inst.processing_chain.push(
                                         ProcessingStage::Effect(effects.remove(idx))
                                     );
@@ -441,7 +441,7 @@ fn load_modulation(
             })),
             "InstrumentParam" => {
                 if let (Some(id), Some(param)) = (src_id, src_param) {
-                    Some(ModSource::InstrumentParam(id, param))
+                    Some(ModSource::InstrumentParam(imbolc_types::InstrumentId::new(id), param))
                 } else {
                     None
                 }
@@ -572,7 +572,7 @@ fn load_drum_sequencer(
             seq.pads[idx].slice_end = slice_end;
             seq.pads[idx].reverse = reverse != 0;
             seq.pads[idx].pitch = pitch as i8;
-            seq.pads[idx].instrument_id = trigger_inst.map(|id| id as u32);
+            seq.pads[idx].instrument_id = trigger_inst.map(|id| imbolc_types::InstrumentId::new(id as u32));
             seq.pads[idx].trigger_freq = trigger_freq;
         }
     }

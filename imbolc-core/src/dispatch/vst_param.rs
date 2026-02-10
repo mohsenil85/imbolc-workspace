@@ -10,7 +10,7 @@ use crate::dispatch::automation::record_automation_point;
 use crate::dispatch::side_effects::AudioSideEffect;
 
 /// Compute VST state file path for an instrument source
-fn vst_state_path(instrument_id: u32, plugin_name: &str) -> PathBuf {
+fn vst_state_path(instrument_id: imbolc_types::InstrumentId, plugin_name: &str) -> PathBuf {
     let config_dir = dirs::config_dir()
         .unwrap_or_else(|| PathBuf::from("."));
     let sanitized: String = plugin_name.chars()
@@ -19,11 +19,11 @@ fn vst_state_path(instrument_id: u32, plugin_name: &str) -> PathBuf {
     config_dir
         .join("imbolc")
         .join("vst_states")
-        .join(format!("instrument_{}_{}.fxp", instrument_id, sanitized))
+        .join(format!("instrument_{}_{}.fxp", instrument_id.get(), sanitized))
 }
 
 /// Compute VST state file path for an effect slot
-fn vst_effect_state_path(instrument_id: u32, effect_id: u32, plugin_name: &str) -> PathBuf {
+fn vst_effect_state_path(instrument_id: imbolc_types::InstrumentId, effect_id: imbolc_types::EffectId, plugin_name: &str) -> PathBuf {
     let config_dir = dirs::config_dir()
         .unwrap_or_else(|| PathBuf::from("."));
     let sanitized: String = plugin_name.chars()
@@ -32,7 +32,7 @@ fn vst_effect_state_path(instrument_id: u32, effect_id: u32, plugin_name: &str) 
     config_dir
         .join("imbolc")
         .join("vst_states")
-        .join(format!("instrument_{}_fx_{}_{}.fxp", instrument_id, effect_id, sanitized))
+        .join(format!("instrument_{}_fx_{}_{}.fxp", instrument_id.get(), effect_id.get(), sanitized))
 }
 
 /// Get the VstPluginId for a given instrument and target

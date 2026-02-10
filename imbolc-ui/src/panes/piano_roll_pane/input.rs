@@ -3,16 +3,17 @@ use crate::state::AppState;
 use crate::ui::layout_helpers::center_rect;
 use crate::ui::{Rect, Action, InputEvent, KeyCode, MouseButton, MouseEvent, MouseEventKind, PianoRollAction, translate_key};
 use crate::ui::action_id::{ActionId, PianoRollActionId, ModeActionId};
+use imbolc_types::InstrumentId;
 
 use super::PianoRollPane;
 
 impl PianoRollPane {
     /// Get the instrument ID for the current track from state
-    fn current_instrument_id(&self, state: &AppState) -> u32 {
+    fn current_instrument_id(&self, state: &AppState) -> InstrumentId {
         state.session.piano_roll.track_order
             .get(self.current_track)
             .copied()
-            .unwrap_or(0)
+            .unwrap_or(InstrumentId::new(0))
     }
 }
 

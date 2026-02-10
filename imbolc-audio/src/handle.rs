@@ -472,8 +472,8 @@ impl AudioHandle {
         l.max(r)
     }
 
-    pub fn audio_in_waveform(&self, instrument_id: u32) -> Vec<f32> {
-        self.monitor.audio_in_waveform(instrument_id)
+    pub fn audio_in_waveform(&self, instrument_id: InstrumentId) -> Vec<f32> {
+        self.monitor.audio_in_waveform(instrument_id.get())
     }
 
     pub fn spectrum_bands(&self) -> [f32; 7] {
@@ -881,7 +881,7 @@ impl AudioHandle {
         })
     }
 
-    pub fn push_active_note(&mut self, instrument_id: u32, pitch: u8, duration_ticks: u32) {
+    pub fn push_active_note(&mut self, instrument_id: InstrumentId, pitch: u8, duration_ticks: u32) {
         self.send(AudioCmd::RegisterActiveNote {
             instrument_id,
             pitch,

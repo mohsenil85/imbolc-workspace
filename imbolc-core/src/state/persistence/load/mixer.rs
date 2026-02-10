@@ -22,7 +22,7 @@ pub(super) fn load_mixer(conn: &Connection, session: &mut SessionState) -> SqlRe
             mute: row.get::<_, i32>(4)? != 0,
             solo: row.get::<_, i32>(5)? != 0,
             effects: Vec::new(),
-            next_effect_id: 0,
+            next_effect_id: imbolc_types::EffectId::new(0),
         })
     })?;
 
@@ -108,7 +108,7 @@ pub(super) fn load_layer_group_mixers(conn: &Connection, session: &mut SessionSt
             output_target,
             sends,
             effects: Vec::new(),
-            next_effect_id: 0,
+            next_effect_id: imbolc_types::EffectId::new(0),
             eq: None,
         };
 

@@ -23,7 +23,20 @@ pub use dispatch::Dispatcher;
 pub use state::*;
 
 /// Unique identifier for an instrument.
-pub type InstrumentId = u32;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(transparent)]
+pub struct InstrumentId(u32);
+
+impl InstrumentId {
+    pub fn new(id: u32) -> Self { Self(id) }
+    pub fn get(self) -> u32 { self.0 }
+}
+
+impl std::fmt::Display for InstrumentId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 /// Newtype for bus identifiers. Bus IDs are always >= 1 (allocated by MixerState).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
@@ -50,10 +63,49 @@ impl std::fmt::Display for BusId {
 }
 
 /// Unique identifier for an effect slot within an instrument.
-pub type EffectId = u32;
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(transparent)]
+pub struct EffectId(u32);
+
+impl EffectId {
+    pub fn new(id: u32) -> Self { Self(id) }
+    pub fn get(self) -> u32 { self.0 }
+}
+
+impl std::fmt::Display for EffectId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 /// Unique identifier for a custom SynthDef.
-pub type CustomSynthDefId = u32;
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(transparent)]
+pub struct CustomSynthDefId(u32);
+
+impl CustomSynthDefId {
+    pub fn new(id: u32) -> Self { Self(id) }
+    pub fn get(self) -> u32 { self.0 }
+}
+
+impl std::fmt::Display for CustomSynthDefId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 /// Unique identifier for a VST plugin.
-pub type VstPluginId = u32;
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(transparent)]
+pub struct VstPluginId(u32);
+
+impl VstPluginId {
+    pub fn new(id: u32) -> Self { Self(id) }
+    pub fn get(self) -> u32 { self.0 }
+}
+
+impl std::fmt::Display for VstPluginId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}

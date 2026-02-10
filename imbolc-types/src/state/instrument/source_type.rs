@@ -606,13 +606,13 @@ mod tests {
 
     #[test]
     fn source_type_custom_id() {
-        assert_eq!(SourceType::Custom(5).custom_id(), Some(5));
+        assert_eq!(SourceType::Custom(CustomSynthDefId::new(5)).custom_id(), Some(CustomSynthDefId::new(5)));
         assert_eq!(SourceType::Saw.custom_id(), None);
     }
 
     #[test]
     fn source_type_vst_id() {
-        assert_eq!(SourceType::Vst(3).vst_id(), Some(3));
+        assert_eq!(SourceType::Vst(VstPluginId::new(3)).vst_id(), Some(VstPluginId::new(3)));
         assert_eq!(SourceType::Saw.vst_id(), None);
     }
 

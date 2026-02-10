@@ -4,7 +4,7 @@ use dioxus::prelude::*;
 
 use crate::dispatch::{use_dispatch, DispatchExt};
 use crate::state::SharedState;
-use imbolc_types::{Action, PianoRollAction};
+use imbolc_types::{Action, ClipId, InstrumentId, PianoRollAction};
 
 /// Number of visible pitch rows in the piano roll.
 const VISIBLE_PITCHES: u8 = 24;
@@ -22,8 +22,8 @@ const DEFAULT_VELOCITY: u8 = 100;
 /// Piano roll view for editing notes in a clip.
 #[component]
 pub fn PianoRollView(
-    clip_id: u32,
-    instrument_id: u32,
+    clip_id: ClipId,
+    instrument_id: InstrumentId,
     clip_length: u32,
 ) -> Element {
     let state = use_context::<Signal<SharedState>>();

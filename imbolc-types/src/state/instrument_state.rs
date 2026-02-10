@@ -30,7 +30,7 @@ impl InstrumentState {
         Self {
             instruments: Vec::new(),
             selected: None,
-            next_id: 0,
+            next_id: InstrumentId::new(0),
             next_sampler_buffer_id: 20000,
             editing_instrument_id: None,
             next_layer_group_id: 0,
@@ -51,7 +51,7 @@ impl InstrumentState {
 
     pub fn add_instrument(&mut self, source: SourceType) -> InstrumentId {
         let id = self.next_id;
-        self.next_id += 1;
+        self.next_id = InstrumentId::new(self.next_id.get() + 1);
         let instrument = Instrument::new(id, source);
         self.instruments.push(instrument);
         self.selected = Some(self.instruments.len() - 1);

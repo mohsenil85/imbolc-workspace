@@ -85,7 +85,7 @@ impl AudioEngine {
 
             let mut params: Vec<(String, f32)> = vec![
                 ("out".to_string(), source_out_bus as f32),
-                ("instrument_id".to_string(), instrument.id as f32),
+                ("instrument_id".to_string(), instrument.id.get() as f32),
             ];
             for p in &instrument.source_params {
                 let val = p.value.to_f32();
@@ -121,7 +121,7 @@ impl AudioEngine {
                 ("out".to_string(), source_out_bus as f32),
                 ("in".to_string(), bus_audio_bus as f32),
                 ("gain".to_string(), gain),
-                ("instrument_id".to_string(), instrument.id as f32),
+                ("instrument_id".to_string(), instrument.id.get() as f32),
             ];
 
             let client = self.backend.as_ref().ok_or("Not connected")?;
@@ -503,7 +503,7 @@ impl AudioEngine {
             let node_id = self.next_node_id;
             self.next_node_id += 1;
             let effect_out_bus = self.bus_allocator.get_or_alloc_audio_bus(
-                u32::MAX - bus.id.get() as u32,
+                InstrumentId::new(u32::MAX - bus.id.get() as u32),
                 &format!("bus_fx_{}_out", effect.id),
             );
 
@@ -582,7 +582,7 @@ impl AudioEngine {
             let node_id = self.next_node_id;
             self.next_node_id += 1;
             let eq_out_bus = self.bus_allocator.get_or_alloc_audio_bus(
-                u32::MAX - 256 - gm.group_id,
+                InstrumentId::new(u32::MAX - 256 - gm.group_id),
                 "group_eq_out",
             );
 
@@ -613,7 +613,7 @@ impl AudioEngine {
             let node_id = self.next_node_id;
             self.next_node_id += 1;
             let effect_out_bus = self.bus_allocator.get_or_alloc_audio_bus(
-                u32::MAX - 256 - gm.group_id,
+                InstrumentId::new(u32::MAX - 256 - gm.group_id),
                 &format!("group_fx_{}_out", effect.id),
             );
 
@@ -742,7 +742,7 @@ impl AudioEngine {
         // Allocate audio buses for each mixer bus first (needed by BusIn instruments)
         for bus in &session.mixer.buses {
             let bus_audio = self.bus_allocator.get_or_alloc_audio_bus(
-                u32::MAX - bus.id.get() as u32,
+                InstrumentId::new(u32::MAX - bus.id.get() as u32),
                 "bus_out",
             );
             self.bus_audio_buses.insert(bus.id, bus_audio);
@@ -751,7 +751,7 @@ impl AudioEngine {
         // Allocate audio buses for each active layer group
         for group_id in state.active_layer_groups() {
             let group_bus = self.bus_allocator.get_or_alloc_audio_bus(
-                u32::MAX - 256 - group_id,
+                InstrumentId::new(u32::MAX - 256 - group_id),
                 "layer_group_out",
             );
             self.layer_group_audio_buses.insert(group_id, group_bus);
@@ -997,7 +997,7 @@ impl AudioEngine {
         self.layer_group_audio_buses.clear();
         for group_id in state.active_layer_groups() {
             let group_bus = self.bus_allocator.get_or_alloc_audio_bus(
-                u32::MAX - 256 - group_id,
+                InstrumentId::new(u32::MAX - 256 - group_id),
                 "layer_group_out",
             );
             self.layer_group_audio_buses.insert(group_id, group_bus);
@@ -1222,7 +1222,7 @@ impl AudioEngine {
                 // Allocate audio buses for each mixer bus (needed by BusIn instruments)
                 for bus in &session.mixer.buses {
                     let bus_audio = self.bus_allocator.get_or_alloc_audio_bus(
-                        u32::MAX - bus.id.get() as u32,
+                        InstrumentId::new(u32::MAX - bus.id.get() as u32),
                         "bus_out",
                     );
                     self.bus_audio_buses.insert(bus.id, bus_audio);
@@ -1231,7 +1231,7 @@ impl AudioEngine {
                 // Allocate audio buses for each active layer group
                 for group_id in state.active_layer_groups() {
                     let group_bus = self.bus_allocator.get_or_alloc_audio_bus(
-                        u32::MAX - 256 - group_id,
+                        InstrumentId::new(u32::MAX - 256 - group_id),
                         "layer_group_out",
                     );
                     self.layer_group_audio_buses.insert(group_id, group_bus);

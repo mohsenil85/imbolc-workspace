@@ -102,7 +102,7 @@ pub(super) fn load_effects_from(
     let mut effects = Vec::new();
     for (effect_id, effect_type_str, enabled, vst_state) in effect_rows {
         let effect_type = decoders::decode_effect_type(&effect_type_str);
-        let mut slot = EffectSlot::new(effect_id, effect_type);
+        let mut slot = EffectSlot::new(imbolc_types::EffectId::new(effect_id), effect_type);
         slot.enabled = enabled != 0;
         slot.vst_state_path = vst_state.map(PathBuf::from);
 

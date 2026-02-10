@@ -6,7 +6,7 @@ use super::commands::AudioFeedback;
 use super::engine::AudioEngine;
 use crate::arp_state::ArpPlayState;
 use super::snapshot::{AutomationSnapshot, InstrumentSnapshot, PianoRollSnapshot, SessionSnapshot};
-use imbolc_types::AutomationTarget;
+use imbolc_types::{AutomationTarget, InstrumentId};
 use imbolc_types::SwingGrid;
 
 fn next_random(state: &mut u64) -> f32 {
@@ -20,8 +20,8 @@ pub fn tick_playback(
     session: &SessionSnapshot,
     automation_lanes: &AutomationSnapshot,
     engine: &mut AudioEngine,
-    active_notes: &mut Vec<(u32, u8, u32)>,
-    arp_states: &mut HashMap<u32, ArpPlayState>,
+    active_notes: &mut Vec<(InstrumentId, u8, u32)>,
+    arp_states: &mut HashMap<InstrumentId, ArpPlayState>,
     rng_state: &mut u64,
     feedback_tx: &Sender<AudioFeedback>,
     elapsed: Duration,
@@ -30,7 +30,7 @@ pub fn tick_playback(
 ) {
     // (instrument_id, pitch, velocity, duration, note_tick, probability, ticks_from_old_playhead)
     let mut playback_data: Option<(
-        Vec<(u32, u8, u8, u32, u32, f32, f64)>,
+        Vec<(InstrumentId, u8, u8, u32, u32, f32, f64)>,
         u32,
         u32,
         u32,
@@ -107,7 +107,7 @@ pub fn tick_playback(
                 effective_scan_end = clamped_end;
             };
 
-            let mut note_ons: Vec<(u32, u8, u8, u32, u32, f32, f64)> = Vec::new();
+            let mut note_ons: Vec<(InstrumentId, u8, u8, u32, u32, f32, f64)> = Vec::new();
             let any_solo = instruments.any_instrument_solo();
             for &instrument_id in &piano_roll.track_order {
                 if let Some(track) = piano_roll.tracks.get(&instrument_id) {
@@ -272,7 +272,7 @@ pub fn tick_playback(
             let _ = engine.send_automation_bundle(automation_msgs, engine.schedule_lookahead_secs);
         }
 
-        let mut note_offs: Vec<(u32, u8, u32)> = Vec::new();
+        let mut note_offs: Vec<(InstrumentId, u8, u32)> = Vec::new();
         for note in active_notes.iter_mut() {
             if note.2 <= tick_delta {
                 note_offs.push((note.0, note.1, note.2));
@@ -341,7 +341,7 @@ mod tests {
         elapsed: Duration,
         tick_accumulator: &mut f64,
         last_scheduled_tick: &mut Option<u32>,
-    ) -> Vec<(u32, u8, u32)> {
+    ) -> Vec<(InstrumentId, u8, u32)> {
         let mut active_notes = Vec::new();
         let mut arp_states = HashMap::new();
         let mut rng_state = 0u64;

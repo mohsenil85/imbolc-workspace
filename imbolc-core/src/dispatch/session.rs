@@ -169,7 +169,7 @@ pub(super) fn dispatch_session(
                                 // Create the custom synthdef entry
                                 let synthdef_name = parsed.name.clone();
                                 let custom = CustomSynthDef {
-                                    id: 0, // Will be set by registry.add()
+                                    id: imbolc_types::CustomSynthDefId::new(0), // Will be set by registry.add()
                                     name: parsed.name.clone(),
                                     synthdef_name: synthdef_name.clone(),
                                     source_path: path.clone(),
@@ -239,7 +239,7 @@ pub(super) fn dispatch_session(
 
             let param_count = params.len();
             let plugin = VstPlugin {
-                id: 0, // Will be set by registry.add()
+                id: imbolc_types::VstPluginId::new(0), // Will be set by registry.add()
                 name: name.clone(),
                 plugin_path: path.clone(),
                 kind,

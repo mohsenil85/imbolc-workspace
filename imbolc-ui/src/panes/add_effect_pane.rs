@@ -8,7 +8,7 @@ use crate::ui::{
     MouseEventKind, MouseButton, NavAction, Pane, SessionAction, Style,
 };
 use crate::action::{BusAction, LayerGroupAction};
-use imbolc_types::BusId;
+use imbolc_types::{BusId, VstPluginId};
 
 /// Target for the add-effect modal: which entity receives the new effect.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -68,7 +68,7 @@ impl AddEffectPane {
         Self::build_effect_list(&[])
     }
 
-    fn build_effect_list(vst_effects: &[(u32, EffectType)]) -> Vec<AddEffectOption> {
+    fn build_effect_list(vst_effects: &[(VstPluginId, EffectType)]) -> Vec<AddEffectOption> {
         let mut options = vec![
             AddEffectOption::Separator("── Dynamics ──"),
             AddEffectOption::Effect(EffectType::TapeComp),
@@ -131,7 +131,7 @@ impl AddEffectPane {
     }
 
     fn build_options(&self, vst_registry: &VstPluginRegistry) -> Vec<AddEffectOption> {
-        let vst_effects: Vec<(u32, EffectType)> = vst_registry
+        let vst_effects: Vec<(VstPluginId, EffectType)> = vst_registry
             .effects()
             .map(|p| (p.id, EffectType::Vst(p.id)))
             .collect();

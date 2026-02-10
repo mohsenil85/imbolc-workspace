@@ -43,13 +43,13 @@ impl VstPluginRegistry {
     pub fn new() -> Self {
         Self {
             plugins: Vec::new(),
-            next_id: 0,
+            next_id: VstPluginId::new(0),
         }
     }
 
     pub fn add(&mut self, mut plugin: VstPlugin) -> VstPluginId {
         let id = self.next_id;
-        self.next_id += 1;
+        self.next_id = VstPluginId::new(self.next_id.get() + 1);
         plugin.id = id;
         self.plugins.push(plugin);
         id
@@ -94,7 +94,7 @@ mod tests {
 
     fn make_plugin(name: &str, kind: VstPluginKind) -> VstPlugin {
         VstPlugin {
-            id: 0,
+            id: VstPluginId::new(0),
             name: name.to_string(),
             plugin_path: PathBuf::from("/tmp/test.vst3"),
             kind,
@@ -106,7 +106,7 @@ mod tests {
     fn registry_new_empty() {
         let reg = VstPluginRegistry::new();
         assert!(reg.is_empty());
-        assert_eq!(reg.next_id, 0);
+        assert_eq!(reg.next_id, VstPluginId::new(0));
     }
 
     #[test]
@@ -114,8 +114,8 @@ mod tests {
         let mut reg = VstPluginRegistry::new();
         let id0 = reg.add(make_plugin("A", VstPluginKind::Instrument));
         let id1 = reg.add(make_plugin("B", VstPluginKind::Effect));
-        assert_eq!(id0, 0);
-        assert_eq!(id1, 1);
+        assert_eq!(id0, VstPluginId::new(0));
+        assert_eq!(id1, VstPluginId::new(1));
     }
 
     #[test]

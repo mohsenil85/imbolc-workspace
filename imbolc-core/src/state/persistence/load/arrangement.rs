@@ -60,7 +60,7 @@ pub(super) fn load_midi_recording(conn: &Connection, session: &mut SessionState)
     ).optional()?;
 
     if let Some((live_inst, passthrough, channel)) = result {
-        session.midi_recording.live_input_instrument = live_inst.map(|v| v as u32);
+        session.midi_recording.live_input_instrument = live_inst.map(|v| imbolc_types::InstrumentId::new(v as u32));
         session.midi_recording.note_passthrough = passthrough != 0;
         session.midi_recording.channel_filter = channel.map(|v| v as u8);
     }
@@ -153,7 +153,7 @@ pub(super) fn load_arrangement(conn: &Connection, session: &mut SessionState) ->
     })?.collect::<SqlResult<_>>()?;
 
     for (id, name, inst_id, length) in clips {
-        let mut clip = Clip { id, name, instrument_id: inst_id, length_ticks: length, notes: Vec::new(), automation_lanes: Vec::new() };
+        let mut clip = Clip { id, name, instrument_id: imbolc_types::InstrumentId::new(inst_id), length_ticks: length, notes: Vec::new(), automation_lanes: Vec::new() };
 
         // Clip notes
         let mut note_stmt = conn.prepare(
@@ -215,7 +215,7 @@ pub(super) fn load_arrangement(conn: &Connection, session: &mut SessionState) ->
         Ok(ClipPlacement {
             id: row.get(0)?,
             clip_id: row.get(1)?,
-            instrument_id: row.get(2)?,
+            instrument_id: imbolc_types::InstrumentId::new(row.get::<_, u32>(2)?),
             start_tick: row.get::<_, i64>(3)? as u32,
             length_override: row.get::<_, Option<i64>>(4)?.map(|v| v as u32),
         })

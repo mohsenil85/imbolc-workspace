@@ -81,14 +81,14 @@ pub(crate) struct AudioThread {
     session: SessionSnapshot,
     piano_roll: PianoRollSnapshot,
     automation_lanes: AutomationSnapshot,
-    active_notes: Vec<(u32, u8, u32)>, // (instrument_id, pitch, duration_ticks)
+    active_notes: Vec<(InstrumentId, u8, u32)>, // (instrument_id, pitch, duration_ticks)
     last_tick: Instant,
     last_recording_secs: u64,
     last_recording_state: bool,
     /// Simple LCG random seed for probability/humanization
     rng_state: u64,
     /// Per-instrument arpeggiator runtime state
-    arp_states: HashMap<u32, ArpPlayState>,
+    arp_states: HashMap<InstrumentId, ArpPlayState>,
     /// Active render-to-WAV state
     render_state: Option<RenderState>,
     /// Active export state (master bounce or stem export)
@@ -484,7 +484,7 @@ impl AudioThread {
             LogEntryKind::Checkpoint { instruments, session, piano_roll, automation_lanes, rebuild_routing } => {
                 // Preserve drum sequencer playback state from old instruments
                 let mut instruments = instruments.clone();
-                let old_instruments: HashMap<u32, &_> = self.instruments.instruments
+                let old_instruments: HashMap<InstrumentId, &_> = self.instruments.instruments
                     .iter()
                     .map(|i| (i.id, i))
                     .collect();
@@ -730,7 +730,7 @@ impl AudioThread {
                 let _ = reply.send(result);
             }
             AudioCmd::StartStemExport { stems, reply } => {
-                let instrument_buses: Vec<(u32, i32, PathBuf)> = stems
+                let instrument_buses: Vec<(InstrumentId, i32, PathBuf)> = stems
                     .iter()
                     .filter_map(|(inst_id, path)| {
                         self.engine
@@ -902,7 +902,7 @@ impl AudioThread {
         }
     }
 
-    fn resolve_vst_node_id(&self, instrument_id: u32, target: VstTarget) -> Option<i32> {
+    fn resolve_vst_node_id(&self, instrument_id: InstrumentId, target: VstTarget) -> Option<i32> {
         let nodes = self.engine.node_map.get(&instrument_id)?;
         match target {
             VstTarget::Source => nodes.source,
@@ -913,7 +913,7 @@ impl AudioThread {
     }
 
     /// Resolve the VstPluginId for a given instrument and target
-    fn resolve_vst_plugin_id(&self, instrument_id: u32, target: VstTarget) -> Option<imbolc_types::VstPluginId> {
+    fn resolve_vst_plugin_id(&self, instrument_id: InstrumentId, target: VstTarget) -> Option<imbolc_types::VstPluginId> {
         let inst = self.instruments.instruments.iter()
             .find(|i| i.id == instrument_id)?;
         match target {

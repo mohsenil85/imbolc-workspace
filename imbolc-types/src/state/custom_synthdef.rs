@@ -36,13 +36,13 @@ impl CustomSynthDefRegistry {
     pub fn new() -> Self {
         Self {
             synthdefs: Vec::new(),
-            next_id: 0,
+            next_id: CustomSynthDefId::new(0),
         }
     }
 
     pub fn add(&mut self, mut synthdef: CustomSynthDef) -> CustomSynthDefId {
         let id = self.next_id;
-        self.next_id += 1;
+        self.next_id = CustomSynthDefId::new(self.next_id.get() + 1);
         synthdef.id = id;
         self.synthdefs.push(synthdef);
         id
@@ -59,7 +59,7 @@ mod tests {
 
     fn make_synthdef(name: &str) -> CustomSynthDef {
         CustomSynthDef {
-            id: 0,
+            id: CustomSynthDefId::new(0),
             name: name.to_string(),
             synthdef_name: format!("imbolc_{}", name),
             source_path: PathBuf::from("/tmp/test.scd"),
@@ -71,7 +71,7 @@ mod tests {
     fn registry_new_empty() {
         let reg = CustomSynthDefRegistry::new();
         assert!(reg.synthdefs.is_empty());
-        assert_eq!(reg.next_id, 0);
+        assert_eq!(reg.next_id, CustomSynthDefId::new(0));
     }
 
     #[test]
@@ -79,8 +79,8 @@ mod tests {
         let mut reg = CustomSynthDefRegistry::new();
         let id0 = reg.add(make_synthdef("first"));
         let id1 = reg.add(make_synthdef("second"));
-        assert_eq!(id0, 0);
-        assert_eq!(id1, 1);
+        assert_eq!(id0, CustomSynthDefId::new(0));
+        assert_eq!(id1, CustomSynthDefId::new(1));
     }
 
     #[test]
@@ -94,6 +94,6 @@ mod tests {
     #[test]
     fn registry_get_missing_returns_none() {
         let reg = CustomSynthDefRegistry::new();
-        assert!(reg.get(99).is_none());
+        assert!(reg.get(CustomSynthDefId::new(99)).is_none());
     }
 }

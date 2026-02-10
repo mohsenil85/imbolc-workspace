@@ -220,10 +220,11 @@ pub mod cc {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::InstrumentId;
 
     #[test]
     fn test_cc_mapping() {
-        let mapping = MidiCcMapping::new(1, AutomationTarget::filter_cutoff(0));
+        let mapping = MidiCcMapping::new(1, AutomationTarget::filter_cutoff(InstrumentId::new(0)));
 
         // CC 0 -> min (20 Hz for filter cutoff)
         let val_min = mapping.map_value(0);
@@ -240,7 +241,7 @@ mod tests {
 
     #[test]
     fn test_pitch_bend_config() {
-        let config = PitchBendConfig::new_for_sampler(0);
+        let config = PitchBendConfig::new_for_sampler(InstrumentId::new(0));
 
         // Center = normal playback
         let val_center = config.map_value(0);
@@ -260,7 +261,7 @@ mod tests {
         let mut state = MidiRecordingState::new();
 
         // Add CC mapping
-        state.add_cc_mapping(MidiCcMapping::new(1, AutomationTarget::filter_cutoff(0)));
+        state.add_cc_mapping(MidiCcMapping::new(1, AutomationTarget::filter_cutoff(InstrumentId::new(0))));
         assert!(state.find_cc_mapping(1, 0).is_some());
         assert!(state.find_cc_mapping(2, 0).is_none());
 

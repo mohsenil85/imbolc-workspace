@@ -4,13 +4,13 @@ use dioxus::prelude::*;
 
 use crate::components::common::Slider;
 use crate::dispatch::{use_dispatch, DispatchExt};
-use imbolc_types::{Action, EffectType, InstrumentAction, InstrumentId};
+use imbolc_types::{Action, EffectId, EffectType, InstrumentAction, InstrumentId};
 
 /// A single effect slot in the effects chain.
 #[component]
 pub fn EffectSlotComponent(
     instrument_id: InstrumentId,
-    effect_id: u32,
+    effect_id: EffectId,
     chain_index: usize,
     effect_name: String,
     enabled: bool,

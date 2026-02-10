@@ -5,7 +5,7 @@ use dioxus::prelude::*;
 use crate::components::common::{Meter, Slider};
 use crate::dispatch::{use_dispatch, DispatchExt};
 use crate::state::SharedState;
-use imbolc_types::{MixerAction, SessionAction};
+use imbolc_types::{InstrumentId, MixerAction, SessionAction};
 
 /// Mixer panel with channel strips for each instrument.
 #[component]
@@ -50,7 +50,7 @@ pub fn Mixer() -> Element {
 
 #[component]
 fn MixerChannel(
-    id: u32,
+    id: InstrumentId,
     name: String,
     level: f32,
     pan: f32,

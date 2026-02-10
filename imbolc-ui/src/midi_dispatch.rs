@@ -72,12 +72,13 @@ mod tests {
     use super::*;
     use crate::state::automation::AutomationTarget;
     use crate::state::midi_recording::MidiCcMapping;
+    use imbolc_types::InstrumentId;
 
     fn test_state() -> AppState {
         let mut state = AppState::new();
         // Add a CC mapping: CC 1 -> FilterCutoff of instrument 0
         state.session.midi_recording.add_cc_mapping(
-            MidiCcMapping::new(1, AutomationTarget::filter_cutoff(0)),
+            MidiCcMapping::new(1, AutomationTarget::filter_cutoff(InstrumentId::new(0))),
         );
         state
     }

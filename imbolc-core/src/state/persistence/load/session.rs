@@ -42,7 +42,7 @@ pub(super) fn load_session(conn: &Connection, session: &mut SessionState, instru
     session.scale = decode_scale(&row.4);
     session.tuning_a4 = row.5;
     session.snap = row.6 != 0;
-    instruments.next_id = row.7;
+    instruments.next_id = imbolc_types::InstrumentId::new(row.7);
     instruments.next_sampler_buffer_id = row.8;
     instruments.selected = row.9.map(|v| v as usize);
     instruments.next_layer_group_id = row.10;
@@ -184,8 +184,8 @@ pub(super) fn load_piano_roll(conn: &Connection, session: &mut SessionState) -> 
     let mut track_stmt = conn.prepare(
         "SELECT instrument_id, polyphonic FROM piano_roll_tracks ORDER BY position"
     )?;
-    let tracks: Vec<(u32, bool)> = track_stmt.query_map([], |row| {
-        Ok((row.get::<_, u32>(0)?, row.get::<_, i32>(1)? != 0))
+    let tracks: Vec<(imbolc_types::InstrumentId, bool)> = track_stmt.query_map([], |row| {
+        Ok((imbolc_types::InstrumentId::new(row.get::<_, u32>(0)?), row.get::<_, i32>(1)? != 0))
     })?.collect::<SqlResult<_>>()?;
 
     for (inst_id, polyphonic) in &tracks {
@@ -200,9 +200,9 @@ pub(super) fn load_piano_roll(conn: &Connection, session: &mut SessionState) -> 
         "SELECT track_instrument_id, tick, duration, pitch, velocity, probability
          FROM piano_roll_notes ORDER BY track_instrument_id, tick"
     )?;
-    let notes: Vec<(u32, Note)> = note_stmt.query_map([], |row| {
+    let notes: Vec<(imbolc_types::InstrumentId, Note)> = note_stmt.query_map([], |row| {
         Ok((
-            row.get::<_, u32>(0)?,
+            imbolc_types::InstrumentId::new(row.get::<_, u32>(0)?),
             Note {
                 tick: row.get::<_, u32>(1)?,
                 duration: row.get::<_, u32>(2)?,
@@ -246,7 +246,7 @@ pub(super) fn load_custom_synthdefs(conn: &Connection, session: &mut SessionStat
         })?.collect::<SqlResult<_>>()?;
 
         registry.add(CustomSynthDef {
-            id,
+            id: imbolc_types::CustomSynthDefId::new(id),
             name,
             synthdef_name,
             source_path: PathBuf::from(source_path),
@@ -287,7 +287,7 @@ pub(super) fn load_vst_plugins(conn: &Connection, session: &mut SessionState) ->
         })?.collect::<SqlResult<_>>()?;
 
         registry.add(VstPlugin {
-            id,
+            id: imbolc_types::VstPluginId::new(id),
             name,
             plugin_path: PathBuf::from(plugin_path),
             kind,

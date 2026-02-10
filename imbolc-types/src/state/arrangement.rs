@@ -407,11 +407,12 @@ impl ArrangementState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::InstrumentId;
 
     #[test]
     fn test_add_remove_clip() {
         let mut arr = ArrangementState::new();
-        let cid = arr.add_clip("Test".to_string(), 1, 384);
+        let cid = arr.add_clip("Test".to_string(), InstrumentId::new(1), 384);
         assert!(arr.clip(cid).is_some());
         assert_eq!(arr.clip(cid).unwrap().name, "Test");
 
@@ -422,8 +423,8 @@ mod tests {
     #[test]
     fn test_add_remove_placement() {
         let mut arr = ArrangementState::new();
-        let cid = arr.add_clip("Test".to_string(), 1, 384);
-        let pid = arr.add_placement(cid, 1, 0);
+        let cid = arr.add_clip("Test".to_string(), InstrumentId::new(1), 384);
+        let pid = arr.add_placement(cid, InstrumentId::new(1), 0);
 
         assert_eq!(arr.placements.len(), 1);
         arr.remove_placement(pid);
@@ -433,9 +434,9 @@ mod tests {
     #[test]
     fn test_cascade_delete() {
         let mut arr = ArrangementState::new();
-        let cid = arr.add_clip("Test".to_string(), 1, 384);
-        arr.add_placement(cid, 1, 0);
-        arr.add_placement(cid, 1, 384);
+        let cid = arr.add_clip("Test".to_string(), InstrumentId::new(1), 384);
+        arr.add_placement(cid, InstrumentId::new(1), 0);
+        arr.add_placement(cid, InstrumentId::new(1), 384);
 
         assert_eq!(arr.placements.len(), 2);
         arr.remove_clip(cid);
@@ -445,24 +446,24 @@ mod tests {
     #[test]
     fn test_remove_instrument_data() {
         let mut arr = ArrangementState::new();
-        let cid1 = arr.add_clip("Inst1".to_string(), 1, 384);
-        let cid2 = arr.add_clip("Inst2".to_string(), 2, 384);
+        let cid1 = arr.add_clip("Inst1".to_string(), InstrumentId::new(1), 384);
+        let cid2 = arr.add_clip("Inst2".to_string(), InstrumentId::new(2), 384);
 
-        arr.add_placement(cid1, 1, 0);
-        arr.add_placement(cid2, 2, 0);
+        arr.add_placement(cid1, InstrumentId::new(1), 0);
+        arr.add_placement(cid2, InstrumentId::new(2), 0);
 
-        arr.remove_instrument_data(1);
+        arr.remove_instrument_data(InstrumentId::new(1));
 
         assert!(arr.clip(cid1).is_none());
         assert!(arr.clip(cid2).is_some());
         assert_eq!(arr.placements.len(), 1);
-        assert_eq!(arr.placements[0].instrument_id, 2);
+        assert_eq!(arr.placements[0].instrument_id, InstrumentId::new(2));
     }
 
     #[test]
     fn test_flatten_to_notes() {
         let mut arr = ArrangementState::new();
-        let cid = arr.add_clip("Test".to_string(), 1, 384);
+        let cid = arr.add_clip("Test".to_string(), InstrumentId::new(1), 384);
 
         if let Some(clip) = arr.clip_mut(cid) {
             clip.notes.push(Note {
@@ -482,12 +483,12 @@ mod tests {
         }
 
         // Placement 1: Start at 0
-        arr.add_placement(cid, 1, 0);
+        arr.add_placement(cid, InstrumentId::new(1), 0);
         // Placement 2: Start at 384
-        arr.add_placement(cid, 1, 384);
+        arr.add_placement(cid, InstrumentId::new(1), 384);
 
         let flat = arr.flatten_to_notes();
-        let notes = flat.get(&1).unwrap();
+        let notes = flat.get(&InstrumentId::new(1)).unwrap();
 
         assert_eq!(notes.len(), 4);
         assert_eq!(notes[0].tick, 0);
@@ -500,7 +501,7 @@ mod tests {
     #[test]
     fn test_flatten_with_override_and_clamp() {
         let mut arr = ArrangementState::new();
-        let cid = arr.add_clip("Test".to_string(), 1, 100);
+        let cid = arr.add_clip("Test".to_string(), InstrumentId::new(1), 100);
 
         if let Some(clip) = arr.clip_mut(cid) {
             // Note at 0, duration 50
@@ -521,11 +522,11 @@ mod tests {
             });
         }
 
-        let pid = arr.add_placement(cid, 1, 0);
+        let pid = arr.add_placement(cid, InstrumentId::new(1), 0);
         arr.resize_placement(pid, Some(80)); // Trim to 80
 
         let flat = arr.flatten_to_notes();
-        let notes = flat.get(&1).unwrap();
+        let notes = flat.get(&InstrumentId::new(1)).unwrap();
 
         // Should have note at 0 (full duration 50 < 80)
         // Should have note at 60 (clamped duration: 80 - 60 = 20)
@@ -538,10 +539,10 @@ mod tests {
     #[test]
     fn test_arrangement_length() {
         let mut arr = ArrangementState::new();
-        let cid = arr.add_clip("Test".to_string(), 1, 120);
+        let cid = arr.add_clip("Test".to_string(), InstrumentId::new(1), 120);
 
-        arr.add_placement(cid, 1, 0);
-        arr.add_placement(cid, 1, 240);
+        arr.add_placement(cid, InstrumentId::new(1), 0);
+        arr.add_placement(cid, InstrumentId::new(1), 240);
 
         assert_eq!(arr.arrangement_length(), 360);
     }
@@ -549,32 +550,32 @@ mod tests {
     #[test]
     fn test_placement_at() {
         let mut arr = ArrangementState::new();
-        let cid = arr.add_clip("Test".to_string(), 1, 100);
-        arr.add_placement(cid, 1, 20);
+        let cid = arr.add_clip("Test".to_string(), InstrumentId::new(1), 100);
+        arr.add_placement(cid, InstrumentId::new(1), 20);
 
-        assert!(arr.placement_at(1, 10).is_none());
-        assert!(arr.placement_at(1, 20).is_some());
-        assert!(arr.placement_at(1, 50).is_some());
-        assert!(arr.placement_at(1, 120).is_none());
+        assert!(arr.placement_at(InstrumentId::new(1), 10).is_none());
+        assert!(arr.placement_at(InstrumentId::new(1), 20).is_some());
+        assert!(arr.placement_at(InstrumentId::new(1), 50).is_some());
+        assert!(arr.placement_at(InstrumentId::new(1), 120).is_none());
     }
 
     #[test]
     fn test_flatten_automation_single_clip() {
         let mut arr = ArrangementState::new();
-        let cid = arr.add_clip("Test".to_string(), 1, 384);
+        let cid = arr.add_clip("Test".to_string(), InstrumentId::new(1), 384);
 
         if let Some(clip) = arr.clip_mut(cid) {
-            let mut lane = AutomationLane::new(0, AutomationTarget::level(1));
+            let mut lane = AutomationLane::new(0, AutomationTarget::level(InstrumentId::new(1)));
             lane.points.push(AutomationPoint::new(0, 0.0));
             lane.points.push(AutomationPoint::new(192, 1.0));
             clip.automation_lanes.push(lane);
         }
 
-        arr.add_placement(cid, 1, 100);
+        arr.add_placement(cid, InstrumentId::new(1), 100);
 
         let flat = arr.flatten_automation();
         assert_eq!(flat.len(), 1);
-        assert_eq!(flat[0].target, AutomationTarget::level(1));
+        assert_eq!(flat[0].target, AutomationTarget::level(InstrumentId::new(1)));
         assert_eq!(flat[0].points.len(), 2);
         assert_eq!(flat[0].points[0].tick, 100);
         assert_eq!(flat[0].points[1].tick, 292);
@@ -583,17 +584,17 @@ mod tests {
     #[test]
     fn test_flatten_automation_multiple_placements() {
         let mut arr = ArrangementState::new();
-        let cid = arr.add_clip("Test".to_string(), 1, 200);
+        let cid = arr.add_clip("Test".to_string(), InstrumentId::new(1), 200);
 
         if let Some(clip) = arr.clip_mut(cid) {
-            let mut lane = AutomationLane::new(0, AutomationTarget::filter_cutoff(1));
+            let mut lane = AutomationLane::new(0, AutomationTarget::filter_cutoff(InstrumentId::new(1)));
             lane.points.push(AutomationPoint::new(0, 0.5));
             lane.points.push(AutomationPoint::new(100, 1.0));
             clip.automation_lanes.push(lane);
         }
 
-        arr.add_placement(cid, 1, 0);
-        arr.add_placement(cid, 1, 500);
+        arr.add_placement(cid, InstrumentId::new(1), 0);
+        arr.add_placement(cid, InstrumentId::new(1), 500);
 
         let flat = arr.flatten_automation();
         assert_eq!(flat.len(), 1);
@@ -608,8 +609,8 @@ mod tests {
     #[test]
     fn test_flatten_automation_empty_clip() {
         let mut arr = ArrangementState::new();
-        let cid = arr.add_clip("Test".to_string(), 1, 384);
-        arr.add_placement(cid, 1, 0);
+        let cid = arr.add_clip("Test".to_string(), InstrumentId::new(1), 384);
+        arr.add_placement(cid, InstrumentId::new(1), 0);
 
         let flat = arr.flatten_automation();
         assert!(flat.is_empty());
@@ -619,24 +620,24 @@ mod tests {
     fn test_flatten_automation_overlapping_dedup() {
         let mut arr = ArrangementState::new();
         // Two clips with same target, placed so they produce points at the same tick
-        let cid1 = arr.add_clip("A".to_string(), 1, 100);
-        let cid2 = arr.add_clip("B".to_string(), 1, 100);
+        let cid1 = arr.add_clip("A".to_string(), InstrumentId::new(1), 100);
+        let cid2 = arr.add_clip("B".to_string(), InstrumentId::new(1), 100);
 
         if let Some(clip) = arr.clip_mut(cid1) {
-            let mut lane = AutomationLane::new(0, AutomationTarget::level(1));
+            let mut lane = AutomationLane::new(0, AutomationTarget::level(InstrumentId::new(1)));
             lane.points.push(AutomationPoint::new(50, 0.2));
             clip.automation_lanes.push(lane);
         }
         if let Some(clip) = arr.clip_mut(cid2) {
-            let mut lane = AutomationLane::new(1, AutomationTarget::level(1));
+            let mut lane = AutomationLane::new(1, AutomationTarget::level(InstrumentId::new(1)));
             lane.points.push(AutomationPoint::new(0, 0.8));
             clip.automation_lanes.push(lane);
         }
 
         // Place clip1 at tick 0 → point at tick 50
         // Place clip2 at tick 50 → point at tick 50 (conflict!)
-        arr.add_placement(cid1, 1, 0);
-        arr.add_placement(cid2, 1, 50);
+        arr.add_placement(cid1, InstrumentId::new(1), 0);
+        arr.add_placement(cid2, InstrumentId::new(1), 50);
 
         let flat = arr.flatten_automation();
         assert_eq!(flat.len(), 1);
@@ -650,17 +651,17 @@ mod tests {
     #[test]
     fn test_flatten_automation_respects_effective_length() {
         let mut arr = ArrangementState::new();
-        let cid = arr.add_clip("Test".to_string(), 1, 200);
+        let cid = arr.add_clip("Test".to_string(), InstrumentId::new(1), 200);
 
         if let Some(clip) = arr.clip_mut(cid) {
-            let mut lane = AutomationLane::new(0, AutomationTarget::pan(1));
+            let mut lane = AutomationLane::new(0, AutomationTarget::pan(InstrumentId::new(1)));
             lane.points.push(AutomationPoint::new(0, 0.0));
             lane.points.push(AutomationPoint::new(50, 0.5));
             lane.points.push(AutomationPoint::new(150, 1.0)); // Past trim point
             clip.automation_lanes.push(lane);
         }
 
-        let pid = arr.add_placement(cid, 1, 0);
+        let pid = arr.add_placement(cid, InstrumentId::new(1), 0);
         arr.resize_placement(pid, Some(100)); // Trim to 100
 
         let flat = arr.flatten_automation();

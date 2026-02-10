@@ -8,6 +8,7 @@ use crate::state::AppState;
 use crate::ui::layout_helpers::center_rect;
 use crate::ui::{Rect, RenderBuf, Action, InputEvent, Keymap, MouseEvent, Pane, PianoKeyboard, PianoRollAction, ToggleResult};
 use crate::ui::action_id::ActionId;
+use imbolc_types::InstrumentId;
 
 pub struct PianoRollPane {
     keymap: Keymap,
@@ -180,7 +181,7 @@ impl Pane for PianoRollPane {
         let instrument_id = state.session.piano_roll.track_order
             .get(self.current_track)
             .copied()
-            .unwrap_or(0);
+            .unwrap_or(InstrumentId::new(0));
         // Flatten all released pitches (handles chords)
         released.into_iter()
             .map(|(_, pitches)| {

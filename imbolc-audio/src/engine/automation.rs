@@ -1,6 +1,6 @@
 use super::backend::{AudioBackend, BackendMessage, RawArg, build_n_set_message};
 use super::AudioEngine;
-use imbolc_types::{AutomationTarget, InstrumentState, SessionState};
+use imbolc_types::{AutomationTarget, InstrumentId, InstrumentState, SessionState};
 use imbolc_types::{BusParameter, GlobalParameter, InstrumentParameter, ParameterTarget};
 
 impl AudioEngine {
@@ -38,7 +38,7 @@ impl AudioEngine {
     fn apply_instrument_automation(
         &self,
         backend: &dyn AudioBackend,
-        instrument_id: u32,
+        instrument_id: InstrumentId,
         param: &InstrumentParameter,
         value: f32,
         state: &mut InstrumentState,
@@ -55,7 +55,7 @@ impl AudioEngine {
     fn apply_parameter_target(
         &self,
         backend: &dyn AudioBackend,
-        instrument_id: u32,
+        instrument_id: InstrumentId,
         param: &ParameterTarget,
         value: f32,
         state: &mut InstrumentState,
@@ -347,7 +347,7 @@ impl AudioEngine {
     fn collect_instrument_messages(
         &self,
         msgs: &mut Vec<BackendMessage>,
-        instrument_id: u32,
+        instrument_id: InstrumentId,
         param: &InstrumentParameter,
         value: f32,
         state: &mut InstrumentState,
@@ -364,7 +364,7 @@ impl AudioEngine {
     fn collect_parameter_target_messages(
         &self,
         msgs: &mut Vec<BackendMessage>,
-        instrument_id: u32,
+        instrument_id: InstrumentId,
         param: &ParameterTarget,
         value: f32,
         state: &mut InstrumentState,
