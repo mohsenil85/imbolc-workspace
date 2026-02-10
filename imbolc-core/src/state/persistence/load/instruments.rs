@@ -199,8 +199,8 @@ pub(super) fn load_instruments(conn: &Connection, instruments: &mut InstrumentSt
         inst.convolution_ir_path = r.convolution_ir_path;
         inst.layer_group = r.layer_group;
         inst.next_effect_id = imbolc_types::EffectId::new(r.next_effect_id);
-        inst.arpeggiator = arpeggiator;
-        inst.chord_shape = chord_shape;
+        inst.note_input.arpeggiator = arpeggiator;
+        inst.note_input.chord_shape = chord_shape;
         inst.vst_state_path = r.vst_state_path.map(PathBuf::from);
         inst.groove = groove;
 

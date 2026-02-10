@@ -119,7 +119,7 @@ pub(super) fn dispatch_piano_roll(
                 for &target_id in &targets {
                     if let Some(inst) = state.instruments.instrument(target_id) {
                         if state.effective_instrument_mute(inst) { continue; }
-                        let expanded: Vec<u8> = match inst.chord_shape {
+                        let expanded: Vec<u8> = match inst.note_input.chord_shape {
                             Some(shape) => shape.expand(pitch),
                             None => vec![pitch],
                         };
@@ -144,7 +144,7 @@ pub(super) fn dispatch_piano_roll(
             // Record note only on the original track (not siblings)
             if state.session.piano_roll.recording {
                 let chord_shape = state.instruments.instrument(instrument_id)
-                    .and_then(|inst| inst.chord_shape);
+                    .and_then(|inst| inst.note_input.chord_shape);
                 let record_pitches: Vec<u8> = match chord_shape {
                     Some(shape) => shape.expand(pitch),
                     None => vec![pitch],
@@ -174,7 +174,7 @@ pub(super) fn dispatch_piano_roll(
                     if let Some(inst) = state.instruments.instrument(target_id) {
                         if state.effective_instrument_mute(inst) { continue; }
                         for &pitch in pitches {
-                            let expanded: Vec<u8> = match inst.chord_shape {
+                            let expanded: Vec<u8> = match inst.note_input.chord_shape {
                                 Some(shape) => shape.expand(pitch),
                                 None => vec![pitch],
                             };
@@ -200,7 +200,7 @@ pub(super) fn dispatch_piano_roll(
             // Record chord notes only on the original track (not siblings)
             if state.session.piano_roll.recording {
                 let chord_shape = state.instruments.instrument(instrument_id)
-                    .and_then(|inst| inst.chord_shape);
+                    .and_then(|inst| inst.note_input.chord_shape);
                 let all_pitches: Vec<u8> = pitches.iter().flat_map(|&pitch| {
                     match chord_shape {
                         Some(shape) => shape.expand(pitch),

@@ -185,7 +185,7 @@ pub fn tick_playback(
                 // Check if this instrument has arpeggiator enabled
                 let arp_enabled = instruments.instruments.iter()
                     .find(|inst| inst.id == instrument_id)
-                    .map(|inst| inst.arpeggiator.enabled)
+                    .map(|inst| inst.note_input.arpeggiator.enabled)
                     .unwrap_or(false);
 
                 if arp_enabled {

@@ -19,7 +19,7 @@ pub(super) fn handle_play_note(
             for &target_id in &targets {
                 if let Some(inst) = state.instruments.instrument(target_id) {
                     if state.effective_instrument_mute(inst) { continue; }
-                    let pitches = match inst.chord_shape {
+                    let pitches = match inst.note_input.chord_shape {
                         Some(shape) => shape.expand(pitch),
                         None => vec![pitch],
                     };
@@ -61,7 +61,7 @@ pub(super) fn handle_play_notes(
                 if let Some(inst) = state.instruments.instrument(target_id) {
                     if state.effective_instrument_mute(inst) { continue; }
                     for &pitch in pitches {
-                        let expanded = match inst.chord_shape {
+                        let expanded = match inst.note_input.chord_shape {
                             Some(shape) => shape.expand(pitch),
                             None => vec![pitch],
                         };

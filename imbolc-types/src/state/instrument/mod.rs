@@ -21,6 +21,22 @@ use super::groove::GrooveConfig;
 use super::sampler::SamplerConfig;
 use crate::{BusId, EffectId, InstrumentId, Param, ParamIndex};
 
+/// Arpeggiator and chord-shape configuration for an instrument.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NoteInputConfig {
+    pub arpeggiator: ArpeggiatorConfig,
+    pub chord_shape: Option<ChordShape>,
+}
+
+impl Default for NoteInputConfig {
+    fn default() -> Self {
+        Self {
+            arpeggiator: ArpeggiatorConfig::default(),
+            chord_shape: None,
+        }
+    }
+}
+
 /// Whether an instrument's signal chain is mono or stereo.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum ChannelConfig {
@@ -403,10 +419,8 @@ pub struct Instrument {
     pub vst_param_values: Vec<(u32, f32)>,
     // Path to saved VST plugin state file (.fxp)
     pub vst_state_path: Option<PathBuf>,
-    /// Arpeggiator configuration
-    pub arpeggiator: ArpeggiatorConfig,
-    /// Chord shape (None = single notes, Some = expand to chord)
-    pub chord_shape: Option<ChordShape>,
+    /// Arpeggiator and chord input configuration
+    pub note_input: NoteInputConfig,
     /// Path to loaded impulse response file for convolution reverb
     pub convolution_ir_path: Option<String>,
     /// Layer group ID: instruments sharing the same group sound together
@@ -455,8 +469,7 @@ impl Instrument {
             drum_sequencer,
             vst_param_values: Vec::new(),
             vst_state_path: None,
-            arpeggiator: ArpeggiatorConfig::default(),
-            chord_shape: None,
+            note_input: NoteInputConfig::default(),
             convolution_ir_path: None,
             layer_group: None,
             layer_octave_offset: 0,

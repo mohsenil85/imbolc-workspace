@@ -19,8 +19,8 @@ pub fn tick_arpeggiator(
     let arp_instruments: Vec<(InstrumentId, imbolc_types::ArpeggiatorConfig)> = instruments
         .instruments
         .iter()
-        .filter(|inst| inst.arpeggiator.enabled)
-        .map(|inst| (inst.id, inst.arpeggiator.clone()))
+        .filter(|inst| inst.note_input.arpeggiator.enabled)
+        .map(|inst| (inst.id, inst.note_input.arpeggiator.clone()))
         .collect();
 
     for (instrument_id, config) in arp_instruments {
@@ -145,7 +145,7 @@ pub fn tick_arpeggiator(
     let active_ids: Vec<InstrumentId> = instruments
         .instruments
         .iter()
-        .filter(|inst| inst.arpeggiator.enabled)
+        .filter(|inst| inst.note_input.arpeggiator.enabled)
         .map(|inst| inst.id)
         .collect();
     arp_states.retain(|id, state| {

@@ -290,38 +290,38 @@ fn project_instrument(
         }
         InstrumentAction::ToggleArp(id) => {
             if let Some(inst) = instruments.instrument_mut(*id) {
-                inst.arpeggiator.enabled = !inst.arpeggiator.enabled;
+                inst.note_input.arpeggiator.enabled = !inst.note_input.arpeggiator.enabled;
             }
             true
         }
         InstrumentAction::CycleArpDirection(id) => {
             if let Some(inst) = instruments.instrument_mut(*id) {
-                inst.arpeggiator.direction = inst.arpeggiator.direction.next();
+                inst.note_input.arpeggiator.direction = inst.note_input.arpeggiator.direction.next();
             }
             true
         }
         InstrumentAction::CycleArpRate(id) => {
             if let Some(inst) = instruments.instrument_mut(*id) {
-                inst.arpeggiator.rate = inst.arpeggiator.rate.next();
+                inst.note_input.arpeggiator.rate = inst.note_input.arpeggiator.rate.next();
             }
             true
         }
         InstrumentAction::AdjustArpOctaves(id, delta) => {
             if let Some(inst) = instruments.instrument_mut(*id) {
-                inst.arpeggiator.octaves = (inst.arpeggiator.octaves as i8 + delta)
+                inst.note_input.arpeggiator.octaves = (inst.note_input.arpeggiator.octaves as i8 + delta)
                     .clamp(1, 4) as u8;
             }
             true
         }
         InstrumentAction::AdjustArpGate(id, delta) => {
             if let Some(inst) = instruments.instrument_mut(*id) {
-                inst.arpeggiator.gate = (inst.arpeggiator.gate + delta).clamp(0.1, 1.0);
+                inst.note_input.arpeggiator.gate = (inst.note_input.arpeggiator.gate + delta).clamp(0.1, 1.0);
             }
             true
         }
         InstrumentAction::CycleChordShape(id) => {
             if let Some(inst) = instruments.instrument_mut(*id) {
-                inst.chord_shape = match inst.chord_shape {
+                inst.note_input.chord_shape = match inst.note_input.chord_shape {
                     None => Some(imbolc_types::ChordShape::Major),
                     Some(shape) => Some(shape.next()),
                 };
@@ -330,7 +330,7 @@ fn project_instrument(
         }
         InstrumentAction::ClearChordShape(id) => {
             if let Some(inst) = instruments.instrument_mut(*id) {
-                inst.chord_shape = None;
+                inst.note_input.chord_shape = None;
             }
             true
         }

@@ -190,7 +190,7 @@ fn save_instruments(conn: &Connection, instruments: &InstrumentState) -> SqlResu
 
         let eq_enabled = inst.eq().map(|eq| eq.enabled as i32);
 
-        let chord_shape = inst.chord_shape.as_ref().map(|cs| format!("{:?}", cs));
+        let chord_shape = inst.note_input.chord_shape.as_ref().map(|cs| format!("{:?}", cs));
 
         let vst_state = inst.vst_state_path.as_ref().map(|p| p.to_string_lossy().to_string());
 
@@ -229,11 +229,11 @@ fn save_instruments(conn: &Connection, instruments: &InstrumentState) -> SqlResu
             inst.layer_group,
             inst.next_effect_id.get(),
             eq_enabled,
-            inst.arpeggiator.enabled as i32,
-            format!("{:?}", inst.arpeggiator.direction),
-            format!("{:?}", inst.arpeggiator.rate),
-            inst.arpeggiator.octaves,
-            inst.arpeggiator.gate,
+            inst.note_input.arpeggiator.enabled as i32,
+            format!("{:?}", inst.note_input.arpeggiator.direction),
+            format!("{:?}", inst.note_input.arpeggiator.rate),
+            inst.note_input.arpeggiator.octaves,
+            inst.note_input.arpeggiator.gate,
             chord_shape,
             vst_state,
             groove.swing_amount,
