@@ -6,44 +6,19 @@ duplication, real friction.
 
 ---
 
-## 1. AudioDirty last-write-wins loses updates
+## ~~1. AudioDirty last-write-wins loses updates~~ (FIXED)
 
-**Where:** `AudioDirty` struct in `imbolc-types/src/action.rs`
-
-Targeted param fields are `Option<(...)>` to preserve `Copy`:
-```rust
-pub filter_param: Option<(InstrumentId, FilterParamKind, f32)>,
-pub effect_param: Option<(InstrumentId, EffectId, usize, f32)>,
-pub lfo_param: Option<(InstrumentId, LfoParamKind, f32)>,
-```
-
-If two filter params change in the same tick (cutoff + resonance),
-only the second survives. Merge uses last-write-wins. In practice
-mostly safe because UI events are one-per-frame, but a real data loss
-bug waiting to happen with MIDI CC input or automation playback
-sending multiple params simultaneously.
-
-**Fix options:**
-- Remove `Copy`, use `Vec<Update>` (requires refactoring ~30 call
-  sites)
-- Use a small fixed-size array: `[Option<(...)>; 4]` (still Copy,
-  handles reasonable burst)
-- Accept the limitation but add a debug assertion that catches
-  overwrites
+**Fixed.** Targeted param fields changed from `Option<(...)>` to
+small fixed-size arrays `[Option<(...)>; 4]`, preserving `Copy` while
+supporting up to 4 updates per tick per param category.
 
 ---
 
-## 2. Action projection has no compile-time link to dispatch
+## ~~2. Action projection has no compile-time link to dispatch~~ (FIXED)
 
-**Where:** `imbolc-core/src/audio/action_projection.rs` vs
-`imbolc-core/src/dispatch/`
-
-`project_action()` manually reimplements state mutations from dispatch
-handlers. If you update a dispatch handler and forget the projection,
-the audio thread silently diverges. No test matrix verifies parity.
-
-**Fix:** Add a test for every projectable action: dispatch it, project
-it, assert final states match. Could be a macro-generated test matrix.
+**Fixed.** Added 156 projection parity tests that dispatch each
+projectable action and verify the projected state matches. Covers all
+instrument, session, and piano roll actions.
 
 ---
 
@@ -254,8 +229,8 @@ centralizing the check.
 |---|-------|----------|--------|
 | 6 | ~~Compilation errors~~ | ~~**High**~~ FIXED | — |
 | 7 | ~~Stringly-typed EQ params~~ | ~~**High**~~ FIXED | — |
-| 1 | AudioDirty data loss | **Medium** (latent bug) | Hours |
-| 2 | Projection parity | **Medium** (silent correctness) | Hours |
+| 1 | ~~AudioDirty data loss~~ | ~~**Medium**~~ FIXED | — |
+| 2 | ~~Projection parity~~ | ~~**Medium**~~ FIXED | — |
 | 9 | Bare ID type aliases | **Medium** (wrong-ID bugs) | Large (mechanical) |
 | 10 | Persistence silent fallbacks | **Medium** (data loss) | Medium |
 | 11 | Raw u8 bus IDs | **Medium** (invalid states) | Medium |
