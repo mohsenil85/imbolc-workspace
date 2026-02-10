@@ -40,11 +40,11 @@ pub fn InstrumentEditor() -> Element {
                 .collect();
 
             // LFO info
-            let lfo = &i.lfo;
+            let lfo = &i.modulation.lfo;
             let lfo_info = (lfo.enabled, lfo.rate, lfo.depth, lfo.shape, lfo.target);
 
             // Envelope info
-            let env = &i.amp_envelope;
+            let env = &i.modulation.amp_envelope;
             let env_info = (env.attack, env.decay, env.sustain, env.release);
 
             // Source params info
