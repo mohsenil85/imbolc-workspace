@@ -45,8 +45,8 @@ pub fn drive_until_clients(
 ) {
     let start = Instant::now();
     while Instant::now().duration_since(start) < timeout {
-        server.accept_connections(state);
-        server.poll_actions(state);
+        server.accept_connections();
+        server.poll_actions(&state.session, &state.instruments);
         if server.client_count() >= expected {
             return;
         }
@@ -68,8 +68,8 @@ pub fn drive_and_collect_actions(
     let start = Instant::now();
     let mut all_actions = Vec::new();
     while Instant::now().duration_since(start) < timeout {
-        server.accept_connections(state);
-        let actions = server.poll_actions(state);
+        server.accept_connections();
+        let actions = server.poll_actions(&state.session, &state.instruments);
         all_actions.extend(actions);
         if !all_actions.is_empty() {
             return all_actions;

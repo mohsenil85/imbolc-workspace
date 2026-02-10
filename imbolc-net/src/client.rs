@@ -319,7 +319,7 @@ impl RemoteDispatcher {
         loop {
             match self.update_rx.try_recv() {
                 Ok(update) => match update {
-                    ServerUpdate::State(new_state) => {
+                    ServerUpdate::State(mut new_state) => {
                         // Update owned instruments from the state ownership map
                         self.owned_instruments.clear();
                         for (&inst_id, owner_info) in &new_state.ownership {
@@ -327,6 +327,7 @@ impl RemoteDispatcher {
                                 self.owned_instruments.insert(inst_id);
                             }
                         }
+                        new_state.instruments.rebuild_index();
                         self.state = new_state;
                         state_updated = true;
                     }
@@ -374,6 +375,7 @@ impl RemoteDispatcher {
                             }
                             if let Some(instruments) = patch.instruments {
                                 self.state.instruments = instruments;
+                                self.state.instruments.rebuild_index();
                             } else if let Some(patches) = patch.instrument_patches {
                                 for (id, new_instrument) in patches {
                                     if let Some(existing) = self.state.instruments.instrument_mut(id) {
@@ -397,7 +399,7 @@ impl RemoteDispatcher {
                             state_updated = true;
                         }
                     }
-                    ServerUpdate::FullSync(new_state, seq) => {
+                    ServerUpdate::FullSync(mut new_state, seq) => {
                         self.last_seq = seq;
                         self.owned_instruments.clear();
                         for (&inst_id, owner_info) in &new_state.ownership {
@@ -405,6 +407,7 @@ impl RemoteDispatcher {
                                 self.owned_instruments.insert(inst_id);
                             }
                         }
+                        new_state.instruments.rebuild_index();
                         self.state = new_state;
                         state_updated = true;
                     }

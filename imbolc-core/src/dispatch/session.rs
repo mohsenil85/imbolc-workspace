@@ -296,6 +296,7 @@ pub(super) fn dispatch_session(
                 Ok((session, instruments)) => {
                     state.session = session;
                     state.instruments = instruments;
+                    state.instruments.rebuild_index();
                     state.undo_history.clear();
                     result.audio_dirty = crate::action::AudioDirty::all();
                     result.push_status(audio.status(), "Checkpoint restored");

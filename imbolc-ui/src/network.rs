@@ -72,22 +72,17 @@ pub fn run_server() -> std::io::Result<()> {
     let mut last_client_count = 0usize;
 
     loop {
-        // Build network state snapshot
-        let network_state = NetworkState {
-            session: dispatcher.state().session.clone(),
-            instruments: dispatcher.state().instruments.clone(),
-            ownership: server.build_ownership_map(),
-            privileged_client: server.privileged_client_info(),
-        };
-
-        // Accept new connections
-        server.accept_connections(&network_state);
+        // Accept new connections (no state needed)
+        server.accept_connections();
 
         // Heartbeat: ping clients, detect dead connections
         server.tick_heartbeat();
 
-        // Poll for client actions
-        for (client_id, net_action) in server.poll_actions(&network_state) {
+        // Poll for client actions (pass refs, NetworkState built only during Hello handshake)
+        for (client_id, net_action) in server.poll_actions(
+            &dispatcher.state().session,
+            &dispatcher.state().instruments,
+        ) {
             log::debug!("Received action from {:?}: {:?}", client_id, net_action);
 
             // Mark dirty based on action
@@ -113,17 +108,19 @@ pub fn run_server() -> std::io::Result<()> {
             pending_audio_dirty.clear();
         }
 
-        // Broadcast state updates
-        let network_state = NetworkState {
-            session: dispatcher.state().session.clone(),
-            instruments: dispatcher.state().instruments.clone(),
-            ownership: server.build_ownership_map(),
-            privileged_client: server.privileged_client_info(),
-        };
-        if server.needs_full_sync() {
-            server.broadcast_full_sync(&network_state);
-        } else {
-            server.broadcast_state_patch(&network_state);
+        // Broadcast state updates (only build NetworkState when needed)
+        if server.needs_full_sync() || server.has_dirty_flags() {
+            let network_state = NetworkState {
+                session: dispatcher.state().session.clone(),
+                instruments: dispatcher.state().instruments.clone(),
+                ownership: server.build_ownership_map(),
+                privileged_client: server.privileged_client_info(),
+            };
+            if server.needs_full_sync() {
+                server.broadcast_full_sync(&network_state);
+            } else {
+                server.broadcast_state_patch(&network_state);
+            }
         }
 
         // Drain I/O feedback (simplified - no UI updates in server mode)
@@ -271,6 +268,7 @@ pub fn run_client(addr: &str, own_instruments: Vec<u32>) -> std::io::Result<()> 
     let mut local_state = AppState::new_with_defaults(config.defaults());
     local_state.session = remote.state().session.clone();
     local_state.instruments = remote.state().instruments.clone();
+    local_state.instruments.rebuild_index();
     sync_network_context(&mut local_state, &remote);
 
     if local_state.instruments.instruments.is_empty() {
@@ -288,6 +286,7 @@ pub fn run_client(addr: &str, own_instruments: Vec<u32>) -> std::io::Result<()> 
             // State was updated from server
             local_state.session = remote.state().session.clone();
             local_state.instruments = remote.state().instruments.clone();
+    local_state.instruments.rebuild_index();
             sync_network_context(&mut local_state, &remote);
         }
 
@@ -346,6 +345,7 @@ pub fn run_client(addr: &str, own_instruments: Vec<u32>) -> std::io::Result<()> 
                         // Sync state
                         local_state.session = remote.state().session.clone();
                         local_state.instruments = remote.state().instruments.clone();
+    local_state.instruments.rebuild_index();
                         sync_network_context(&mut local_state, &remote);
                         reconnected = true;
                         break;

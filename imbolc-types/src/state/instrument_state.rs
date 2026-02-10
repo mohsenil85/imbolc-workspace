@@ -1,5 +1,7 @@
 //! Instrument collection state.
 
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 
 use super::drum_sequencer::DrumSequencerState;
@@ -18,6 +20,9 @@ pub struct InstrumentState {
     pub editing_instrument_id: Option<InstrumentId>,
     /// Counter for allocating layer group IDs
     pub next_layer_group_id: u32,
+    /// Index from InstrumentId → Vec position for O(1) lookups.
+    #[serde(skip)]
+    id_index: HashMap<InstrumentId, usize>,
 }
 
 impl InstrumentState {
@@ -29,6 +34,18 @@ impl InstrumentState {
             next_sampler_buffer_id: 20000,
             editing_instrument_id: None,
             next_layer_group_id: 0,
+            id_index: HashMap::new(),
+        }
+    }
+
+    /// Rebuild the id → index lookup table from the Vec.
+    ///
+    /// Call after any operation that replaces `instruments` wholesale
+    /// (e.g. undo/redo, persistence load, network state replacement).
+    pub fn rebuild_index(&mut self) {
+        self.id_index.clear();
+        for (i, inst) in self.instruments.iter().enumerate() {
+            self.id_index.insert(inst.id, i);
         }
     }
 
@@ -38,6 +55,7 @@ impl InstrumentState {
         let instrument = Instrument::new(id, source);
         self.instruments.push(instrument);
         self.selected = Some(self.instruments.len() - 1);
+        self.id_index.insert(id, self.instruments.len() - 1);
 
         id
     }
@@ -58,6 +76,9 @@ impl InstrumentState {
                     };
                 }
             }
+
+            // Rebuild index since positions shifted
+            self.rebuild_index();
         }
 
         // If old group now has only 1 member, clear it (group of 1 is meaningless)
@@ -77,10 +98,26 @@ impl InstrumentState {
     }
 
     pub fn instrument(&self, id: InstrumentId) -> Option<&Instrument> {
+        // Use index for O(1) lookup, fall back to linear scan if index is stale
+        if let Some(&idx) = self.id_index.get(&id) {
+            if let Some(inst) = self.instruments.get(idx) {
+                if inst.id == id {
+                    return Some(inst);
+                }
+            }
+        }
         self.instruments.iter().find(|s| s.id == id)
     }
 
     pub fn instrument_mut(&mut self, id: InstrumentId) -> Option<&mut Instrument> {
+        // Use index for O(1) lookup, fall back to linear scan if index is stale
+        if let Some(&idx) = self.id_index.get(&id) {
+            if let Some(inst) = self.instruments.get(idx) {
+                if inst.id == id {
+                    return self.instruments.get_mut(idx);
+                }
+            }
+        }
         self.instruments.iter_mut().find(|s| s.id == id)
     }
 
@@ -177,6 +214,7 @@ impl Default for InstrumentState {
 fn default_sampler_buffer_id() -> u32 {
     20000
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -318,5 +356,76 @@ mod tests {
         state.selected = Some(0);
         state.select_prev();
         assert_eq!(state.selected, Some(0)); // stays at start, does not wrap
+    }
+
+    #[test]
+    fn index_correct_after_add() {
+        let mut state = InstrumentState::new();
+        let id1 = state.add_instrument(SourceType::Saw);
+        let id2 = state.add_instrument(SourceType::Sin);
+        let id3 = state.add_instrument(SourceType::Sqr);
+
+        assert!(state.instrument(id1).is_some());
+        assert!(state.instrument(id2).is_some());
+        assert!(state.instrument(id3).is_some());
+        assert_eq!(state.instrument(id1).unwrap().id, id1);
+        assert_eq!(state.instrument(id2).unwrap().id, id2);
+        assert_eq!(state.instrument(id3).unwrap().id, id3);
+    }
+
+    #[test]
+    fn index_correct_after_remove() {
+        let mut state = InstrumentState::new();
+        let id1 = state.add_instrument(SourceType::Saw);
+        let id2 = state.add_instrument(SourceType::Sin);
+        let id3 = state.add_instrument(SourceType::Sqr);
+
+        state.remove_instrument(id2);
+
+        assert!(state.instrument(id1).is_some());
+        assert!(state.instrument(id2).is_none());
+        assert!(state.instrument(id3).is_some());
+        assert_eq!(state.instrument(id1).unwrap().id, id1);
+        assert_eq!(state.instrument(id3).unwrap().id, id3);
+    }
+
+    #[test]
+    fn fallback_works_when_index_empty() {
+        let mut state = InstrumentState::new();
+        let id1 = state.add_instrument(SourceType::Saw);
+        let id2 = state.add_instrument(SourceType::Sin);
+
+        // Clear the index to simulate a deserialized state without rebuild_index
+        state.id_index.clear();
+
+        // Should still find instruments via linear fallback
+        assert_eq!(state.instrument(id1).unwrap().id, id1);
+        assert_eq!(state.instrument(id2).unwrap().id, id2);
+        assert_eq!(state.instrument_mut(id1).unwrap().id, id1);
+    }
+
+    #[test]
+    fn rebuild_index_restores_lookups() {
+        let mut state = InstrumentState::new();
+        let id1 = state.add_instrument(SourceType::Saw);
+        let id2 = state.add_instrument(SourceType::Sin);
+
+        // Simulate whole-struct replacement by clearing and rebuilding
+        state.id_index.clear();
+        state.rebuild_index();
+
+        assert_eq!(state.instrument(id1).unwrap().id, id1);
+        assert_eq!(state.instrument(id2).unwrap().id, id2);
+    }
+
+    #[test]
+    fn clone_preserves_index() {
+        let mut state = InstrumentState::new();
+        let id1 = state.add_instrument(SourceType::Saw);
+        let id2 = state.add_instrument(SourceType::Sin);
+
+        let cloned = state.clone();
+        assert_eq!(cloned.instrument(id1).unwrap().id, id1);
+        assert_eq!(cloned.instrument(id2).unwrap().id, id2);
     }
 }

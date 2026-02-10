@@ -13,7 +13,7 @@ use log::{error, info, warn};
 
 use imbolc_types::{InstrumentAction, InstrumentId, VstParamAction};
 
-use crate::framing::{read_message, write_message};
+use crate::framing::{read_message, serialize_frame, write_message, write_raw_frame};
 use crate::protocol::{
     ClientId, ClientMessage, NetworkAction, NetworkState, OwnerInfo,
     PrivilegeLevel, ServerMessage, SessionToken, StatePatch,
@@ -133,6 +133,10 @@ impl ClientConnection {
     fn send(&mut self, msg: &ServerMessage) -> io::Result<()> {
         write_message(&mut self.writer, msg)
     }
+
+    fn send_raw(&mut self, frame: &[u8]) -> io::Result<()> {
+        write_raw_frame(&mut self.writer, frame)
+    }
 }
 
 /// A pending connection awaiting Hello handshake.
@@ -201,7 +205,7 @@ impl NetServer {
     }
 
     /// Accept any pending TCP connections (they become fully connected after Hello handshake).
-    pub fn accept_connections(&mut self, _state: &NetworkState) {
+    pub fn accept_connections(&mut self) {
         loop {
             match self.listener.accept() {
                 Ok((stream, addr)) => {
@@ -253,8 +257,14 @@ impl NetServer {
     }
 
     /// Poll for client messages, returning any NetworkActions received.
-    /// Must call with current state for Hello handshake.
-    pub fn poll_actions(&mut self, state: &NetworkState) -> Vec<(ClientId, NetworkAction)> {
+    ///
+    /// Takes references to session and instrument state — only builds a full
+    /// `NetworkState` during Hello handshakes (rare).
+    pub fn poll_actions(
+        &mut self,
+        session: &imbolc_types::SessionState,
+        instruments: &imbolc_types::InstrumentState,
+    ) -> Vec<(ClientId, NetworkAction)> {
         let mut actions = Vec::new();
 
         while let Ok((client_id, msg)) = self.action_rx.try_recv() {
@@ -345,11 +355,19 @@ impl NetServer {
 
                         let session_token = SessionToken::new();
 
+                        // Build NetworkState on demand (only during Hello handshake)
+                        let net_state = NetworkState {
+                            session: session.clone(),
+                            instruments: instruments.clone(),
+                            ownership: self.build_ownership_map(),
+                            privileged_client: self.privileged_client_info(),
+                        };
+
                         // Send Welcome with granted instruments
                         let welcome = ServerMessage::Welcome {
                             client_id,
                             granted_instruments: granted.clone(),
-                            state: state.clone(),
+                            state: net_state,
                             privilege,
                             session_token: session_token.clone(),
                         };
@@ -745,6 +763,11 @@ impl NetServer {
         self.force_full_sync = false;
     }
 
+    /// Check if any dirty flags are set (useful for callers to avoid building state when clean).
+    pub fn has_dirty_flags(&self) -> bool {
+        self.dirty.any()
+    }
+
     /// Check if a full sync should be sent (every 30s or on request).
     pub fn needs_full_sync(&self) -> bool {
         self.force_full_sync
@@ -817,11 +840,22 @@ impl NetServer {
     }
 
     /// Send a message to all connected clients.
+    ///
+    /// Serializes the message once and writes the pre-serialized frame to each client,
+    /// avoiding redundant JSON serialization per client.
     fn broadcast(&mut self, msg: &ServerMessage) {
+        let frame = match serialize_frame(msg) {
+            Ok(f) => f,
+            Err(e) => {
+                error!("Failed to serialize broadcast message: {}", e);
+                return;
+            }
+        };
+
         let mut disconnected = Vec::new();
 
         for (id, client) in &mut self.clients {
-            if let Err(e) = client.send(msg) {
+            if let Err(e) = client.send_raw(&frame) {
                 warn!("Failed to send to client {:?}: {}", id, e);
                 disconnected.push(*id);
             }

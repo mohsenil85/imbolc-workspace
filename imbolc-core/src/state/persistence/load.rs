@@ -25,6 +25,7 @@ pub fn load_relational(conn: &Connection) -> SqlResult<(SessionState, Instrument
 
     // Recompute derived state
     session.recompute_next_bus_id();
+    instruments.rebuild_index();
 
     Ok((session, instruments))
 }

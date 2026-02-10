@@ -19,6 +19,29 @@ pub fn write_message<W: Write, T: Serialize>(writer: &mut W, msg: &T) -> io::Res
     Ok(())
 }
 
+/// Serialize a message into a complete length-prefixed frame (header + JSON payload).
+///
+/// Use with [`write_raw_frame`] to broadcast a pre-serialized message to multiple writers
+/// without re-serializing for each one.
+pub fn serialize_frame<T: Serialize>(msg: &T) -> io::Result<Vec<u8>> {
+    let payload = serde_json::to_vec(msg)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+
+    let len = payload.len() as u32;
+    let mut frame = Vec::with_capacity(4 + payload.len());
+    frame.extend_from_slice(&len.to_be_bytes());
+    frame.extend_from_slice(&payload);
+
+    Ok(frame)
+}
+
+/// Write a pre-serialized frame (from [`serialize_frame`]) to a stream.
+pub fn write_raw_frame<W: Write>(writer: &mut W, frame: &[u8]) -> io::Result<()> {
+    writer.write_all(frame)?;
+    writer.flush()?;
+    Ok(())
+}
+
 /// Read a length-prefixed JSON message from a stream.
 pub fn read_message<R: Read, T: DeserializeOwned>(reader: &mut R) -> io::Result<T> {
     let mut len_buf = [0u8; 4];
@@ -73,6 +96,50 @@ mod tests {
 
         let mut cursor = Cursor::new(buf);
         let result: TestMsg = read_message(&mut cursor).unwrap();
+        assert_eq!(result, msg);
+    }
+
+    #[test]
+    fn serialize_frame_roundtrip() {
+        let msg = "hello frame".to_string();
+        let frame = serialize_frame(&msg).unwrap();
+
+        let mut cursor = Cursor::new(frame);
+        let result: String = read_message(&mut cursor).unwrap();
+        assert_eq!(result, msg);
+    }
+
+    #[test]
+    fn serialize_frame_matches_write_message() {
+        #[derive(Debug, Serialize, serde::Deserialize)]
+        struct TestMsg {
+            id: u32,
+            data: Vec<u8>,
+        }
+
+        let msg = TestMsg {
+            id: 99,
+            data: vec![1, 2, 3],
+        };
+
+        let frame = serialize_frame(&msg).unwrap();
+
+        let mut buf = Vec::new();
+        write_message(&mut buf, &msg).unwrap();
+
+        assert_eq!(frame, buf);
+    }
+
+    #[test]
+    fn write_raw_frame_roundtrip() {
+        let msg = "raw frame test".to_string();
+        let frame = serialize_frame(&msg).unwrap();
+
+        let mut buf = Vec::new();
+        write_raw_frame(&mut buf, &frame).unwrap();
+
+        let mut cursor = Cursor::new(buf);
+        let result: String = read_message(&mut cursor).unwrap();
         assert_eq!(result, msg);
     }
 }

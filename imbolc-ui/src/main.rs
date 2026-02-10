@@ -214,6 +214,7 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
                 let state = dispatcher.state_mut();
                 state.session = session;
                 state.instruments = instruments;
+                state.instruments.rebuild_index();
                 state.project.path = Some(load_path);
                 state.project.dirty = false;
                 app_frame.set_project_name(name);
@@ -546,6 +547,7 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
                                  state.undo_history.clear();
                                  state.session = new_session;
                                  state.instruments = new_instruments;
+                                 state.instruments.rebuild_index();
                                  state.project.path = Some(path.clone());
                                  state.project.dirty = false;
                              }

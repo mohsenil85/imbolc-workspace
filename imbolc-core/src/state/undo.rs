@@ -195,6 +195,7 @@ fn apply_entry(
         }
         UndoEntry::Instruments(stored) => {
             *instruments = *stored;
+            instruments.rebuild_index();
         }
         UndoEntry::Session(stored) => {
             *session = *stored;
@@ -205,6 +206,7 @@ fn apply_entry(
         } => {
             *session = *s;
             *instruments = *i;
+            instruments.rebuild_index();
         }
     }
 }

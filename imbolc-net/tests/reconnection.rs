@@ -27,8 +27,8 @@ fn test_graceful_disconnect_suspends_session() {
     alice.send(&ClientMessage::Goodbye).unwrap();
     std::thread::sleep(Duration::from_millis(100));
     let state = common::make_test_state_with_instruments(&server, 3);
-    server.accept_connections(&state);
-    server.poll_actions(&state);
+    server.accept_connections();
+    server.poll_actions(&state.session, &state.instruments);
 
     // Client should be suspended (count drops)
     assert_eq!(server.client_count(), 0);
@@ -59,8 +59,8 @@ fn test_reconnect_with_valid_token() {
     alice.send(&ClientMessage::Goodbye).unwrap();
     std::thread::sleep(Duration::from_millis(100));
     let state = common::make_test_state_with_instruments(&server, 3);
-    server.accept_connections(&state);
-    server.poll_actions(&state);
+    server.accept_connections();
+    server.poll_actions(&state.session, &state.instruments);
     assert_eq!(server.client_count(), 0);
 
     // Alice reconnects with token
@@ -99,8 +99,8 @@ fn test_reconnect_with_invalid_token_fails() {
     alice.send(&ClientMessage::Goodbye).unwrap();
     std::thread::sleep(Duration::from_millis(100));
     let state = common::make_test_state(&server);
-    server.accept_connections(&state);
-    server.poll_actions(&state);
+    server.accept_connections();
+    server.poll_actions(&state.session, &state.instruments);
 
     // Try to reconnect with a fake token
     let state = common::make_test_state(&server);
@@ -113,8 +113,8 @@ fn test_reconnect_with_invalid_token_fails() {
     // Instead, loop until pending_count drops back to 0 (processed but rejected).
     let start = std::time::Instant::now();
     while start.elapsed() < Duration::from_secs(2) {
-        server.accept_connections(&state);
-        server.poll_actions(&state);
+        server.accept_connections();
+        server.poll_actions(&state.session, &state.instruments);
         if server.pending_count() == 0 && server.client_count() == 0 {
             // Give a tiny extra moment for the message to be flushed
             std::thread::sleep(Duration::from_millis(10));

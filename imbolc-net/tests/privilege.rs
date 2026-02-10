@@ -69,8 +69,8 @@ fn test_privilege_transfer() {
     bob.send(&ClientMessage::RequestPrivilege).unwrap();
     std::thread::sleep(Duration::from_millis(50));
     let state = common::make_test_state(&server);
-    server.accept_connections(&state);
-    server.poll_actions(&state);
+    server.accept_connections();
+    server.poll_actions(&state.session, &state.instruments);
 
     // Bob should receive PrivilegeGranted
     let msg = bob.recv().unwrap();
