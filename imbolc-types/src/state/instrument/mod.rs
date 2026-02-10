@@ -21,6 +21,73 @@ use super::groove::GrooveConfig;
 use super::sampler::SamplerConfig;
 use crate::{BusId, EffectId, InstrumentId, Param, ParamIndex};
 
+/// Arpeggiator and chord-shape configuration for an instrument.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NoteInputConfig {
+    pub arpeggiator: ArpeggiatorConfig,
+    pub chord_shape: Option<ChordShape>,
+}
+
+impl Default for NoteInputConfig {
+    fn default() -> Self {
+        Self {
+            arpeggiator: ArpeggiatorConfig::default(),
+            chord_shape: None,
+        }
+    }
+}
+
+/// Layer group membership and octave offset for an instrument.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
+pub struct LayerConfig {
+    pub group: Option<u32>,
+    pub octave_offset: i8,
+}
+
+impl LayerConfig {
+    /// Apply layer octave offset to a pitch, clamping to MIDI range 0..=127.
+    pub fn offset_pitch(&self, pitch: u8) -> u8 {
+        ((pitch as i16) + (self.octave_offset as i16 * 12)).clamp(0, 127) as u8
+    }
+}
+
+/// Mixer settings for an instrument: level, pan, mute, solo, routing, and sends.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InstrumentMixer {
+    pub level: f32,
+    pub pan: f32,
+    pub mute: bool,
+    pub solo: bool,
+    pub active: bool,
+    pub output_target: OutputTarget,
+    #[serde(default)]
+    pub channel_config: ChannelConfig,
+    #[serde(deserialize_with = "deserialize_sends")]
+    pub sends: BTreeMap<BusId, MixerSend>,
+}
+
+impl InstrumentMixer {
+    pub fn new(active: bool) -> Self {
+        Self {
+            level: 0.8,
+            pan: 0.0,
+            mute: false,
+            solo: false,
+            active,
+            output_target: OutputTarget::Master,
+            channel_config: ChannelConfig::default(),
+            sends: BTreeMap::new(),
+        }
+    }
+
+    /// Disable sends for a removed bus (keeps the entry for undo support)
+    pub fn disable_send_for_bus(&mut self, bus_id: BusId) {
+        if let Some(send) = self.sends.get_mut(&bus_id) {
+            send.enabled = false;
+        }
+    }
+}
+
 /// Whether an instrument's signal chain is mono or stereo.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum ChannelConfig {
@@ -383,18 +450,8 @@ pub struct Instrument {
     pub lfo: LfoConfig,
     pub amp_envelope: EnvConfig,
     pub polyphonic: bool,
-    // Integrated mixer
-    pub level: f32,
-    pub pan: f32,
-    pub mute: bool,
-    pub solo: bool,
-    pub active: bool,
-    pub output_target: OutputTarget,
-    /// Mono or stereo signal chain
-    #[serde(default)]
-    pub channel_config: ChannelConfig,
-    #[serde(deserialize_with = "deserialize_sends")]
-    pub sends: BTreeMap<BusId, MixerSend>,
+    /// Mixer: level, pan, mute, solo, routing, sends
+    pub mixer: InstrumentMixer,
     // Sample configuration (only used when source is SourceType::PitchedSampler)
     pub sampler_config: Option<SamplerConfig>,
     // Kit sequencer (only used when source is SourceType::Kit)
@@ -403,16 +460,12 @@ pub struct Instrument {
     pub vst_param_values: Vec<(u32, f32)>,
     // Path to saved VST plugin state file (.fxp)
     pub vst_state_path: Option<PathBuf>,
-    /// Arpeggiator configuration
-    pub arpeggiator: ArpeggiatorConfig,
-    /// Chord shape (None = single notes, Some = expand to chord)
-    pub chord_shape: Option<ChordShape>,
+    /// Arpeggiator and chord input configuration
+    pub note_input: NoteInputConfig,
     /// Path to loaded impulse response file for convolution reverb
     pub convolution_ir_path: Option<String>,
-    /// Layer group ID: instruments sharing the same group sound together
-    pub layer_group: Option<u32>,
-    /// Per-instrument octave offset for layer groups (-4 to +4, default 0)
-    pub layer_octave_offset: i8,
+    /// Layer group membership and octave offset
+    pub layer: LayerConfig,
     /// Counter for allocating unique EffectIds
     pub next_effect_id: EffectId,
     /// Per-track groove settings (swing, humanization, timing offset)
@@ -421,7 +474,6 @@ pub struct Instrument {
 
 impl Instrument {
     pub fn new(id: InstrumentId, source: SourceType) -> Self {
-        let sends = BTreeMap::new();
         // Sample instruments get a sampler config
         let sampler_config = if source.is_sample() || source.is_time_stretch() {
             Some(SamplerConfig::default())
@@ -443,23 +495,14 @@ impl Instrument {
             lfo: LfoConfig::default(),
             amp_envelope: source.default_envelope(),
             polyphonic: true,
-            level: 0.8,
-            pan: 0.0,
-            mute: false,
-            solo: false,
-            active: !source.is_audio_input(),
-            output_target: OutputTarget::Master,
-            channel_config: ChannelConfig::default(),
-            sends,
+            mixer: InstrumentMixer::new(!source.is_audio_input()),
             sampler_config,
             drum_sequencer,
             vst_param_values: Vec::new(),
             vst_state_path: None,
-            arpeggiator: ArpeggiatorConfig::default(),
-            chord_shape: None,
+            note_input: NoteInputConfig::default(),
             convolution_ir_path: None,
-            layer_group: None,
-            layer_octave_offset: 0,
+            layer: LayerConfig::default(),
             next_effect_id: EffectId::new(0),
             groove: GrooveConfig::default(),
         }
@@ -652,7 +695,7 @@ impl Instrument {
 
     /// Apply layer octave offset to a pitch, clamping to MIDI range 0..=127.
     pub fn offset_pitch(&self, pitch: u8) -> u8 {
-        ((pitch as i16) + (self.layer_octave_offset as i16 * 12)).clamp(0, 127) as u8
+        self.layer.offset_pitch(pitch)
     }
 
     /// Recalculate next_effect_id from existing effects in the chain (used after loading).
@@ -666,9 +709,7 @@ impl Instrument {
 
     /// Disable sends for a removed bus (keeps the entry for undo support)
     pub fn disable_send_for_bus(&mut self, bus_id: BusId) {
-        if let Some(send) = self.sends.get_mut(&bus_id) {
-            send.enabled = false;
-        }
+        self.mixer.disable_send_for_bus(bus_id);
     }
 
     // --- Structure navigation convenience methods ---
@@ -987,7 +1028,7 @@ mod tests {
     #[test]
     fn offset_pitch_identity_at_zero() {
         let inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
-        assert_eq!(inst.layer_octave_offset, 0);
+        assert_eq!(inst.layer.octave_offset, 0);
         assert_eq!(inst.offset_pitch(60), 60);
         assert_eq!(inst.offset_pitch(0), 0);
         assert_eq!(inst.offset_pitch(127), 127);
@@ -996,7 +1037,7 @@ mod tests {
     #[test]
     fn offset_pitch_positive() {
         let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
-        inst.layer_octave_offset = 2;
+        inst.layer.octave_offset = 2;
         assert_eq!(inst.offset_pitch(60), 84);
         assert_eq!(inst.offset_pitch(48), 72);
     }
@@ -1004,21 +1045,21 @@ mod tests {
     #[test]
     fn offset_pitch_negative() {
         let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
-        inst.layer_octave_offset = -3;
+        inst.layer.octave_offset = -3;
         assert_eq!(inst.offset_pitch(60), 24);
     }
 
     #[test]
     fn offset_pitch_clamps_high() {
         let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
-        inst.layer_octave_offset = 4;
+        inst.layer.octave_offset = 4;
         assert_eq!(inst.offset_pitch(120), 127);
     }
 
     #[test]
     fn offset_pitch_clamps_low() {
         let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
-        inst.layer_octave_offset = -4;
+        inst.layer.octave_offset = -4;
         assert_eq!(inst.offset_pitch(10), 0);
     }
 

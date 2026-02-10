@@ -414,7 +414,7 @@ mod tests {
             inst.set_filter(Some(FilterType::Lpf));
             inst.lfo.enabled = true;
             inst.add_effect(EffectType::Delay);
-            inst.sends.insert(BusId::new(1), imbolc_types::MixerSend { bus_id: BusId::new(1), level: 0.5, enabled: true, tap_point: imbolc_types::SendTapPoint::default() });
+            inst.mixer.sends.insert(BusId::new(1), imbolc_types::MixerSend { bus_id: BusId::new(1), level: 0.5, enabled: true, tap_point: imbolc_types::SendTapPoint::default() });
         }
 
         engine
@@ -898,7 +898,7 @@ mod tests {
             let mut state = AppState::new();
             let inst_id = state.add_instrument(SourceType::AudioIn);
             if let Some(inst) = state.instruments.instrument_mut(inst_id) {
-                inst.sends.insert(BusId::new(1), imbolc_types::MixerSend { bus_id: BusId::new(1), level: 0.5, enabled: true, tap_point: imbolc_types::SendTapPoint::default() });
+                inst.mixer.sends.insert(BusId::new(1), imbolc_types::MixerSend { bus_id: BusId::new(1), level: 0.5, enabled: true, tap_point: imbolc_types::SendTapPoint::default() });
             }
             engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild routing");
             let send_count = backend.count(|op| matches!(op, TestOp::CreateSynth { def_name, .. } if def_name == "imbolc_send"));
@@ -992,7 +992,7 @@ mod tests {
             let (mut engine, backend) = engine_with_test_backend();
             let mut state = AppState::new();
             let inst_id = state.add_instrument(SourceType::Saw);
-            if let Some(inst) = state.instruments.instrument_mut(inst_id) { inst.mute = true; }
+            if let Some(inst) = state.instruments.instrument_mut(inst_id) { inst.mixer.mute = true; }
             engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild routing");
             let synths = backend.synths_created();
             let output = synths.iter().find(|op| matches!(op, TestOp::CreateSynth { def_name, .. } if def_name == "imbolc_output"));
@@ -1031,7 +1031,7 @@ mod tests {
             let mut state = AppState::new();
             let inst_id = state.add_instrument(SourceType::Saw);
             if let Some(inst) = state.instruments.instrument_mut(inst_id) {
-                inst.output_target = OutputTarget::Bus(BusId::new(1));
+                inst.mixer.output_target = OutputTarget::Bus(BusId::new(1));
             }
             engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild routing");
             let synths = backend.synths_created();
@@ -1054,7 +1054,7 @@ mod tests {
             let mut state = AppState::new();
             let inst_id = state.add_instrument(SourceType::Saw);
             // output_target defaults to Master, no change needed
-            assert_eq!(state.instruments.instrument(inst_id).unwrap().output_target, OutputTarget::Master);
+            assert_eq!(state.instruments.instrument(inst_id).unwrap().mixer.output_target, OutputTarget::Master);
             engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild routing");
             let synths = backend.synths_created();
             let output_out = synths.iter().find_map(|op| {
@@ -1076,7 +1076,7 @@ mod tests {
             if let Some(inst) = state.instruments.instrument_mut(inst_id) {
                 inst.set_filter(Some(FilterType::Lpf));
                 inst.add_effect(EffectType::Delay);
-                inst.sends.insert(BusId::new(1), imbolc_types::MixerSend { bus_id: BusId::new(1), level: 0.5, enabled: true, tap_point: SendTapPoint::PostInsert });
+                inst.mixer.sends.insert(BusId::new(1), imbolc_types::MixerSend { bus_id: BusId::new(1), level: 0.5, enabled: true, tap_point: SendTapPoint::PostInsert });
             }
             engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild routing");
             let synths = backend.synths_created();
@@ -1192,7 +1192,7 @@ mod tests {
             let inst_id = state.add_instrument(SourceType::Saw);
             // Assign instrument to layer group 1 so the group bus gets allocated
             if let Some(inst) = state.instruments.instrument_mut(inst_id) {
-                inst.layer_group = Some(1);
+                inst.layer.group = Some(1);
             }
             // Create a layer group mixer and add a reverb effect
             state.session.mixer.add_layer_group_mixer(1, &[BusId::new(1)]);
@@ -1225,7 +1225,7 @@ mod tests {
             let mut state = AppState::new();
             let inst_id = state.add_instrument(SourceType::Saw);
             if let Some(inst) = state.instruments.instrument_mut(inst_id) {
-                inst.layer_group = Some(1);
+                inst.layer.group = Some(1);
             }
             state.session.mixer.add_layer_group_mixer(1, &[BusId::new(1)]);
             let gm = state.session.mixer.layer_group_mixer_mut(1).unwrap();
@@ -1280,7 +1280,7 @@ mod tests {
             if let Some(inst) = state.instruments.instrument_mut(inst_id) {
                 inst.set_filter(Some(FilterType::Lpf));
                 inst.add_effect(EffectType::Delay);
-                inst.sends.insert(BusId::new(1), imbolc_types::MixerSend { bus_id: BusId::new(1), level: 0.5, enabled: true, tap_point: SendTapPoint::PreInsert });
+                inst.mixer.sends.insert(BusId::new(1), imbolc_types::MixerSend { bus_id: BusId::new(1), level: 0.5, enabled: true, tap_point: SendTapPoint::PreInsert });
             }
             engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild routing");
             let synths = backend.synths_created();

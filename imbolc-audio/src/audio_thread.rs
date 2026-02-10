@@ -607,10 +607,10 @@ impl AudioThread {
             }
             AudioCmd::SetInstrumentMixerParams { instrument_id, level, pan, mute, solo } => {
                 if let Some(inst) = self.instruments.instruments.iter_mut().find(|i| i.id == instrument_id) {
-                    inst.level = level;
-                    inst.pan = pan;
-                    inst.mute = mute;
-                    inst.solo = solo;
+                    inst.mixer.level = level;
+                    inst.mixer.pan = pan;
+                    inst.mixer.mute = mute;
+                    inst.mixer.solo = solo;
                 }
             }
             AudioCmd::SetBusMixerParams { bus_id, level, mute, pan } => {

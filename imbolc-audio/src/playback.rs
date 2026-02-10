@@ -128,7 +128,7 @@ pub fn tick_playback(
                             for &target_id in &targets {
                                 // Skip muted/inactive siblings
                                 let skip = instruments.instrument(target_id).map_or(true, |inst| {
-                                    !inst.active || if any_solo { !inst.solo } else { inst.mute }
+                                    !inst.mixer.active || if any_solo { !inst.mixer.solo } else { inst.mixer.mute }
                                 });
                                 if skip { continue; }
                                 note_ons.push((
@@ -185,7 +185,7 @@ pub fn tick_playback(
                 // Check if this instrument has arpeggiator enabled
                 let arp_enabled = instruments.instruments.iter()
                     .find(|inst| inst.id == instrument_id)
-                    .map(|inst| inst.arpeggiator.enabled)
+                    .map(|inst| inst.note_input.arpeggiator.enabled)
                     .unwrap_or(false);
 
                 if arp_enabled {

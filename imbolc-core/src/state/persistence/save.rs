@@ -172,8 +172,8 @@ fn save_instruments(conn: &Connection, instruments: &InstrumentState) -> SqlResu
 
     for (pos, inst) in instruments.instruments.iter().enumerate() {
         let source_type = encode_source_type(&inst.source);
-        let output_target = encode_output_target(&inst.output_target);
-        let channel_config = format!("{:?}", inst.channel_config);
+        let output_target = encode_output_target(&inst.mixer.output_target);
+        let channel_config = format!("{:?}", inst.mixer.channel_config);
 
         let (filter_type, filter_cutoff, filter_cutoff_min, filter_cutoff_max,
              filter_resonance, filter_resonance_min, filter_resonance_max, filter_enabled) =
@@ -190,7 +190,7 @@ fn save_instruments(conn: &Connection, instruments: &InstrumentState) -> SqlResu
 
         let eq_enabled = inst.eq().map(|eq| eq.enabled as i32);
 
-        let chord_shape = inst.chord_shape.as_ref().map(|cs| format!("{:?}", cs));
+        let chord_shape = inst.note_input.chord_shape.as_ref().map(|cs| format!("{:?}", cs));
 
         let vst_state = inst.vst_state_path.as_ref().map(|p| p.to_string_lossy().to_string());
 
@@ -218,22 +218,22 @@ fn save_instruments(conn: &Connection, instruments: &InstrumentState) -> SqlResu
             inst.amp_envelope.sustain,
             inst.amp_envelope.release,
             inst.polyphonic as i32,
-            inst.level,
-            inst.pan,
-            inst.mute as i32,
-            inst.solo as i32,
-            inst.active as i32,
+            inst.mixer.level,
+            inst.mixer.pan,
+            inst.mixer.mute as i32,
+            inst.mixer.solo as i32,
+            inst.mixer.active as i32,
             output_target,
             channel_config,
             inst.convolution_ir_path.as_deref(),
-            inst.layer_group,
+            inst.layer.group,
             inst.next_effect_id.get(),
             eq_enabled,
-            inst.arpeggiator.enabled as i32,
-            format!("{:?}", inst.arpeggiator.direction),
-            format!("{:?}", inst.arpeggiator.rate),
-            inst.arpeggiator.octaves,
-            inst.arpeggiator.gate,
+            inst.note_input.arpeggiator.enabled as i32,
+            format!("{:?}", inst.note_input.arpeggiator.direction),
+            format!("{:?}", inst.note_input.arpeggiator.rate),
+            inst.note_input.arpeggiator.octaves,
+            inst.note_input.arpeggiator.gate,
             chord_shape,
             vst_state,
             groove.swing_amount,
@@ -243,7 +243,7 @@ fn save_instruments(conn: &Connection, instruments: &InstrumentState) -> SqlResu
             groove.timing_offset_ms,
             groove_time_sig_num,
             groove_time_sig_denom,
-            inst.layer_octave_offset as i32,
+            inst.layer.octave_offset as i32,
         ])?;
 
         // Source params
@@ -254,7 +254,7 @@ fn save_instruments(conn: &Connection, instruments: &InstrumentState) -> SqlResu
         save_effects(conn, inst.id.get(), &effects)?;
 
         // Sends
-        for send in inst.sends.values() {
+        for send in inst.mixer.sends.values() {
             conn.execute(
                 "INSERT INTO instrument_sends (instrument_id, bus_id, level, enabled, tap_point)
                  VALUES (?1, ?2, ?3, ?4, ?5)",

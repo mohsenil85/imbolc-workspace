@@ -66,8 +66,8 @@ pub(super) fn dispatch_server(
 
                 // Auto-deactivate AudioIn instrument on stop
                 if let Some(inst) = state.instruments.selected_instrument_mut() {
-                    if inst.source.is_audio_input() && inst.active {
-                        inst.active = false;
+                    if inst.source.is_audio_input() && inst.mixer.active {
+                        inst.mixer.active = false;
                         result.audio_dirty.instruments = true;
                         result.audio_dirty.routing = true;
                     }
@@ -77,8 +77,8 @@ pub(super) fn dispatch_server(
             } else if audio.is_running() {
                 // Auto-activate AudioIn instrument on start
                 if let Some(inst) = state.instruments.selected_instrument_mut() {
-                    if inst.source.is_audio_input() && !inst.active {
-                        inst.active = true;
+                    if inst.source.is_audio_input() && !inst.mixer.active {
+                        inst.mixer.active = true;
                         result.audio_dirty.instruments = true;
                         result.audio_dirty.routing = true;
                     }
@@ -98,8 +98,8 @@ pub(super) fn dispatch_server(
 
                 // Auto-deactivate AudioIn instrument on stop
                 if let Some(inst) = state.instruments.selected_instrument_mut() {
-                    if inst.source.is_audio_input() && inst.active {
-                        inst.active = false;
+                    if inst.source.is_audio_input() && inst.mixer.active {
+                        inst.mixer.active = false;
                         result.audio_dirty.instruments = true;
                         result.audio_dirty.routing = true;
                     }
@@ -111,9 +111,9 @@ pub(super) fn dispatch_server(
                 if let Some(inst) = state.instruments.selected_instrument() {
                     let inst_id = inst.id;
                     // Auto-activate AudioIn instrument on start
-                    if inst.source.is_audio_input() && !inst.active {
+                    if inst.source.is_audio_input() && !inst.mixer.active {
                         if let Some(inst_mut) = state.instruments.instrument_mut(inst_id) {
-                            inst_mut.active = true;
+                            inst_mut.mixer.active = true;
                         }
                         result.audio_dirty.instruments = true;
                         result.audio_dirty.routing = true;

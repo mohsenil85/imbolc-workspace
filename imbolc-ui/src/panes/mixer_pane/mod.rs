@@ -198,7 +198,7 @@ impl MixerPane {
                     count.saturating_sub(1)
                 }
             }
-            MixerSection::Sends => inst.sends.len().saturating_sub(1),
+            MixerSection::Sends => inst.mixer.sends.len().saturating_sub(1),
             MixerSection::Filter => {
                 if inst.filter().is_some() { 2 } else { 0 }
             }

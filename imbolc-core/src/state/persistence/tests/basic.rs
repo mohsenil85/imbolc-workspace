@@ -33,9 +33,9 @@ fn save_and_load_round_trip_basic() {
     }
     inst.lfo.enabled = true;
     inst.lfo.rate = 5.0;
-    inst.level = 0.42;
-    inst.pan = -0.2;
-    inst.output_target = OutputTarget::Bus(BusId::new(2));
+    inst.mixer.level = 0.42;
+    inst.mixer.pan = -0.2;
+    inst.mixer.output_target = OutputTarget::Bus(BusId::new(2));
     inst.add_effect(EffectType::Delay);
 
     session.piano_roll.add_track(inst_id);
@@ -63,9 +63,9 @@ fn save_and_load_round_trip_basic() {
     let loaded_inst = &loaded_instruments.instruments[0];
     assert_eq!(loaded_inst.id, inst_id);
     assert_eq!(loaded_inst.name, "Test");
-    assert!((loaded_inst.level - 0.42).abs() < 0.001);
-    assert!((loaded_inst.pan - -0.2).abs() < 0.001);
-    assert_eq!(loaded_inst.output_target, OutputTarget::Bus(BusId::new(2)));
+    assert!((loaded_inst.mixer.level - 0.42).abs() < 0.001);
+    assert!((loaded_inst.mixer.pan - -0.2).abs() < 0.001);
+    assert_eq!(loaded_inst.mixer.output_target, OutputTarget::Bus(BusId::new(2)));
     assert!(loaded_inst.filter().is_some());
     assert_eq!(loaded_inst.filter().unwrap().filter_type, FilterType::Hpf);
     if let Some(filter) = loaded_inst.filter() {
@@ -145,10 +145,10 @@ fn save_and_load_round_trip_complex() {
                 target: ParameterTarget::FilterCutoff,
             }));
         }
-        inst.output_target = OutputTarget::Bus(BusId::new(2));
-        inst.level = 0.55;
-        inst.pan = 0.25;
-        inst.sends.insert(BusId::new(1), MixerSend {
+        inst.mixer.output_target = OutputTarget::Bus(BusId::new(2));
+        inst.mixer.level = 0.55;
+        inst.mixer.pan = 0.25;
+        inst.mixer.sends.insert(BusId::new(1), MixerSend {
             bus_id: BusId::new(1), level: 0.33, enabled: true, tap_point: Default::default(),
         });
 
@@ -266,10 +266,10 @@ fn save_and_load_round_trip_complex() {
         .find(|i| i.id == saw_id)
         .unwrap();
     assert!(matches!(loaded_saw.source, SourceType::Saw));
-    assert_eq!(loaded_saw.output_target, OutputTarget::Bus(BusId::new(2)));
-    assert!((loaded_saw.level - 0.55).abs() < 0.001);
-    assert!((loaded_saw.pan - 0.25).abs() < 0.001);
-    let send = loaded_saw.sends.get(&BusId::new(1)).expect("send for bus 1");
+    assert_eq!(loaded_saw.mixer.output_target, OutputTarget::Bus(BusId::new(2)));
+    assert!((loaded_saw.mixer.level - 0.55).abs() < 0.001);
+    assert!((loaded_saw.mixer.pan - 0.25).abs() < 0.001);
+    let send = loaded_saw.mixer.sends.get(&BusId::new(1)).expect("send for bus 1");
     assert!(send.enabled);
     assert!((send.level - 0.33).abs() < 0.001);
     assert!(loaded_saw.filter().is_some());

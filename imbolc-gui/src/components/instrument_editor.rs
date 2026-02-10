@@ -59,8 +59,8 @@ pub fn InstrumentEditor() -> Element {
                 i.name.clone(),
                 i.source,
                 source_params,
-                i.level,
-                i.pan,
+                i.mixer.level,
+                i.mixer.pan,
                 filter_enabled,
                 filter_type,
                 cutoff,
@@ -69,7 +69,7 @@ pub fn InstrumentEditor() -> Element {
                 lfo_info,
                 env_info,
                 i.polyphonic,
-                i.active,
+                i.mixer.active,
             )
         })
     };

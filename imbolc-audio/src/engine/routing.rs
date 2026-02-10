@@ -70,8 +70,8 @@ impl AudioEngine {
         let mut effect_order: Vec<EffectId> = Vec::new();
 
         // Determine channel count based on channel config
-        let is_mono = instrument.channel_config.is_mono();
-        let channels = instrument.channel_config.channels();
+        let is_mono = instrument.mixer.channel_config.is_mono();
+        let channels = instrument.mixer.channel_config.channels();
 
         let source_out_bus = self.bus_allocator.get_or_alloc_audio_bus_with_channels(
             instrument.id, "source_out", channels,
@@ -89,7 +89,7 @@ impl AudioEngine {
             ];
             for p in &instrument.source_params {
                 let val = p.value.to_f32();
-                let val = if p.name == "gain" && !instrument.active { 0.0 } else { val };
+                let val = if p.name == "gain" && !instrument.mixer.active { 0.0 } else { val };
                 params.push((p.name.clone(), val));
             }
 
@@ -340,7 +340,7 @@ impl AudioEngine {
         let output_node_id = {
             let node_id = self.next_node_id;
             self.next_node_id += 1;
-            let mute = if any_solo { !instrument.solo } else { instrument.mute || session.mixer.master_mute };
+            let mute = if any_solo { !instrument.mixer.solo } else { instrument.mixer.mute || session.mixer.master_mute };
 
             let pan_mod_bus = if instrument.lfo.enabled && instrument.lfo.target == ParameterTarget::Pan {
                 lfo_control_bus.map(|b| b as f32).unwrap_or(-1.0)
@@ -349,10 +349,10 @@ impl AudioEngine {
             };
 
             // Determine output destination: layer group bus, mixer bus, or master (0)
-            let output_bus = if let Some(group_id) = instrument.layer_group {
+            let output_bus = if let Some(group_id) = instrument.layer.group {
                 self.layer_group_audio_buses.get(&group_id).copied().unwrap_or(0) as f32
             } else {
-                match instrument.output_target {
+                match instrument.mixer.output_target {
                     imbolc_types::OutputTarget::Bus(id) => {
                         self.bus_audio_buses.get(&id).copied().unwrap_or(0) as f32
                     }
@@ -363,9 +363,9 @@ impl AudioEngine {
             let params = vec![
                 ("in".to_string(), current_bus as f32),
                 ("out".to_string(), output_bus),
-                ("level".to_string(), instrument.level * session.mixer.master_level),
+                ("level".to_string(), instrument.mixer.level * session.mixer.master_level),
                 ("mute".to_string(), if mute { 1.0 } else { 0.0 }),
-                ("pan".to_string(), instrument.pan),
+                ("pan".to_string(), instrument.mixer.pan),
                 ("pan_mod_in".to_string(), pan_mod_bus),
             ];
 
@@ -402,7 +402,7 @@ impl AudioEngine {
         instrument: &Instrument,
     ) -> Result<(), String> {
         let source_out_bus = self.bus_allocator.get_audio_bus(instrument.id, "source_out").unwrap_or(16);
-        let is_mono = instrument.channel_config.is_mono();
+        let is_mono = instrument.mixer.channel_config.is_mono();
 
         let send_lfo_bus = if instrument.lfo.enabled && matches!(instrument.lfo.target, ParameterTarget::SendLevel(_)) {
             self.bus_allocator.get_control_bus(instrument.id, "lfo_out")
@@ -412,7 +412,7 @@ impl AudioEngine {
             -1.0
         };
 
-        for send in instrument.sends.values() {
+        for send in instrument.mixer.sends.values() {
             if !send.enabled || send.level <= 0.0 {
                 continue;
             }
@@ -1397,12 +1397,12 @@ impl AudioEngine {
         let any_solo = state.any_instrument_solo();
         for instrument in &state.instruments {
             if let Some(nodes) = self.node_map.get(&instrument.id) {
-                let mute = instrument.mute || session.mixer.master_mute || (any_solo && !instrument.solo);
-                client.set_param(nodes.output, "level", instrument.level * session.mixer.master_level)
+                let mute = instrument.mixer.mute || session.mixer.master_mute || (any_solo && !instrument.mixer.solo);
+                client.set_param(nodes.output, "level", instrument.mixer.level * session.mixer.master_level)
                     .map_err(|e| e.to_string())?;
                 client.set_param(nodes.output, "mute", if mute { 1.0 } else { 0.0 })
                     .map_err(|e| e.to_string())?;
-                client.set_param(nodes.output, "pan", instrument.pan)
+                client.set_param(nodes.output, "pan", instrument.mixer.pan)
                     .map_err(|e| e.to_string())?;
             }
         }

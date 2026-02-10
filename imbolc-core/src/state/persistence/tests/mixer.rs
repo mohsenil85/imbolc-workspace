@@ -76,7 +76,7 @@ fn round_trip_layer_group_effects() {
 
     // Assign instrument to group 1
     if let Some(inst) = instruments.instrument_mut(inst_id) {
-        inst.layer_group = Some(1);
+        inst.layer.group = Some(1);
     }
 
     // Add layer group mixer
@@ -126,7 +126,7 @@ fn round_trip_layer_group_eq() {
 
     // Assign instrument to group 1
     if let Some(inst) = instruments.instrument_mut(inst_id) {
-        inst.layer_group = Some(1);
+        inst.layer.group = Some(1);
     }
 
     // Add layer group mixer (comes with default EQ)
@@ -183,7 +183,7 @@ fn round_trip_layer_group_eq_disabled() {
     let inst_id = instruments.add_instrument(SourceType::Saw);
 
     if let Some(inst) = instruments.instrument_mut(inst_id) {
-        inst.layer_group = Some(1);
+        inst.layer.group = Some(1);
     }
 
     let bus_ids: Vec<BusId> = session.bus_ids().collect();

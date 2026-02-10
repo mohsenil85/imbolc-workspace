@@ -286,13 +286,13 @@ impl Pane for InstrumentPane {
             let eq_str = format!(" {:4}", Self::format_eq(instrument));
             let fx_raw = Self::format_effects(instrument);
             let fx_str = format!(" {:18}", &fx_raw[..fx_raw.len().min(18)]);
-            let level_str = format!(" {}", Self::format_level(instrument.level));
+            let level_str = format!(" {}", Self::format_level(instrument.mixer.level));
 
             let source_c = source_color(instrument.source);
 
-            let layer_str = match instrument.layer_group {
-                Some(g) if instrument.layer_octave_offset != 0 => {
-                    format!(" [L{}:{:+}]", g, instrument.layer_octave_offset)
+            let layer_str = match instrument.layer.group {
+                Some(g) if instrument.layer.octave_offset != 0 => {
+                    format!(" [L{}:{:+}]", g, instrument.layer.octave_offset)
                 }
                 Some(g) => format!(" [L{}]", g),
                 None => String::new(),

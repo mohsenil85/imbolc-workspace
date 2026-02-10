@@ -142,7 +142,7 @@ fn project_instrument(
                 instrument.lfo = update.lfo.clone();
                 instrument.amp_envelope = update.amp_envelope.clone();
                 instrument.polyphonic = update.polyphonic;
-                instrument.active = update.active;
+                instrument.mixer.active = update.active;
             }
             true
         }
@@ -290,38 +290,38 @@ fn project_instrument(
         }
         InstrumentAction::ToggleArp(id) => {
             if let Some(inst) = instruments.instrument_mut(*id) {
-                inst.arpeggiator.enabled = !inst.arpeggiator.enabled;
+                inst.note_input.arpeggiator.enabled = !inst.note_input.arpeggiator.enabled;
             }
             true
         }
         InstrumentAction::CycleArpDirection(id) => {
             if let Some(inst) = instruments.instrument_mut(*id) {
-                inst.arpeggiator.direction = inst.arpeggiator.direction.next();
+                inst.note_input.arpeggiator.direction = inst.note_input.arpeggiator.direction.next();
             }
             true
         }
         InstrumentAction::CycleArpRate(id) => {
             if let Some(inst) = instruments.instrument_mut(*id) {
-                inst.arpeggiator.rate = inst.arpeggiator.rate.next();
+                inst.note_input.arpeggiator.rate = inst.note_input.arpeggiator.rate.next();
             }
             true
         }
         InstrumentAction::AdjustArpOctaves(id, delta) => {
             if let Some(inst) = instruments.instrument_mut(*id) {
-                inst.arpeggiator.octaves = (inst.arpeggiator.octaves as i8 + delta)
+                inst.note_input.arpeggiator.octaves = (inst.note_input.arpeggiator.octaves as i8 + delta)
                     .clamp(1, 4) as u8;
             }
             true
         }
         InstrumentAction::AdjustArpGate(id, delta) => {
             if let Some(inst) = instruments.instrument_mut(*id) {
-                inst.arpeggiator.gate = (inst.arpeggiator.gate + delta).clamp(0.1, 1.0);
+                inst.note_input.arpeggiator.gate = (inst.note_input.arpeggiator.gate + delta).clamp(0.1, 1.0);
             }
             true
         }
         InstrumentAction::CycleChordShape(id) => {
             if let Some(inst) = instruments.instrument_mut(*id) {
-                inst.chord_shape = match inst.chord_shape {
+                inst.note_input.chord_shape = match inst.note_input.chord_shape {
                     None => Some(imbolc_types::ChordShape::Major),
                     Some(shape) => Some(shape.next()),
                 };
@@ -330,7 +330,7 @@ fn project_instrument(
         }
         InstrumentAction::ClearChordShape(id) => {
             if let Some(inst) = instruments.instrument_mut(*id) {
-                inst.chord_shape = None;
+                inst.note_input.chord_shape = None;
             }
             true
         }
@@ -381,7 +381,7 @@ fn project_instrument(
         }
         InstrumentAction::AdjustLayerOctaveOffset(id, delta) => {
             if let Some(inst) = instruments.instrument_mut(*id) {
-                inst.layer_octave_offset = (inst.layer_octave_offset + delta).clamp(-4, 4);
+                inst.layer.octave_offset = (inst.layer.octave_offset + delta).clamp(-4, 4);
             }
             true
         }
@@ -537,7 +537,7 @@ fn project_instrument(
         // Channel config
         InstrumentAction::ToggleChannelConfig(id) => {
             if let Some(inst) = instruments.instrument_mut(*id) {
-                inst.channel_config = inst.channel_config.toggle();
+                inst.mixer.channel_config = inst.mixer.channel_config.toggle();
             }
             true
         }
@@ -557,18 +557,18 @@ fn project_link_layer(
     if a == b {
         return;
     }
-    let group_b = instruments.instrument(b).and_then(|i| i.layer_group);
-    let group_a = instruments.instrument(a).and_then(|i| i.layer_group);
+    let group_b = instruments.instrument(b).and_then(|i| i.layer.group);
+    let group_a = instruments.instrument(a).and_then(|i| i.layer.group);
     let group_id = match (group_a, group_b) {
         (_, Some(g)) => g,
         (Some(g), None) => g,
         (None, None) => instruments.next_layer_group(),
     };
     if let Some(inst) = instruments.instrument_mut(a) {
-        inst.layer_group = Some(group_id);
+        inst.layer.group = Some(group_id);
     }
     if let Some(inst) = instruments.instrument_mut(b) {
-        inst.layer_group = Some(group_id);
+        inst.layer.group = Some(group_id);
     }
     // Auto-create LayerGroupMixer if new group
     let bus_ids: Vec<BusId> = session.mixer.bus_ids().collect();
@@ -582,19 +582,19 @@ fn project_unlink_layer(
     session: &mut SessionState,
     id: InstrumentId,
 ) {
-    let old_group = instruments.instrument(id).and_then(|i| i.layer_group);
+    let old_group = instruments.instrument(id).and_then(|i| i.layer.group);
     if let Some(inst) = instruments.instrument_mut(id) {
-        inst.layer_group = None;
+        inst.layer.group = None;
     }
     if let Some(g) = old_group {
         let remaining: Vec<InstrumentId> = instruments.instruments.iter()
-            .filter(|i| i.layer_group == Some(g))
+            .filter(|i| i.layer.group == Some(g))
             .map(|i| i.id)
             .collect();
         if remaining.len() <= 1 {
             if remaining.len() == 1 {
                 if let Some(inst) = instruments.instrument_mut(remaining[0]) {
-                    inst.layer_group = None;
+                    inst.layer.group = None;
                 }
             }
             session.mixer.remove_layer_group_mixer(g);
@@ -700,7 +700,7 @@ fn project_mixer(
             match session.mixer.selection {
                 MixerSelection::Instrument(idx) => {
                     if let Some(instrument) = instruments.instruments.get_mut(idx) {
-                        instrument.level = (instrument.level + delta).clamp(0.0, 1.0);
+                        instrument.mixer.level = (instrument.mixer.level + delta).clamp(0.0, 1.0);
                     }
                 }
                 MixerSelection::LayerGroup(group_id) => {
@@ -723,7 +723,7 @@ fn project_mixer(
             match session.mixer.selection {
                 MixerSelection::Instrument(idx) => {
                     if let Some(instrument) = instruments.instruments.get_mut(idx) {
-                        instrument.mute = !instrument.mute;
+                        instrument.mixer.mute = !instrument.mixer.mute;
                     }
                 }
                 MixerSelection::LayerGroup(group_id) => {
@@ -746,7 +746,7 @@ fn project_mixer(
             match session.mixer.selection {
                 MixerSelection::Instrument(idx) => {
                     if let Some(instrument) = instruments.instruments.get_mut(idx) {
-                        instrument.solo = !instrument.solo;
+                        instrument.mixer.solo = !instrument.mixer.solo;
                     }
                 }
                 MixerSelection::LayerGroup(group_id) => {
@@ -779,7 +779,7 @@ fn project_mixer(
             match session.mixer.selection {
                 MixerSelection::Instrument(idx) => {
                     if let Some(inst) = instruments.instruments.get_mut(idx) {
-                        inst.output_target = match inst.output_target {
+                        inst.mixer.output_target = match inst.mixer.output_target {
                             OutputTarget::Master => {
                                 bus_ids.first().map(|&id| OutputTarget::Bus(id))
                                     .unwrap_or(OutputTarget::Master)
@@ -821,7 +821,7 @@ fn project_mixer(
             match session.mixer.selection {
                 MixerSelection::Instrument(idx) => {
                     if let Some(inst) = instruments.instruments.get_mut(idx) {
-                        inst.output_target = match inst.output_target {
+                        inst.mixer.output_target = match inst.mixer.output_target {
                             OutputTarget::Master => {
                                 bus_ids.last().map(|&id| OutputTarget::Bus(id))
                                     .unwrap_or(OutputTarget::Master)
@@ -861,7 +861,7 @@ fn project_mixer(
             match session.mixer.selection {
                 MixerSelection::Instrument(idx) => {
                     if let Some(instrument) = instruments.instruments.get_mut(idx) {
-                        if let Some(send) = instrument.sends.get_mut(bus_id) {
+                        if let Some(send) = instrument.mixer.sends.get_mut(bus_id) {
                             send.level = (send.level + delta).clamp(0.0, 1.0);
                         }
                     }
@@ -881,7 +881,7 @@ fn project_mixer(
             match session.mixer.selection {
                 MixerSelection::Instrument(idx) => {
                     if let Some(instrument) = instruments.instruments.get_mut(idx) {
-                        let send = instrument.sends.entry(*bus_id).or_insert_with(|| MixerSend::new(*bus_id));
+                        let send = instrument.mixer.sends.entry(*bus_id).or_insert_with(|| MixerSend::new(*bus_id));
                         send.enabled = !send.enabled;
                         if send.enabled && send.level <= 0.0 {
                             send.level = 0.5;
@@ -905,7 +905,7 @@ fn project_mixer(
             match session.mixer.selection {
                 MixerSelection::Instrument(idx) => {
                     if let Some(instrument) = instruments.instruments.get_mut(idx) {
-                        if let Some(send) = instrument.sends.get_mut(bus_id) {
+                        if let Some(send) = instrument.mixer.sends.get_mut(bus_id) {
                             send.tap_point = send.tap_point.cycle();
                         }
                     }
@@ -925,7 +925,7 @@ fn project_mixer(
             match session.mixer.selection {
                 MixerSelection::Instrument(idx) => {
                     if let Some(instrument) = instruments.instruments.get_mut(idx) {
-                        instrument.pan = (instrument.pan + delta).clamp(-1.0, 1.0);
+                        instrument.mixer.pan = (instrument.mixer.pan + delta).clamp(-1.0, 1.0);
                     }
                 }
                 MixerSelection::LayerGroup(group_id) => {
@@ -1180,8 +1180,8 @@ fn project_bus(
             }
             // Reset instruments that output to this bus
             for inst in &mut instruments.instruments {
-                if inst.output_target == OutputTarget::Bus(bus_id) {
-                    inst.output_target = OutputTarget::Master;
+                if inst.mixer.output_target == OutputTarget::Bus(bus_id) {
+                    inst.mixer.output_target = OutputTarget::Master;
                 }
                 inst.disable_send_for_bus(bus_id);
             }
