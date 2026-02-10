@@ -1,7 +1,7 @@
 # Scaling Analysis
 
 Analysis of scaling bottlenecks in Imbolc's local and network architectures,
-ranked by impact. Updated Feb 2026 after dedicated writer thread.
+ranked by impact. Updated Feb 2026 after field-level state diffing.
 
 ---
 
@@ -17,7 +17,6 @@ ranked by impact. Updated Feb 2026 after dedicated writer thread.
   supports up to 4 concurrent single-instrument rebuilds per frame before
   escalating to full rebuild. Scoped undo (`SingleInstrument`) uses targeted
   flags instead of `AudioDirty::all()`.
-  See [targeted-routing-rebuild.md](targeted-routing-rebuild.md).
 
 - ~~Full state clone on every undoable action~~ — **Resolved: scoped undo.**
   `UndoScope::SingleInstrument(id)` clones only the affected instrument for
@@ -80,25 +79,14 @@ ranked by impact. Updated Feb 2026 after dedicated writer thread.
 
 ### Remaining
 
-1. **JSON wire format**. ~3-5x larger than bincode, ~10-50x slower to
-   serialize. Main cost is in `StatePatch` and `FullStateSync` — these carry
-   nested structs with many floats (instrument params, automation points, mixer
-   levels). Metering is small (playhead + bpm + peaks) so JSON overhead there
-   is low in absolute terms, but it's sent at 30Hz so the per-frame cost adds
-   up. Serialization still happens on the main thread (writer thread only does
-   I/O), so this is now the main-thread bottleneck for network broadcasts.
-
-2. **No state catchup on reconnect**. After `ReconnectSuccessful`, the client
-   waits for the next broadcast cycle to receive state. Gap is at most ~33ms
-   (one 30Hz cycle) but could be longer if nothing is dirty. Low impact —
-   trivial fix (send `FullStateSync` immediately after reconnect handshake).
-
-3. **Field-level state diffing**. Subsystem-level patches already avoid
-   sending unrelated subsystems, but within a subsystem the entire struct is
-   sent. E.g., adding one note sends the full `PianoRollState`. Impact scales
-   with project complexity — a project with 10k notes in the piano roll sends
-   all of them for any single-note edit. Would require delta encoding or
-   operation-based sync (CRDTs).
+1. **Automation/arrangement/mixer field-level diffing.** The piano roll and
+   instruments already have per-item delta patches, but automation lanes,
+   arrangement clips, and mixer buses still send the full subsystem struct on
+   any change. Lower priority — these subsystems are typically small. When
+   needed, the pattern is proven: add `dirty_<entity>: HashSet<Id>` +
+   `<subsystem>_structural: bool` to `DirtyFlags`, add a
+   `<subsystem>_<entity>_patches` field to `StatePatch`, and apply threshold
+   coalescing at >50%.
 
 ### Resolved
 
@@ -138,12 +126,32 @@ ranked by impact. Updated Feb 2026 after dedicated writer thread.
   since they target pending streams before client registration.
 
 - ~~Coarse session-level patch granularity~~ — **Resolved: subsystem-level
-  session patches.** `DirtyFlags` now tracks `piano_roll`, `arrangement`,
-  `automation`, and `mixer` independently. `StatePatch` has 4 new optional
-  subsystem fields. Adding a note sends only `PianoRollState`, not the entire
-  `SessionState`. The `session` flag is reserved for rare "remainder" changes
-  (BPM, key, registries, undo/redo) that send the full session. Backward-
-  compatible: old clients deserialize unknown fields as `None`.
+  session patches.** `DirtyFlags` tracks piano roll, arrangement, automation,
+  and mixer independently. `StatePatch` has optional subsystem fields. The
+  `session` flag is reserved for rare "remainder" changes (BPM, key,
+  registries, undo/redo) that send the full session.
+
+- ~~JSON wire format~~ — **Resolved: binary message format.** Switched from
+  JSON (`serde_json`) to bincode for the wire protocol. ~3-5x smaller payloads,
+  ~10-50x faster serialization. Changes localized to `framing.rs`
+  (`serialize_frame()`, `read_message()`, `write_message()`). Length-prefixed
+  framing (`[u32 len][payload]`) unchanged.
+
+- ~~No state catchup on reconnect~~ — **Resolved: reconnect catchup.**
+  Server sends `FullStateSync` immediately after `ReconnectSuccessful`
+  handshake. Client receives up-to-date state without waiting for the next
+  broadcast cycle.
+
+- ~~Field-level state diffing (piano roll / instruments)~~ — **Resolved:
+  per-item delta patches.** Both instruments and piano roll tracks use the
+  same pattern: `dirty_<items>: HashSet<InstrumentId>` for targeted edits,
+  `<subsystem>_structural: bool` for add/delete/metadata changes. `StatePatch`
+  carries either the full subsystem or a `HashMap<InstrumentId, T>` of changed
+  items (mutually exclusive). Threshold coalescing sends full state when >50%
+  of items are dirty. Piano roll actions are matched per-variant: note edits
+  resolve the track index to `InstrumentId` via `track_order`, metadata changes
+  (loop, time sig, swing) are structural, and audio-only actions (PlayStop,
+  ReleaseNote) set no flags at all.
 
 ### What's Well-Designed in Net
 
@@ -153,68 +161,34 @@ ranked by impact. Updated Feb 2026 after dedicated writer thread.
 - Suspension preserving ownership for reconnect
 - Dirty flags avoiding no-op broadcasts
 - Rate-limited patch broadcasting (~30 Hz)
-- Per-instrument delta patches
+- Per-instrument delta patches with threshold coalescing
+- Per-track piano roll delta patches with threshold coalescing
 - Serialize-once broadcast
 - Per-client outbox with frame-kind drop policy (slow-client isolation)
 - Subsystem-level session patches (piano roll, arrangement, automation, mixer)
+- Binary wire format (bincode)
+- Immediate state catchup on reconnect
 
 ---
 
-## Recommended Next Steps
+## Potential Future Work
 
-Prioritized by effort/impact ratio:
+Low priority — all high-impact issues are resolved. Listed for reference:
 
-### 1. Reconnect state catchup (quick win)
+### Automation per-lane deltas
 
-Send a `FullStateSync` immediately after `ReconnectSuccessful` handshake.
-Trivial change — a few lines in the reconnect path of `poll_actions()`.
-Eliminates the stale-state gap on reconnect.
+`dirty_automation_lanes: HashSet<AutomationLaneId>` + `automation_structural`.
+Simpler than piano roll — `AutomationAction` variants already carry lane IDs
+directly. Add `automation_lane_patches: Option<HashMap<AutomationLaneId,
+AutomationLane>>` to `StatePatch`. Only worth doing if automation lanes grow
+large (many points per lane).
 
-### 2. Binary wire format (high impact)
+### Arrangement per-entity deltas
 
-Switch from JSON to bincode for the wire protocol. This is the single biggest
-remaining optimization because serialization is now the main-thread bottleneck
-for network broadcasts (writer thread handles I/O).
+Two entity types (clips, placements). Lower priority — arrangement state is
+typically small.
 
-**What it buys:**
-- ~3-5x smaller payloads (less channel + socket throughput)
-- ~10-50x faster serialization (less main-thread time per broadcast)
-- Biggest win on `StatePatch` and `FullStateSync` which carry deeply nested
-  structs with many floats (JSON float formatting is notoriously slow)
+### Mixer per-bus deltas
 
-**Approach:**
-- Use `bincode` (already serde-based, so all types work immediately)
-- Replace `serde_json` in `framing.rs` — the serialize-once + writer-thread
-  architecture means changes are localized to `serialize_frame()`,
-  `read_message()`, and `write_message()`
-- The length-prefixed framing (`[u32 len][payload]`) stays identical
-- No protocol version negotiation needed initially — this is a LAN-only
-  protocol with no backward-compatibility requirement across versions
-- Reader threads also benefit (faster deserialization of `ClientMessage`)
-
-**Complexity:** Low-medium. The framing layer is already cleanly separated.
-Main risk is debugging opaque binary payloads vs readable JSON during
-development. Consider keeping a JSON debug mode behind a feature flag.
-
-### 3. Field-level state diffing (complex, diminishing returns)
-
-Reduce within-subsystem patch sizes by sending only changed fields or
-operations rather than full subsystem snapshots.
-
-**Where it matters most:** Piano roll (can have thousands of notes), automation
-(many points per lane), arrangement (many clip placements).
-
-**Where it doesn't matter:** Mixer (small, flat struct), session remainder
-(BPM, key — tiny), metering (already minimal).
-
-**Approach options:**
-- **Operation-based**: Send the action itself instead of the resulting state
-  diff. Clients apply the same action locally. Simple but requires all actions
-  to be deterministic and all clients to have identical dispatch logic.
-- **Delta encoding**: Diff old vs new state, send only changed fields. More
-  robust but requires a diffing library or custom delta types.
-- **CRDT**: Conflict-free replicated data types. Overkill for the current
-  single-writer-per-subsystem model but future-proofs for concurrent editing.
-
-Not recommended until binary format is in place — JSON overhead currently
-dwarfs the redundant-data overhead.
+`mixer_bus_patches: Option<HashMap<u8, MixerBus>>`. Also typically small
+payloads.
