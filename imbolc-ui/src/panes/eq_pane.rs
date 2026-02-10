@@ -4,6 +4,7 @@ use crate::state::{AppState, EqBandType, EqConfig, InstrumentId};
 use crate::ui::action_id::{ActionId, EqActionId};
 use crate::ui::layout_helpers::center_rect;
 use crate::ui::{Rect, RenderBuf, Action, Color, InputEvent, InstrumentAction, Keymap, Pane, Style};
+use imbolc_types::EqParamKind;
 
 use crate::state::instrument::EqBand;
 
@@ -72,7 +73,7 @@ impl Pane for EqPane {
                     let band = &eq.bands[self.selected_band];
                     let new_val = if band.enabled { 0.0 } else { 1.0 };
                     Action::Instrument(InstrumentAction::SetEqParam(
-                        instrument_id, self.selected_band, "on".to_string(), new_val,
+                        instrument_id, self.selected_band, EqParamKind::Enabled, new_val,
                     ))
                 } else {
                     Action::None
@@ -188,10 +189,10 @@ fn adjust_param(
     };
     let band = &eq.bands[band_idx];
 
-    let (param_name, current, min, max) = match param_idx {
-        0 => ("freq", band.freq, 20.0, 20000.0),
-        1 => ("gain", band.gain, -24.0, 24.0),
-        2 => ("q", band.q, 0.1, 10.0),
+    let (param, current, min, max) = match param_idx {
+        0 => (EqParamKind::Freq, band.freq, 20.0, 20000.0),
+        1 => (EqParamKind::Gain, band.gain, -24.0, 24.0),
+        2 => (EqParamKind::Q, band.q, 0.1, 10.0),
         3 => return Action::None, // toggle handled by toggle_band
         _ => return Action::None,
     };
@@ -219,7 +220,7 @@ fn adjust_param(
     };
 
     Action::Instrument(InstrumentAction::SetEqParam(
-        instrument_id, band_idx, param_name.to_string(), new_val,
+        instrument_id, band_idx, param, new_val,
     ))
 }
 

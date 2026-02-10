@@ -1,4 +1,4 @@
-use crate::action::{BusAction, DispatchResult, LayerGroupAction, NavIntent};
+use crate::action::{BusAction, DispatchResult, EqParamKind, LayerGroupAction, NavIntent};
 use imbolc_audio::AudioHandle;
 use crate::dispatch::side_effects::AudioSideEffect;
 use crate::state::{AppState, OutputTarget};
@@ -222,24 +222,23 @@ pub fn dispatch_layer_group(
             result.audio_dirty.session = true;
         }
 
-        LayerGroupAction::SetEqParam(group_id, band_idx, param_name, value) => {
+        LayerGroupAction::SetEqParam(group_id, band_idx, param, value) => {
             if let Some(gm) = state.session.mixer.layer_group_mixer_mut(*group_id) {
                 if let Some(ref mut eq) = gm.eq {
                     if let Some(band) = eq.bands.get_mut(*band_idx) {
-                        match param_name.as_str() {
-                            "freq" => band.freq = value.clamp(20.0, 20000.0),
-                            "gain" => band.gain = value.clamp(-24.0, 24.0),
-                            "q" => band.q = value.clamp(0.1, 10.0),
-                            "on" => band.enabled = *value > 0.5,
-                            _ => {}
+                        match param {
+                            EqParamKind::Freq => band.freq = value.clamp(20.0, 20000.0),
+                            EqParamKind::Gain => band.gain = value.clamp(-24.0, 24.0),
+                            EqParamKind::Q => band.q = value.clamp(0.1, 10.0),
+                            EqParamKind::Enabled => band.enabled = *value > 0.5,
                         }
                     }
                 }
             }
             // Send real-time param update to audio engine
             if audio.is_running() {
-                let sc_param = format!("b{}_{}", band_idx, param_name);
-                let sc_value = if param_name == "q" { 1.0 / value } else { *value };
+                let sc_param = format!("b{}_{}", band_idx, param.as_str());
+                let sc_value = if *param == EqParamKind::Q { 1.0 / value } else { *value };
                 effects.push(AudioSideEffect::SetLayerGroupEqParam {
                     group_id: *group_id,
                     param: sc_param,
@@ -473,7 +472,7 @@ mod tests {
         state.session.mixer.add_layer_group_mixer(1, &[]);
 
         let result = dispatch_layer_group(
-            &LayerGroupAction::SetEqParam(1, 0, "gain".to_string(), 6.0),
+            &LayerGroupAction::SetEqParam(1, 0, EqParamKind::Gain, 6.0),
             &mut state, &audio, &mut effects,
         );
         let eq = state.session.mixer.layer_group_mixer(1).unwrap().eq().unwrap();

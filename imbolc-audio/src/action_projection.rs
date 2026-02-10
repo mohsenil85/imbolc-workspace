@@ -13,7 +13,7 @@
 
 use imbolc_types::{
     Action, InstrumentAction, MixerAction, PianoRollAction, AutomationAction,
-    BusAction, LayerGroupAction, VstParamAction, SessionAction, ClickAction, VstTarget,
+    BusAction, EqParamKind, LayerGroupAction, VstParamAction, SessionAction, ClickAction, VstTarget,
     InstrumentId, MixerSelection, FilterType, OutputTarget,
 };
 use imbolc_types::Instrument;
@@ -349,16 +349,15 @@ fn project_instrument(
         // OpenVstEffectParams: navigation only, no state mutation
         InstrumentAction::OpenVstEffectParams(_, _) => true,
 
-        InstrumentAction::SetEqParam(instrument_id, band_idx, param_name, value) => {
+        InstrumentAction::SetEqParam(instrument_id, band_idx, param, value) => {
             if let Some(instrument) = instruments.instrument_mut(*instrument_id) {
                 if let Some(eq) = instrument.eq_mut() {
                     if let Some(band) = eq.bands.get_mut(*band_idx) {
-                        match param_name.as_str() {
-                            "freq" => band.freq = value.clamp(20.0, 20000.0),
-                            "gain" => band.gain = value.clamp(-24.0, 24.0),
-                            "q" => band.q = value.clamp(0.1, 10.0),
-                            "on" => band.enabled = *value > 0.5,
-                            _ => {}
+                        match param {
+                            EqParamKind::Freq => band.freq = value.clamp(20.0, 20000.0),
+                            EqParamKind::Gain => band.gain = value.clamp(-24.0, 24.0),
+                            EqParamKind::Q => band.q = value.clamp(0.1, 10.0),
+                            EqParamKind::Enabled => band.enabled = *value > 0.5,
                         }
                     }
                 }
@@ -1329,16 +1328,15 @@ fn project_layer_group(
             }
             true
         }
-        LayerGroupAction::SetEqParam(group_id, band_idx, param_name, value) => {
+        LayerGroupAction::SetEqParam(group_id, band_idx, param, value) => {
             if let Some(gm) = session.mixer.layer_group_mixer_mut(*group_id) {
                 if let Some(ref mut eq) = gm.eq {
                     if let Some(band) = eq.bands.get_mut(*band_idx) {
-                        match param_name.as_str() {
-                            "freq" => band.freq = value.clamp(20.0, 20000.0),
-                            "gain" => band.gain = value.clamp(-24.0, 24.0),
-                            "q" => band.q = value.clamp(0.1, 10.0),
-                            "on" => band.enabled = *value > 0.5,
-                            _ => {}
+                        match param {
+                            EqParamKind::Freq => band.freq = value.clamp(20.0, 20000.0),
+                            EqParamKind::Gain => band.gain = value.clamp(-24.0, 24.0),
+                            EqParamKind::Q => band.q = value.clamp(0.1, 10.0),
+                            EqParamKind::Enabled => band.enabled = *value > 0.5,
                         }
                     }
                 }

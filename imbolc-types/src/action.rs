@@ -73,6 +73,26 @@ impl LfoParamKind {
     }
 }
 
+/// Identifies an EQ band parameter for targeted /n_set updates.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EqParamKind {
+    Freq,
+    Gain,
+    Q,
+    Enabled,
+}
+
+impl EqParamKind {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            EqParamKind::Freq => "freq",
+            EqParamKind::Gain => "gain",
+            EqParamKind::Q => "q",
+            EqParamKind::Enabled => "on",
+        }
+    }
+}
+
 /// Identifies whether a VST operation targets the instrument source or an effect slot.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum VstTarget {
@@ -145,8 +165,8 @@ pub enum LayerGroupAction {
     AdjustEffectParam(u32, EffectId, usize, f32),
     /// Toggle EQ on/off for a layer group
     ToggleEq(u32),
-    /// Set an EQ band parameter on a layer group (group_id, band_index, param_name, value)
-    SetEqParam(u32, usize, String, f32),
+    /// Set an EQ band parameter on a layer group (group_id, band_index, param, value)
+    SetEqParam(u32, usize, EqParamKind, f32),
 }
 
 /// Sample chopper actions.
@@ -763,7 +783,7 @@ pub enum InstrumentAction {
     ClearChordShape(InstrumentId),
     LoadIRResult(InstrumentId, EffectId, PathBuf), // instrument_id, effect_id, path
     OpenVstEffectParams(InstrumentId, EffectId), // instrument_id, effect_id
-    SetEqParam(InstrumentId, usize, String, f32), // instrument_id, band_index, param_name, value
+    SetEqParam(InstrumentId, usize, EqParamKind, f32), // instrument_id, band_index, param, value
     ToggleEq(InstrumentId),
     LinkLayer(InstrumentId, InstrumentId),
     UnlinkLayer(InstrumentId),

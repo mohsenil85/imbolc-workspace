@@ -84,8 +84,8 @@ pub(super) fn dispatch_instrument(
         InstrumentAction::OpenVstEffectParams(instrument_id, effect_id) => {
             effects::handle_open_vst_effect_params(*instrument_id, *effect_id)
         }
-        InstrumentAction::SetEqParam(instrument_id, band_idx, ref param_name, value) => {
-            eq::handle_set_eq_param(state, audio, effects, *instrument_id, *band_idx, param_name, *value)
+        InstrumentAction::SetEqParam(instrument_id, band_idx, param, value) => {
+            eq::handle_set_eq_param(state, audio, effects, *instrument_id, *band_idx, *param, *value)
         }
         InstrumentAction::ToggleEq(instrument_id) => {
             eq::handle_toggle_eq(state, *instrument_id)
