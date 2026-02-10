@@ -378,6 +378,10 @@ impl RemoteDispatcher {
                             if !full_session {
                                 if let Some(pr) = patch.piano_roll {
                                     self.state.session.piano_roll = pr;
+                                } else if let Some(track_patches) = patch.piano_roll_track_patches {
+                                    for (id, track) in track_patches {
+                                        self.state.session.piano_roll.tracks.insert(id, track);
+                                    }
                                 }
                                 if let Some(arr) = patch.arrangement {
                                     self.state.session.arrangement = arr;

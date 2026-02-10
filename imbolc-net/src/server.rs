@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 
 use log::{error, info, warn};
 
-use imbolc_types::{InstrumentAction, InstrumentId, VstParamAction};
+use imbolc_types::{InstrumentAction, InstrumentId, PianoRollAction, SessionState, VstParamAction};
 
 use crate::framing::{read_message, serialize_frame, write_message};
 use crate::protocol::{
@@ -81,8 +81,10 @@ const PATCH_BROADCAST_INTERVAL_MS: u128 = 33;
 /// Tracks which subsystems have changed since last broadcast.
 #[derive(Debug, Default)]
 pub struct DirtyFlags {
-    /// Piano roll subsystem changed.
-    pub piano_roll: bool,
+    /// Per-track piano roll edits (e.g. ToggleNote on a specific track).
+    pub dirty_piano_roll_tracks: HashSet<InstrumentId>,
+    /// Structural piano roll changes: metadata, loop settings, time sig, etc.
+    pub piano_roll_structural: bool,
     /// Arrangement subsystem changed.
     pub arrangement: bool,
     /// Automation subsystem changed.
@@ -102,7 +104,14 @@ pub struct DirtyFlags {
 
 impl DirtyFlags {
     /// Mark dirty flags based on the action variant.
-    pub fn mark_from_action(&mut self, action: &NetworkAction) {
+    ///
+    /// `session` is needed to resolve piano roll track indices to `InstrumentId`.
+    /// Pass `None` in unit tests — PianoRoll actions will fall back to structural.
+    pub fn mark_from_action(
+        &mut self,
+        action: &NetworkAction,
+        session: Option<&SessionState>,
+    ) {
         match action {
             NetworkAction::Instrument(a) => {
                 match a.target_instrument_id() {
@@ -110,6 +119,8 @@ impl DirtyFlags {
                         // Delete changes the instrument Vec structurally
                         if matches!(a, InstrumentAction::Delete(_)) {
                             self.instruments_structural = true;
+                            // Instrument deletion also affects piano roll track list
+                            self.piano_roll_structural = true;
                         } else {
                             self.dirty_instruments.insert(id);
                         }
@@ -117,6 +128,10 @@ impl DirtyFlags {
                     None => {
                         // Add, Select*, PlayNote, PlayDrumPad — structural
                         self.instruments_structural = true;
+                        // Instrument addition also affects piano roll track list
+                        if matches!(a, InstrumentAction::Add(_)) {
+                            self.piano_roll_structural = true;
+                        }
                     }
                 }
             }
@@ -133,8 +148,8 @@ impl DirtyFlags {
             NetworkAction::Sequencer(_) => {
                 self.instruments_structural = true;
             }
-            NetworkAction::PianoRoll(_) => {
-                self.piano_roll = true;
+            NetworkAction::PianoRoll(pr) => {
+                self.mark_piano_roll_action(pr, session);
             }
             NetworkAction::Arrangement(_) => {
                 self.arrangement = true;
@@ -164,8 +179,75 @@ impl DirtyFlags {
         }
     }
 
+    /// Resolve a piano roll track index to an `InstrumentId` using session state.
+    /// Falls back to structural if session is unavailable or index is out of bounds.
+    fn resolve_track_id(
+        &mut self,
+        track: usize,
+        session: Option<&SessionState>,
+    ) {
+        match session.and_then(|s| s.piano_roll.track_order.get(track).copied()) {
+            Some(id) => { self.dirty_piano_roll_tracks.insert(id); }
+            None => self.piano_roll_structural = true,
+        }
+    }
+
+    /// Mark piano roll dirty flags based on the specific PianoRollAction variant.
+    fn mark_piano_roll_action(
+        &mut self,
+        action: &PianoRollAction,
+        session: Option<&SessionState>,
+    ) {
+        match action {
+            // Per-track note edits
+            PianoRollAction::ToggleNote { track, .. } => {
+                self.resolve_track_id(*track, session);
+            }
+            PianoRollAction::DeleteNotesInRegion { track, .. } => {
+                self.resolve_track_id(*track, session);
+            }
+            PianoRollAction::PasteNotes { track, .. } => {
+                self.resolve_track_id(*track, session);
+            }
+            PianoRollAction::TogglePolyMode(track) => {
+                self.resolve_track_id(*track, session);
+            }
+            // Recording: per-track if recording, otherwise audio-only (no flag)
+            PianoRollAction::PlayNote { track, .. } => {
+                if session.map_or(false, |s| s.piano_roll.recording) {
+                    self.resolve_track_id(*track, session);
+                }
+            }
+            PianoRollAction::PlayNotes { track, .. } => {
+                if session.map_or(false, |s| s.piano_roll.recording) {
+                    self.resolve_track_id(*track, session);
+                }
+            }
+            // Metadata / structural changes
+            PianoRollAction::ToggleLoop
+            | PianoRollAction::SetLoopStart(_)
+            | PianoRollAction::SetLoopEnd(_)
+            | PianoRollAction::CycleTimeSig
+            | PianoRollAction::AdjustSwing(_) => {
+                self.piano_roll_structural = true;
+            }
+            // Audio-only / transient — no state change to broadcast
+            PianoRollAction::PlayStop
+            | PianoRollAction::PlayStopRecord
+            | PianoRollAction::ReleaseNote { .. }
+            | PianoRollAction::ReleaseNotes { .. }
+            | PianoRollAction::BounceToWav
+            | PianoRollAction::ExportStems
+            | PianoRollAction::CancelExport
+            | PianoRollAction::RenderToWav(_) => {}
+            // Clipboard-only — no state change
+            PianoRollAction::CopyNotes { .. } => {}
+        }
+    }
+
     fn any(&self) -> bool {
-        self.piano_roll
+        !self.dirty_piano_roll_tracks.is_empty()
+            || self.piano_roll_structural
             || self.arrangement
             || self.automation
             || self.mixer
@@ -177,7 +259,8 @@ impl DirtyFlags {
     }
 
     fn clear(&mut self) {
-        self.piano_roll = false;
+        self.dirty_piano_roll_tracks.clear();
+        self.piano_roll_structural = false;
         self.arrangement = false;
         self.automation = false;
         self.mixer = false;
@@ -973,8 +1056,8 @@ impl NetServer {
     }
 
     /// Mark dirty flags for a dispatched action.
-    pub fn mark_dirty(&mut self, action: &NetworkAction) {
-        self.dirty.mark_from_action(action);
+    pub fn mark_dirty(&mut self, action: &NetworkAction, session: &SessionState) {
+        self.dirty.mark_from_action(action, Some(session));
     }
 
     /// Mark ownership as dirty (call on connect/disconnect).
@@ -1034,21 +1117,53 @@ impl NetServer {
 
         // If dirty.session is set, send full SessionState (includes all subsystems).
         // Otherwise, send only the specific subsystems that changed.
-        let (session, piano_roll, arrangement, automation, mixer) = if self.dirty.session {
-            (Some(state.session.clone()), None, None, None, None)
-        } else {
-            (
-                None,
-                if self.dirty.piano_roll { Some(state.session.piano_roll.clone()) } else { None },
-                if self.dirty.arrangement { Some(state.session.arrangement.clone()) } else { None },
-                if self.dirty.automation { Some(state.session.automation.clone()) } else { None },
-                if self.dirty.mixer { Some(state.session.mixer.clone()) } else { None },
-            )
-        };
+        let (session, piano_roll, piano_roll_track_patches, arrangement, automation, mixer) =
+            if self.dirty.session {
+                (Some(state.session.clone()), None, None, None, None, None)
+            } else {
+                // Piano roll: threshold coalescing (same pattern as instruments)
+                let pr_total = state.session.piano_roll.tracks.len();
+                let use_full_pr = self.dirty.piano_roll_structural
+                    || (pr_total > 0
+                        && self.dirty.dirty_piano_roll_tracks.len() > pr_total / 2);
+
+                let pr_full = if use_full_pr
+                    && (self.dirty.piano_roll_structural
+                        || !self.dirty.dirty_piano_roll_tracks.is_empty())
+                {
+                    Some(state.session.piano_roll.clone())
+                } else {
+                    None
+                };
+
+                let pr_patches = if !use_full_pr
+                    && !self.dirty.dirty_piano_roll_tracks.is_empty()
+                {
+                    let mut patches = HashMap::new();
+                    for &id in &self.dirty.dirty_piano_roll_tracks {
+                        if let Some(track) = state.session.piano_roll.tracks.get(&id) {
+                            patches.insert(id, track.clone());
+                        }
+                    }
+                    if patches.is_empty() { None } else { Some(patches) }
+                } else {
+                    None
+                };
+
+                (
+                    None,
+                    pr_full,
+                    pr_patches,
+                    if self.dirty.arrangement { Some(state.session.arrangement.clone()) } else { None },
+                    if self.dirty.automation { Some(state.session.automation.clone()) } else { None },
+                    if self.dirty.mixer { Some(state.session.mixer.clone()) } else { None },
+                )
+            };
 
         let patch = StatePatch {
             session,
             piano_roll,
+            piano_roll_track_patches,
             arrangement,
             automation,
             mixer,
@@ -1298,7 +1413,7 @@ mod tests {
         ];
         for action in &cases {
             let mut d = DirtyFlags::default();
-            d.mark_from_action(action);
+            d.mark_from_action(action, None);
             assert!(d.instruments_structural, "instruments_structural for {:?}", action);
             assert!(!d.session, "session clean for {:?}", action);
         }
@@ -1313,7 +1428,7 @@ mod tests {
         ];
         for action in &cases {
             let mut d = DirtyFlags::default();
-            d.mark_from_action(action);
+            d.mark_from_action(action, None);
             assert!(
                 !d.dirty_instruments.is_empty(),
                 "dirty_instruments should be non-empty for {:?}", action
@@ -1333,7 +1448,7 @@ mod tests {
         ];
         for action in &cases {
             let mut d = DirtyFlags::default();
-            d.mark_from_action(action);
+            d.mark_from_action(action, None);
             assert!(d.session, "session dirty for {:?}", action);
             assert!(!instruments_dirty(&d), "instruments clean for {:?}", action);
         }
@@ -1341,15 +1456,20 @@ mod tests {
 
     #[test]
     fn dirty_subsystem_actions() {
-        // PianoRoll → piano_roll flag
+        // PianoRoll metadata → piano_roll_structural (without session, falls back to structural)
         let mut d = DirtyFlags::default();
-        d.mark_from_action(&NetworkAction::PianoRoll(PianoRollAction::PlayStop));
-        assert!(d.piano_roll, "piano_roll dirty");
+        d.mark_from_action(&NetworkAction::PianoRoll(PianoRollAction::ToggleLoop), None);
+        assert!(d.piano_roll_structural, "piano_roll_structural dirty for ToggleLoop");
         assert!(!d.session, "session clean for PianoRoll");
+
+        // PianoRoll audio-only → no flags
+        let mut d = DirtyFlags::default();
+        d.mark_from_action(&NetworkAction::PianoRoll(PianoRollAction::PlayStop), None);
+        assert!(!d.any(), "PlayStop should not dirty anything");
 
         // Arrangement → arrangement flag
         let mut d = DirtyFlags::default();
-        d.mark_from_action(&NetworkAction::Arrangement(ArrangementAction::TogglePlayMode));
+        d.mark_from_action(&NetworkAction::Arrangement(ArrangementAction::TogglePlayMode), None);
         assert!(d.arrangement, "arrangement dirty");
         assert!(!d.session, "session clean for Arrangement");
 
@@ -1357,13 +1477,13 @@ mod tests {
         let mut d = DirtyFlags::default();
         d.mark_from_action(&NetworkAction::Automation(AutomationAction::AddLane(
             AutomationTarget::Instrument(0, InstrumentParameter::Standard(ParameterTarget::Level)),
-        )));
+        )), None);
         assert!(d.automation, "automation dirty");
         assert!(!d.session, "session clean for Automation");
 
         // Bus → mixer flag
         let mut d = DirtyFlags::default();
-        d.mark_from_action(&NetworkAction::Bus(BusAction::Add));
+        d.mark_from_action(&NetworkAction::Bus(BusAction::Add), None);
         assert!(d.mixer, "mixer dirty for Bus");
         assert!(!d.session, "session clean for Bus");
     }
@@ -1371,7 +1491,7 @@ mod tests {
     #[test]
     fn dirty_mixer_marks_mixer_and_instruments() {
         let mut d = DirtyFlags::default();
-        d.mark_from_action(&NetworkAction::Mixer(MixerAction::Move(1)));
+        d.mark_from_action(&NetworkAction::Mixer(MixerAction::Move(1)), None);
         assert!(d.mixer, "mixer dirty for Mixer");
         assert!(d.instruments_structural, "instruments_structural for Mixer");
         assert!(!d.session, "session clean for Mixer");
@@ -1380,7 +1500,7 @@ mod tests {
     #[test]
     fn dirty_midi_marks_session_and_instruments() {
         let mut d = DirtyFlags::default();
-        d.mark_from_action(&NetworkAction::Midi(MidiAction::ConnectPort(0)));
+        d.mark_from_action(&NetworkAction::Midi(MidiAction::ConnectPort(0)), None);
         assert!(d.session, "session dirty for Midi");
         assert!(d.instruments_structural, "instruments_structural for Midi");
     }
@@ -1389,7 +1509,7 @@ mod tests {
     fn dirty_undo_redo_mark_both() {
         for action in &[NetworkAction::Undo, NetworkAction::Redo] {
             let mut d = DirtyFlags::default();
-            d.mark_from_action(action);
+            d.mark_from_action(action, None);
             assert!(d.session, "session dirty for {:?}", action);
             assert!(d.instruments_structural, "instruments_structural for {:?}", action);
         }
@@ -1399,7 +1519,7 @@ mod tests {
     fn dirty_noop_actions() {
         for action in &[NetworkAction::None, NetworkAction::Quit] {
             let mut d = DirtyFlags::default();
-            d.mark_from_action(action);
+            d.mark_from_action(action, None);
             assert!(!d.any(), "no flags dirty for {:?}", action);
         }
     }
@@ -1411,7 +1531,7 @@ mod tests {
         let mut d = DirtyFlags::default();
         d.mark_from_action(&NetworkAction::Instrument(
             InstrumentAction::AdjustFilterCutoff(5, 0.1),
-        ));
+        ), None);
         assert_eq!(d.dirty_instruments, HashSet::from([5]));
         assert!(!d.instruments_structural);
     }
@@ -1419,8 +1539,9 @@ mod tests {
     #[test]
     fn dirty_instrument_delete_is_structural() {
         let mut d = DirtyFlags::default();
-        d.mark_from_action(&NetworkAction::Instrument(InstrumentAction::Delete(5)));
+        d.mark_from_action(&NetworkAction::Instrument(InstrumentAction::Delete(5)), None);
         assert!(d.instruments_structural);
+        assert!(d.piano_roll_structural, "instrument delete should also mark piano_roll_structural");
     }
 
     #[test]
@@ -1428,9 +1549,10 @@ mod tests {
         let mut d = DirtyFlags::default();
         d.mark_from_action(&NetworkAction::Instrument(
             InstrumentAction::Add(SourceType::Saw),
-        ));
+        ), None);
         assert!(d.instruments_structural);
         assert!(d.dirty_instruments.is_empty());
+        assert!(d.piano_roll_structural, "instrument add should also mark piano_roll_structural");
     }
 
     #[test]
@@ -1438,7 +1560,7 @@ mod tests {
         let mut d = DirtyFlags::default();
         d.mark_from_action(&NetworkAction::VstParam(
             VstParamAction::SetParam(3, VstTarget::Source, 0, 0.5),
-        ));
+        ), None);
         assert_eq!(d.dirty_instruments, HashSet::from([3]));
         assert!(!d.instruments_structural);
     }
@@ -1446,7 +1568,7 @@ mod tests {
     #[test]
     fn dirty_undo_is_structural() {
         let mut d = DirtyFlags::default();
-        d.mark_from_action(&NetworkAction::Undo);
+        d.mark_from_action(&NetworkAction::Undo, None);
         assert!(d.instruments_structural);
     }
 
@@ -1455,10 +1577,10 @@ mod tests {
         let mut d = DirtyFlags::default();
         d.mark_from_action(&NetworkAction::Instrument(
             InstrumentAction::AdjustFilterCutoff(2, 0.1),
-        ));
+        ), None);
         d.mark_from_action(&NetworkAction::Instrument(
             InstrumentAction::AdjustFilterCutoff(7, 0.2),
-        ));
+        ), None);
         assert_eq!(d.dirty_instruments, HashSet::from([2, 7]));
         assert!(!d.instruments_structural);
     }
@@ -1473,7 +1595,8 @@ mod tests {
     #[test]
     fn any_true_for_each_flag() {
         for setter in [
-            (|d: &mut DirtyFlags| d.piano_roll = true) as fn(&mut DirtyFlags),
+            (|d: &mut DirtyFlags| { d.dirty_piano_roll_tracks.insert(0); }) as fn(&mut DirtyFlags),
+            |d: &mut DirtyFlags| d.piano_roll_structural = true,
             |d: &mut DirtyFlags| d.arrangement = true,
             |d: &mut DirtyFlags| d.automation = true,
             |d: &mut DirtyFlags| d.mixer = true,
@@ -1492,7 +1615,8 @@ mod tests {
     #[test]
     fn clear_resets_all() {
         let mut d = DirtyFlags {
-            piano_roll: true,
+            dirty_piano_roll_tracks: HashSet::from([0, 1]),
+            piano_roll_structural: true,
             arrangement: true,
             automation: true,
             mixer: true,
@@ -1504,7 +1628,8 @@ mod tests {
         };
         d.clear();
         assert!(!d.any());
-        assert!(!d.piano_roll);
+        assert!(d.dirty_piano_roll_tracks.is_empty());
+        assert!(!d.piano_roll_structural);
         assert!(!d.arrangement);
         assert!(!d.automation);
         assert!(!d.mixer);
@@ -1521,11 +1646,11 @@ mod tests {
     fn multiple_actions_accumulate() {
         let mut d = DirtyFlags::default();
         // First: session only
-        d.mark_from_action(&NetworkAction::Server(ServerAction::Connect));
+        d.mark_from_action(&NetworkAction::Server(ServerAction::Connect), None);
         assert!(d.session);
         assert!(!instruments_dirty(&d));
         // Second: instruments (structural) — session stays dirty
-        d.mark_from_action(&NetworkAction::Instrument(InstrumentAction::Add(SourceType::Saw)));
+        d.mark_from_action(&NetworkAction::Instrument(InstrumentAction::Add(SourceType::Saw)), None);
         assert!(d.session);
         assert!(d.instruments_structural);
     }
@@ -1541,7 +1666,7 @@ mod tests {
         ];
         let mut d = DirtyFlags::default();
         for a in &all {
-            d.mark_from_action(a);
+            d.mark_from_action(a, None);
         }
         assert!(!d.ownership);
         assert!(!d.privileged_client);

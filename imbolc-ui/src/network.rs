@@ -89,7 +89,7 @@ pub fn run_server() -> std::io::Result<()> {
             log::debug!("Received action from {:?}: {:?}", client_id, net_action);
 
             // Mark dirty based on action
-            server.mark_dirty(&net_action);
+            server.mark_dirty(&net_action, &dispatcher.state().session);
 
             // Convert NetworkAction to Action
             let action = network_action_to_action(net_action);

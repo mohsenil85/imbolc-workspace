@@ -85,7 +85,7 @@ fn test_state_patch_broadcast() {
     // Mark session dirty and broadcast patch
     use imbolc_net::protocol::NetworkAction;
     use imbolc_types::ServerAction;
-    server.mark_dirty(&NetworkAction::Server(ServerAction::RecordMaster));
+    server.mark_dirty(&NetworkAction::Server(ServerAction::RecordMaster), &state.session);
 
     let state = common::make_test_state(&server);
     server.broadcast_state_patch(&state);
@@ -141,7 +141,7 @@ fn test_patch_instruments_only() {
     common::drive_until_clients(&mut server, &state, 1, Duration::from_secs(2));
     let _welcome = alice.recv().unwrap();
 
-    server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::Add(SourceType::Saw)));
+    server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::Add(SourceType::Saw)), &state.session);
 
     let state = common::make_test_state(&server);
     server.broadcast_state_patch(&state);
@@ -173,7 +173,7 @@ fn test_patch_mixer_and_instruments() {
     let _welcome = alice.recv().unwrap();
 
     // Mixer marks mixer (granular) + instruments_structural
-    server.mark_dirty(&NetworkAction::Mixer(MixerAction::Move(1)));
+    server.mark_dirty(&NetworkAction::Mixer(MixerAction::Move(1)), &state.session);
 
     let state = common::make_test_state(&server);
     server.broadcast_state_patch(&state);
@@ -229,7 +229,7 @@ fn test_seq_increments() {
 
     let mut prev_seq = 0u64;
     for _ in 0..3 {
-        server.mark_dirty(&NetworkAction::Server(ServerAction::Connect));
+        server.mark_dirty(&NetworkAction::Server(ServerAction::Connect), &state.session);
         server.reset_rate_limit();
         let state = common::make_test_state(&server);
         server.broadcast_state_patch(&state);
@@ -260,14 +260,14 @@ fn test_dirty_clears_after_patch() {
     let _welcome = alice.recv().unwrap();
 
     // First broadcast: instruments dirty
-    server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::Add(SourceType::Saw)));
+    server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::Add(SourceType::Saw)), &state.session);
     let state = common::make_test_state(&server);
     server.broadcast_state_patch(&state);
     server.flush_writer();
     let _msg1 = alice.recv().unwrap();
 
     // Second broadcast: session dirty (instruments should be clean now)
-    server.mark_dirty(&NetworkAction::Server(ServerAction::Connect));
+    server.mark_dirty(&NetworkAction::Server(ServerAction::Connect), &state.session);
     server.reset_rate_limit();
     let state = common::make_test_state(&server);
     server.broadcast_state_patch(&state);
@@ -372,7 +372,7 @@ fn test_patch_reaches_all_clients() {
     common::drive_until_clients(&mut server, &state, 2, Duration::from_secs(2));
     let _welcome_b = bob.recv().unwrap();
 
-    server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::Add(SourceType::Saw)));
+    server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::Add(SourceType::Saw)), &state.session);
     let state = common::make_test_state(&server);
     server.broadcast_state_patch(&state);
     server.flush_writer();
@@ -402,8 +402,8 @@ fn test_accumulated_actions_combined_patch() {
     let _welcome = alice.recv().unwrap();
 
     // Mark session dirty then instruments dirty before broadcasting
-    server.mark_dirty(&NetworkAction::Server(ServerAction::Connect));
-    server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::Add(SourceType::Saw)));
+    server.mark_dirty(&NetworkAction::Server(ServerAction::Connect), &state.session);
+    server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::Add(SourceType::Saw)), &state.session);
     server.mark_ownership_dirty();
 
     let state = common::make_test_state(&server);
@@ -438,7 +438,7 @@ fn test_patch_single_instrument_change() {
     let _welcome = alice.recv().unwrap();
 
     // Targeted action on instrument 1
-    server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::AdjustFilterCutoff(1, 0.1)));
+    server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::AdjustFilterCutoff(1, 0.1)), &state.session);
     let state = common::make_test_state_with_instruments(&server, 4);
     server.broadcast_state_patch(&state);
     server.flush_writer();
@@ -467,7 +467,7 @@ fn test_patch_structural_sends_full_instruments() {
     let _welcome = alice.recv().unwrap();
 
     // Structural action (Add)
-    server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::Add(SourceType::Saw)));
+    server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::Add(SourceType::Saw)), &state.session);
     let state = common::make_test_state_with_instruments(&server, 4);
     server.broadcast_state_patch(&state);
     server.flush_writer();
@@ -494,8 +494,8 @@ fn test_patch_targeted_then_structural() {
     let _welcome = alice.recv().unwrap();
 
     // Targeted + structural in same tick → structural wins
-    server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::AdjustFilterCutoff(1, 0.1)));
-    server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::Add(SourceType::Saw)));
+    server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::AdjustFilterCutoff(1, 0.1)), &state.session);
+    server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::Add(SourceType::Saw)), &state.session);
     let state = common::make_test_state_with_instruments(&server, 4);
     server.broadcast_state_patch(&state);
     server.flush_writer();
@@ -523,8 +523,8 @@ fn test_instrument_patches_roundtrip() {
     let _welcome = alice.recv().unwrap();
 
     // Two targeted changes on different instruments
-    server.mark_dirty(&NetworkAction::VstParam(VstParamAction::SetParam(0, VstTarget::Source, 0, 0.5)));
-    server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::AdjustFilterCutoff(2, 0.3)));
+    server.mark_dirty(&NetworkAction::VstParam(VstParamAction::SetParam(0, VstTarget::Source, 0, 0.5)), &state.session);
+    server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::AdjustFilterCutoff(2, 0.3)), &state.session);
     let state = common::make_test_state_with_instruments(&server, 4);
     server.broadcast_state_patch(&state);
     server.flush_writer();
@@ -553,7 +553,7 @@ fn test_patch_rate_limiting() {
     let _welcome = alice.recv().unwrap();
 
     // First broadcast should go through
-    server.mark_dirty(&NetworkAction::Server(ServerAction::Connect));
+    server.mark_dirty(&NetworkAction::Server(ServerAction::Connect), &state.session);
     let state = common::make_test_state(&server);
     server.broadcast_state_patch(&state);
     server.flush_writer();
@@ -561,7 +561,7 @@ fn test_patch_rate_limiting() {
     assert!(matches!(msg, ServerMessage::StatePatchUpdate { .. }));
 
     // Second broadcast immediately after should be rate-limited (no reset_rate_limit)
-    server.mark_dirty(&NetworkAction::Server(ServerAction::RecordMaster));
+    server.mark_dirty(&NetworkAction::Server(ServerAction::RecordMaster), &state.session);
     let state = common::make_test_state(&server);
     server.broadcast_state_patch(&state);
     server.flush_writer();
@@ -600,9 +600,9 @@ fn test_patch_threshold_coalescing() {
     let _welcome = alice.recv().unwrap();
 
     // Dirty 3 out of 4 instruments (> half) → should coalesce to full instruments
-    server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::AdjustFilterCutoff(0, 0.1)));
-    server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::AdjustFilterCutoff(1, 0.2)));
-    server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::AdjustFilterCutoff(2, 0.3)));
+    server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::AdjustFilterCutoff(0, 0.1)), &state.session);
+    server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::AdjustFilterCutoff(1, 0.2)), &state.session);
+    server.mark_dirty(&NetworkAction::Instrument(InstrumentAction::AdjustFilterCutoff(2, 0.3)), &state.session);
     let state = common::make_test_state_with_instruments(&server, 4);
     server.broadcast_state_patch(&state);
     server.flush_writer();
@@ -649,7 +649,7 @@ fn test_slow_client_does_not_block_fast_client() {
     let start = Instant::now();
     let mut alice_received = 0u32;
     for i in 0..20 {
-        server.mark_dirty(&NetworkAction::Server(ServerAction::Connect));
+        server.mark_dirty(&NetworkAction::Server(ServerAction::Connect), &state.session);
         server.reset_rate_limit();
         let state = common::make_test_state(&server);
         server.broadcast_state_patch(&state);
@@ -750,7 +750,7 @@ fn test_piano_roll_only_sends_piano_roll() {
     common::drive_until_clients(&mut server, &state, 1, Duration::from_secs(2));
     let _welcome = alice.recv().unwrap();
 
-    server.mark_dirty(&NetworkAction::PianoRoll(PianoRollAction::PlayStop));
+    server.mark_dirty(&NetworkAction::PianoRoll(PianoRollAction::ToggleLoop), &state.session);
 
     let state = common::make_test_state(&server);
     server.broadcast_state_patch(&state);
@@ -781,7 +781,7 @@ fn test_arrangement_only_sends_arrangement() {
     common::drive_until_clients(&mut server, &state, 1, Duration::from_secs(2));
     let _welcome = alice.recv().unwrap();
 
-    server.mark_dirty(&NetworkAction::Arrangement(ArrangementAction::TogglePlayMode));
+    server.mark_dirty(&NetworkAction::Arrangement(ArrangementAction::TogglePlayMode), &state.session);
 
     let state = common::make_test_state(&server);
     server.broadcast_state_patch(&state);
@@ -811,7 +811,7 @@ fn test_mixer_only_sends_mixer() {
     common::drive_until_clients(&mut server, &state, 1, Duration::from_secs(2));
     let _welcome = alice.recv().unwrap();
 
-    server.mark_dirty(&NetworkAction::Bus(BusAction::Add));
+    server.mark_dirty(&NetworkAction::Bus(BusAction::Add), &state.session);
 
     let state = common::make_test_state(&server);
     server.broadcast_state_patch(&state);
@@ -841,7 +841,7 @@ fn test_undo_sends_full_session() {
     common::drive_until_clients(&mut server, &state, 1, Duration::from_secs(2));
     let _welcome = alice.recv().unwrap();
 
-    server.mark_dirty(&NetworkAction::Undo);
+    server.mark_dirty(&NetworkAction::Undo, &state.session);
 
     let state = common::make_test_state(&server);
     server.broadcast_state_patch(&state);
@@ -874,10 +874,10 @@ fn test_mixed_subsystems_no_full_session() {
     let _welcome = alice.recv().unwrap();
 
     // Mark both PianoRoll and Automation dirty
-    server.mark_dirty(&NetworkAction::PianoRoll(PianoRollAction::PlayStop));
+    server.mark_dirty(&NetworkAction::PianoRoll(PianoRollAction::ToggleLoop), &state.session);
     server.mark_dirty(&NetworkAction::Automation(AutomationAction::AddLane(
         AutomationTarget::Instrument(0, InstrumentParameter::Standard(ParameterTarget::Level)),
-    )));
+    )), &state.session);
 
     let state = common::make_test_state(&server);
     server.broadcast_state_patch(&state);
@@ -891,6 +891,178 @@ fn test_mixed_subsystems_no_full_session() {
             assert!(patch.session.is_none(), "session should be absent (no remainder change)");
             assert!(patch.arrangement.is_none(), "arrangement should be absent");
             assert!(patch.mixer.is_none(), "mixer should be absent");
+        }
+        other => panic!("Expected StatePatchUpdate, got {:?}", other),
+    }
+}
+
+// ── Piano roll per-track delta patches ──────────────────────────
+
+#[test]
+fn test_piano_roll_per_track_sends_track_patches() {
+    let mut server = NetServer::bind("127.0.0.1:0").unwrap();
+    let addr = server.local_addr().unwrap().to_string();
+
+    // Build state with 2 piano roll tracks
+    let mut state = common::make_test_state(&server);
+    state.session.piano_roll.add_track(1);
+    state.session.piano_roll.add_track(2);
+    state.session.piano_roll.toggle_note(0, 60, 0, 480, 100);
+
+    let mut alice = common::RawClient::connect(&addr).unwrap();
+    alice.send_hello("Alice", vec![], false).unwrap();
+    common::drive_until_clients(&mut server, &state, 1, Duration::from_secs(2));
+    let _welcome = alice.recv().unwrap();
+
+    // ToggleNote on track 0 → per-track patch
+    server.mark_dirty(
+        &NetworkAction::PianoRoll(PianoRollAction::ToggleNote {
+            pitch: 64,
+            tick: 480,
+            duration: 480,
+            velocity: 100,
+            track: 0,
+        }),
+        &state.session,
+    );
+    server.broadcast_state_patch(&state);
+    server.flush_writer();
+
+    let msg = alice.recv().unwrap();
+    match msg {
+        ServerMessage::StatePatchUpdate { patch } => {
+            assert!(patch.piano_roll.is_none(), "full piano_roll should be absent for per-track edit");
+            let track_patches = patch.piano_roll_track_patches
+                .expect("piano_roll_track_patches should be present");
+            assert!(track_patches.contains_key(&1), "track for instrument 1 should be in patches");
+            assert_eq!(track_patches.len(), 1, "only the edited track should be in patches");
+        }
+        other => panic!("Expected StatePatchUpdate, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_piano_roll_structural_sends_full() {
+    let mut server = NetServer::bind("127.0.0.1:0").unwrap();
+    let addr = server.local_addr().unwrap().to_string();
+
+    let mut state = common::make_test_state(&server);
+    state.session.piano_roll.add_track(1);
+
+    let mut alice = common::RawClient::connect(&addr).unwrap();
+    alice.send_hello("Alice", vec![], false).unwrap();
+    common::drive_until_clients(&mut server, &state, 1, Duration::from_secs(2));
+    let _welcome = alice.recv().unwrap();
+
+    // ToggleLoop → structural → full piano_roll
+    server.mark_dirty(
+        &NetworkAction::PianoRoll(PianoRollAction::ToggleLoop),
+        &state.session,
+    );
+    server.broadcast_state_patch(&state);
+    server.flush_writer();
+
+    let msg = alice.recv().unwrap();
+    match msg {
+        ServerMessage::StatePatchUpdate { patch } => {
+            assert!(patch.piano_roll.is_some(), "full piano_roll should be sent for structural change");
+            assert!(patch.piano_roll_track_patches.is_none(), "track_patches absent when full piano_roll sent");
+        }
+        other => panic!("Expected StatePatchUpdate, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_piano_roll_targeted_then_structural() {
+    let mut server = NetServer::bind("127.0.0.1:0").unwrap();
+    let addr = server.local_addr().unwrap().to_string();
+
+    let mut state = common::make_test_state(&server);
+    state.session.piano_roll.add_track(1);
+
+    let mut alice = common::RawClient::connect(&addr).unwrap();
+    alice.send_hello("Alice", vec![], false).unwrap();
+    common::drive_until_clients(&mut server, &state, 1, Duration::from_secs(2));
+    let _welcome = alice.recv().unwrap();
+
+    // ToggleNote (per-track) + ToggleLoop (structural) in same tick → full piano_roll
+    server.mark_dirty(
+        &NetworkAction::PianoRoll(PianoRollAction::ToggleNote {
+            pitch: 60,
+            tick: 0,
+            duration: 480,
+            velocity: 100,
+            track: 0,
+        }),
+        &state.session,
+    );
+    server.mark_dirty(
+        &NetworkAction::PianoRoll(PianoRollAction::ToggleLoop),
+        &state.session,
+    );
+    server.broadcast_state_patch(&state);
+    server.flush_writer();
+
+    let msg = alice.recv().unwrap();
+    match msg {
+        ServerMessage::StatePatchUpdate { patch } => {
+            assert!(patch.piano_roll.is_some(), "structural should override to full piano_roll");
+            assert!(patch.piano_roll_track_patches.is_none(), "track_patches absent when full piano_roll sent");
+        }
+        other => panic!("Expected StatePatchUpdate, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_piano_roll_threshold_coalescing() {
+    let mut server = NetServer::bind("127.0.0.1:0").unwrap();
+    let addr = server.local_addr().unwrap().to_string();
+
+    // 2 tracks: threshold is >1, so dirtying both → full piano_roll
+    let mut state = common::make_test_state(&server);
+    state.session.piano_roll.add_track(1);
+    state.session.piano_roll.add_track(2);
+
+    let mut alice = common::RawClient::connect(&addr).unwrap();
+    alice.send_hello("Alice", vec![], false).unwrap();
+    common::drive_until_clients(&mut server, &state, 1, Duration::from_secs(2));
+    let _welcome = alice.recv().unwrap();
+
+    // Dirty both tracks (2 out of 2 > half)
+    server.mark_dirty(
+        &NetworkAction::PianoRoll(PianoRollAction::ToggleNote {
+            pitch: 60,
+            tick: 0,
+            duration: 480,
+            velocity: 100,
+            track: 0,
+        }),
+        &state.session,
+    );
+    server.mark_dirty(
+        &NetworkAction::PianoRoll(PianoRollAction::ToggleNote {
+            pitch: 64,
+            tick: 0,
+            duration: 480,
+            velocity: 100,
+            track: 1,
+        }),
+        &state.session,
+    );
+    server.broadcast_state_patch(&state);
+    server.flush_writer();
+
+    let msg = alice.recv().unwrap();
+    match msg {
+        ServerMessage::StatePatchUpdate { patch } => {
+            assert!(
+                patch.piano_roll.is_some(),
+                "should coalesce to full piano_roll when >half tracks dirty"
+            );
+            assert!(
+                patch.piano_roll_track_patches.is_none(),
+                "track_patches absent when coalesced to full"
+            );
         }
         other => panic!("Expected StatePatchUpdate, got {:?}", other),
     }
