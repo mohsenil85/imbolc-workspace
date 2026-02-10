@@ -74,7 +74,7 @@ impl AutomationPane {
                 }
                 // Add global targets (skip when editing a clip — only instrument targets apply)
                 if !editing_clip {
-                    for bus_id in 1..=8u8 {
+                    for bus_id in state.session.bus_ids() {
                         options.push(AutomationTarget::bus_level(bus_id));
                     }
                     options.push(AutomationTarget::bpm());

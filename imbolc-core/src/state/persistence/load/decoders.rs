@@ -215,9 +215,10 @@ pub(crate) fn decode_parameter_target(s: &str) -> crate::state::instrument::Para
 
 pub(crate) fn decode_output_target(s: &str) -> crate::state::instrument::OutputTarget {
     use crate::state::instrument::OutputTarget;
+    use imbolc_types::BusId;
     if let Some(rest) = s.strip_prefix("Bus:") {
         if let Ok(id) = rest.parse::<u8>() {
-            return OutputTarget::Bus(id);
+            return OutputTarget::Bus(BusId::new(id));
         }
     }
     OutputTarget::Master
@@ -345,11 +346,11 @@ pub(crate) fn decode_automation_target(
     target_bus_id: Option<i64>,
     _target_extra: Option<&str>,
 ) -> crate::state::AutomationTarget {
-    use imbolc_types::{AutomationTarget, BusParameter, GlobalParameter, InstrumentParameter};
+    use imbolc_types::{AutomationTarget, BusId, BusParameter, GlobalParameter, InstrumentParameter};
 
     match target_type {
         "BusLevel" => {
-            AutomationTarget::Bus(target_bus_id.unwrap_or(1) as u8, BusParameter::Level)
+            AutomationTarget::Bus(BusId::new(target_bus_id.unwrap_or(1) as u8), BusParameter::Level)
         }
         "GlobalBpm" => AutomationTarget::Global(GlobalParameter::Bpm),
         "GlobalTimeSignature" => AutomationTarget::Global(GlobalParameter::TimeSignature),

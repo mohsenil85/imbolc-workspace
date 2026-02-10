@@ -86,7 +86,7 @@ where
 }
 
 /// Push bus mixer params effect if audio is running.
-pub fn apply_bus_update(audio: &imbolc_audio::AudioHandle, effects: &mut Vec<AudioSideEffect>, update: Option<(u8, f32, bool, f32)>) {
+pub fn apply_bus_update(audio: &imbolc_audio::AudioHandle, effects: &mut Vec<AudioSideEffect>, update: Option<(imbolc_types::BusId, f32, bool, f32)>) {
     if let Some((bus_id, level, mute, pan)) = update {
         if audio.is_running() {
             effects.push(AudioSideEffect::SetBusMixerParams { bus_id, level, mute, pan });

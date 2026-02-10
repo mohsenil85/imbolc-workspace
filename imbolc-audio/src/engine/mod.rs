@@ -16,7 +16,7 @@ use std::time::Instant;
 
 use backend::AudioBackend;
 use super::bus_allocator::BusAllocator;
-use imbolc_types::{BufferId, EffectId, InstrumentId};
+use imbolc_types::{BufferId, BusId, EffectId, InstrumentId};
 use node_registry::NodeRegistry;
 use voice_allocator::VoiceAllocator;
 
@@ -124,19 +124,19 @@ pub struct AudioEngine {
     bus_allocator: BusAllocator,
     groups_created: bool,
     /// Dedicated audio bus per mixer bus (bus_id -> SC audio bus index)
-    bus_audio_buses: HashMap<u8, i32>,
+    bus_audio_buses: HashMap<BusId, i32>,
     /// Send synth nodes: (instrument_id, bus_id) -> node_id
-    send_node_map: HashMap<(InstrumentId, u8), i32>,
+    send_node_map: HashMap<(InstrumentId, BusId), i32>,
     /// Bus output synth nodes: bus_id -> node_id
-    bus_node_map: HashMap<u8, i32>,
+    bus_node_map: HashMap<BusId, i32>,
     /// Layer group audio buses: group_id -> SC audio bus index
     layer_group_audio_buses: HashMap<u32, i32>,
     /// Layer group output synth nodes: group_id -> node_id
     layer_group_node_map: HashMap<u32, i32>,
     /// Layer group send synth nodes: (group_id, bus_id) -> node_id
-    layer_group_send_node_map: HashMap<(u32, u8), i32>,
+    layer_group_send_node_map: HashMap<(u32, BusId), i32>,
     /// Bus effect synth nodes: (bus_id, effect_id) -> node_id
-    bus_effect_node_map: HashMap<(u8, EffectId), i32>,
+    bus_effect_node_map: HashMap<(BusId, EffectId), i32>,
     /// Layer group effect synth nodes: (group_id, effect_id) -> node_id
     layer_group_effect_node_map: HashMap<(u32, EffectId), i32>,
     /// Layer group EQ synth nodes: group_id -> node_id
@@ -368,7 +368,7 @@ mod tests {
     use super::*;
     use super::voice_allocator::MAX_VOICES_PER_INSTRUMENT;
     use crate::engine::backend::NullBackend;
-    use imbolc_types::{AutomationTarget, ParamValue};
+    use imbolc_types::{AutomationTarget, BusId, ParamValue};
     use imbolc_types::{EffectType, FilterType, SourceType};
     use imbolc_types::state::mixer::DEFAULT_BUS_COUNT;
 
@@ -392,7 +392,7 @@ mod tests {
         fn add_instrument(&mut self, source: imbolc_types::SourceType) -> imbolc_types::InstrumentId {
             let id = self.instruments.add_instrument(source);
             self.session.piano_roll.add_track(id);
-            let bus_ids: Vec<u8> = self.session.bus_ids().collect();
+            let bus_ids: Vec<BusId> = self.session.bus_ids().collect();
             if let Some(inst) = self.instruments.instrument_mut(id) {
                 inst.sync_sends_with_buses(&bus_ids);
             }
@@ -431,7 +431,7 @@ mod tests {
         assert!(nodes.filter.is_some());
         assert!(nodes.lfo.is_some());
         assert_eq!(nodes.effects.len(), 1);
-        assert!(engine.send_node_map.contains_key(&(inst_id, 1)));
+        assert!(engine.send_node_map.contains_key(&(inst_id, BusId::new(1))));
         assert_eq!(engine.bus_node_map.len(), state.session.mixer.buses.len());
     }
 
@@ -614,7 +614,7 @@ mod tests {
             .expect("rebuild routing");
 
         engine
-            .set_bus_mixer_params(1, 0.5, false, 0.0)
+            .set_bus_mixer_params(BusId::new(1), 0.5, false, 0.0)
             .expect("set_bus_mixer_params");
     }
 
@@ -909,7 +909,7 @@ mod tests {
             engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild routing");
             let send_count = backend.count(|op| matches!(op, TestOp::CreateSynth { def_name, .. } if def_name == "imbolc_send"));
             assert_eq!(send_count, 1, "one send synth for the enabled send");
-            assert!(engine.send_node_map.contains_key(&(inst_id, 1)), "send node registered for bus 1");
+            assert!(engine.send_node_map.contains_key(&(inst_id, BusId::new(1))), "send node registered for bus 1");
         }
 
         #[test]
@@ -1037,7 +1037,7 @@ mod tests {
             let mut state = AppState::new();
             let inst_id = state.add_instrument(SourceType::Saw);
             if let Some(inst) = state.instruments.instrument_mut(inst_id) {
-                inst.output_target = OutputTarget::Bus(1);
+                inst.output_target = OutputTarget::Bus(BusId::new(1));
             }
             engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild routing");
             let synths = backend.synths_created();
@@ -1049,7 +1049,7 @@ mod tests {
                 }
                 None
             }).expect("output synth out param");
-            let expected_bus = *engine.bus_audio_buses.get(&1).expect("bus 1 audio bus must exist");
+            let expected_bus = *engine.bus_audio_buses.get(&BusId::new(1)).expect("bus 1 audio bus must exist");
             assert_eq!(output_out, expected_bus as f32, "output should route to bus 1 audio bus");
             assert_ne!(output_out, 0.0, "output should NOT route to hardware bus 0");
         }
@@ -1116,7 +1116,7 @@ mod tests {
             state.add_instrument(SourceType::Saw);
             // Add reverb + delay to bus 1
             let bus = &mut state.session.mixer.buses[0];
-            assert_eq!(bus.id, 1);
+            assert_eq!(bus.id, BusId::new(1));
             let reverb_id = bus.add_effect(EffectType::Reverb);
             let delay_id = bus.add_effect(EffectType::Delay);
             engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild");
@@ -1127,8 +1127,8 @@ mod tests {
             let delay_synth = synths.iter().find(|op| matches!(op, TestOp::CreateSynth { def_name, group_id, .. } if def_name == "imbolc_delay" && *group_id == GROUP_BUS_PROCESSING));
             assert!(delay_synth.is_some(), "bus delay must be created in GROUP_BUS_PROCESSING");
             // Verify tracked in bus_effect_node_map
-            assert!(engine.bus_effect_node_map.contains_key(&(1, reverb_id)), "reverb tracked in bus_effect_node_map");
-            assert!(engine.bus_effect_node_map.contains_key(&(1, delay_id)), "delay tracked in bus_effect_node_map");
+            assert!(engine.bus_effect_node_map.contains_key(&(BusId::new(1), reverb_id)), "reverb tracked in bus_effect_node_map");
+            assert!(engine.bus_effect_node_map.contains_key(&(BusId::new(1), delay_id)), "delay tracked in bus_effect_node_map");
         }
 
         #[test]
@@ -1141,7 +1141,7 @@ mod tests {
             engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild");
             let synths = backend.synths_created();
             // Reverb should read from bus_audio
-            let bus_audio = *engine.bus_audio_buses.get(&1).expect("bus 1 audio bus");
+            let bus_audio = *engine.bus_audio_buses.get(&BusId::new(1)).expect("bus 1 audio bus");
             let reverb_in = synths.iter().find_map(|op| {
                 if let TestOp::CreateSynth { def_name, params, group_id, .. } = op {
                     if def_name == "imbolc_reverb" && *group_id == GROUP_BUS_PROCESSING {
@@ -1180,7 +1180,7 @@ mod tests {
             // No effects on bus 1
             engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild");
             let synths = backend.synths_created();
-            let bus_audio = *engine.bus_audio_buses.get(&1).expect("bus 1 audio bus");
+            let bus_audio = *engine.bus_audio_buses.get(&BusId::new(1)).expect("bus 1 audio bus");
             // bus_out should read directly from bus_audio when no effects
             let bus_out_in = synths.iter().find_map(|op| {
                 if let TestOp::CreateSynth { def_name, params, group_id, .. } = op {
@@ -1203,7 +1203,7 @@ mod tests {
                 inst.layer_group = Some(1);
             }
             // Create a layer group mixer and add a reverb effect
-            state.session.mixer.add_layer_group_mixer(1, &[1]);
+            state.session.mixer.add_layer_group_mixer(1, &[BusId::new(1)]);
             let gm = state.session.mixer.layer_group_mixer_mut(1).unwrap();
             let effect_id = gm.add_effect(EffectType::Reverb);
             engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild");
@@ -1222,7 +1222,7 @@ mod tests {
             let effect_id = bus.add_effect(EffectType::Reverb);
             engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild");
             backend.clear();
-            engine.set_bus_effect_param(1, effect_id, "mix", 0.6).expect("set param");
+            engine.set_bus_effect_param(BusId::new(1), effect_id, "mix", 0.6).expect("set param");
             let set_op = backend.find(|op| matches!(op, TestOp::SetParam { param, value, .. } if param == "mix" && (*value - 0.6).abs() < 0.001));
             assert!(set_op.is_some(), "set_bus_effect_param should record SetParam");
         }
@@ -1235,7 +1235,7 @@ mod tests {
             if let Some(inst) = state.instruments.instrument_mut(inst_id) {
                 inst.layer_group = Some(1);
             }
-            state.session.mixer.add_layer_group_mixer(1, &[1]);
+            state.session.mixer.add_layer_group_mixer(1, &[BusId::new(1)]);
             let gm = state.session.mixer.layer_group_mixer_mut(1).unwrap();
             let effect_id = gm.add_effect(EffectType::Delay);
             engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild");
@@ -1277,7 +1277,7 @@ mod tests {
             let reverb_count = backend.count(|op| matches!(op, TestOp::CreateSynth { def_name, group_id, .. } if def_name == "imbolc_reverb" && *group_id == GROUP_BUS_PROCESSING));
             assert_eq!(delay_count, 0, "disabled delay should not be created");
             assert_eq!(reverb_count, 1, "enabled reverb should be created");
-            assert!(!engine.bus_effect_node_map.contains_key(&(1, delay_id)), "disabled effect not in node map");
+            assert!(!engine.bus_effect_node_map.contains_key(&(BusId::new(1), delay_id)), "disabled effect not in node map");
         }
 
         #[test]

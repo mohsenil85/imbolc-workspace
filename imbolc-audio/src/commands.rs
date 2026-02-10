@@ -10,7 +10,7 @@ use std::sync::mpsc::Sender;
 
 use imbolc_types::VstTarget;
 use imbolc_types::AutomationTarget;
-use imbolc_types::{BufferId, EffectId, InstrumentId};
+use imbolc_types::{BufferId, BusId, EffectId, InstrumentId};
 
 /// Commands sent from the main thread to the audio engine.
 ///
@@ -68,7 +68,7 @@ pub enum AudioCmd {
     },
     UpdateMixerParams,
     SetBusMixerParams {
-        bus_id: u8,
+        bus_id: BusId,
         level: f32,
         mute: bool,
         pan: f32,
@@ -110,7 +110,7 @@ pub enum AudioCmd {
     },
     /// Targeted /n_set to bus effect node (no routing rebuild).
     SetBusEffectParam {
-        bus_id: u8,
+        bus_id: BusId,
         effect_id: EffectId,
         param: String,
         value: f32,

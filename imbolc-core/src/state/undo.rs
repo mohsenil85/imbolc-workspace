@@ -565,7 +565,7 @@ mod tests {
     use super::*;
     use crate::state::SessionState;
     use crate::state::InstrumentState;
-    use imbolc_types::SourceType;
+    use imbolc_types::{BusId, SourceType};
 
     #[test]
     fn test_undo_push_pop() {
@@ -797,7 +797,7 @@ mod tests {
         assert_eq!(undo_scope(&action, &session, &instruments, false), UndoScope::Full);
 
         // Bus Rename => Session
-        let action = Action::Bus(BusAction::Rename(1, "Test".to_string()));
+        let action = Action::Bus(BusAction::Rename(BusId::new(1), "Test".to_string()));
         assert_eq!(undo_scope(&action, &session, &instruments, false), UndoScope::Session);
 
         // Sequencer (with selected instrument) => SingleInstrument

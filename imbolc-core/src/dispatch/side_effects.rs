@@ -7,6 +7,7 @@
 use std::path::PathBuf;
 
 use imbolc_audio::AudioHandle;
+use imbolc_types::BusId;
 use crate::state::automation::AutomationTarget;
 use crate::state::{BufferId, InstrumentId};
 use crate::action::VstTarget;
@@ -55,7 +56,7 @@ pub enum AudioSideEffect {
 
     // ── Mixer ──
     SetBusMixerParams {
-        bus_id: u8,
+        bus_id: BusId,
         level: f32,
         mute: bool,
         pan: f32,

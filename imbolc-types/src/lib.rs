@@ -25,6 +25,30 @@ pub use state::*;
 /// Unique identifier for an instrument.
 pub type InstrumentId = u32;
 
+/// Newtype for bus identifiers. Bus IDs are always >= 1 (allocated by MixerState).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(transparent)]
+pub struct BusId(u8);
+
+impl BusId {
+    /// Create a BusId. Panics if id == 0.
+    pub fn new(id: u8) -> Self {
+        assert!(id > 0, "BusId cannot be zero");
+        Self(id)
+    }
+
+    /// Extract the raw u8 value.
+    pub fn get(self) -> u8 {
+        self.0
+    }
+}
+
+impl std::fmt::Display for BusId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 /// Unique identifier for an effect slot within an instrument.
 pub type EffectId = u32;
 

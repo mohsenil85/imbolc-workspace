@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use rusqlite::{params, Connection, Result as SqlResult, OptionalExtension};
 
+use imbolc_types::BusId;
 use crate::state::instrument_state::InstrumentState;
 use super::{table_exists, load_params, load_effects_from};
 use super::decoders::*;
@@ -370,7 +371,7 @@ fn load_sends(conn: &Connection, instrument_id: u32) -> SqlResult<Vec<crate::sta
             Default::default()
         };
         Ok(MixerSend {
-            bus_id: row.get::<_, i32>(0)? as u8,
+            bus_id: BusId::new(row.get::<_, i32>(0)? as u8),
             level: row.get(1)?,
             enabled: row.get::<_, i32>(2)? != 0,
             tap_point,

@@ -16,8 +16,8 @@ use crate::dispatch::dispatch_action;
 use crate::state::AppState;
 
 use imbolc_types::{
-    AutomationTarget, CurveType, EffectType, FilterType, InstrumentId, LfoShape, MixerSelection,
-    MusicalSettings, OutputTarget, ParameterTarget, SourceType,
+    AutomationTarget, BusId, CurveType, EffectType, FilterType, InstrumentId, LfoShape,
+    MixerSelection, MusicalSettings, OutputTarget, ParameterTarget, SourceType,
 };
 
 // ============================================================================
@@ -130,7 +130,7 @@ fn rich() -> AppState {
         .add_lane(AutomationTarget::level(id1));
 
     // Bus 1 gets a Delay effect
-    if let Some(bus) = s.session.bus_mut(1) {
+    if let Some(bus) = s.session.bus_mut(BusId::new(1)) {
         bus.add_effect(EffectType::Delay);
     }
 
@@ -141,7 +141,7 @@ fn rich() -> AppState {
 fn bus_effect() -> AppState {
     let mut s = minimal();
     s.add_instrument(SourceType::Saw);
-    if let Some(bus) = s.session.bus_mut(1) {
+    if let Some(bus) = s.session.bus_mut(BusId::new(1)) {
         bus.add_effect(EffectType::Delay);
     }
     s
@@ -613,7 +613,7 @@ fn parity_mixer_adjust_level_instrument() {
 #[test]
 fn parity_mixer_adjust_level_bus() {
     let mut s = rich();
-    s.session.mixer.selection = MixerSelection::Bus(1);
+    s.session.mixer.selection = MixerSelection::Bus(BusId::new(1));
     assert_parity(&mut s, &Action::Mixer(MixerAction::AdjustLevel(0.1)));
 }
 
@@ -642,7 +642,7 @@ fn parity_mixer_toggle_mute_instrument() {
 #[test]
 fn parity_mixer_toggle_mute_bus() {
     let mut s = rich();
-    s.session.mixer.selection = MixerSelection::Bus(1);
+    s.session.mixer.selection = MixerSelection::Bus(BusId::new(1));
     assert_parity(&mut s, &Action::Mixer(MixerAction::ToggleMute));
 }
 
@@ -671,7 +671,7 @@ fn parity_mixer_toggle_solo_instrument() {
 #[test]
 fn parity_mixer_toggle_solo_bus() {
     let mut s = rich();
-    s.session.mixer.selection = MixerSelection::Bus(1);
+    s.session.mixer.selection = MixerSelection::Bus(BusId::new(1));
     assert_parity(&mut s, &Action::Mixer(MixerAction::ToggleSolo));
 }
 
@@ -711,14 +711,14 @@ fn parity_mixer_adjust_send() {
     // Enable the send first so there's something to adjust
     s.instruments.instruments[0].sends[0].enabled = true;
     s.instruments.instruments[0].sends[0].level = 0.5;
-    assert_parity(&mut s, &Action::Mixer(MixerAction::AdjustSend(1, 0.1)));
+    assert_parity(&mut s, &Action::Mixer(MixerAction::AdjustSend(BusId::new(1), 0.1)));
 }
 
 #[test]
 fn parity_mixer_toggle_send() {
     let mut s = rich();
     s.session.mixer.selection = MixerSelection::Instrument(0);
-    assert_parity(&mut s, &Action::Mixer(MixerAction::ToggleSend(1)));
+    assert_parity(&mut s, &Action::Mixer(MixerAction::ToggleSend(BusId::new(1))));
 }
 
 #[test]
@@ -728,7 +728,7 @@ fn parity_mixer_cycle_send_tap_point() {
     s.instruments.instruments[0].sends[0].enabled = true;
     assert_parity(
         &mut s,
-        &Action::Mixer(MixerAction::CycleSendTapPoint(1)),
+        &Action::Mixer(MixerAction::CycleSendTapPoint(BusId::new(1))),
     );
 }
 
@@ -742,7 +742,7 @@ fn parity_mixer_adjust_pan_instrument() {
 #[test]
 fn parity_mixer_adjust_pan_bus() {
     let mut s = rich();
-    s.session.mixer.selection = MixerSelection::Bus(1);
+    s.session.mixer.selection = MixerSelection::Bus(BusId::new(1));
     assert_parity(&mut s, &Action::Mixer(MixerAction::AdjustPan(0.1)));
 }
 
@@ -757,14 +757,14 @@ fn parity_mixer_adjust_pan_layer_group() {
 #[test]
 fn parity_mixer_move_bus() {
     let mut s = rich();
-    s.session.mixer.selection = MixerSelection::Bus(1);
+    s.session.mixer.selection = MixerSelection::Bus(BusId::new(1));
     assert_parity(&mut s, &Action::Mixer(MixerAction::Move(1)));
 }
 
 #[test]
 fn parity_mixer_jump_bus() {
     let mut s = rich();
-    s.session.mixer.selection = MixerSelection::Bus(1);
+    s.session.mixer.selection = MixerSelection::Bus(BusId::new(1));
     assert_parity(&mut s, &Action::Mixer(MixerAction::Jump(-1)));
 }
 
@@ -782,8 +782,8 @@ fn parity_bus_add() {
 fn parity_bus_remove() {
     let mut s = one_instrument();
     // Set output to bus 1 to test reset behavior
-    s.instruments.instruments[0].output_target = OutputTarget::Bus(1);
-    assert_parity(&mut s, &Action::Bus(BusAction::Remove(1)));
+    s.instruments.instruments[0].output_target = OutputTarget::Bus(BusId::new(1));
+    assert_parity(&mut s, &Action::Bus(BusAction::Remove(BusId::new(1))));
 }
 
 #[test]
@@ -791,7 +791,7 @@ fn parity_bus_rename() {
     let mut s = minimal();
     assert_parity(
         &mut s,
-        &Action::Bus(BusAction::Rename(1, "Drums".to_string())),
+        &Action::Bus(BusAction::Rename(BusId::new(1), "Drums".to_string())),
     );
 }
 
@@ -800,43 +800,43 @@ fn parity_bus_add_effect() {
     let mut s = minimal();
     assert_parity(
         &mut s,
-        &Action::Bus(BusAction::AddEffect(1, EffectType::Delay)),
+        &Action::Bus(BusAction::AddEffect(BusId::new(1), EffectType::Delay)),
     );
 }
 
 #[test]
 fn parity_bus_remove_effect() {
     let mut s = bus_effect();
-    let eid = s.session.bus(1).unwrap().effects[0].id;
-    assert_parity(&mut s, &Action::Bus(BusAction::RemoveEffect(1, eid)));
+    let eid = s.session.bus(BusId::new(1)).unwrap().effects[0].id;
+    assert_parity(&mut s, &Action::Bus(BusAction::RemoveEffect(BusId::new(1), eid)));
 }
 
 #[test]
 fn parity_bus_move_effect() {
     let mut s = bus_effect();
     // Add second effect so we can move
-    s.session.bus_mut(1).unwrap().add_effect(EffectType::Reverb);
-    let eid = s.session.bus(1).unwrap().effects[0].id;
-    assert_parity(&mut s, &Action::Bus(BusAction::MoveEffect(1, eid, 1)));
+    s.session.bus_mut(BusId::new(1)).unwrap().add_effect(EffectType::Reverb);
+    let eid = s.session.bus(BusId::new(1)).unwrap().effects[0].id;
+    assert_parity(&mut s, &Action::Bus(BusAction::MoveEffect(BusId::new(1), eid, 1)));
 }
 
 #[test]
 fn parity_bus_toggle_effect_bypass() {
     let mut s = bus_effect();
-    let eid = s.session.bus(1).unwrap().effects[0].id;
+    let eid = s.session.bus(BusId::new(1)).unwrap().effects[0].id;
     assert_parity(
         &mut s,
-        &Action::Bus(BusAction::ToggleEffectBypass(1, eid)),
+        &Action::Bus(BusAction::ToggleEffectBypass(BusId::new(1), eid)),
     );
 }
 
 #[test]
 fn parity_bus_adjust_effect_param() {
     let mut s = bus_effect();
-    let eid = s.session.bus(1).unwrap().effects[0].id;
+    let eid = s.session.bus(BusId::new(1)).unwrap().effects[0].id;
     assert_parity(
         &mut s,
-        &Action::Bus(BusAction::AdjustEffectParam(1, eid, 0, 1.0)),
+        &Action::Bus(BusAction::AdjustEffectParam(BusId::new(1), eid, 0, 1.0)),
     );
 }
 
@@ -1441,7 +1441,7 @@ fn parity_mixer_adjust_send_layer_group() {
     let bus_id = s.session.mixer.layer_group_mixer(gid)
         .and_then(|gm| gm.sends.first())
         .map(|s| s.bus_id)
-        .unwrap_or(1);
+        .unwrap_or(BusId::new(1));
     assert_parity(
         &mut s,
         &Action::Mixer(MixerAction::AdjustSend(bus_id, 0.1)),
@@ -1456,7 +1456,7 @@ fn parity_mixer_toggle_send_layer_group() {
     let bus_id = s.session.mixer.layer_group_mixer(gid)
         .and_then(|gm| gm.sends.first())
         .map(|s| s.bus_id)
-        .unwrap_or(1);
+        .unwrap_or(BusId::new(1));
     assert_parity(
         &mut s,
         &Action::Mixer(MixerAction::ToggleSend(bus_id)),
@@ -1476,7 +1476,7 @@ fn parity_mixer_cycle_send_tap_point_layer_group() {
     let bus_id = s.session.mixer.layer_group_mixer(gid)
         .and_then(|gm| gm.sends.first())
         .map(|s| s.bus_id)
-        .unwrap_or(1);
+        .unwrap_or(BusId::new(1));
     assert_parity(
         &mut s,
         &Action::Mixer(MixerAction::CycleSendTapPoint(bus_id)),
@@ -1626,7 +1626,7 @@ fn parity_select_out_of_bounds() {
 fn parity_bus_remove_nonexistent() {
     let mut s = minimal();
     // Bus 200 doesn't exist — both paths should no-op
-    assert_parity(&mut s, &Action::Bus(BusAction::Remove(200)));
+    assert_parity(&mut s, &Action::Bus(BusAction::Remove(BusId::new(200))));
 }
 
 #[test]

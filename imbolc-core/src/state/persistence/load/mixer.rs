@@ -1,5 +1,6 @@
 use rusqlite::{params, Connection, Result as SqlResult, OptionalExtension};
 
+use imbolc_types::BusId;
 use crate::state::session::SessionState;
 use super::{table_exists, load_effects_from};
 use super::decoders::*;
@@ -14,7 +15,7 @@ pub(super) fn load_mixer(conn: &Connection, session: &mut SessionState) -> SqlRe
     let mut stmt = conn.prepare("SELECT id, name, level, pan, mute, solo FROM mixer_buses ORDER BY id")?;
     let buses = stmt.query_map([], |row| {
         Ok(MixerBus {
-            id: row.get::<_, i32>(0)? as u8,
+            id: BusId::new(row.get::<_, i32>(0)? as u8),
             name: row.get(1)?,
             level: row.get(2)?,
             pan: row.get(3)?,
@@ -28,7 +29,7 @@ pub(super) fn load_mixer(conn: &Connection, session: &mut SessionState) -> SqlRe
     for bus in buses {
         let mut bus = bus?;
         if has_bus_effects {
-            bus.effects = load_effects_from(conn, "bus_effects", "bus_effect_params", "bus_effect_vst_params", "bus_id", bus.id as u32)?;
+            bus.effects = load_effects_from(conn, "bus_effects", "bus_effect_params", "bus_effect_vst_params", "bus_id", bus.id.get() as u32)?;
             bus.recalculate_next_effect_id();
         }
         session.mixer.buses.push(bus);
@@ -90,7 +91,7 @@ pub(super) fn load_layer_group_mixers(conn: &Connection, session: &mut SessionSt
                 Default::default()
             };
             Ok(MixerSend {
-                bus_id: row.get::<_, i32>(0)? as u8,
+                bus_id: BusId::new(row.get::<_, i32>(0)? as u8),
                 level: row.get(1)?,
                 enabled: row.get::<_, i32>(2)? != 0,
                 tap_point,

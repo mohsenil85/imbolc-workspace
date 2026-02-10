@@ -3,6 +3,7 @@ use super::{CHANNEL_WIDTH, METER_HEIGHT, NUM_VISIBLE_CHANNELS, NUM_VISIBLE_GROUP
 use crate::state::{AppState, MixerSelection, OutputTarget, ParamValue};
 use crate::ui::{Rect, RenderBuf, Color, Style};
 use crate::ui::layout_helpers::center_rect;
+use imbolc_types::BusId;
 
 impl MixerPane {
     fn level_to_db(level: f32) -> String {
@@ -28,15 +29,17 @@ impl MixerPane {
     fn format_output(target: OutputTarget) -> &'static str {
         match target {
             OutputTarget::Master => ">MST",
-            OutputTarget::Bus(1) => ">B1",
-            OutputTarget::Bus(2) => ">B2",
-            OutputTarget::Bus(3) => ">B3",
-            OutputTarget::Bus(4) => ">B4",
-            OutputTarget::Bus(5) => ">B5",
-            OutputTarget::Bus(6) => ">B6",
-            OutputTarget::Bus(7) => ">B7",
-            OutputTarget::Bus(8) => ">B8",
-            OutputTarget::Bus(_) => ">??",
+            OutputTarget::Bus(id) => match id.get() {
+                1 => ">B1",
+                2 => ">B2",
+                3 => ">B3",
+                4 => ">B4",
+                5 => ">B5",
+                6 => ">B6",
+                7 => ">B7",
+                8 => ">B8",
+                _ => ">??",
+            },
         }
     }
 
@@ -91,7 +94,7 @@ impl MixerPane {
 
         let bus_scroll = match state.session.mixer.selection {
             MixerSelection::Bus(id) => {
-                Self::calc_scroll_offset((id - 1) as usize, state.session.mixer.buses.len(), NUM_VISIBLE_BUSES)
+                Self::calc_scroll_offset((id.get() - 1) as usize, state.session.mixer.buses.len(), NUM_VISIBLE_BUSES)
             }
             _ => 0,
         };
@@ -665,7 +668,7 @@ impl MixerPane {
         Self::write_str(buf, hint_x, hint_y, hint, dim);
     }
 
-    pub(super) fn render_bus_detail_buf(&self, buf: &mut RenderBuf, area: Rect, state: &AppState, bus_id: u8) {
+    pub(super) fn render_bus_detail_buf(&self, buf: &mut RenderBuf, area: Rect, state: &AppState, bus_id: BusId) {
         let Some(bus) = state.session.bus(bus_id) else { return };
 
         let title = format!(" MIXER --- BUS {} [{}] ", bus_id, bus.name);

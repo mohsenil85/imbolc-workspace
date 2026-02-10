@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use super::instrument::{LayerGroupMixer, MixerBus};
 use super::session::MixerSelection;
+use crate::BusId;
 
 /// Maximum number of buses allowed
 pub const MAX_BUSES: u8 = 32;
@@ -33,7 +34,7 @@ impl MixerState {
 
     pub fn new_with_bus_count(bus_count: u8) -> Self {
         let bus_count = bus_count.min(MAX_BUSES);
-        let buses: Vec<MixerBus> = (1..=bus_count).map(MixerBus::new).collect();
+        let buses: Vec<MixerBus> = (1..=bus_count).map(|i| MixerBus::new(BusId::new(i))).collect();
         let next_bus_id = bus_count + 1;
         Self {
             buses,
@@ -46,33 +47,33 @@ impl MixerState {
     }
 
     /// Get a bus by ID
-    pub fn bus(&self, id: u8) -> Option<&MixerBus> {
+    pub fn bus(&self, id: BusId) -> Option<&MixerBus> {
         self.buses.iter().find(|b| b.id == id)
     }
 
     /// Get a mutable bus by ID
-    pub fn bus_mut(&mut self, id: u8) -> Option<&mut MixerBus> {
+    pub fn bus_mut(&mut self, id: BusId) -> Option<&mut MixerBus> {
         self.buses.iter_mut().find(|b| b.id == id)
     }
 
     /// Get an iterator over current bus IDs in order
-    pub fn bus_ids(&self) -> impl Iterator<Item = u8> + '_ {
+    pub fn bus_ids(&self) -> impl Iterator<Item = BusId> + '_ {
         self.buses.iter().map(|b| b.id)
     }
 
     /// Add a new bus. Returns the new bus ID, or None if at max capacity.
-    pub fn add_bus(&mut self) -> Option<u8> {
+    pub fn add_bus(&mut self) -> Option<BusId> {
         if self.buses.len() >= MAX_BUSES as usize {
             return None;
         }
-        let id = self.next_bus_id;
+        let id = BusId::new(self.next_bus_id);
         self.next_bus_id = self.next_bus_id.saturating_add(1);
         self.buses.push(MixerBus::new(id));
         Some(id)
     }
 
     /// Remove a bus by ID. Returns true if the bus was found and removed.
-    pub fn remove_bus(&mut self, id: u8) -> bool {
+    pub fn remove_bus(&mut self, id: BusId) -> bool {
         if let Some(idx) = self.buses.iter().position(|b| b.id == id) {
             self.buses.remove(idx);
             true
@@ -122,7 +123,7 @@ impl MixerState {
 
     /// Recompute next_bus_id from current buses (call after loading from persistence)
     pub fn recompute_next_bus_id(&mut self) {
-        self.next_bus_id = self.buses.iter().map(|b| b.id).max().unwrap_or(0).saturating_add(1);
+        self.next_bus_id = self.buses.iter().map(|b| b.id.get()).max().unwrap_or(0).saturating_add(1);
     }
 
     /// Get a layer group mixer by group ID
@@ -136,7 +137,7 @@ impl MixerState {
     }
 
     /// Add a layer group mixer. Returns false if it already exists.
-    pub fn add_layer_group_mixer(&mut self, group_id: u32, bus_ids: &[u8]) -> bool {
+    pub fn add_layer_group_mixer(&mut self, group_id: u32, bus_ids: &[BusId]) -> bool {
         if self.layer_group_mixer(group_id).is_some() {
             return false;
         }
@@ -182,14 +183,13 @@ mod tests {
     #[test]
     fn bus_lookup_by_id() {
         let mixer = MixerState::new();
-        assert!(mixer.bus(1).is_some());
-        assert_eq!(mixer.bus(1).unwrap().id, 1);
-        assert!(mixer.bus(8).is_some());
-        assert_eq!(mixer.bus(8).unwrap().id, 8);
+        assert!(mixer.bus(BusId::new(1)).is_some());
+        assert_eq!(mixer.bus(BusId::new(1)).unwrap().id, BusId::new(1));
+        assert!(mixer.bus(BusId::new(8)).is_some());
+        assert_eq!(mixer.bus(BusId::new(8)).unwrap().id, BusId::new(8));
         // Non-existent IDs return None
-        assert!(mixer.bus(0).is_none());
-        assert!(mixer.bus(9).is_none());
-        assert!(mixer.bus(100).is_none());
+        assert!(mixer.bus(BusId::new(9)).is_none());
+        assert!(mixer.bus(BusId::new(100)).is_none());
     }
 
     #[test]
@@ -197,7 +197,7 @@ mod tests {
         let mut mixer = MixerState::new();
         assert_eq!(mixer.buses.len(), DEFAULT_BUS_COUNT as usize);
         let new_id = mixer.add_bus().unwrap();
-        assert_eq!(new_id, DEFAULT_BUS_COUNT + 1);
+        assert_eq!(new_id, BusId::new(DEFAULT_BUS_COUNT + 1));
         assert_eq!(mixer.buses.len(), DEFAULT_BUS_COUNT as usize + 1);
         assert!(mixer.bus(new_id).is_some());
     }
@@ -213,19 +213,20 @@ mod tests {
     #[test]
     fn remove_bus() {
         let mut mixer = MixerState::new();
-        assert!(mixer.bus(3).is_some());
-        assert!(mixer.remove_bus(3));
-        assert!(mixer.bus(3).is_none());
+        assert!(mixer.bus(BusId::new(3)).is_some());
+        assert!(mixer.remove_bus(BusId::new(3)));
+        assert!(mixer.bus(BusId::new(3)).is_none());
         // Removing non-existent bus returns false
-        assert!(!mixer.remove_bus(3));
-        assert!(!mixer.remove_bus(100));
+        assert!(!mixer.remove_bus(BusId::new(3)));
+        assert!(!mixer.remove_bus(BusId::new(100)));
     }
 
     #[test]
     fn bus_ids_iterator() {
         let mixer = MixerState::new();
-        let ids: Vec<u8> = mixer.bus_ids().collect();
-        assert_eq!(ids, (1..=DEFAULT_BUS_COUNT).collect::<Vec<_>>());
+        let ids: Vec<BusId> = mixer.bus_ids().collect();
+        let expected: Vec<BusId> = (1..=DEFAULT_BUS_COUNT).map(BusId::new).collect();
+        assert_eq!(ids, expected);
     }
 
     #[test]
@@ -239,7 +240,7 @@ mod tests {
     #[test]
     fn effective_bus_mute_no_solo() {
         let mixer = MixerState::new();
-        let bus = mixer.bus(1).unwrap();
+        let bus = mixer.bus(BusId::new(1)).unwrap();
         assert!(!mixer.effective_bus_mute(bus));
 
         let mut bus_copy = bus.clone();
@@ -250,11 +251,11 @@ mod tests {
     #[test]
     fn effective_bus_mute_with_solo() {
         let mut mixer = MixerState::new();
-        mixer.bus_mut(1).unwrap().solo = true;
+        mixer.bus_mut(BusId::new(1)).unwrap().solo = true;
         // Bus 1 is soloed — should not be muted
-        assert!(!mixer.effective_bus_mute(mixer.bus(1).unwrap()));
+        assert!(!mixer.effective_bus_mute(mixer.bus(BusId::new(1)).unwrap()));
         // Bus 2 is not soloed — should be muted
-        assert!(mixer.effective_bus_mute(mixer.bus(2).unwrap()));
+        assert!(mixer.effective_bus_mute(mixer.bus(BusId::new(2)).unwrap()));
     }
 
     #[test]
@@ -262,7 +263,7 @@ mod tests {
         let mut mixer = MixerState::new();
         assert!(matches!(mixer.selection, MixerSelection::Instrument(0)));
         mixer.cycle_section();
-        assert!(matches!(mixer.selection, MixerSelection::Bus(1)));
+        assert!(matches!(mixer.selection, MixerSelection::Bus(id) if id == BusId::new(1)));
         mixer.cycle_section();
         assert!(matches!(mixer.selection, MixerSelection::Master));
         mixer.cycle_section();
@@ -273,7 +274,7 @@ mod tests {
     fn any_bus_solo() {
         let mut mixer = MixerState::new();
         assert!(!mixer.any_bus_solo());
-        mixer.bus_mut(3).unwrap().solo = true;
+        mixer.bus_mut(BusId::new(3)).unwrap().solo = true;
         assert!(mixer.any_bus_solo());
     }
 
@@ -284,7 +285,7 @@ mod tests {
     #[test]
     fn bus_add_effect() {
         use crate::state::instrument::EffectType;
-        let mut bus = MixerBus::new(1);
+        let mut bus = MixerBus::new(BusId::new(1));
         let id = bus.add_effect(EffectType::Reverb);
         assert_eq!(id, 0);
         assert_eq!(bus.effects.len(), 1);
@@ -295,7 +296,7 @@ mod tests {
     #[test]
     fn bus_add_multiple_effects() {
         use crate::state::instrument::EffectType;
-        let mut bus = MixerBus::new(1);
+        let mut bus = MixerBus::new(BusId::new(1));
         let id0 = bus.add_effect(EffectType::Reverb);
         let id1 = bus.add_effect(EffectType::Delay);
         assert_eq!(id0, 0);
@@ -307,7 +308,7 @@ mod tests {
     #[test]
     fn bus_effect_by_id() {
         use crate::state::instrument::EffectType;
-        let mut bus = MixerBus::new(1);
+        let mut bus = MixerBus::new(BusId::new(1));
         let id = bus.add_effect(EffectType::Reverb);
         assert!(bus.effect_by_id(id).is_some());
         assert_eq!(bus.effect_by_id(id).unwrap().effect_type, EffectType::Reverb);
@@ -317,7 +318,7 @@ mod tests {
     #[test]
     fn bus_remove_effect() {
         use crate::state::instrument::EffectType;
-        let mut bus = MixerBus::new(1);
+        let mut bus = MixerBus::new(BusId::new(1));
         let id = bus.add_effect(EffectType::Reverb);
         assert!(bus.remove_effect(id));
         assert!(bus.effects.is_empty());
@@ -327,7 +328,7 @@ mod tests {
     #[test]
     fn bus_move_effect() {
         use crate::state::instrument::EffectType;
-        let mut bus = MixerBus::new(1);
+        let mut bus = MixerBus::new(BusId::new(1));
         let id0 = bus.add_effect(EffectType::Reverb);
         let id1 = bus.add_effect(EffectType::Delay);
         // Move first effect down
@@ -341,7 +342,7 @@ mod tests {
     #[test]
     fn bus_recalculate_next_effect_id() {
         use crate::state::instrument::EffectType;
-        let mut bus = MixerBus::new(1);
+        let mut bus = MixerBus::new(BusId::new(1));
         bus.add_effect(EffectType::Reverb);
         bus.add_effect(EffectType::Delay);
         bus.next_effect_id = 0; // simulate loading
@@ -356,7 +357,7 @@ mod tests {
     #[test]
     fn layer_group_add_effect() {
         use crate::state::instrument::{EffectType, LayerGroupMixer};
-        let mut gm = LayerGroupMixer::new(1, &[1, 2]);
+        let mut gm = LayerGroupMixer::new(1, &[BusId::new(1), BusId::new(2)]);
         let id = gm.add_effect(EffectType::TapeComp);
         assert_eq!(id, 0);
         assert_eq!(gm.effects.len(), 1);

@@ -110,9 +110,13 @@ Not proposing per-effect typed enums (too much churn), but a
 
 ---
 
-## 9. All ID types are bare type aliases
+## 9. All ID types are bare type aliases (PARTIAL — BusId done, rest open)
 
 **Where:** `imbolc-types/src/lib.rs`
+
+`BusId` has been converted to a newtype (`struct BusId(u8)` with
+constructor enforcing id > 0). The remaining ID types are still bare
+aliases:
 
 ```rust
 pub type InstrumentId = u32;
@@ -121,59 +125,27 @@ pub type CustomSynthDefId = u32;
 pub type VstPluginId = u32;
 ```
 
-These are all `u32`. The compiler can't stop you from passing an
-`EffectId` where an `InstrumentId` is expected. Same issue with `u8`
-bus IDs — a bus ID and a MIDI channel are both `u8`.
-
-**Fix:** Newtypes. `struct InstrumentId(u32)` etc. Derive `Copy,
-Clone, PartialEq, Eq, Hash, Serialize, Deserialize`. The refactor is
-mechanical but touches many files.
+**Fix:** Same newtype treatment for the remaining IDs. Mechanical but
+touches many files.
 
 ---
 
-## 10. Persistence decoders silently fall back on unknown variants
+## ~~10. Persistence decoders silently fall back on unknown variants~~ (FIXED)
 
-**Where:** `imbolc-core/src/state/persistence/load.rs` — 14 decoder
-functions
-
-```rust
-fn decode_effect_type(s: &str) -> EffectType {
-    match s {
-        "Delay" => EffectType::Delay,
-        "Reverb" => EffectType::Reverb,
-        // ...
-        _ => EffectType::Delay,  // silent fallback
-    }
-}
-```
-
-Same pattern for `decode_source_type`, `decode_filter_type`,
-`decode_lfo_shape`, `decode_arp_direction`, `decode_chord_shape`,
-etc. — 14 functions total, all with `_ => SomeDefault` arms.
-
-If you add a new `EffectType` variant, save a project, then load it on
-an older binary, it silently becomes a Delay. No warning, no
-error. The compiler can't help because these are string→enum
-conversions.
-
-**Fix:** Return `Result<T, String>` from decoders. Log a warning on
-unknown variants. Or use `serde` for the round-trip and get
-exhaustiveness for free.
+**Fixed.** All 18 decoder functions now log warnings via
+`eprintln!("[imbolc] persistence: unknown X '{}', using DEFAULT", other)`
+on unknown variants. Still returns defaults (not `Result`), but
+unknown variants are no longer silent. 18 roundtrip tests cover all
+decoders.
 
 ---
 
-## 11. Bus IDs are raw `u8` with no bounds enforcement
+## 11. Bus IDs are raw `u8` with no bounds enforcement (IN PROGRESS)
 
-**Where:** `MixerBus.id: u8`, `MixerSend.bus_id: u8`,
-`BusAction::Remove(u8)`, `OutputTarget::Bus(u8)`
-
-Bus IDs are 1–8 but the type allows 0–255. `OutputTarget::Bus(0)` or
-`Bus(100)` compile fine. Validation happens at runtime in dispatch
-handlers, not at construction.
-
-**Fix:** `struct BusId(u8)` with a constructor that enforces the
-range. Then `OutputTarget::Bus(BusId)` is invalid-by-construction for
-out-of-range values.
+`BusId` newtype introduced in `imbolc-types/src/lib.rs` —
+`struct BusId(u8)` with `new()` asserting id > 0. Migration to use
+`BusId` throughout the codebase is in progress (compilation errors
+remain in action.rs, action_projection.rs, handle.rs, etc.).
 
 ---
 
@@ -231,9 +203,9 @@ centralizing the check.
 | 7 | ~~Stringly-typed EQ params~~ | ~~**High**~~ FIXED | — |
 | 1 | ~~AudioDirty data loss~~ | ~~**Medium**~~ FIXED | — |
 | 2 | ~~Projection parity~~ | ~~**Medium**~~ FIXED | — |
-| 9 | Bare ID type aliases | **Medium** (wrong-ID bugs) | Large (mechanical) |
-| 10 | Persistence silent fallbacks | **Medium** (data loss) | Medium |
-| 11 | Raw u8 bus IDs | **Medium** (invalid states) | Medium |
+| 9 | Bare ID type aliases (BusId done) | **Medium** (wrong-ID bugs) | Large (mechanical) |
+| 10 | ~~Persistence silent fallbacks~~ | ~~**Medium**~~ FIXED | — |
+| 11 | Raw u8 bus IDs (IN PROGRESS) | **Medium** (invalid states) | Medium |
 | 12 | Sends/buses sync invariant | **Medium** (forgotten sync) | Medium |
 | 8 | Raw usize param index | **Low** (index confusion) | Small |
 | 3 | Silent `is_running()` | **Low** (UX annoyance) | Small |

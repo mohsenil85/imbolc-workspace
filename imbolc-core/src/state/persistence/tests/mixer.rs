@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use imbolc_types::BusId;
 use crate::state::instrument::{EffectType, FilterType, SourceType};
 use crate::state::instrument_state::InstrumentState;
 use crate::state::param::ParamValue;
@@ -15,7 +16,7 @@ fn round_trip_bus_effects() {
     assert!(session.mixer.buses.len() >= 2, "expected at least 2 default buses");
 
     // Add effects to bus 1
-    let bus = session.mixer.bus_mut(1).unwrap();
+    let bus = session.mixer.bus_mut(BusId::new(1)).unwrap();
     let reverb_id = bus.add_effect(EffectType::Reverb);
     let delay_id = bus.add_effect(EffectType::Delay);
 
@@ -38,7 +39,7 @@ fn round_trip_bus_effects() {
     let (loaded_session, _) = load_project(&path).expect("load");
 
     // Bus 1 should have 2 effects
-    let loaded_bus = loaded_session.mixer.buses.iter().find(|b| b.id == 1).unwrap();
+    let loaded_bus = loaded_session.mixer.buses.iter().find(|b| b.id == BusId::new(1)).unwrap();
     assert_eq!(loaded_bus.effects.len(), 2);
     assert_eq!(loaded_bus.next_effect_id, 2);
 
@@ -61,7 +62,7 @@ fn round_trip_bus_effects() {
     assert!(loaded_delay.vst_param_values.iter().any(|&(k, v)| k == 3 && (v - 0.88).abs() < 0.01));
 
     // Bus 2 should have no effects
-    let loaded_bus2 = loaded_session.mixer.buses.iter().find(|b| b.id == 2).unwrap();
+    let loaded_bus2 = loaded_session.mixer.buses.iter().find(|b| b.id == BusId::new(2)).unwrap();
     assert!(loaded_bus2.effects.is_empty());
 
     std::fs::remove_file(&path).ok();
@@ -79,7 +80,7 @@ fn round_trip_layer_group_effects() {
     }
 
     // Add layer group mixer
-    let bus_ids: Vec<u8> = session.bus_ids().collect();
+    let bus_ids: Vec<BusId> = session.bus_ids().collect();
     session.mixer.add_layer_group_mixer(1, &bus_ids);
 
     // Add effects to layer group mixer
@@ -129,7 +130,7 @@ fn round_trip_layer_group_eq() {
     }
 
     // Add layer group mixer (comes with default EQ)
-    let bus_ids: Vec<u8> = session.bus_ids().collect();
+    let bus_ids: Vec<BusId> = session.bus_ids().collect();
     session.mixer.add_layer_group_mixer(1, &bus_ids);
 
     // Verify EQ is present and modify some bands
@@ -185,7 +186,7 @@ fn round_trip_layer_group_eq_disabled() {
         inst.layer_group = Some(1);
     }
 
-    let bus_ids: Vec<u8> = session.bus_ids().collect();
+    let bus_ids: Vec<BusId> = session.bus_ids().collect();
     session.mixer.add_layer_group_mixer(1, &bus_ids);
 
     // Toggle EQ off

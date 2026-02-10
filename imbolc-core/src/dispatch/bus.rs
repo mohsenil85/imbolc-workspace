@@ -1,5 +1,6 @@
 use crate::action::{BusAction, DispatchResult, EqParamKind, LayerGroupAction, NavIntent};
 use imbolc_audio::AudioHandle;
+use imbolc_types::BusId;
 use crate::dispatch::side_effects::AudioSideEffect;
 use crate::state::{AppState, OutputTarget};
 
@@ -11,7 +12,7 @@ pub fn dispatch_bus(action: &BusAction, state: &mut AppState) -> DispatchResult 
         BusAction::Add => {
             if let Some(_new_id) = state.session.add_bus() {
                 // Sync all instruments with the new bus
-                let bus_ids: Vec<u8> = state.session.bus_ids().collect();
+                let bus_ids: Vec<BusId> = state.session.bus_ids().collect();
                 for inst in &mut state.instruments.instruments {
                     inst.sync_sends_with_buses(&bus_ids);
                 }
@@ -287,9 +288,9 @@ mod tests {
     fn remove_bus_resets_instrument_output() {
         let mut state = setup();
         state.add_instrument(SourceType::Saw);
-        state.instruments.instruments[0].output_target = OutputTarget::Bus(3);
+        state.instruments.instruments[0].output_target = OutputTarget::Bus(BusId::new(3));
 
-        dispatch_bus(&BusAction::Remove(3), &mut state);
+        dispatch_bus(&BusAction::Remove(BusId::new(3)), &mut state);
 
         assert_eq!(state.instruments.instruments[0].output_target, OutputTarget::Master);
     }
@@ -299,15 +300,15 @@ mod tests {
         let mut state = setup();
         state.add_instrument(SourceType::Saw);
         // Enable send to bus 3
-        if let Some(send) = state.instruments.instruments[0].sends.iter_mut().find(|s| s.bus_id == 3) {
+        if let Some(send) = state.instruments.instruments[0].sends.iter_mut().find(|s| s.bus_id == BusId::new(3)) {
             send.enabled = true;
             send.level = 0.5;
         }
 
-        dispatch_bus(&BusAction::Remove(3), &mut state);
+        dispatch_bus(&BusAction::Remove(BusId::new(3)), &mut state);
 
         // Send should be disabled but still exist
-        let send = state.instruments.instruments[0].sends.iter().find(|s| s.bus_id == 3);
+        let send = state.instruments.instruments[0].sends.iter().find(|s| s.bus_id == BusId::new(3));
         assert!(send.is_some());
         assert!(!send.unwrap().enabled);
     }
@@ -315,10 +316,10 @@ mod tests {
     #[test]
     fn remove_bus_clears_automation() {
         let mut state = setup();
-        state.session.automation.add_lane(AutomationTarget::bus_level(3));
+        state.session.automation.add_lane(AutomationTarget::bus_level(BusId::new(3)));
         assert!(!state.session.automation.lanes.is_empty());
 
-        dispatch_bus(&BusAction::Remove(3), &mut state);
+        dispatch_bus(&BusAction::Remove(BusId::new(3)), &mut state);
 
         assert!(state.session.automation.lanes.is_empty());
     }
@@ -327,9 +328,9 @@ mod tests {
     fn rename_bus() {
         let mut state = setup();
 
-        dispatch_bus(&BusAction::Rename(1, "Drums".to_string()), &mut state);
+        dispatch_bus(&BusAction::Rename(BusId::new(1), "Drums".to_string()), &mut state);
 
-        assert_eq!(state.session.bus(1).unwrap().name, "Drums");
+        assert_eq!(state.session.bus(BusId::new(1)).unwrap().name, "Drums");
     }
 
     // ========================================================================
@@ -340,8 +341,8 @@ mod tests {
     fn bus_add_effect_dispatch() {
         use crate::state::EffectType;
         let mut state = setup();
-        let result = dispatch_bus(&BusAction::AddEffect(1, EffectType::Reverb), &mut state);
-        let bus = state.session.bus(1).unwrap();
+        let result = dispatch_bus(&BusAction::AddEffect(BusId::new(1), EffectType::Reverb), &mut state);
+        let bus = state.session.bus(BusId::new(1)).unwrap();
         assert_eq!(bus.effects.len(), 1);
         assert_eq!(bus.effects[0].effect_type, EffectType::Reverb);
         assert!(result.audio_dirty.routing_bus_processing);
@@ -351,11 +352,11 @@ mod tests {
     fn bus_remove_effect_dispatch() {
         use crate::state::EffectType;
         let mut state = setup();
-        dispatch_bus(&BusAction::AddEffect(1, EffectType::Reverb), &mut state);
-        let effect_id = state.session.bus(1).unwrap().effects[0].id;
+        dispatch_bus(&BusAction::AddEffect(BusId::new(1), EffectType::Reverb), &mut state);
+        let effect_id = state.session.bus(BusId::new(1)).unwrap().effects[0].id;
 
-        let result = dispatch_bus(&BusAction::RemoveEffect(1, effect_id), &mut state);
-        assert!(state.session.bus(1).unwrap().effects.is_empty());
+        let result = dispatch_bus(&BusAction::RemoveEffect(BusId::new(1), effect_id), &mut state);
+        assert!(state.session.bus(BusId::new(1)).unwrap().effects.is_empty());
         assert!(result.audio_dirty.routing_bus_processing);
     }
 
@@ -363,12 +364,12 @@ mod tests {
     fn bus_move_effect_dispatch() {
         use crate::state::EffectType;
         let mut state = setup();
-        dispatch_bus(&BusAction::AddEffect(1, EffectType::Reverb), &mut state);
-        dispatch_bus(&BusAction::AddEffect(1, EffectType::Delay), &mut state);
-        let id0 = state.session.bus(1).unwrap().effects[0].id;
+        dispatch_bus(&BusAction::AddEffect(BusId::new(1), EffectType::Reverb), &mut state);
+        dispatch_bus(&BusAction::AddEffect(BusId::new(1), EffectType::Delay), &mut state);
+        let id0 = state.session.bus(BusId::new(1)).unwrap().effects[0].id;
 
-        dispatch_bus(&BusAction::MoveEffect(1, id0, 1), &mut state);
-        let bus = state.session.bus(1).unwrap();
+        dispatch_bus(&BusAction::MoveEffect(BusId::new(1), id0, 1), &mut state);
+        let bus = state.session.bus(BusId::new(1)).unwrap();
         assert_eq!(bus.effects[1].id, id0);
     }
 
@@ -376,27 +377,27 @@ mod tests {
     fn bus_toggle_effect_bypass_dispatch() {
         use crate::state::EffectType;
         let mut state = setup();
-        dispatch_bus(&BusAction::AddEffect(1, EffectType::Reverb), &mut state);
-        let effect_id = state.session.bus(1).unwrap().effects[0].id;
-        assert!(state.session.bus(1).unwrap().effects[0].enabled);
+        dispatch_bus(&BusAction::AddEffect(BusId::new(1), EffectType::Reverb), &mut state);
+        let effect_id = state.session.bus(BusId::new(1)).unwrap().effects[0].id;
+        assert!(state.session.bus(BusId::new(1)).unwrap().effects[0].enabled);
 
-        dispatch_bus(&BusAction::ToggleEffectBypass(1, effect_id), &mut state);
-        assert!(!state.session.bus(1).unwrap().effects[0].enabled);
+        dispatch_bus(&BusAction::ToggleEffectBypass(BusId::new(1), effect_id), &mut state);
+        assert!(!state.session.bus(BusId::new(1)).unwrap().effects[0].enabled);
     }
 
     #[test]
     fn bus_adjust_effect_param_dispatch() {
         use crate::state::EffectType;
         let mut state = setup();
-        dispatch_bus(&BusAction::AddEffect(1, EffectType::Reverb), &mut state);
-        let effect_id = state.session.bus(1).unwrap().effects[0].id;
-        let initial_val = match &state.session.bus(1).unwrap().effects[0].params[0].value {
+        dispatch_bus(&BusAction::AddEffect(BusId::new(1), EffectType::Reverb), &mut state);
+        let effect_id = state.session.bus(BusId::new(1)).unwrap().effects[0].id;
+        let initial_val = match &state.session.bus(BusId::new(1)).unwrap().effects[0].params[0].value {
             crate::state::ParamValue::Float(v) => *v,
             _ => panic!("expected float"),
         };
 
-        let result = dispatch_bus(&BusAction::AdjustEffectParam(1, effect_id, 0, 1.0), &mut state);
-        let new_val = match &state.session.bus(1).unwrap().effects[0].params[0].value {
+        let result = dispatch_bus(&BusAction::AdjustEffectParam(BusId::new(1), effect_id, 0, 1.0), &mut state);
+        let new_val = match &state.session.bus(BusId::new(1)).unwrap().effects[0].params[0].value {
             crate::state::ParamValue::Float(v) => *v,
             _ => panic!("expected float"),
         };
@@ -418,7 +419,7 @@ mod tests {
     fn layer_group_add_effect_dispatch() {
         use crate::state::EffectType;
         let (mut state, audio, mut effects) = setup_with_audio();
-        state.session.mixer.add_layer_group_mixer(1, &[1, 2]);
+        state.session.mixer.add_layer_group_mixer(1, &[BusId::new(1), BusId::new(2)]);
 
         let result = dispatch_layer_group(&LayerGroupAction::AddEffect(1, EffectType::TapeComp), &mut state, &audio, &mut effects);
         let gm = state.session.mixer.layer_group_mixer(1).unwrap();

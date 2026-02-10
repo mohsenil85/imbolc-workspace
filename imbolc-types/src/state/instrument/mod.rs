@@ -18,7 +18,7 @@ use super::arpeggiator::{ArpeggiatorConfig, ChordShape};
 use super::drum_sequencer::DrumSequencerState;
 use super::groove::GrooveConfig;
 use super::sampler::SamplerConfig;
-use crate::{EffectId, InstrumentId, Param};
+use crate::{BusId, EffectId, InstrumentId, Param};
 
 /// Whether an instrument's signal chain is mono or stereo.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -63,7 +63,7 @@ impl ChannelConfig {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum OutputTarget {
     Master,
-    Bus(u8), // 1-8
+    Bus(BusId),
 }
 
 impl Default for OutputTarget {
@@ -100,7 +100,7 @@ impl SendTapPoint {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MixerSend {
-    pub bus_id: u8,
+    pub bus_id: BusId,
     pub level: f32,
     pub enabled: bool,
     #[serde(default)]
@@ -108,7 +108,7 @@ pub struct MixerSend {
 }
 
 impl MixerSend {
-    pub fn new(bus_id: u8) -> Self {
+    pub fn new(bus_id: BusId) -> Self {
         Self {
             bus_id,
             level: 0.0,
@@ -120,7 +120,7 @@ impl MixerSend {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MixerBus {
-    pub id: u8,
+    pub id: BusId,
     pub name: String,
     pub level: f32,
     pub pan: f32,
@@ -133,7 +133,7 @@ pub struct MixerBus {
 }
 
 impl MixerBus {
-    pub fn new(id: u8) -> Self {
+    pub fn new(id: BusId) -> Self {
         Self {
             id,
             name: format!("Bus {}", id),
@@ -221,7 +221,7 @@ pub struct LayerGroupMixer {
 }
 
 impl LayerGroupMixer {
-    pub fn new(group_id: u32, bus_ids: &[u8]) -> Self {
+    pub fn new(group_id: u32, bus_ids: &[BusId]) -> Self {
         let sends = bus_ids.iter().map(|&id| MixerSend::new(id)).collect();
         Self {
             group_id,
@@ -254,7 +254,7 @@ impl LayerGroupMixer {
         self.eq.as_mut()
     }
 
-    pub fn sync_sends_with_buses(&mut self, bus_ids: &[u8]) {
+    pub fn sync_sends_with_buses(&mut self, bus_ids: &[BusId]) {
         for &bus_id in bus_ids {
             if !self.sends.iter().any(|s| s.bus_id == bus_id) {
                 self.sends.push(MixerSend::new(bus_id));
@@ -263,7 +263,7 @@ impl LayerGroupMixer {
         self.sends.sort_by_key(|s| s.bus_id);
     }
 
-    pub fn disable_send_for_bus(&mut self, bus_id: u8) {
+    pub fn disable_send_for_bus(&mut self, bus_id: BusId) {
         if let Some(send) = self.sends.iter_mut().find(|s| s.bus_id == bus_id) {
             send.enabled = false;
         }
@@ -786,7 +786,7 @@ impl Instrument {
     }
 
     /// Sync sends with current bus IDs. Adds missing sends, keeps existing ones.
-    pub fn sync_sends_with_buses(&mut self, bus_ids: &[u8]) {
+    pub fn sync_sends_with_buses(&mut self, bus_ids: &[BusId]) {
         for &bus_id in bus_ids {
             if !self.sends.iter().any(|s| s.bus_id == bus_id) {
                 self.sends.push(MixerSend::new(bus_id));
@@ -797,7 +797,7 @@ impl Instrument {
     }
 
     /// Disable sends for a removed bus (keeps the entry for undo support)
-    pub fn disable_send_for_bus(&mut self, bus_id: u8) {
+    pub fn disable_send_for_bus(&mut self, bus_id: BusId) {
         if let Some(send) = self.sends.iter_mut().find(|s| s.bus_id == bus_id) {
             send.enabled = false;
         }
@@ -977,8 +977,8 @@ mod tests {
 
     #[test]
     fn mixer_send_new() {
-        let send = MixerSend::new(3);
-        assert_eq!(send.bus_id, 3);
+        let send = MixerSend::new(BusId::new(3));
+        assert_eq!(send.bus_id, BusId::new(3));
         assert_eq!(send.level, 0.0);
         assert!(!send.enabled);
     }
@@ -1061,7 +1061,7 @@ mod tests {
 
     #[test]
     fn layer_group_mixer_new_has_eq() {
-        let gm = LayerGroupMixer::new(1, &[1, 2]);
+        let gm = LayerGroupMixer::new(1, &[BusId::new(1), BusId::new(2)]);
         assert!(gm.eq.is_some());
         let eq = gm.eq().unwrap();
         assert!(eq.enabled);

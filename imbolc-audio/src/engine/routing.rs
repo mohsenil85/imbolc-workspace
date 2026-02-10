@@ -2,7 +2,7 @@ use super::AudioEngine;
 use super::{InstrumentNodes, GROUP_SOURCES, GROUP_PROCESSING, GROUP_OUTPUT, GROUP_BUS_PROCESSING, VST_UGEN_INDEX};
 use super::backend::RawArg;
 use std::collections::HashMap;
-use imbolc_types::{CustomSynthDefRegistry, EffectId, EffectType, FilterType, Instrument, InstrumentId, InstrumentState, LayerGroupMixer, MixerBus, ParameterTarget, ParamValue, SendTapPoint, SessionState, SourceType, SourceTypeExt};
+use imbolc_types::{BusId, CustomSynthDefRegistry, EffectId, EffectType, FilterType, Instrument, InstrumentId, InstrumentState, LayerGroupMixer, MixerBus, ParameterTarget, ParamValue, SendTapPoint, SessionState, SourceType, SourceTypeExt};
 
 /// State machine for amortized routing rebuild across multiple ticks.
 /// Each step performs a bounded amount of work so the audio thread is never
@@ -104,10 +104,10 @@ impl AudioEngine {
             let bus_id = instrument.source_params.iter()
                 .find(|p| p.name == "bus")
                 .map(|p| match p.value {
-                    imbolc_types::ParamValue::Int(v) => v as u8,
-                    _ => 1,
+                    imbolc_types::ParamValue::Int(v) => BusId::new(v as u8),
+                    _ => BusId::new(1),
                 })
-                .unwrap_or(1);
+                .unwrap_or(BusId::new(1));
             let bus_audio_bus = self.bus_audio_buses.get(&bus_id).copied().unwrap_or(16);
             let gain = instrument.source_params.iter()
                 .find(|p| p.name == "gain")
@@ -266,14 +266,14 @@ impl AudioEngine {
             ];
             for p in &effect.params {
                 if effect.effect_type == EffectType::SidechainComp && p.name == "sc_bus" {
-                    let bus_id = match p.value {
+                    let sc_bus_raw = match p.value {
                         ParamValue::Int(v) => v as u8,
                         _ => 0,
                     };
-                    let sidechain_in = if bus_id == 0 {
+                    let sidechain_in = if sc_bus_raw == 0 {
                         0.0
                     } else {
-                        self.bus_audio_buses.get(&bus_id).copied().unwrap_or(0) as f32
+                        self.bus_audio_buses.get(&BusId::new(sc_bus_raw)).copied().unwrap_or(0) as f32
                     };
                     params.push(("sidechain_in".to_string(), sidechain_in));
                     continue;
@@ -503,7 +503,7 @@ impl AudioEngine {
             let node_id = self.next_node_id;
             self.next_node_id += 1;
             let effect_out_bus = self.bus_allocator.get_or_alloc_audio_bus(
-                u32::MAX - bus.id as u32,
+                u32::MAX - bus.id.get() as u32,
                 &format!("bus_fx_{}_out", effect.id),
             );
 
@@ -513,14 +513,14 @@ impl AudioEngine {
             ];
             for p in &effect.params {
                 if effect.effect_type == EffectType::SidechainComp && p.name == "sc_bus" {
-                    let sc_bus_id = match p.value {
+                    let sc_bus_raw = match p.value {
                         ParamValue::Int(v) => v as u8,
                         _ => 0,
                     };
-                    let sidechain_in = if sc_bus_id == 0 {
+                    let sidechain_in = if sc_bus_raw == 0 {
                         0.0
                     } else {
-                        self.bus_audio_buses.get(&sc_bus_id).copied().unwrap_or(0) as f32
+                        self.bus_audio_buses.get(&BusId::new(sc_bus_raw)).copied().unwrap_or(0) as f32
                     };
                     params.push(("sidechain_in".to_string(), sidechain_in));
                     continue;
@@ -623,14 +623,14 @@ impl AudioEngine {
             ];
             for p in &effect.params {
                 if effect.effect_type == EffectType::SidechainComp && p.name == "sc_bus" {
-                    let sc_bus_id = match p.value {
+                    let sc_bus_raw = match p.value {
                         ParamValue::Int(v) => v as u8,
                         _ => 0,
                     };
-                    let sidechain_in = if sc_bus_id == 0 {
+                    let sidechain_in = if sc_bus_raw == 0 {
                         0.0
                     } else {
-                        self.bus_audio_buses.get(&sc_bus_id).copied().unwrap_or(0) as f32
+                        self.bus_audio_buses.get(&BusId::new(sc_bus_raw)).copied().unwrap_or(0) as f32
                     };
                     params.push(("sidechain_in".to_string(), sidechain_in));
                     continue;
@@ -742,7 +742,7 @@ impl AudioEngine {
         // Allocate audio buses for each mixer bus first (needed by BusIn instruments)
         for bus in &session.mixer.buses {
             let bus_audio = self.bus_allocator.get_or_alloc_audio_bus(
-                u32::MAX - bus.id as u32,
+                u32::MAX - bus.id.get() as u32,
                 "bus_out",
             );
             self.bus_audio_buses.insert(bus.id, bus_audio);
@@ -917,7 +917,7 @@ impl AudioEngine {
         }
 
         // Free send nodes
-        let send_keys: Vec<(InstrumentId, u8)> = self.send_node_map.keys()
+        let send_keys: Vec<(InstrumentId, BusId)> = self.send_node_map.keys()
             .filter(|(id, _)| *id == instrument_id)
             .copied()
             .collect();
@@ -1113,7 +1113,7 @@ impl AudioEngine {
             }
 
             // Free this instrument's send nodes
-            let send_keys: Vec<(InstrumentId, u8)> = self.send_node_map.keys()
+            let send_keys: Vec<(InstrumentId, BusId)> = self.send_node_map.keys()
                 .filter(|(id, _)| *id == instrument_id)
                 .copied()
                 .collect();
@@ -1222,7 +1222,7 @@ impl AudioEngine {
                 // Allocate audio buses for each mixer bus (needed by BusIn instruments)
                 for bus in &session.mixer.buses {
                     let bus_audio = self.bus_allocator.get_or_alloc_audio_bus(
-                        u32::MAX - bus.id as u32,
+                        u32::MAX - bus.id.get() as u32,
                         "bus_out",
                     );
                     self.bus_audio_buses.insert(bus.id, bus_audio);
@@ -1367,11 +1367,11 @@ impl AudioEngine {
     }
 
     /// Set bus output mixer params (level, mute, pan) in real-time
-    pub fn set_bus_mixer_params(&self, bus_id: u8, level: f32, mute: bool, pan: f32) -> Result<(), String> {
+    pub fn set_bus_mixer_params(&self, bus_id: BusId, level: f32, mute: bool, pan: f32) -> Result<(), String> {
         let client = self.backend.as_ref().ok_or("Not connected")?;
         let node_id = self.bus_node_map
             .get(&bus_id)
-            .ok_or_else(|| format!("No bus output node for bus{}", bus_id))?;
+            .ok_or_else(|| format!("No bus output node for bus{}", bus_id.get()))?;
         client.set_param(*node_id, "level", level).map_err(|e| e.to_string())?;
         client.set_param(*node_id, "mute", if mute { 1.0 } else { 0.0 }).map_err(|e| e.to_string())?;
         client.set_param(*node_id, "pan", pan).map_err(|e| e.to_string())?;
@@ -1417,7 +1417,7 @@ impl AudioEngine {
 
         // BusIn "bus" param: translate bus_id (1-8) to SC audio bus number
         if param == "bus" {
-            let bus_id = value as u8;
+            let bus_id = BusId::new(value as u8);
             if let Some(&audio_bus) = self.bus_audio_buses.get(&bus_id) {
                 if let Some(nodes) = self.node_map.get(&instrument_id) {
                     if let Some(source_node) = nodes.source {
@@ -1502,7 +1502,7 @@ impl AudioEngine {
     }
 
     /// Set a bus effect parameter in real-time (targeted /n_set, no rebuild).
-    pub fn set_bus_effect_param(&self, bus_id: u8, effect_id: EffectId, param: &str, value: f32) -> Result<(), String> {
+    pub fn set_bus_effect_param(&self, bus_id: BusId, effect_id: EffectId, param: &str, value: f32) -> Result<(), String> {
         if !self.is_running { return Ok(()); }
         let client = self.backend.as_ref().ok_or("Not connected")?;
 

@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    AutomationLaneId, AutomationTarget, ClipId, ClipboardNote, CurveType, DrumStep,
+    AutomationLaneId, AutomationTarget, BusId, ClipId, ClipboardNote, CurveType, DrumStep,
     EffectId, EffectType, EnvConfig, FilterType,
     InstrumentId, LfoConfig, MixerSelection, MusicalSettings, Param, PlacementId,
     ProcessingStage, ServerStatus, SourceType, VstPluginKind,
@@ -135,19 +135,19 @@ pub enum BusAction {
     /// Add a new bus
     Add,
     /// Remove a bus by ID
-    Remove(u8),
+    Remove(BusId),
     /// Rename a bus
-    Rename(u8, String),
+    Rename(BusId, String),
     /// Add an effect to a bus
-    AddEffect(u8, EffectType),
+    AddEffect(BusId, EffectType),
     /// Remove an effect from a bus
-    RemoveEffect(u8, EffectId),
+    RemoveEffect(BusId, EffectId),
     /// Move an effect up/down on a bus
-    MoveEffect(u8, EffectId, i8),
+    MoveEffect(BusId, EffectId, i8),
     /// Toggle bypass on a bus effect
-    ToggleEffectBypass(u8, EffectId),
+    ToggleEffectBypass(BusId, EffectId),
     /// Adjust a parameter on a bus effect
-    AdjustEffectParam(u8, EffectId, usize, f32),
+    AdjustEffectParam(BusId, EffectId, usize, f32),
 }
 
 /// Layer group actions.
@@ -270,7 +270,7 @@ pub struct AudioDirty {
     /// Targeted bus effect param updates: (bus_id, effect_id, param_index, value).
     /// Sends /n_set directly to the bus effect node without routing rebuild.
     /// Supports up to 4 per frame; overflow escalates to session=true.
-    pub bus_effect_params: [Option<(u8, EffectId, usize, f32)>; 4],
+    pub bus_effect_params: [Option<(BusId, EffectId, usize, f32)>; 4],
     /// Targeted layer group effect param updates: (group_id, effect_id, param_index, value).
     /// Sends /n_set directly to the layer group effect node without routing rebuild.
     /// Supports up to 4 per frame; overflow escalates to session=true.
@@ -470,7 +470,7 @@ impl AudioDirty {
 
     /// Set a targeted bus effect param update. Finds an empty slot in the array.
     /// If all slots are full, escalates to session=true.
-    pub fn set_bus_effect_param(&mut self, bus_id: u8, effect_id: EffectId, param_idx: usize, value: f32) {
+    pub fn set_bus_effect_param(&mut self, bus_id: BusId, effect_id: EffectId, param_idx: usize, value: f32) {
         if let Some(slot) = self.bus_effect_params.iter_mut().find(|s| s.is_none()) {
             *slot = Some((bus_id, effect_id, param_idx, value));
         } else {
@@ -607,9 +607,9 @@ pub enum MixerAction {
     CycleSection,
     CycleOutput,
     CycleOutputReverse,
-    AdjustSend(u8, f32),
-    ToggleSend(u8),
-    CycleSendTapPoint(u8),
+    AdjustSend(BusId, f32),
+    ToggleSend(BusId),
+    CycleSendTapPoint(BusId),
     AdjustPan(f32),
 }
 
@@ -1044,6 +1044,7 @@ pub enum Action {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::BusId;
 
     #[test]
     fn audio_dirty_all_sets_everything() {
@@ -1211,10 +1212,10 @@ mod tests {
         let eid = 1u32;
         let mut a = AudioDirty::default();
         for i in 0..4 {
-            a.bus_effect_params[i] = Some((1, eid, i, i as f32));
+            a.bus_effect_params[i] = Some((BusId::new(1), eid, i, i as f32));
         }
         let mut b = AudioDirty::default();
-        b.bus_effect_params[0] = Some((2, eid, 0, 99.0));
+        b.bus_effect_params[0] = Some((BusId::new(2), eid, 0, 99.0));
         a.merge(b);
         assert!(a.session, "bus overflow should escalate to session=true");
         assert!(!a.instruments, "bus overflow should NOT escalate to instruments");
@@ -1275,7 +1276,7 @@ mod tests {
     #[test]
     fn any_detects_bus_effect_params() {
         let mut d = AudioDirty::default();
-        d.bus_effect_params[0] = Some((1, 1u32, 0, 0.5));
+        d.bus_effect_params[0] = Some((BusId::new(1), 1u32, 0, 0.5));
         assert!(d.any());
     }
 }

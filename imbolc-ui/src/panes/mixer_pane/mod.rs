@@ -7,6 +7,7 @@ use crate::panes::add_effect_pane::EffectTarget;
 use crate::state::{AppState, InstrumentId};
 use crate::ui::action_id::ActionId;
 use crate::ui::{Action, InputEvent, Keymap, MouseEvent, Pane, Rect, RenderBuf};
+use imbolc_types::BusId;
 
 const CHANNEL_WIDTH: u16 = 8;
 const METER_HEIGHT: u16 = 12;
@@ -21,7 +22,7 @@ const BLOCK_CHARS: [char; 8] = ['\u{2581}', '\u{2582}', '\u{2583}', '\u{2584}', 
 enum DetailTarget {
     Instrument(usize),
     LayerGroup(u32),
-    Bus(u8),
+    Bus(BusId),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -126,7 +127,7 @@ impl GroupDetailSection {
 
 pub struct MixerPane {
     keymap: Keymap,
-    send_target: Option<u8>,
+    send_target: Option<BusId>,
     detail_mode: Option<DetailTarget>,
     detail_section: MixerSection,
     detail_cursor: usize,
@@ -150,7 +151,7 @@ impl MixerPane {
     }
 
     #[allow(dead_code)]
-    pub fn send_target(&self) -> Option<u8> {
+    pub fn send_target(&self) -> Option<BusId> {
         self.send_target
     }
 
@@ -176,7 +177,7 @@ impl MixerPane {
         }
     }
 
-    fn detail_bus_id(&self) -> Option<u8> {
+    fn detail_bus_id(&self) -> Option<BusId> {
         match self.detail_mode? {
             DetailTarget::Bus(id) => Some(id),
             _ => None,
@@ -310,6 +311,7 @@ mod tests {
     use crate::state::{AppState, MixerSelection};
     use crate::ui::{BusAction, InputEvent, KeyCode, LayerGroupAction, MixerAction, Modifiers, NavAction};
     use crate::ui::action_id::MixerActionId;
+    use imbolc_types::BusId;
 
     fn dummy_event() -> InputEvent {
         InputEvent::new(KeyCode::Char('x'), Modifiers::default())
@@ -322,12 +324,12 @@ mod tests {
 
         let action = pane.handle_action(ActionId::Mixer(MixerActionId::SendNext), &dummy_event(), &state);
         assert!(matches!(action, Action::None));
-        assert_eq!(pane.send_target, Some(1));
+        assert_eq!(pane.send_target, Some(BusId::new(1)));
 
         let action = pane.handle_action(ActionId::Mixer(MixerActionId::LevelUp), &dummy_event(), &state);
         match action {
             Action::Mixer(MixerAction::AdjustSend(bus_id, delta)) => {
-                assert_eq!(bus_id, 1);
+                assert_eq!(bus_id, BusId::new(1));
                 assert!((delta - 0.05).abs() < 0.0001);
             }
             _ => panic!("Expected AdjustSend when send_target is set"),
@@ -343,12 +345,12 @@ mod tests {
         let mut pane = MixerPane::new(Keymap::new());
         let state = AppState::new();
 
-        pane.send_target = Some(3);
+        pane.send_target = Some(BusId::new(3));
         let action = pane.handle_action(ActionId::Mixer(MixerActionId::Prev), &dummy_event(), &state);
         assert!(matches!(action, Action::Mixer(MixerAction::Move(-1))));
         assert_eq!(pane.send_target, None);
 
-        pane.send_target = Some(2);
+        pane.send_target = Some(BusId::new(2));
         let action = pane.handle_action(ActionId::Mixer(MixerActionId::Next), &dummy_event(), &state);
         assert!(matches!(action, Action::Mixer(MixerAction::Move(1))));
         assert_eq!(pane.send_target, None);
@@ -358,12 +360,12 @@ mod tests {
     fn bus_detail_entry_and_escape() {
         let mut pane = MixerPane::new(Keymap::new());
         let mut state = AppState::new();
-        state.session.mixer.selection = MixerSelection::Bus(1);
+        state.session.mixer.selection = MixerSelection::Bus(BusId::new(1));
 
         // Enter bus detail
         let action = pane.handle_action(ActionId::Mixer(MixerActionId::EnterDetail), &dummy_event(), &state);
         assert!(matches!(action, Action::None));
-        assert_eq!(pane.detail_mode, Some(DetailTarget::Bus(1)));
+        assert_eq!(pane.detail_mode, Some(DetailTarget::Bus(BusId::new(1))));
         assert_eq!(pane.bus_detail_section, BusDetailSection::Effects);
         assert_eq!(pane.detail_cursor, 0);
 
@@ -390,7 +392,7 @@ mod tests {
     fn bus_detail_section_cycling() {
         let mut pane = MixerPane::new(Keymap::new());
         let mut state = AppState::new();
-        state.session.mixer.selection = MixerSelection::Bus(1);
+        state.session.mixer.selection = MixerSelection::Bus(BusId::new(1));
 
         // Enter bus detail
         pane.handle_action(ActionId::Mixer(MixerActionId::EnterDetail), &dummy_event(), &state);
@@ -410,7 +412,7 @@ mod tests {
     fn bus_detail_add_effect_returns_push_pane() {
         let mut pane = MixerPane::new(Keymap::new());
         let mut state = AppState::new();
-        state.session.mixer.selection = MixerSelection::Bus(1);
+        state.session.mixer.selection = MixerSelection::Bus(BusId::new(1));
 
         pane.handle_action(ActionId::Mixer(MixerActionId::EnterDetail), &dummy_event(), &state);
         let action = pane.handle_action(ActionId::Mixer(MixerActionId::AddEffect), &dummy_event(), &state);
@@ -421,14 +423,14 @@ mod tests {
     fn bus_detail_remove_effect() {
         let mut pane = MixerPane::new(Keymap::new());
         let mut state = AppState::new();
-        state.session.bus_mut(1).unwrap().add_effect(crate::state::EffectType::Reverb);
-        let effect_id = state.session.bus(1).unwrap().effects[0].id;
+        state.session.bus_mut(BusId::new(1)).unwrap().add_effect(crate::state::EffectType::Reverb);
+        let effect_id = state.session.bus(BusId::new(1)).unwrap().effects[0].id;
 
-        state.session.mixer.selection = MixerSelection::Bus(1);
+        state.session.mixer.selection = MixerSelection::Bus(BusId::new(1));
         pane.handle_action(ActionId::Mixer(MixerActionId::EnterDetail), &dummy_event(), &state);
 
         let action = pane.handle_action(ActionId::Mixer(MixerActionId::RemoveEffect), &dummy_event(), &state);
-        assert!(matches!(action, Action::Bus(BusAction::RemoveEffect(1, id)) if id == effect_id));
+        assert!(matches!(action, Action::Bus(BusAction::RemoveEffect(id, eid)) if id == BusId::new(1) && eid == effect_id));
     }
 
     #[test]
@@ -471,8 +473,8 @@ mod tests {
         let mut pane = MixerPane::new(Keymap::new());
         assert_eq!(pane.effect_target(), EffectTarget::Instrument);
 
-        pane.detail_mode = Some(DetailTarget::Bus(2));
-        assert_eq!(pane.effect_target(), EffectTarget::Bus(2));
+        pane.detail_mode = Some(DetailTarget::Bus(BusId::new(2)));
+        assert_eq!(pane.effect_target(), EffectTarget::Bus(BusId::new(2)));
 
         pane.detail_mode = Some(DetailTarget::LayerGroup(5));
         assert_eq!(pane.effect_target(), EffectTarget::LayerGroup(5));

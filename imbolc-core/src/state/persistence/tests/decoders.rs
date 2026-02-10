@@ -191,7 +191,8 @@ fn roundtrip_parameter_target() {
 #[test]
 fn roundtrip_output_target() {
     use crate::state::instrument::OutputTarget::*;
-    let all = [Master, Bus(1), Bus(5)];
+    use imbolc_types::BusId;
+    let all = [Master, Bus(BusId::new(1)), Bus(BusId::new(5))];
     for ot in &all {
         match ot { Master | Bus(_) => {} }
         let save_str = match ot {

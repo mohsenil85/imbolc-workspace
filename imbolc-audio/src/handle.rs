@@ -25,7 +25,7 @@ use imbolc_types::AudioDirty;
 use imbolc_types::{ArrangementState, PlayMode};
 use imbolc_types::{AutomationLane, AutomationTarget};
 use imbolc_types::Note;
-use imbolc_types::{BufferId, EffectId, InstrumentId};
+use imbolc_types::{BufferId, BusId, EffectId, InstrumentId};
 
 /// Audio-owned read state: values that the audio thread is the authority on.
 /// UI reads these for display; audio feedback updates them.
@@ -709,7 +709,7 @@ impl AudioHandle {
 
     pub fn set_bus_mixer_params(
         &self,
-        bus_id: u8,
+        bus_id: BusId,
         level: f32,
         mute: bool,
         pan: f32,
@@ -810,7 +810,7 @@ impl AudioHandle {
 
     pub fn set_bus_effect_param(
         &self,
-        bus_id: u8,
+        bus_id: BusId,
         effect_id: EffectId,
         param: &str,
         value: f32,

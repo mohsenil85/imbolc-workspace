@@ -13,6 +13,7 @@ use super::music::{Key, Scale};
 use super::piano_roll::PianoRollState;
 use super::theme::Theme;
 use super::vst::VstPluginRegistry;
+use crate::BusId;
 
 /// Click track (metronome) state.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -39,7 +40,7 @@ impl Default for ClickTrackState {
 pub enum MixerSelection {
     Instrument(usize), // index into instruments vec
     LayerGroup(u32),   // layer group ID
-    Bus(u8),           // 1-8
+    Bus(BusId),
     Master,
 }
 
@@ -178,27 +179,27 @@ impl SessionState {
     // Direct field access should use state.session.mixer.* instead.
 
     /// Get a bus by ID
-    pub fn bus(&self, id: u8) -> Option<&MixerBus> {
+    pub fn bus(&self, id: BusId) -> Option<&MixerBus> {
         self.mixer.bus(id)
     }
 
     /// Get a mutable bus by ID
-    pub fn bus_mut(&mut self, id: u8) -> Option<&mut MixerBus> {
+    pub fn bus_mut(&mut self, id: BusId) -> Option<&mut MixerBus> {
         self.mixer.bus_mut(id)
     }
 
     /// Get an iterator over current bus IDs in order
-    pub fn bus_ids(&self) -> impl Iterator<Item = u8> + '_ {
+    pub fn bus_ids(&self) -> impl Iterator<Item = BusId> + '_ {
         self.mixer.bus_ids()
     }
 
     /// Add a new bus. Returns the new bus ID, or None if at max capacity.
-    pub fn add_bus(&mut self) -> Option<u8> {
+    pub fn add_bus(&mut self) -> Option<BusId> {
         self.mixer.add_bus()
     }
 
     /// Remove a bus by ID. Returns true if the bus was found and removed.
-    pub fn remove_bus(&mut self, id: u8) -> bool {
+    pub fn remove_bus(&mut self, id: BusId) -> bool {
         self.mixer.remove_bus(id)
     }
 
@@ -237,14 +238,13 @@ mod tests {
     #[test]
     fn bus_lookup_by_id() {
         let session = SessionState::new();
-        assert!(session.bus(1).is_some());
-        assert_eq!(session.bus(1).unwrap().id, 1);
-        assert!(session.bus(8).is_some());
-        assert_eq!(session.bus(8).unwrap().id, 8);
+        assert!(session.bus(BusId::new(1)).is_some());
+        assert_eq!(session.bus(BusId::new(1)).unwrap().id, BusId::new(1));
+        assert!(session.bus(BusId::new(8)).is_some());
+        assert_eq!(session.bus(BusId::new(8)).unwrap().id, BusId::new(8));
         // Non-existent IDs return None
-        assert!(session.bus(0).is_none());
-        assert!(session.bus(9).is_none());
-        assert!(session.bus(100).is_none());
+        assert!(session.bus(BusId::new(9)).is_none());
+        assert!(session.bus(BusId::new(100)).is_none());
     }
 
     #[test]
@@ -252,7 +252,7 @@ mod tests {
         let mut session = SessionState::new();
         assert_eq!(session.mixer.buses.len(), DEFAULT_BUS_COUNT as usize);
         let new_id = session.add_bus().unwrap();
-        assert_eq!(new_id, DEFAULT_BUS_COUNT + 1);
+        assert_eq!(new_id, BusId::new(DEFAULT_BUS_COUNT + 1));
         assert_eq!(session.mixer.buses.len(), DEFAULT_BUS_COUNT as usize + 1);
         assert!(session.bus(new_id).is_some());
     }
@@ -268,19 +268,20 @@ mod tests {
     #[test]
     fn remove_bus() {
         let mut session = SessionState::new();
-        assert!(session.bus(3).is_some());
-        assert!(session.remove_bus(3));
-        assert!(session.bus(3).is_none());
+        assert!(session.bus(BusId::new(3)).is_some());
+        assert!(session.remove_bus(BusId::new(3)));
+        assert!(session.bus(BusId::new(3)).is_none());
         // Removing non-existent bus returns false
-        assert!(!session.remove_bus(3));
-        assert!(!session.remove_bus(100));
+        assert!(!session.remove_bus(BusId::new(3)));
+        assert!(!session.remove_bus(BusId::new(100)));
     }
 
     #[test]
     fn bus_ids_iterator() {
         let session = SessionState::new();
-        let ids: Vec<u8> = session.bus_ids().collect();
-        assert_eq!(ids, (1..=DEFAULT_BUS_COUNT).collect::<Vec<_>>());
+        let ids: Vec<BusId> = session.bus_ids().collect();
+        let expected: Vec<BusId> = (1..=DEFAULT_BUS_COUNT).map(BusId::new).collect();
+        assert_eq!(ids, expected);
     }
 
     #[test]
@@ -294,7 +295,7 @@ mod tests {
     #[test]
     fn effective_bus_mute_no_solo() {
         let session = SessionState::new();
-        let bus = session.bus(1).unwrap();
+        let bus = session.bus(BusId::new(1)).unwrap();
         assert!(!session.effective_bus_mute(bus));
 
         let mut bus_copy = bus.clone();
@@ -305,11 +306,11 @@ mod tests {
     #[test]
     fn effective_bus_mute_with_solo() {
         let mut session = SessionState::new();
-        session.bus_mut(1).unwrap().solo = true;
+        session.bus_mut(BusId::new(1)).unwrap().solo = true;
         // Bus 1 is soloed — should not be muted
-        assert!(!session.effective_bus_mute(session.bus(1).unwrap()));
+        assert!(!session.effective_bus_mute(session.bus(BusId::new(1)).unwrap()));
         // Bus 2 is not soloed — should be muted
-        assert!(session.effective_bus_mute(session.bus(2).unwrap()));
+        assert!(session.effective_bus_mute(session.bus(BusId::new(2)).unwrap()));
     }
 
     #[test]
@@ -320,7 +321,7 @@ mod tests {
             MixerSelection::Instrument(0)
         ));
         session.mixer_cycle_section();
-        assert!(matches!(session.mixer.selection, MixerSelection::Bus(1)));
+        assert!(matches!(session.mixer.selection, MixerSelection::Bus(id) if id == BusId::new(1)));
         session.mixer_cycle_section();
         assert!(matches!(session.mixer.selection, MixerSelection::Master));
         session.mixer_cycle_section();
@@ -358,7 +359,7 @@ mod tests {
     fn any_bus_solo() {
         let mut session = SessionState::new();
         assert!(!session.any_bus_solo());
-        session.bus_mut(3).unwrap().solo = true;
+        session.bus_mut(BusId::new(3)).unwrap().solo = true;
         assert!(session.any_bus_solo());
     }
 }

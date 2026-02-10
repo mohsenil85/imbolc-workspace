@@ -14,7 +14,7 @@
 use imbolc_types::{
     Action, InstrumentAction, MixerAction, PianoRollAction, AutomationAction,
     BusAction, EqParamKind, LayerGroupAction, VstParamAction, SessionAction, ClickAction, VstTarget,
-    InstrumentId, MixerSelection, FilterType, OutputTarget,
+    InstrumentId, BusId, MixerSelection, FilterType, OutputTarget,
 };
 use imbolc_types::Instrument;
 use imbolc_types::Note;
@@ -121,7 +121,7 @@ fn project_instrument(
         InstrumentAction::Add(source_type) => {
             let id = instruments.add_instrument(*source_type);
             session.piano_roll.add_track(id);
-            let bus_ids: Vec<u8> = session.bus_ids().collect();
+            let bus_ids: Vec<BusId> = session.bus_ids().collect();
             if let Some(inst) = instruments.instrument_mut(id) {
                 inst.sync_sends_with_buses(&bus_ids);
             }
@@ -575,7 +575,7 @@ fn project_link_layer(
         inst.layer_group = Some(group_id);
     }
     // Auto-create LayerGroupMixer if new group
-    let bus_ids: Vec<u8> = session.mixer.bus_ids().collect();
+    let bus_ids: Vec<BusId> = session.mixer.bus_ids().collect();
     if session.mixer.layer_group_mixer(group_id).is_none() {
         session.mixer.add_layer_group_mixer(group_id, &bus_ids);
     }
@@ -637,7 +637,7 @@ fn project_mixer(
                     MixerSelection::LayerGroup(group_ids[new_pos])
                 }
                 MixerSelection::Bus(current_id) => {
-                    let bus_ids: Vec<u8> = session.bus_ids().collect();
+                    let bus_ids: Vec<BusId> = session.bus_ids().collect();
                     if bus_ids.is_empty() {
                         return true;
                     }
@@ -676,7 +676,7 @@ fn project_mixer(
                     }
                 }
                 MixerSelection::Bus(_) => {
-                    let bus_ids: Vec<u8> = session.bus_ids().collect();
+                    let bus_ids: Vec<BusId> = session.bus_ids().collect();
                     if bus_ids.is_empty() {
                         return true;
                     }
@@ -779,7 +779,7 @@ fn project_mixer(
         }
         MixerAction::CycleOutput => {
             // Replicate AppState::mixer_cycle_output logic
-            let bus_ids: Vec<u8> = session.bus_ids().collect();
+            let bus_ids: Vec<BusId> = session.bus_ids().collect();
             match session.mixer.selection {
                 MixerSelection::Instrument(idx) => {
                     if let Some(inst) = instruments.instruments.get_mut(idx) {
@@ -821,7 +821,7 @@ fn project_mixer(
         }
         MixerAction::CycleOutputReverse => {
             // Replicate AppState::mixer_cycle_output_reverse logic
-            let bus_ids: Vec<u8> = session.bus_ids().collect();
+            let bus_ids: Vec<BusId> = session.bus_ids().collect();
             match session.mixer.selection {
                 MixerSelection::Instrument(idx) => {
                     if let Some(inst) = instruments.instruments.get_mut(idx) {
@@ -1177,7 +1177,7 @@ fn project_bus(
     match action {
         BusAction::Add => {
             if session.add_bus().is_some() {
-                let bus_ids: Vec<u8> = session.bus_ids().collect();
+                let bus_ids: Vec<BusId> = session.bus_ids().collect();
                 for inst in &mut instruments.instruments {
                     inst.sync_sends_with_buses(&bus_ids);
                 }

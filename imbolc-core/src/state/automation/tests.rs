@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::state::automation::*;
+    use imbolc_types::BusId;
 
     #[test]
     fn test_automation_point() {
@@ -75,7 +76,7 @@ mod tests {
     fn test_new_target_instrument_id() {
         assert_eq!(AutomationTarget::lfo_rate(5).instrument_id(), Some(5));
         assert_eq!(AutomationTarget::send_level(3, 0).instrument_id(), Some(3));
-        assert_eq!(AutomationTarget::bus_level(1).instrument_id(), None);
+        assert_eq!(AutomationTarget::bus_level(BusId::new(1)).instrument_id(), None);
         assert_eq!(AutomationTarget::bpm().instrument_id(), None);
     }
 
@@ -95,12 +96,12 @@ mod tests {
         let mut state = AutomationState::new();
         state.add_lane(AutomationTarget::level(1));
         state.add_lane(AutomationTarget::bpm());
-        state.add_lane(AutomationTarget::bus_level(2));
+        state.add_lane(AutomationTarget::bus_level(BusId::new(2)));
 
         state.remove_lanes_for_instrument(1);
         assert_eq!(state.lanes.len(), 2);
         assert!(matches!(state.lanes[0].target, AutomationTarget::Global(imbolc_types::GlobalParameter::Bpm)));
-        assert!(matches!(state.lanes[1].target, AutomationTarget::Bus(2, _)));
+        assert!(matches!(state.lanes[1].target, AutomationTarget::Bus(id, _) if id == BusId::new(2)));
     }
 
     #[test]

@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::{EffectId, InstrumentId, ParameterTarget};
+use crate::{BusId, EffectId, InstrumentId, ParameterTarget};
 
 /// Whether target uses continuous interpolation or discrete steps.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -121,8 +121,8 @@ pub enum GlobalParameter {
 pub enum AutomationTarget {
     /// Per-instrument parameter automation
     Instrument(InstrumentId, InstrumentParameter),
-    /// Bus output level (bus 1-8)
-    Bus(u8, BusParameter),
+    /// Bus output level
+    Bus(BusId, BusParameter),
     /// Global session parameters
     Global(GlobalParameter),
 }
@@ -140,7 +140,7 @@ impl AutomationTarget {
 
     /// Create a bus level target.
     #[inline]
-    pub fn bus_level(bus_id: u8) -> Self {
+    pub fn bus_level(bus_id: BusId) -> Self {
         Self::Bus(bus_id, BusParameter::Level)
     }
 
@@ -716,7 +716,7 @@ impl AutomationState {
     }
 
     /// Remove all lanes for a bus (when bus is deleted)
-    pub fn remove_lanes_for_bus(&mut self, bus_id: u8) {
+    pub fn remove_lanes_for_bus(&mut self, bus_id: BusId) {
         self.lanes.retain(|l| !matches!(l.target, AutomationTarget::Bus(id, _) if id == bus_id));
         // Adjust selection
         if let Some(sel) = self.selected_lane {

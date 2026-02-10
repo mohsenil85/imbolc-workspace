@@ -8,12 +8,13 @@ use crate::ui::{
     MouseEventKind, MouseButton, NavAction, Pane, SessionAction, Style,
 };
 use crate::action::{BusAction, LayerGroupAction};
+use imbolc_types::BusId;
 
 /// Target for the add-effect modal: which entity receives the new effect.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EffectTarget {
     Instrument,
-    Bus(u8),
+    Bus(BusId),
     LayerGroup(u32),
 }
 

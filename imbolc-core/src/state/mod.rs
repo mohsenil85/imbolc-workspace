@@ -38,7 +38,7 @@ pub use vst_plugin::{VstParamSpec, VstPlugin, VstPluginId, VstPluginKind, VstPlu
 
 // Re-export types moved to imbolc-types
 pub use imbolc_types::{
-    ClientDisplayInfo, IoGeneration, IoState, KeyboardLayout, NetworkConnectionStatus,
+    BusId, ClientDisplayInfo, IoGeneration, IoState, KeyboardLayout, NetworkConnectionStatus,
     NetworkDisplayContext, OwnershipDisplayStatus, PendingExport, PendingRender, ProjectMeta,
     RecordingState, VisualizationState,
 };
@@ -156,7 +156,7 @@ impl AppState {
         self.session.piano_roll.add_track(id);
 
         // Sync sends with current buses
-        let bus_ids: Vec<u8> = self.session.bus_ids().collect();
+        let bus_ids: Vec<BusId> = self.session.bus_ids().collect();
         if let Some(inst) = self.instruments.instrument_mut(id) {
             inst.sync_sends_with_buses(&bus_ids);
         }
@@ -202,7 +202,7 @@ impl AppState {
             }
             MixerSelection::Bus(current_id) => {
                 // Find current position and move by delta
-                let bus_ids: Vec<u8> = self.session.bus_ids().collect();
+                let bus_ids: Vec<BusId> = self.session.bus_ids().collect();
                 if bus_ids.is_empty() {
                     return;
                 }
@@ -237,7 +237,7 @@ impl AppState {
                 }
             }
             MixerSelection::Bus(_) => {
-                let bus_ids: Vec<u8> = self.session.bus_ids().collect();
+                let bus_ids: Vec<BusId> = self.session.bus_ids().collect();
                 if bus_ids.is_empty() {
                     return;
                 }
@@ -253,7 +253,7 @@ impl AppState {
 
     /// Cycle output target for the selected instrument or layer group
     pub fn mixer_cycle_output(&mut self) {
-        let bus_ids: Vec<u8> = self.session.bus_ids().collect();
+        let bus_ids: Vec<BusId> = self.session.bus_ids().collect();
         match self.session.mixer.selection {
             MixerSelection::Instrument(idx) => {
                 if let Some(inst) = self.instruments.instruments.get_mut(idx) {
@@ -293,7 +293,7 @@ impl AppState {
 
     /// Cycle output target backwards for the selected instrument or layer group
     pub fn mixer_cycle_output_reverse(&mut self) {
-        let bus_ids: Vec<u8> = self.session.bus_ids().collect();
+        let bus_ids: Vec<BusId> = self.session.bus_ids().collect();
         match self.session.mixer.selection {
             MixerSelection::Instrument(idx) => {
                 if let Some(inst) = self.instruments.instruments.get_mut(idx) {
@@ -424,13 +424,13 @@ mod tests {
     #[test]
     fn mixer_move_clamps_bus() {
         let mut state = AppState::new();
-        state.session.mixer.selection = MixerSelection::Bus(1);
+        state.session.mixer.selection = MixerSelection::Bus(BusId::new(1));
         state.mixer_move(-1);
-        assert!(matches!(state.session.mixer.selection, MixerSelection::Bus(1)));
+        assert!(matches!(state.session.mixer.selection, MixerSelection::Bus(id) if id == BusId::new(1)));
 
         state.mixer_move(100);
         // Should clamp to last bus (DEFAULT_BUS_COUNT = 8)
-        assert!(matches!(state.session.mixer.selection, MixerSelection::Bus(DEFAULT_BUS_COUNT)));
+        assert!(matches!(state.session.mixer.selection, MixerSelection::Bus(id) if id == BusId::new(DEFAULT_BUS_COUNT)));
     }
 
     #[test]
@@ -455,7 +455,7 @@ mod tests {
 
         assert_eq!(state.instruments.instruments[0].output_target, OutputTarget::Master);
         state.mixer_cycle_output();
-        assert_eq!(state.instruments.instruments[0].output_target, OutputTarget::Bus(1));
+        assert_eq!(state.instruments.instruments[0].output_target, OutputTarget::Bus(BusId::new(1)));
 
         // Cycle through all buses back to Master
         for _ in 1..=DEFAULT_BUS_COUNT {
@@ -471,9 +471,9 @@ mod tests {
         state.session.mixer.selection = MixerSelection::Instrument(0);
 
         state.mixer_cycle_output_reverse();
-        assert_eq!(state.instruments.instruments[0].output_target, OutputTarget::Bus(DEFAULT_BUS_COUNT));
+        assert_eq!(state.instruments.instruments[0].output_target, OutputTarget::Bus(BusId::new(DEFAULT_BUS_COUNT)));
         state.mixer_cycle_output_reverse();
-        assert_eq!(state.instruments.instruments[0].output_target, OutputTarget::Bus(DEFAULT_BUS_COUNT - 1));
+        assert_eq!(state.instruments.instruments[0].output_target, OutputTarget::Bus(BusId::new(DEFAULT_BUS_COUNT - 1)));
     }
 
     #[test]

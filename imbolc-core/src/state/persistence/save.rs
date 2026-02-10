@@ -258,7 +258,7 @@ fn save_instruments(conn: &Connection, instruments: &InstrumentState) -> SqlResu
             conn.execute(
                 "INSERT INTO instrument_sends (instrument_id, bus_id, level, enabled, tap_point)
                  VALUES (?1, ?2, ?3, ?4, ?5)",
-                params![inst.id, send.bus_id, send.level, send.enabled as i32, encode_tap_point(send.tap_point)],
+                params![inst.id, send.bus_id.get() as i32, send.level, send.enabled as i32, encode_tap_point(send.tap_point)],
             )?;
         }
 
@@ -606,10 +606,10 @@ fn save_mixer(conn: &Connection, session: &SessionState) -> SqlResult<()> {
         conn.execute(
             "INSERT INTO mixer_buses (id, name, level, pan, mute, solo)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![bus.id as i32, bus.name, bus.level, bus.pan, bus.mute as i32, bus.solo as i32],
+            params![bus.id.get() as i32, bus.name, bus.level, bus.pan, bus.mute as i32, bus.solo as i32],
         )?;
 
-        save_effects_to(conn, "bus_effects", "bus_effect_params", "bus_effect_vst_params", "bus_id", bus.id as u32, &bus.effects)?;
+        save_effects_to(conn, "bus_effects", "bus_effect_params", "bus_effect_vst_params", "bus_id", bus.id.get() as u32, &bus.effects)?;
     }
 
     conn.execute(
@@ -636,7 +636,7 @@ fn save_layer_group_mixers(conn: &Connection, session: &SessionState) -> SqlResu
             conn.execute(
                 "INSERT INTO layer_group_sends (group_id, bus_id, level, enabled, tap_point)
                  VALUES (?1, ?2, ?3, ?4, ?5)",
-                params![gm.group_id as i32, send.bus_id as i32, send.level, send.enabled as i32, encode_tap_point(send.tap_point)],
+                params![gm.group_id as i32, send.bus_id.get() as i32, send.level, send.enabled as i32, encode_tap_point(send.tap_point)],
             )?;
         }
 
@@ -1007,7 +1007,7 @@ pub fn encode_automation_target(
             (param_name, Some(*inst_id as i64), None, None, None, target_extra)
         }
         AutomationTarget::Bus(bus_id, BusParameter::Level) => {
-            ("BusLevel".to_string(), None, Some(*bus_id as i64), None, None, None)
+            ("BusLevel".to_string(), None, Some(bus_id.get() as i64), None, None, None)
         }
         AutomationTarget::Global(GlobalParameter::Bpm) => {
             ("GlobalBpm".to_string(), None, None, None, None, None)

@@ -24,7 +24,7 @@ pub(super) fn handle_link_layer(
         inst.layer_group = Some(group_id);
     }
     // Auto-create LayerGroupMixer if new group
-    let bus_ids: Vec<u8> = state.session.mixer.bus_ids().collect();
+    let bus_ids: Vec<imbolc_types::BusId> = state.session.mixer.bus_ids().collect();
     if state.session.mixer.layer_group_mixer(group_id).is_none() {
         state.session.mixer.add_layer_group_mixer(group_id, &bus_ids);
     }

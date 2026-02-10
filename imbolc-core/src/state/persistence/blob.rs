@@ -20,6 +20,7 @@ pub fn deserialize_instruments(bytes: &[u8]) -> Result<InstrumentState, String> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use imbolc_types::BusId;
     use crate::state::AutomationTarget;
     use crate::state::custom_synthdef::{CustomSynthDef, CustomSynthDefRegistry, ParamSpec};
     use crate::state::instrument::{
@@ -69,7 +70,7 @@ mod tests {
         let custom_inst_id = instruments.add_instrument(SourceType::Custom(custom_id));
 
         // Sync sends for all instruments with session buses
-        let bus_ids: Vec<u8> = session.bus_ids().collect();
+        let bus_ids: Vec<BusId> = session.bus_ids().collect();
         for inst in &mut instruments.instruments {
             inst.sync_sends_with_buses(&bus_ids);
         }
@@ -87,7 +88,7 @@ mod tests {
                     target: ParameterTarget::FilterCutoff,
                 }));
             }
-            inst.output_target = OutputTarget::Bus(2);
+            inst.output_target = OutputTarget::Bus(BusId::new(2));
             inst.level = 0.55;
             inst.pan = 0.25;
             inst.sends[0].level = 0.33;
@@ -273,7 +274,7 @@ mod tests {
             .find(|i| i.id == saw_id)
             .unwrap();
         assert!(matches!(loaded_saw.source, SourceType::Saw));
-        assert_eq!(loaded_saw.output_target, OutputTarget::Bus(2));
+        assert_eq!(loaded_saw.output_target, OutputTarget::Bus(BusId::new(2)));
         assert!((loaded_saw.level - 0.55).abs() < 0.001);
         assert!((loaded_saw.pan - 0.25).abs() < 0.001);
         assert!(loaded_saw.sends[0].enabled);

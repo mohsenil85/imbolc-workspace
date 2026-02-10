@@ -7,6 +7,7 @@ use crate::ui::{
     Action, BusAction, InputEvent, InstrumentAction, LayerGroupAction, MixerAction, MouseButton,
     MouseEvent, MouseEventKind, NavAction, Rect,
 };
+use imbolc_types::BusId;
 
 impl MixerPane {
     pub(super) fn handle_action_impl(
@@ -78,17 +79,17 @@ impl MixerPane {
             }
             ActionId::Mixer(MixerActionId::SendNext) => {
                 self.send_target = match self.send_target {
-                    None => Some(1),
-                    Some(8) => None,
-                    Some(n) => Some(n + 1),
+                    None => Some(BusId::new(1)),
+                    Some(id) if id.get() >= 8 => None,
+                    Some(id) => Some(BusId::new(id.get() + 1)),
                 };
                 Action::None
             }
             ActionId::Mixer(MixerActionId::SendPrev) => {
                 self.send_target = match self.send_target {
-                    None => Some(8),
-                    Some(1) => None,
-                    Some(n) => Some(n - 1),
+                    None => Some(BusId::new(8)),
+                    Some(id) if id.get() <= 1 => None,
+                    Some(id) => Some(BusId::new(id.get() - 1)),
                 };
                 Action::None
             }
@@ -176,7 +177,7 @@ impl MixerPane {
         };
         let bus_scroll = match state.session.mixer.selection {
             MixerSelection::Bus(id) => Self::calc_scroll_offset(
-                (id - 1) as usize,
+                (id.get() - 1) as usize,
                 state.session.mixer.buses.len(),
                 NUM_VISIBLE_BUSES,
             ),
@@ -730,7 +731,7 @@ impl MixerPane {
         }
     }
 
-    fn adjust_bus_detail_param(&self, state: &AppState, bus_id: u8, delta: f32) -> Action {
+    fn adjust_bus_detail_param(&self, state: &AppState, bus_id: BusId, delta: f32) -> Action {
         match self.bus_detail_section {
             BusDetailSection::Effects => {
                 if let Some((ei, Some(pi))) = self.decode_bus_effect_cursor(state) {

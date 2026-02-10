@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use imbolc_types::BusId;
 use crate::state::AutomationTarget;
 use crate::state::custom_synthdef::{CustomSynthDef, CustomSynthDefRegistry, ParamSpec};
 use crate::state::instrument::{EffectType, FilterType, LfoConfig, LfoShape, ParameterTarget, ModSource, OutputTarget, SourceType};
@@ -34,7 +35,7 @@ fn save_and_load_round_trip_basic() {
     inst.lfo.rate = 5.0;
     inst.level = 0.42;
     inst.pan = -0.2;
-    inst.output_target = OutputTarget::Bus(2);
+    inst.output_target = OutputTarget::Bus(BusId::new(2));
     inst.add_effect(EffectType::Delay);
 
     session.piano_roll.add_track(inst_id);
@@ -64,7 +65,7 @@ fn save_and_load_round_trip_basic() {
     assert_eq!(loaded_inst.name, "Test");
     assert!((loaded_inst.level - 0.42).abs() < 0.001);
     assert!((loaded_inst.pan - -0.2).abs() < 0.001);
-    assert_eq!(loaded_inst.output_target, OutputTarget::Bus(2));
+    assert_eq!(loaded_inst.output_target, OutputTarget::Bus(BusId::new(2)));
     assert!(loaded_inst.filter().is_some());
     assert_eq!(loaded_inst.filter().unwrap().filter_type, FilterType::Hpf);
     if let Some(filter) = loaded_inst.filter() {
@@ -132,7 +133,7 @@ fn save_and_load_round_trip_complex() {
     let custom_inst_id = instruments.add_instrument(SourceType::Custom(custom_id));
 
     // Sync sends for all instruments with session buses
-    let bus_ids: Vec<u8> = session.bus_ids().collect();
+    let bus_ids: Vec<BusId> = session.bus_ids().collect();
     for inst in &mut instruments.instruments {
         inst.sync_sends_with_buses(&bus_ids);
     }
@@ -150,7 +151,7 @@ fn save_and_load_round_trip_complex() {
                 target: ParameterTarget::FilterCutoff,
             }));
         }
-        inst.output_target = OutputTarget::Bus(2);
+        inst.output_target = OutputTarget::Bus(BusId::new(2));
         inst.level = 0.55;
         inst.pan = 0.25;
         inst.sends[0].level = 0.33;
@@ -270,7 +271,7 @@ fn save_and_load_round_trip_complex() {
         .find(|i| i.id == saw_id)
         .unwrap();
     assert!(matches!(loaded_saw.source, SourceType::Saw));
-    assert_eq!(loaded_saw.output_target, OutputTarget::Bus(2));
+    assert_eq!(loaded_saw.output_target, OutputTarget::Bus(BusId::new(2)));
     assert!((loaded_saw.level - 0.55).abs() < 0.001);
     assert!((loaded_saw.pan - 0.25).abs() < 0.001);
     assert!(loaded_saw.sends[0].enabled);
