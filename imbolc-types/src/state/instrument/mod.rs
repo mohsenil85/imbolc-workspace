@@ -19,7 +19,7 @@ use super::arpeggiator::{ArpeggiatorConfig, ChordShape};
 use super::drum_sequencer::DrumSequencerState;
 use super::groove::GrooveConfig;
 use super::sampler::SamplerConfig;
-use crate::{BusId, EffectId, InstrumentId, Param};
+use crate::{BusId, EffectId, InstrumentId, Param, ParamIndex};
 
 /// Whether an instrument's signal chain is mono or stereo.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -367,7 +367,7 @@ impl ProcessingStage {
 
 /// Decode an effect cursor position into (EffectId, Option<param_index>).
 /// Returns None if cursor is out of range. Used by Instrument, MixerBus, and LayerGroupMixer.
-pub fn decode_effect_cursor_from_slice(effects: &[EffectSlot], cursor: usize) -> Option<(EffectId, Option<usize>)> {
+pub fn decode_effect_cursor_from_slice(effects: &[EffectSlot], cursor: usize) -> Option<(EffectId, Option<ParamIndex>)> {
     let mut pos = 0;
     for effect in effects {
         if cursor == pos {
@@ -376,7 +376,7 @@ pub fn decode_effect_cursor_from_slice(effects: &[EffectSlot], cursor: usize) ->
         pos += 1;
         for pi in 0..effect.params.len() {
             if cursor == pos {
-                return Some((effect.id, Some(pi)));
+                return Some((effect.id, Some(ParamIndex::new(pi))));
             }
             pos += 1;
         }
@@ -743,6 +743,9 @@ impl Instrument {
     /// Remove an effect by its EffectId. Returns true if removed.
     pub fn remove_effect(&mut self, id: EffectId) -> bool {
         if let Some(idx) = self.effect_chain_index(id) {
+            if matches!(&self.processing_chain[idx], ProcessingStage::Effect(e) if e.effect_type == EffectType::ConvolutionReverb) {
+                self.convolution_ir_path = None;
+            }
             self.processing_chain.remove(idx);
             true
         } else {
@@ -813,9 +816,67 @@ impl Instrument {
 
     /// Decode a flat cursor position over just the effects in the chain into (EffectId, Option<param_index>).
     /// Returns None if cursor is out of range. None param_index means the effect header row.
-    pub fn decode_effect_cursor(&self, cursor: usize) -> Option<(EffectId, Option<usize>)> {
+    pub fn decode_effect_cursor(&self, cursor: usize) -> Option<(EffectId, Option<ParamIndex>)> {
         let effects: Vec<_> = self.effects().cloned().collect();
         decode_effect_cursor_from_slice(&effects, cursor)
+    }
+
+    // --- Source-type-gated accessors ---
+
+    pub fn sampler_config(&self) -> Option<&SamplerConfig> {
+        if self.source.is_sample() || self.source.is_time_stretch() {
+            self.sampler_config.as_ref()
+        } else {
+            None
+        }
+    }
+
+    pub fn sampler_config_mut(&mut self) -> Option<&mut SamplerConfig> {
+        if self.source.is_sample() || self.source.is_time_stretch() {
+            self.sampler_config.as_mut()
+        } else {
+            None
+        }
+    }
+
+    pub fn drum_sequencer(&self) -> Option<&DrumSequencerState> {
+        if self.source.is_kit() {
+            self.drum_sequencer.as_ref()
+        } else {
+            None
+        }
+    }
+
+    pub fn drum_sequencer_mut(&mut self) -> Option<&mut DrumSequencerState> {
+        if self.source.is_kit() {
+            self.drum_sequencer.as_mut()
+        } else {
+            None
+        }
+    }
+
+    pub fn vst_source_params(&self) -> &[(u32, f32)] {
+        if self.source.is_vst() { &self.vst_param_values } else { &[] }
+    }
+
+    pub fn vst_source_params_mut(&mut self) -> Option<&mut Vec<(u32, f32)>> {
+        if self.source.is_vst() { Some(&mut self.vst_param_values) } else { None }
+    }
+
+    pub fn vst_source_state_path(&self) -> Option<&PathBuf> {
+        if self.source.is_vst() { self.vst_state_path.as_ref() } else { None }
+    }
+
+    pub fn has_convolution_reverb(&self) -> bool {
+        self.effects().any(|e| e.effect_type == EffectType::ConvolutionReverb)
+    }
+
+    pub fn convolution_ir(&self) -> Option<&str> {
+        if self.has_convolution_reverb() {
+            self.convolution_ir_path.as_deref()
+        } else {
+            None
+        }
     }
 }
 
@@ -1001,7 +1062,7 @@ mod tests {
 
         assert_eq!(decode_effect_cursor_from_slice(&effects, 0), Some((id1, None)));
         if params1 > 0 {
-            assert_eq!(decode_effect_cursor_from_slice(&effects, 1), Some((id1, Some(0))));
+            assert_eq!(decode_effect_cursor_from_slice(&effects, 1), Some((id1, Some(ParamIndex::new(0)))));
         }
         assert_eq!(decode_effect_cursor_from_slice(&effects, 1 + params1), Some((id2, None)));
         let total: usize = effects.iter().map(|e| 1 + e.params.len()).sum();
@@ -1390,5 +1451,103 @@ mod tests {
         inst.next_effect_id = EffectId::new(0);
         inst.recalculate_next_effect_id();
         assert_eq!(inst.next_effect_id, EffectId::new(2));
+    }
+
+    // --- Source-type-gated accessor tests ---
+
+    #[test]
+    fn sampler_config_none_for_non_sampler() {
+        let inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
+        assert!(inst.sampler_config().is_none());
+    }
+
+    #[test]
+    fn sampler_config_some_for_pitched_sampler() {
+        let inst = Instrument::new(InstrumentId::new(1), SourceType::PitchedSampler);
+        assert!(inst.sampler_config().is_some());
+    }
+
+    #[test]
+    fn sampler_config_some_for_time_stretch() {
+        let inst = Instrument::new(InstrumentId::new(1), SourceType::TimeStretch);
+        assert!(inst.sampler_config().is_some());
+    }
+
+    #[test]
+    fn sampler_config_mut_works() {
+        let mut inst = Instrument::new(InstrumentId::new(1), SourceType::PitchedSampler);
+        assert!(inst.sampler_config_mut().is_some());
+        let mut saw = Instrument::new(InstrumentId::new(2), SourceType::Saw);
+        assert!(saw.sampler_config_mut().is_none());
+    }
+
+    #[test]
+    fn drum_sequencer_none_for_non_kit() {
+        let inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
+        assert!(inst.drum_sequencer().is_none());
+    }
+
+    #[test]
+    fn drum_sequencer_some_for_kit() {
+        let inst = Instrument::new(InstrumentId::new(1), SourceType::Kit);
+        assert!(inst.drum_sequencer().is_some());
+    }
+
+    #[test]
+    fn drum_sequencer_mut_works() {
+        let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Kit);
+        assert!(inst.drum_sequencer_mut().is_some());
+        let mut saw = Instrument::new(InstrumentId::new(2), SourceType::Saw);
+        assert!(saw.drum_sequencer_mut().is_none());
+    }
+
+    #[test]
+    fn vst_source_params_empty_for_non_vst() {
+        let inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
+        assert!(inst.vst_source_params().is_empty());
+    }
+
+    #[test]
+    fn vst_source_params_returns_values_for_vst() {
+        let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Vst(VstPluginId::new(0)));
+        inst.vst_param_values.push((0, 0.5));
+        inst.vst_param_values.push((1, 0.8));
+        assert_eq!(inst.vst_source_params().len(), 2);
+        assert_eq!(inst.vst_source_params()[0], (0, 0.5));
+    }
+
+    #[test]
+    fn convolution_ir_none_without_effect() {
+        let inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
+        assert!(!inst.has_convolution_reverb());
+        assert!(inst.convolution_ir().is_none());
+    }
+
+    #[test]
+    fn convolution_ir_some_with_effect_and_path() {
+        let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
+        inst.add_effect(EffectType::ConvolutionReverb);
+        inst.convolution_ir_path = Some("/path/to/ir.wav".to_string());
+        assert!(inst.has_convolution_reverb());
+        assert_eq!(inst.convolution_ir(), Some("/path/to/ir.wav"));
+    }
+
+    #[test]
+    fn remove_convolution_reverb_clears_ir_path() {
+        let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
+        let id = inst.add_effect(EffectType::ConvolutionReverb);
+        inst.convolution_ir_path = Some("/path/to/ir.wav".to_string());
+        assert!(inst.remove_effect(id));
+        assert!(inst.convolution_ir_path.is_none());
+    }
+
+    #[test]
+    fn remove_non_convolution_effect_preserves_ir_path() {
+        let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
+        inst.add_effect(EffectType::ConvolutionReverb);
+        inst.convolution_ir_path = Some("/path/to/ir.wav".to_string());
+        let delay_id = inst.add_effect(EffectType::Delay);
+        assert!(inst.remove_effect(delay_id));
+        assert_eq!(inst.convolution_ir_path.as_deref(), Some("/path/to/ir.wav"));
     }
 }
