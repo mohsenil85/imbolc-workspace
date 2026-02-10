@@ -254,7 +254,7 @@ fn save_instruments(conn: &Connection, instruments: &InstrumentState) -> SqlResu
         save_effects(conn, inst.id.get(), &effects)?;
 
         // Sends
-        for send in &inst.sends {
+        for send in inst.sends.values() {
             conn.execute(
                 "INSERT INTO instrument_sends (instrument_id, bus_id, level, enabled, tap_point)
                  VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -632,7 +632,7 @@ fn save_layer_group_mixers(conn: &Connection, session: &SessionState) -> SqlResu
             ],
         )?;
 
-        for send in &gm.sends {
+        for send in gm.sends.values() {
             conn.execute(
                 "INSERT INTO layer_group_sends (group_id, bus_id, level, enabled, tap_point)
                  VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -974,7 +974,7 @@ fn encode_output_target(target: &crate::state::instrument::OutputTarget) -> Stri
 pub fn encode_parameter_target(target: &crate::state::instrument::ParameterTarget) -> String {
     use crate::state::instrument::ParameterTarget;
     match target {
-        ParameterTarget::SendLevel(idx) => format!("SendLevel:{}", idx),
+        ParameterTarget::SendLevel(bus_id) => format!("SendLevel:bus:{}", bus_id.get()),
         ParameterTarget::EffectParam(eid, pidx) => format!("EffectParam:{}:{}", eid, pidx),
         ParameterTarget::EffectBypass(eid) => format!("EffectBypass:{}", eid),
         ParameterTarget::EqBandFreq(idx) => format!("EqBandFreq:{}", idx),
@@ -996,7 +996,7 @@ pub fn encode_automation_target(
             let target_extra = match param_target {
                 ParameterTarget::EffectParam(eid, pidx) => Some(format!("{}:{}", eid, pidx)),
                 ParameterTarget::EffectBypass(eid) => Some(format!("{}", eid)),
-                ParameterTarget::SendLevel(idx) => Some(format!("{}", idx)),
+                ParameterTarget::SendLevel(bus_id) => Some(format!("bus:{}", bus_id.get())),
                 ParameterTarget::EqBandFreq(idx) => Some(format!("{}", idx)),
                 ParameterTarget::EqBandGain(idx) => Some(format!("{}", idx)),
                 ParameterTarget::EqBandQ(idx) => Some(format!("{}", idx)),

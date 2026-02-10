@@ -412,7 +412,7 @@ impl AudioEngine {
             -1.0
         };
 
-        for send in &instrument.sends {
+        for send in instrument.sends.values() {
             if !send.enabled || send.level <= 0.0 {
                 continue;
             }
@@ -806,7 +806,7 @@ impl AudioEngine {
                 self.layer_group_node_map.insert(group_mixer.group_id, node_id);
 
                 // Create group-level sends
-                for send in &group_mixer.sends {
+                for send in group_mixer.sends.values() {
                     if !send.enabled || send.level <= 0.0 {
                         continue;
                     }
@@ -1033,7 +1033,7 @@ impl AudioEngine {
                 self.node_registry.register(node_id);
                 self.layer_group_node_map.insert(group_mixer.group_id, node_id);
 
-                for send in &group_mixer.sends {
+                for send in group_mixer.sends.values() {
                     if !send.enabled || send.level <= 0.0 {
                         continue;
                     }
@@ -1294,7 +1294,7 @@ impl AudioEngine {
                         self.node_registry.register(node_id);
                         self.layer_group_node_map.insert(group_mixer.group_id, node_id);
 
-                        for send in &group_mixer.sends {
+                        for send in group_mixer.sends.values() {
                             if !send.enabled || send.level <= 0.0 {
                                 continue;
                             }

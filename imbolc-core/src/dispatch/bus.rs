@@ -1,6 +1,5 @@
 use crate::action::{BusAction, DispatchResult, EqParamKind, LayerGroupAction, NavIntent};
 use imbolc_audio::AudioHandle;
-use imbolc_types::BusId;
 use crate::dispatch::side_effects::AudioSideEffect;
 use crate::state::{AppState, OutputTarget};
 
@@ -10,16 +9,7 @@ pub fn dispatch_bus(action: &BusAction, state: &mut AppState) -> DispatchResult 
 
     match action {
         BusAction::Add => {
-            if let Some(_new_id) = state.session.add_bus() {
-                // Sync all instruments with the new bus
-                let bus_ids: Vec<BusId> = state.session.bus_ids().collect();
-                for inst in &mut state.instruments.instruments {
-                    inst.sync_sends_with_buses(&bus_ids);
-                }
-                // Sync layer group mixers with the new bus
-                for gm in &mut state.session.mixer.layer_group_mixers {
-                    gm.sync_sends_with_buses(&bus_ids);
-                }
+            if state.session.add_bus().is_some() {
                 result.audio_dirty.routing = true;
                 result.audio_dirty.session = true;
             }
@@ -256,6 +246,7 @@ pub fn dispatch_layer_group(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use imbolc_types::BusId;
     use crate::state::SourceType;
     use crate::state::automation::AutomationTarget;
 
@@ -274,14 +265,16 @@ mod tests {
     }
 
     #[test]
-    fn add_bus_syncs_instrument_sends() {
+    fn add_bus_creates_bus() {
         let mut state = setup();
         state.add_instrument(SourceType::Saw);
-        let initial_sends = state.instruments.instruments[0].sends.len();
+        let initial_bus_count = state.session.mixer.buses.len();
 
         dispatch_bus(&BusAction::Add, &mut state);
 
-        assert_eq!(state.instruments.instruments[0].sends.len(), initial_sends + 1);
+        assert_eq!(state.session.mixer.buses.len(), initial_bus_count + 1);
+        // Sends are lazily created now, so instrument sends remain empty
+        assert!(state.instruments.instruments[0].sends.is_empty());
     }
 
     #[test]
@@ -297,18 +290,19 @@ mod tests {
 
     #[test]
     fn remove_bus_disables_sends() {
+        use imbolc_types::MixerSend;
         let mut state = setup();
         state.add_instrument(SourceType::Saw);
-        // Enable send to bus 3
-        if let Some(send) = state.instruments.instruments[0].sends.iter_mut().find(|s| s.bus_id == BusId::new(3)) {
-            send.enabled = true;
-            send.level = 0.5;
-        }
+        // Insert and enable a send to bus 3
+        state.instruments.instruments[0].sends.insert(
+            BusId::new(3),
+            MixerSend { bus_id: BusId::new(3), level: 0.5, enabled: true, tap_point: Default::default() },
+        );
 
         dispatch_bus(&BusAction::Remove(BusId::new(3)), &mut state);
 
         // Send should be disabled but still exist
-        let send = state.instruments.instruments[0].sends.iter().find(|s| s.bus_id == BusId::new(3));
+        let send = state.instruments.instruments[0].sends.get(&BusId::new(3));
         assert!(send.is_some());
         assert!(!send.unwrap().enabled);
     }

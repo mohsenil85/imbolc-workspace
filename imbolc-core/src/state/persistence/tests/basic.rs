@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use imbolc_types::BusId;
+use imbolc_types::{BusId, MixerSend};
 use crate::state::AutomationTarget;
 use crate::state::custom_synthdef::{CustomSynthDef, CustomSynthDefRegistry, ParamSpec};
 use crate::state::instrument::{EffectType, FilterType, LfoConfig, LfoShape, ParameterTarget, ModSource, OutputTarget, SourceType};
@@ -132,12 +132,6 @@ fn save_and_load_round_trip_complex() {
 
     let custom_inst_id = instruments.add_instrument(SourceType::Custom(custom_id));
 
-    // Sync sends for all instruments with session buses
-    let bus_ids: Vec<BusId> = session.bus_ids().collect();
-    for inst in &mut instruments.instruments {
-        inst.sync_sends_with_buses(&bus_ids);
-    }
-
     // Saw instrument: filter, mod source, effect, output, send, and source param
     if let Some(inst) = instruments.instrument_mut(saw_id) {
         inst.set_filter(Some(FilterType::Hpf));
@@ -154,8 +148,9 @@ fn save_and_load_round_trip_complex() {
         inst.output_target = OutputTarget::Bus(BusId::new(2));
         inst.level = 0.55;
         inst.pan = 0.25;
-        inst.sends[0].level = 0.33;
-        inst.sends[0].enabled = true;
+        inst.sends.insert(BusId::new(1), MixerSend {
+            bus_id: BusId::new(1), level: 0.33, enabled: true, tap_point: Default::default(),
+        });
 
         let delay_id = inst.add_effect(EffectType::Delay);
         if let Some(effect) = inst.effect_by_id_mut(delay_id) {
@@ -274,8 +269,9 @@ fn save_and_load_round_trip_complex() {
     assert_eq!(loaded_saw.output_target, OutputTarget::Bus(BusId::new(2)));
     assert!((loaded_saw.level - 0.55).abs() < 0.001);
     assert!((loaded_saw.pan - 0.25).abs() < 0.001);
-    assert!(loaded_saw.sends[0].enabled);
-    assert!((loaded_saw.sends[0].level - 0.33).abs() < 0.001);
+    let send = loaded_saw.sends.get(&BusId::new(1)).expect("send for bus 1");
+    assert!(send.enabled);
+    assert!((send.level - 0.33).abs() < 0.001);
     assert!(loaded_saw.filter().is_some());
     if let Some(filter) = loaded_saw.filter() {
         assert!((filter.cutoff.value - 1234.0).abs() < 0.01);

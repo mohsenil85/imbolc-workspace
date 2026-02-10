@@ -16,7 +16,7 @@ use imbolc_types::{
     BusAction, EqParamKind, LayerGroupAction, VstParamAction, SessionAction, ClickAction, VstTarget,
     InstrumentId, BusId, MixerSelection, FilterType, OutputTarget,
 };
-use imbolc_types::Instrument;
+use imbolc_types::{Instrument, MixerSend};
 use imbolc_types::Note;
 use imbolc_types::{InstrumentState, SessionState, SourceType, EffectType};
 
@@ -121,10 +121,6 @@ fn project_instrument(
         InstrumentAction::Add(source_type) => {
             let id = instruments.add_instrument(*source_type);
             session.piano_roll.add_track(id);
-            let bus_ids: Vec<BusId> = session.bus_ids().collect();
-            if let Some(inst) = instruments.instrument_mut(id) {
-                inst.sync_sends_with_buses(&bus_ids);
-            }
             true
         }
         InstrumentAction::Delete(id) => {
@@ -865,14 +861,14 @@ fn project_mixer(
             match session.mixer.selection {
                 MixerSelection::Instrument(idx) => {
                     if let Some(instrument) = instruments.instruments.get_mut(idx) {
-                        if let Some(send) = instrument.sends.iter_mut().find(|s| s.bus_id == *bus_id) {
+                        if let Some(send) = instrument.sends.get_mut(bus_id) {
                             send.level = (send.level + delta).clamp(0.0, 1.0);
                         }
                     }
                 }
                 MixerSelection::LayerGroup(group_id) => {
                     if let Some(gm) = session.mixer.layer_group_mixer_mut(group_id) {
-                        if let Some(send) = gm.sends.iter_mut().find(|s| s.bus_id == *bus_id) {
+                        if let Some(send) = gm.sends.get_mut(bus_id) {
                             send.level = (send.level + delta).clamp(0.0, 1.0);
                         }
                     }
@@ -885,21 +881,19 @@ fn project_mixer(
             match session.mixer.selection {
                 MixerSelection::Instrument(idx) => {
                     if let Some(instrument) = instruments.instruments.get_mut(idx) {
-                        if let Some(send) = instrument.sends.iter_mut().find(|s| s.bus_id == *bus_id) {
-                            send.enabled = !send.enabled;
-                            if send.enabled && send.level <= 0.0 {
-                                send.level = 0.5;
-                            }
+                        let send = instrument.sends.entry(*bus_id).or_insert_with(|| MixerSend::new(*bus_id));
+                        send.enabled = !send.enabled;
+                        if send.enabled && send.level <= 0.0 {
+                            send.level = 0.5;
                         }
                     }
                 }
                 MixerSelection::LayerGroup(group_id) => {
                     if let Some(gm) = session.mixer.layer_group_mixer_mut(group_id) {
-                        if let Some(send) = gm.sends.iter_mut().find(|s| s.bus_id == *bus_id) {
-                            send.enabled = !send.enabled;
-                            if send.enabled && send.level <= 0.0 {
-                                send.level = 0.5;
-                            }
+                        let send = gm.sends.entry(*bus_id).or_insert_with(|| MixerSend::new(*bus_id));
+                        send.enabled = !send.enabled;
+                        if send.enabled && send.level <= 0.0 {
+                            send.level = 0.5;
                         }
                     }
                 }
@@ -911,14 +905,14 @@ fn project_mixer(
             match session.mixer.selection {
                 MixerSelection::Instrument(idx) => {
                     if let Some(instrument) = instruments.instruments.get_mut(idx) {
-                        if let Some(send) = instrument.sends.iter_mut().find(|s| s.bus_id == *bus_id) {
+                        if let Some(send) = instrument.sends.get_mut(bus_id) {
                             send.tap_point = send.tap_point.cycle();
                         }
                     }
                 }
                 MixerSelection::LayerGroup(group_id) => {
                     if let Some(gm) = session.mixer.layer_group_mixer_mut(group_id) {
-                        if let Some(send) = gm.sends.iter_mut().find(|s| s.bus_id == *bus_id) {
+                        if let Some(send) = gm.sends.get_mut(bus_id) {
                             send.tap_point = send.tap_point.cycle();
                         }
                     }
@@ -1176,15 +1170,7 @@ fn project_bus(
 ) -> bool {
     match action {
         BusAction::Add => {
-            if session.add_bus().is_some() {
-                let bus_ids: Vec<BusId> = session.bus_ids().collect();
-                for inst in &mut instruments.instruments {
-                    inst.sync_sends_with_buses(&bus_ids);
-                }
-                for gm in &mut session.mixer.layer_group_mixers {
-                    gm.sync_sends_with_buses(&bus_ids);
-                }
-            }
+            session.add_bus();
             true
         }
         BusAction::Remove(bus_id) => {

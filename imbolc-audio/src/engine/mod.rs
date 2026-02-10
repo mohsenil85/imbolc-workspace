@@ -392,10 +392,6 @@ mod tests {
         fn add_instrument(&mut self, source: imbolc_types::SourceType) -> imbolc_types::InstrumentId {
             let id = self.instruments.add_instrument(source);
             self.session.piano_roll.add_track(id);
-            let bus_ids: Vec<BusId> = self.session.bus_ids().collect();
-            if let Some(inst) = self.instruments.instrument_mut(id) {
-                inst.sync_sends_with_buses(&bus_ids);
-            }
             id
         }
     }
@@ -418,8 +414,7 @@ mod tests {
             inst.set_filter(Some(FilterType::Lpf));
             inst.lfo.enabled = true;
             inst.add_effect(EffectType::Delay);
-            inst.sends[0].enabled = true;
-            inst.sends[0].level = 0.5;
+            inst.sends.insert(BusId::new(1), imbolc_types::MixerSend { bus_id: BusId::new(1), level: 0.5, enabled: true, tap_point: imbolc_types::SendTapPoint::default() });
         }
 
         engine
@@ -903,8 +898,7 @@ mod tests {
             let mut state = AppState::new();
             let inst_id = state.add_instrument(SourceType::AudioIn);
             if let Some(inst) = state.instruments.instrument_mut(inst_id) {
-                inst.sends[0].enabled = true;
-                inst.sends[0].level = 0.5;
+                inst.sends.insert(BusId::new(1), imbolc_types::MixerSend { bus_id: BusId::new(1), level: 0.5, enabled: true, tap_point: imbolc_types::SendTapPoint::default() });
             }
             engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild routing");
             let send_count = backend.count(|op| matches!(op, TestOp::CreateSynth { def_name, .. } if def_name == "imbolc_send"));
@@ -1082,9 +1076,7 @@ mod tests {
             if let Some(inst) = state.instruments.instrument_mut(inst_id) {
                 inst.set_filter(Some(FilterType::Lpf));
                 inst.add_effect(EffectType::Delay);
-                inst.sends[0].enabled = true;
-                inst.sends[0].level = 0.5;
-                inst.sends[0].tap_point = SendTapPoint::PostInsert;
+                inst.sends.insert(BusId::new(1), imbolc_types::MixerSend { bus_id: BusId::new(1), level: 0.5, enabled: true, tap_point: SendTapPoint::PostInsert });
             }
             engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild routing");
             let synths = backend.synths_created();
@@ -1288,9 +1280,7 @@ mod tests {
             if let Some(inst) = state.instruments.instrument_mut(inst_id) {
                 inst.set_filter(Some(FilterType::Lpf));
                 inst.add_effect(EffectType::Delay);
-                inst.sends[0].enabled = true;
-                inst.sends[0].level = 0.5;
-                inst.sends[0].tap_point = SendTapPoint::PreInsert;
+                inst.sends.insert(BusId::new(1), imbolc_types::MixerSend { bus_id: BusId::new(1), level: 0.5, enabled: true, tap_point: SendTapPoint::PreInsert });
             }
             engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild routing");
             let synths = backend.synths_created();

@@ -17,7 +17,7 @@ use crate::state::AppState;
 
 use imbolc_types::{
     AutomationTarget, BusId, CurveType, EffectType, FilterType, InstrumentId, LfoShape,
-    MixerSelection, MusicalSettings, OutputTarget, ParameterTarget, SourceType,
+    MixerSelection, MixerSend, MusicalSettings, OutputTarget, ParameterTarget, SourceType,
 };
 
 // ============================================================================
@@ -709,8 +709,10 @@ fn parity_mixer_adjust_send() {
     let mut s = rich();
     s.session.mixer.selection = MixerSelection::Instrument(0);
     // Enable the send first so there's something to adjust
-    s.instruments.instruments[0].sends[0].enabled = true;
-    s.instruments.instruments[0].sends[0].level = 0.5;
+    s.instruments.instruments[0].sends.insert(
+        BusId::new(1),
+        MixerSend { bus_id: BusId::new(1), level: 0.5, enabled: true, tap_point: Default::default() },
+    );
     assert_parity(&mut s, &Action::Mixer(MixerAction::AdjustSend(BusId::new(1), 0.1)));
 }
 
@@ -725,7 +727,10 @@ fn parity_mixer_toggle_send() {
 fn parity_mixer_cycle_send_tap_point() {
     let mut s = rich();
     s.session.mixer.selection = MixerSelection::Instrument(0);
-    s.instruments.instruments[0].sends[0].enabled = true;
+    s.instruments.instruments[0].sends.insert(
+        BusId::new(1),
+        MixerSend { bus_id: BusId::new(1), level: 0.5, enabled: true, tap_point: Default::default() },
+    );
     assert_parity(
         &mut s,
         &Action::Mixer(MixerAction::CycleSendTapPoint(BusId::new(1))),
@@ -1433,13 +1438,13 @@ fn parity_mixer_adjust_send_layer_group() {
     s.session.mixer.selection = MixerSelection::LayerGroup(gid);
     // Enable a send
     if let Some(gm) = s.session.mixer.layer_group_mixer_mut(gid) {
-        if let Some(send) = gm.sends.first_mut() {
+        if let Some(send) = gm.sends.values_mut().next() {
             send.enabled = true;
             send.level = 0.5;
         }
     }
     let bus_id = s.session.mixer.layer_group_mixer(gid)
-        .and_then(|gm| gm.sends.first())
+        .and_then(|gm| gm.sends.values().next())
         .map(|s| s.bus_id)
         .unwrap_or(BusId::new(1));
     assert_parity(
@@ -1454,7 +1459,7 @@ fn parity_mixer_toggle_send_layer_group() {
     let gid = group_id(&s);
     s.session.mixer.selection = MixerSelection::LayerGroup(gid);
     let bus_id = s.session.mixer.layer_group_mixer(gid)
-        .and_then(|gm| gm.sends.first())
+        .and_then(|gm| gm.sends.values().next())
         .map(|s| s.bus_id)
         .unwrap_or(BusId::new(1));
     assert_parity(
@@ -1469,12 +1474,12 @@ fn parity_mixer_cycle_send_tap_point_layer_group() {
     let gid = group_id(&s);
     s.session.mixer.selection = MixerSelection::LayerGroup(gid);
     if let Some(gm) = s.session.mixer.layer_group_mixer_mut(gid) {
-        if let Some(send) = gm.sends.first_mut() {
+        if let Some(send) = gm.sends.values_mut().next() {
             send.enabled = true;
         }
     }
     let bus_id = s.session.mixer.layer_group_mixer(gid)
-        .and_then(|gm| gm.sends.first())
+        .and_then(|gm| gm.sends.values().next())
         .map(|s| s.bus_id)
         .unwrap_or(BusId::new(1));
     assert_parity(

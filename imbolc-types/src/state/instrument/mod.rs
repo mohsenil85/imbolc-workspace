@@ -10,6 +10,7 @@ pub use filter::*;
 pub use lfo::*;
 pub use source_type::*;
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
@@ -211,7 +212,8 @@ pub struct LayerGroupMixer {
     pub mute: bool,
     pub solo: bool,
     pub output_target: OutputTarget,
-    pub sends: Vec<MixerSend>,
+    #[serde(deserialize_with = "deserialize_sends")]
+    pub sends: BTreeMap<BusId, MixerSend>,
     #[serde(default)]
     pub effects: Vec<EffectSlot>,
     #[serde(default)]
@@ -221,8 +223,7 @@ pub struct LayerGroupMixer {
 }
 
 impl LayerGroupMixer {
-    pub fn new(group_id: u32, bus_ids: &[BusId]) -> Self {
-        let sends = bus_ids.iter().map(|&id| MixerSend::new(id)).collect();
+    pub fn new(group_id: u32, _bus_ids: &[BusId]) -> Self {
         Self {
             group_id,
             name: format!("Group {}", group_id),
@@ -231,7 +232,7 @@ impl LayerGroupMixer {
             mute: false,
             solo: false,
             output_target: OutputTarget::Master,
-            sends,
+            sends: BTreeMap::new(),
             effects: Vec::new(),
             next_effect_id: EffectId::new(0),
             eq: Some(EqConfig::default()),
@@ -254,17 +255,8 @@ impl LayerGroupMixer {
         self.eq.as_mut()
     }
 
-    pub fn sync_sends_with_buses(&mut self, bus_ids: &[BusId]) {
-        for &bus_id in bus_ids {
-            if !self.sends.iter().any(|s| s.bus_id == bus_id) {
-                self.sends.push(MixerSend::new(bus_id));
-            }
-        }
-        self.sends.sort_by_key(|s| s.bus_id);
-    }
-
     pub fn disable_send_for_bus(&mut self, bus_id: BusId) {
-        if let Some(send) = self.sends.iter_mut().find(|s| s.bus_id == bus_id) {
+        if let Some(send) = self.sends.get_mut(&bus_id) {
             send.enabled = false;
         }
     }
@@ -517,7 +509,8 @@ pub struct Instrument {
     /// Mono or stereo signal chain
     #[serde(default)]
     pub channel_config: ChannelConfig,
-    pub sends: Vec<MixerSend>,
+    #[serde(deserialize_with = "deserialize_sends")]
+    pub sends: BTreeMap<BusId, MixerSend>,
     // Sample configuration (only used when source is SourceType::PitchedSampler)
     pub sampler_config: Option<SamplerConfig>,
     // Kit sequencer (only used when source is SourceType::Kit)
@@ -544,8 +537,7 @@ pub struct Instrument {
 
 impl Instrument {
     pub fn new(id: InstrumentId, source: SourceType) -> Self {
-        // Sends are initialized empty; call sync_sends_with_buses() after creation
-        let sends = Vec::new();
+        let sends = BTreeMap::new();
         // Sample instruments get a sampler config
         let sampler_config = if source.is_sample() || source.is_time_stretch() {
             Some(SamplerConfig::default())
@@ -785,20 +777,9 @@ impl Instrument {
             .map_or(EffectId::new(0), |m| EffectId::new(m + 1));
     }
 
-    /// Sync sends with current bus IDs. Adds missing sends, keeps existing ones.
-    pub fn sync_sends_with_buses(&mut self, bus_ids: &[BusId]) {
-        for &bus_id in bus_ids {
-            if !self.sends.iter().any(|s| s.bus_id == bus_id) {
-                self.sends.push(MixerSend::new(bus_id));
-            }
-        }
-        // Sort sends by bus_id for consistent ordering
-        self.sends.sort_by_key(|s| s.bus_id);
-    }
-
     /// Disable sends for a removed bus (keeps the entry for undo support)
     pub fn disable_send_for_bus(&mut self, bus_id: BusId) {
-        if let Some(send) = self.sends.iter_mut().find(|s| s.bus_id == bus_id) {
+        if let Some(send) = self.sends.get_mut(&bus_id) {
             send.enabled = false;
         }
     }
@@ -835,6 +816,23 @@ impl Instrument {
     pub fn decode_effect_cursor(&self, cursor: usize) -> Option<(EffectId, Option<usize>)> {
         let effects: Vec<_> = self.effects().cloned().collect();
         decode_effect_cursor_from_slice(&effects, cursor)
+    }
+}
+
+/// Serde deserializer that accepts either a Vec<MixerSend> (legacy) or BTreeMap<BusId, MixerSend> (new).
+fn deserialize_sends<'de, D>(deserializer: D) -> Result<BTreeMap<BusId, MixerSend>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum SendsFormat {
+        Map(BTreeMap<BusId, MixerSend>),
+        Vec(Vec<MixerSend>),
+    }
+    match SendsFormat::deserialize(deserializer)? {
+        SendsFormat::Map(map) => Ok(map),
+        SendsFormat::Vec(vec) => Ok(vec.into_iter().map(|s| (s.bus_id, s)).collect()),
     }
 }
 

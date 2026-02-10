@@ -353,7 +353,7 @@ fn load_effects(conn: &Connection, instrument_id: u32) -> SqlResult<Vec<crate::s
     load_effects_from(conn, "instrument_effects", "instrument_effect_params", "effect_vst_params", "instrument_id", instrument_id)
 }
 
-fn load_sends(conn: &Connection, instrument_id: u32) -> SqlResult<Vec<crate::state::instrument::MixerSend>> {
+fn load_sends(conn: &Connection, instrument_id: u32) -> SqlResult<std::collections::BTreeMap<BusId, crate::state::instrument::MixerSend>> {
     use crate::state::instrument::MixerSend;
 
     // Try with tap_point column first; fall back for old schemas
@@ -364,18 +364,19 @@ fn load_sends(conn: &Connection, instrument_id: u32) -> SqlResult<Vec<crate::sta
         "SELECT bus_id, level, enabled FROM instrument_sends WHERE instrument_id = ?1 ORDER BY bus_id"
     };
     let mut stmt = conn.prepare(query)?;
-    let sends: Vec<MixerSend> = stmt.query_map(params![instrument_id], |row| {
+    let sends = stmt.query_map(params![instrument_id], |row| {
         let tap_point = if has_tap_point {
             decode_tap_point(&row.get::<_, String>(3)?)
         } else {
             Default::default()
         };
-        Ok(MixerSend {
+        let send = MixerSend {
             bus_id: BusId::new(row.get::<_, i32>(0)? as u8),
             level: row.get(1)?,
             enabled: row.get::<_, i32>(2)? != 0,
             tap_point,
-        })
+        };
+        Ok((send.bus_id, send))
     })?.collect::<SqlResult<_>>()?;
 
     Ok(sends)

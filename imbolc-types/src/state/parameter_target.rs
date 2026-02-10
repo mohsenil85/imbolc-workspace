@@ -5,7 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::EffectId;
+use crate::{BusId, EffectId};
 
 /// Core parameter target - shared between LFO and Automation.
 ///
@@ -21,8 +21,8 @@ pub enum ParameterTarget {
     Level,
     /// Pan position (-1.0 to 1.0)
     Pan,
-    /// Send level to a bus (send_index, 0.0-1.0)
-    SendLevel(usize),
+    /// Send level to a bus (bus_id, 0.0-1.0)
+    SendLevel(BusId),
 
     // === Filter ===
     /// Filter cutoff frequency (20-20000 Hz)
@@ -192,7 +192,7 @@ impl ParameterTarget {
         match self {
             Self::Level => "Level".to_string(),
             Self::Pan => "Pan".to_string(),
-            Self::SendLevel(idx) => format!("Send {}", idx + 1),
+            Self::SendLevel(bus_id) => format!("Send {}", bus_id),
             Self::FilterCutoff => "Filter Cutoff".to_string(),
             Self::FilterResonance => "Filter Resonance".to_string(),
             Self::FilterBypass => "Filter Bypass".to_string(),
@@ -306,7 +306,7 @@ impl ParameterTarget {
             Self::DelayFeedback,
             Self::ReverbMix,
             Self::GateRate,
-            Self::SendLevel(0),
+            Self::SendLevel(BusId::new(1)),
             Self::Detune,
             Self::Attack,
             Self::Decay,

@@ -155,12 +155,6 @@ impl AppState {
         // Always add a piano roll track for every instrument
         self.session.piano_roll.add_track(id);
 
-        // Sync sends with current buses
-        let bus_ids: Vec<BusId> = self.session.bus_ids().collect();
-        if let Some(inst) = self.instruments.instrument_mut(id) {
-            inst.sync_sends_with_buses(&bus_ids);
-        }
-
         id
     }
 

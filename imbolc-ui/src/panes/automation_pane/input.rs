@@ -68,8 +68,8 @@ impl AutomationPane {
                     options = AutomationTarget::targets_for_instrument_context(inst, &state.session.vst_plugins);
                     // Add send targets
                     let id = inst.id;
-                    for (idx, _send) in inst.sends.iter().enumerate() {
-                        options.push(AutomationTarget::send_level(id, idx));
+                    for &bus_id in inst.sends.keys() {
+                        options.push(AutomationTarget::send_level(id, bus_id));
                     }
                 }
                 // Add global targets (skip when editing a clip — only instrument targets apply)

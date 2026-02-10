@@ -204,7 +204,7 @@ impl MixerPane {
             let send_info = match state.session.mixer.selection {
                 MixerSelection::Instrument(idx) => {
                     state.instruments.instruments.get(idx).and_then(|instrument| {
-                        instrument.sends.iter().find(|s| s.bus_id == bus_id).map(|send| {
+                        instrument.sends.get(&bus_id).map(|send| {
                             let status = if send.enabled { "ON" } else { "OFF" };
                             format!("Send→B{}: {:.0}% [{}]", bus_id, send.level * 100.0, status)
                         })
@@ -212,7 +212,7 @@ impl MixerPane {
                 }
                 MixerSelection::LayerGroup(gid) => {
                     state.session.mixer.layer_group_mixer(gid).and_then(|gm| {
-                        gm.sends.iter().find(|s| s.bus_id == bus_id).map(|send| {
+                        gm.sends.get(&bus_id).map(|send| {
                             let status = if send.enabled { "ON" } else { "OFF" };
                             format!("G{} Send→B{}: {:.0}% [{}]", gid, bus_id, send.level * 100.0, status)
                         })
@@ -327,7 +327,7 @@ impl MixerPane {
         Self::write_str(buf, col2_x, inner_y, "SENDS", sends_header);
 
         let mut sy = inner_y + 1;
-        for (si, send) in inst.sends.iter().enumerate() {
+        for (si, send) in inst.sends.values().enumerate() {
             if sy >= inner_y + inner_h / 2 { break; }
             let bar_len = (send.level * 5.0) as usize;
             let bar: String = "\u{2588}".repeat(bar_len) + &"\u{2591}".repeat(5 - bar_len);
@@ -590,7 +590,7 @@ impl MixerPane {
                 Self::write_str(buf, inner_x, inner_y, "SENDS", active_section);
 
                 let mut sy = inner_y + 1;
-                for (si, send) in gm.sends.iter().enumerate() {
+                for (si, send) in gm.sends.values().enumerate() {
                     if sy >= inner_y + inner_h { break; }
                     let bar_len = (send.level * 5.0) as usize;
                     let bar: String = "\u{2588}".repeat(bar_len) + &"\u{2591}".repeat(5 - bar_len);

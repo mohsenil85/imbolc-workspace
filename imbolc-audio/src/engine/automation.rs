@@ -197,14 +197,10 @@ impl AudioEngine {
                     }
                 }
             }
-            ParameterTarget::SendLevel(send_idx) => {
-                if let Some(inst) = state.instrument(instrument_id) {
-                    if let Some(send) = inst.sends.get(*send_idx) {
-                        if let Some(&node_id) = self.send_node_map.get(&(instrument_id, send.bus_id)) {
-                            backend.set_param(node_id, "level", value)
-                                .map_err(|e| e.to_string())?;
-                        }
-                    }
+            ParameterTarget::SendLevel(bus_id) => {
+                if let Some(&node_id) = self.send_node_map.get(&(instrument_id, *bus_id)) {
+                    backend.set_param(node_id, "level", value)
+                        .map_err(|e| e.to_string())?;
                 }
             }
             ParameterTarget::VstParam(param_index) => {
@@ -493,13 +489,9 @@ impl AudioEngine {
                     }
                 }
             }
-            ParameterTarget::SendLevel(send_idx) => {
-                if let Some(inst) = state.instrument(instrument_id) {
-                    if let Some(send) = inst.sends.get(*send_idx) {
-                        if let Some(&node_id) = self.send_node_map.get(&(instrument_id, send.bus_id)) {
-                            msgs.push(build_n_set_message(node_id, "level", value));
-                        }
-                    }
+            ParameterTarget::SendLevel(bus_id) => {
+                if let Some(&node_id) = self.send_node_map.get(&(instrument_id, *bus_id)) {
+                    msgs.push(build_n_set_message(node_id, "level", value));
                 }
             }
             ParameterTarget::VstParam(param_index) => {

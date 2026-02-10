@@ -154,8 +154,17 @@ pub(crate) fn decode_lfo_shape(s: &str) -> crate::state::instrument::LfoShape {
 pub(crate) fn decode_parameter_target(s: &str) -> crate::state::instrument::ParameterTarget {
     use crate::state::instrument::ParameterTarget;
 
+    if let Some(rest) = s.strip_prefix("SendLevel:bus:") {
+        // New format: "SendLevel:bus:N"
+        if let Ok(id) = rest.parse::<u8>() {
+            return ParameterTarget::SendLevel(imbolc_types::BusId::new(id));
+        }
+    }
     if let Some(rest) = s.strip_prefix("SendLevel:") {
-        if let Ok(idx) = rest.parse::<usize>() { return ParameterTarget::SendLevel(idx); }
+        // Legacy format: "SendLevel:N" where N was a Vec index (0-based); bus ids are 1-based
+        if let Ok(idx) = rest.parse::<usize>() {
+            return ParameterTarget::SendLevel(imbolc_types::BusId::new((idx + 1) as u8));
+        }
     }
     if let Some(rest) = s.strip_prefix("EffectParam:") {
         let parts: Vec<&str> = rest.splitn(2, ':').collect();

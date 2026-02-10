@@ -216,8 +216,8 @@ impl AutomationTarget {
     }
 
     #[inline]
-    pub fn send_level(id: InstrumentId, send_idx: usize) -> Self {
-        Self::instrument(id, ParameterTarget::SendLevel(send_idx))
+    pub fn send_level(id: InstrumentId, bus_id: BusId) -> Self {
+        Self::instrument(id, ParameterTarget::SendLevel(bus_id))
     }
 
     #[inline]

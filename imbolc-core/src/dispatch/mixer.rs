@@ -218,12 +218,12 @@ pub(super) fn dispatch_mixer(
             match state.session.mixer.selection {
                 MixerSelection::Instrument(idx) => {
                     if let Some(instrument) = state.instruments.instruments.get_mut(idx) {
-                        if let Some((send_idx, send)) = instrument.sends.iter_mut().enumerate().find(|(_, s)| s.bus_id == bus_id) {
+                        if let Some(send) = instrument.sends.get_mut(&bus_id) {
                             send.level = (send.level + delta).clamp(0.0, 1.0);
                             result.audio_dirty.instruments = true;
                             if state.recording.automation_recording && state.audio.playing {
                                 record_target = Some((
-                                    AutomationTarget::send_level(instrument.id, send_idx),
+                                    AutomationTarget::send_level(instrument.id, bus_id),
                                     send.level,
                                 ));
                             }
@@ -232,7 +232,7 @@ pub(super) fn dispatch_mixer(
                 }
                 MixerSelection::LayerGroup(group_id) => {
                     if let Some(gm) = state.session.mixer.layer_group_mixer_mut(group_id) {
-                        if let Some(send) = gm.sends.iter_mut().find(|s| s.bus_id == bus_id) {
+                        if let Some(send) = gm.sends.get_mut(&bus_id) {
                             send.level = (send.level + delta).clamp(0.0, 1.0);
                             result.audio_dirty.session = true;
                             result.audio_dirty.routing = true;
@@ -296,26 +296,24 @@ pub(super) fn dispatch_mixer(
             match state.session.mixer.selection {
                 MixerSelection::Instrument(idx) => {
                     if let Some(instrument) = state.instruments.instruments.get_mut(idx) {
-                        if let Some(send) = instrument.sends.iter_mut().find(|s| s.bus_id == bus_id) {
-                            send.enabled = !send.enabled;
-                            if send.enabled && send.level <= 0.0 {
-                                send.level = 0.5;
-                            }
-                            result.audio_dirty.instruments = true;
-                            result.audio_dirty.set_routing_instrument(instrument.id);
+                        let send = instrument.sends.entry(bus_id).or_insert_with(|| imbolc_types::MixerSend::new(bus_id));
+                        send.enabled = !send.enabled;
+                        if send.enabled && send.level <= 0.0 {
+                            send.level = 0.5;
                         }
+                        result.audio_dirty.instruments = true;
+                        result.audio_dirty.set_routing_instrument(instrument.id);
                     }
                 }
                 MixerSelection::LayerGroup(group_id) => {
                     if let Some(gm) = state.session.mixer.layer_group_mixer_mut(group_id) {
-                        if let Some(send) = gm.sends.iter_mut().find(|s| s.bus_id == bus_id) {
-                            send.enabled = !send.enabled;
-                            if send.enabled && send.level <= 0.0 {
-                                send.level = 0.5;
-                            }
-                            result.audio_dirty.session = true;
-                            result.audio_dirty.routing = true;
+                        let send = gm.sends.entry(bus_id).or_insert_with(|| imbolc_types::MixerSend::new(bus_id));
+                        send.enabled = !send.enabled;
+                        if send.enabled && send.level <= 0.0 {
+                            send.level = 0.5;
                         }
+                        result.audio_dirty.session = true;
+                        result.audio_dirty.routing = true;
                     }
                 }
                 _ => {}
@@ -326,7 +324,7 @@ pub(super) fn dispatch_mixer(
             match state.session.mixer.selection {
                 MixerSelection::Instrument(idx) => {
                     if let Some(instrument) = state.instruments.instruments.get_mut(idx) {
-                        if let Some(send) = instrument.sends.iter_mut().find(|s| s.bus_id == bus_id) {
+                        if let Some(send) = instrument.sends.get_mut(&bus_id) {
                             send.tap_point = send.tap_point.cycle();
                             result.audio_dirty.instruments = true;
                             result.audio_dirty.set_routing_instrument(instrument.id);
@@ -335,7 +333,7 @@ pub(super) fn dispatch_mixer(
                 }
                 MixerSelection::LayerGroup(group_id) => {
                     if let Some(gm) = state.session.mixer.layer_group_mixer_mut(group_id) {
-                        if let Some(send) = gm.sends.iter_mut().find(|s| s.bus_id == bus_id) {
+                        if let Some(send) = gm.sends.get_mut(&bus_id) {
                             send.tap_point = send.tap_point.cycle();
                             result.audio_dirty.session = true;
                             result.audio_dirty.routing = true;
@@ -476,28 +474,31 @@ mod tests {
         let (mut state, audio) = setup();
         let mut effects = Vec::new();
         state.session.mixer.selection = MixerSelection::Instrument(0);
-        // Send starts disabled with level 0.0
-        assert!(!state.instruments.instruments[0].sends[0].enabled);
-        assert!((state.instruments.instruments[0].sends[0].level - 0.0).abs() < f32::EPSILON);
+        // Sends start empty (lazily created)
+        assert!(state.instruments.instruments[0].sends.is_empty());
 
         dispatch_mixer(&MixerAction::ToggleSend(BusId::new(1)), &mut state, &audio, &mut effects);
-        assert!(state.instruments.instruments[0].sends[0].enabled);
-        assert!((state.instruments.instruments[0].sends[0].level - 0.5).abs() < f32::EPSILON);
+        let send = state.instruments.instruments[0].sends.get(&BusId::new(1)).unwrap();
+        assert!(send.enabled);
+        assert!((send.level - 0.5).abs() < f32::EPSILON);
 
         dispatch_mixer(&MixerAction::ToggleSend(BusId::new(1)), &mut state, &audio, &mut effects);
-        assert!(!state.instruments.instruments[0].sends[0].enabled);
+        assert!(!state.instruments.instruments[0].sends.get(&BusId::new(1)).unwrap().enabled);
     }
 
     #[test]
     fn adjust_send_clamps() {
+        use imbolc_types::MixerSend;
         let (mut state, audio) = setup();
         let mut effects = Vec::new();
         state.session.mixer.selection = MixerSelection::Instrument(0);
-        state.instruments.instruments[0].sends[0].enabled = true;
-        state.instruments.instruments[0].sends[0].level = 0.5;
+        state.instruments.instruments[0].sends.insert(
+            BusId::new(1),
+            MixerSend { bus_id: BusId::new(1), level: 0.5, enabled: true, tap_point: Default::default() },
+        );
         dispatch_mixer(&MixerAction::AdjustSend(BusId::new(1), 2.0), &mut state, &audio, &mut effects);
-        assert!((state.instruments.instruments[0].sends[0].level - 1.0).abs() < f32::EPSILON);
+        assert!((state.instruments.instruments[0].sends.get(&BusId::new(1)).unwrap().level - 1.0).abs() < f32::EPSILON);
         dispatch_mixer(&MixerAction::AdjustSend(BusId::new(1), -5.0), &mut state, &audio, &mut effects);
-        assert!((state.instruments.instruments[0].sends[0].level - 0.0).abs() < f32::EPSILON);
+        assert!((state.instruments.instruments[0].sends.get(&BusId::new(1)).unwrap().level - 0.0).abs() < f32::EPSILON);
     }
 }

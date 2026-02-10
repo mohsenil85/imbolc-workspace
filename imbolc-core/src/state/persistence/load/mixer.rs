@@ -84,18 +84,19 @@ pub(super) fn load_layer_group_mixers(conn: &Connection, session: &mut SessionSt
             "SELECT bus_id, level, enabled FROM layer_group_sends WHERE group_id = ?1 ORDER BY bus_id"
         };
         let mut send_stmt = conn.prepare(group_send_query)?;
-        let sends: Vec<MixerSend> = send_stmt.query_map(params![group_id as i32], |row| {
+        let sends: std::collections::BTreeMap<BusId, MixerSend> = send_stmt.query_map(params![group_id as i32], |row| {
             let tap_point = if has_group_tap_point {
                 decode_tap_point(&row.get::<_, String>(3)?)
             } else {
                 Default::default()
             };
-            Ok(MixerSend {
+            let send = MixerSend {
                 bus_id: BusId::new(row.get::<_, i32>(0)? as u8),
                 level: row.get(1)?,
                 enabled: row.get::<_, i32>(2)? != 0,
                 tap_point,
-            })
+            };
+            Ok((send.bus_id, send))
         })?.collect::<SqlResult<_>>()?;
 
         let mut gm = LayerGroupMixer {

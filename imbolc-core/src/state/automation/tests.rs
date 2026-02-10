@@ -75,7 +75,7 @@ mod tests {
     #[test]
     fn test_new_target_instrument_id() {
         assert_eq!(AutomationTarget::lfo_rate(5).instrument_id(), Some(5));
-        assert_eq!(AutomationTarget::send_level(3, 0).instrument_id(), Some(3));
+        assert_eq!(AutomationTarget::send_level(3, BusId::new(1)).instrument_id(), Some(3));
         assert_eq!(AutomationTarget::bus_level(BusId::new(1)).instrument_id(), None);
         assert_eq!(AutomationTarget::bpm().instrument_id(), None);
     }
