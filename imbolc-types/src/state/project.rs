@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use super::session::MusicalSettings;
 
 /// Project metadata (path, dirty flag, defaults).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ProjectMeta {
     /// Current project file path (None = untitled/new project)
     #[serde(skip)]
@@ -17,16 +17,6 @@ pub struct ProjectMeta {
     pub dirty: bool,
     /// Musical defaults used when creating new projects
     pub default_settings: MusicalSettings,
-}
-
-impl Default for ProjectMeta {
-    fn default() -> Self {
-        Self {
-            path: None,
-            dirty: false,
-            default_settings: MusicalSettings::default(),
-        }
-    }
 }
 
 impl ProjectMeta {

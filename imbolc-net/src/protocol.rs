@@ -170,6 +170,7 @@ pub enum ClientMessage {
 
 /// Messages sent from server to clients.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(clippy::large_enum_variant)]
 pub enum ServerMessage {
     /// Initial state on connection with ownership confirmation.
     Welcome {

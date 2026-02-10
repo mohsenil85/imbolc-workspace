@@ -214,12 +214,12 @@ impl DirtyFlags {
             }
             // Recording: per-track if recording, otherwise audio-only (no flag)
             PianoRollAction::PlayNote { track, .. } => {
-                if session.map_or(false, |s| s.piano_roll.recording) {
+                if session.is_some_and(|s| s.piano_roll.recording) {
                     self.resolve_track_id(*track, session);
                 }
             }
             PianoRollAction::PlayNotes { track, .. } => {
-                if session.map_or(false, |s| s.piano_roll.recording) {
+                if session.is_some_and(|s| s.piano_roll.recording) {
                     self.resolve_track_id(*track, session);
                 }
             }
@@ -419,17 +419,14 @@ fn writer_thread(
                             let mut stalled = Vec::new();
                             for (&id, writer) in &mut writers {
                                 // Try to drain any pending outbox first
-                                if !writer.outbox.is_empty() {
-                                    match writer.flush_outbox() {
-                                        Err(_) => {
-                                            stalled.push(id);
-                                            continue;
-                                        }
-                                        Ok(_) => {}
-                                    }
+                                if !writer.outbox.is_empty()
+                                    && writer.flush_outbox().is_err()
+                                {
+                                    stalled.push(id);
+                                    continue;
                                 }
                                 // Send the new frame
-                                if let Err(_) = writer.send_frame(&frame, kind) {
+                                if writer.send_frame(&frame, kind).is_err() {
                                     stalled.push(id);
                                     continue;
                                 }
@@ -445,7 +442,7 @@ fn writer_thread(
                         }
                         WriterCommand::SendTo { client_id, frame, kind } => {
                             if let Some(writer) = writers.get_mut(&client_id) {
-                                if let Err(_) = writer.send_frame(&frame, kind) {
+                                if writer.send_frame(&frame, kind).is_err() {
                                     writers.remove(&client_id);
                                     let _ = feedback_tx.send(WriterFeedback::ClientStalled { client_id });
                                 }

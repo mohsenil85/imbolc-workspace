@@ -58,8 +58,7 @@ pub fn parse_markdown(content: &str) -> ParsedDoc {
         }
 
         // Handle headings
-        if line.starts_with("### ") {
-            let text = &line[4..];
+        if let Some(text) = line.strip_prefix("### ") {
             let anchor_id = make_anchor_id(text);
             lines.push(RenderLine {
                 text: text.to_string(),
@@ -67,8 +66,7 @@ pub fn parse_markdown(content: &str) -> ParsedDoc {
                 link_target: None,
                 anchor_id: Some(anchor_id),
             });
-        } else if line.starts_with("## ") {
-            let text = &line[3..];
+        } else if let Some(text) = line.strip_prefix("## ") {
             let anchor_id = make_anchor_id(text);
             lines.push(RenderLine {
                 text: text.to_string(),
@@ -76,8 +74,7 @@ pub fn parse_markdown(content: &str) -> ParsedDoc {
                 link_target: None,
                 anchor_id: Some(anchor_id),
             });
-        } else if line.starts_with("# ") {
-            let text = &line[2..];
+        } else if let Some(text) = line.strip_prefix("# ") {
             let anchor_id = make_anchor_id(text);
             lines.push(RenderLine {
                 text: text.to_string(),

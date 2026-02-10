@@ -22,6 +22,7 @@ pub fn maybe_record_automation(
 
 /// Adjust an instrument parameter with clamping and optional automation recording.
 /// Generic helper that reduces boilerplate in envelope, LFO, and filter dispatch handlers.
+#[allow(clippy::too_many_arguments)]
 pub fn adjust_instrument_param<F, G>(
     state: &mut AppState,
     id: InstrumentId,

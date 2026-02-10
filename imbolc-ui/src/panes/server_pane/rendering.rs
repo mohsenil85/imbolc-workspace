@@ -106,15 +106,14 @@ impl ServerPane {
         y += 1;
 
         // Restart hint if config is dirty and server is running
-        if self.device_config_dirty && self.server_running {
-            if y < rect.y + rect.height - 3 {
+        if self.device_config_dirty && self.server_running
+            && y < rect.y + rect.height - 3 {
                 buf.draw_line(
                     Rect::new(x, y, w, 1),
                     &[("(restart server to apply device changes)", Style::new().fg(Color::ORANGE))],
                 );
                 y += 1;
             }
-        }
 
         // Network section (only in network mode)
         if let Some(ref net) = state.network {
@@ -219,6 +218,7 @@ impl ServerPane {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn render_device_list(
         &self,
         buf: &mut RenderBuf,

@@ -14,6 +14,7 @@ fn next_random(state: &mut u64) -> f32 {
     ((*state >> 33) as f32) / (u32::MAX as f32)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn tick_playback(
     piano_roll: &mut PianoRollSnapshot,
     instruments: &mut InstrumentSnapshot,
@@ -29,6 +30,7 @@ pub fn tick_playback(
     last_scheduled_tick: &mut Option<u32>,
 ) {
     // (instrument_id, pitch, velocity, duration, note_tick, probability, ticks_from_old_playhead)
+    #[allow(clippy::type_complexity)]
     let mut playback_data: Option<(
         Vec<(InstrumentId, u8, u8, u32, u32, f32, f64)>,
         u32,
@@ -85,7 +87,7 @@ pub fn tick_playback(
 
                 scan_ranges = vec![
                     (scan_start, piano_roll.loop_end, (scan_start as f64 - old_playhead as f64)),
-                    (piano_roll.loop_start, after_wrap_end, post_wrap_base + (piano_roll.loop_start as f64 - piano_roll.loop_start as f64)),
+                    (piano_roll.loop_start, after_wrap_end, post_wrap_base),
                 ];
                 effective_scan_end = after_wrap_end;
             } else if scan_end_raw > piano_roll.loop_end && piano_roll.loop_end > piano_roll.loop_start {
@@ -127,7 +129,7 @@ pub fn tick_playback(
                             let ticks_from_old = base_ticks + (note.tick - range_start) as f64;
                             for &target_id in &targets {
                                 // Skip muted/inactive siblings
-                                let skip = instruments.instrument(target_id).map_or(true, |inst| {
+                                let skip = instruments.instrument(target_id).is_none_or(|inst| {
                                     !inst.mixer.active || if any_solo { !inst.mixer.solo } else { inst.mixer.mute }
                                 });
                                 if skip { continue; }
@@ -191,7 +193,7 @@ pub fn tick_playback(
                 if arp_enabled {
                     // Buffer note for arpeggiator instead of spawning directly
                     let arp = arp_states.entry(instrument_id)
-                        .or_insert_with(ArpPlayState::default);
+                        .or_default();
                     if !arp.held_notes.contains(&pitch) {
                         arp.held_notes.push(pitch);
                         arp.held_notes.sort();
@@ -332,6 +334,7 @@ mod tests {
     }
 
     /// Helper: call tick_playback with standard fixtures.
+    #[allow(clippy::too_many_arguments)]
     fn do_tick(
         piano_roll: &mut PianoRollState,
         instruments: &mut InstrumentState,

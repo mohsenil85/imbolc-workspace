@@ -56,7 +56,7 @@ pub fn tick_click(
 
     // Calculate the base tick position before any beats in this tick
     // This is where we were at the start of the tick minus accumulated fractional beats
-    let base_tick = (piano_roll.playhead as f64) - (*click_accumulator * ticks_per_beat as f64);
+    let base_tick = (piano_roll.playhead as f64) - (*click_accumulator * ticks_per_beat);
 
     // Track how many beat boundaries we've crossed
     let mut beat_count: u32 = 0;
@@ -67,7 +67,7 @@ pub fn tick_click(
         beat_count += 1;
 
         // Calculate the tick position for THIS beat boundary
-        let beat_tick = (base_tick + (beat_count as f64 * ticks_per_beat as f64)) as u32;
+        let beat_tick = (base_tick + (beat_count as f64 * ticks_per_beat)) as u32;
 
         // Determine beat number within bar for this specific beat
         let beat_in_bar = (beat_tick % ticks_per_bar) / ticks_per_beat_u32;

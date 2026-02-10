@@ -126,6 +126,7 @@ pub(crate) fn sync_pane_layer(panes: &mut PaneManager, layer_stack: &mut LayerSt
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn handle_global_action(
     action: ActionId,
     dispatcher: &mut LocalDispatcher,
@@ -382,13 +383,11 @@ pub(crate) fn handle_global_action(
                             restore_view(panes, dispatcher, &view);
                             sync_pane_layer(panes, layer_stack);
                         }
-                    } else {
-                        if app_frame.history_cursor < history.len() - 1 {
-                            app_frame.history_cursor += 1;
-                            let view = history[app_frame.history_cursor].clone();
-                            restore_view(panes, dispatcher, &view);
-                            sync_pane_layer(panes, layer_stack);
-                        }
+                    } else if app_frame.history_cursor < history.len() - 1 {
+                        app_frame.history_cursor += 1;
+                        let view = history[app_frame.history_cursor].clone();
+                        restore_view(panes, dispatcher, &view);
+                        sync_pane_layer(panes, layer_stack);
                     }
                 }
             }

@@ -87,7 +87,7 @@ pub(super) fn dispatch_server(
                 effects.push(AudioSideEffect::StartRecording { bus: 0, path: path.clone() });
                 result.push_status(
                     audio.status(),
-                    &format!("Recording to {}", path.display()),
+                    format!("Recording to {}", path.display()),
                 );
             } else {
                 result.push_status(imbolc_audio::ServerStatus::Stopped, "Audio engine not running");
@@ -126,7 +126,7 @@ pub(super) fn dispatch_server(
                     effects.push(AudioSideEffect::StartRecording { bus: 0, path: path.clone() });
                     result.push_status(
                         audio.status(),
-                        &format!("Recording to {}", path.display()),
+                        format!("Recording to {}", path.display()),
                     );
                 }
             } else {

@@ -114,7 +114,7 @@ fn main() -> std::io::Result<()> {
 }
 
 pub(crate) fn pane_keymap(keymaps: &mut std::collections::HashMap<String, Keymap>, id: &str) -> Keymap {
-    keymaps.remove(id).unwrap_or_else(Keymap::new)
+    keymaps.remove(id).unwrap_or_default()
 }
 
 pub(crate) fn register_all_panes(keymaps: &mut std::collections::HashMap<String, Keymap>) -> PaneManager {
@@ -370,11 +370,11 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
                 let still_editing = match panes.active().id() {
                     "instrument_edit" => {
                         panes.get_pane_mut::<InstrumentEditPane>("instrument_edit")
-                            .map_or(false, |p| p.is_editing())
+                            .is_some_and(|p| p.is_editing())
                     }
                     "frame_edit" => {
                         panes.get_pane_mut::<FrameEditPane>("frame_edit")
-                            .map_or(false, |p| p.is_editing())
+                            .is_some_and(|p| p.is_editing())
                     }
                     _ => false,
                 };
@@ -657,10 +657,8 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
                                          server.set_status(audio.status(), &format!("Failed to load synthdef: {}", e));
                                      }
                                  }
-                             } else {
-                                 if let Some(server) = panes.get_pane_mut::<ServerPane>("server") {
-                                     server.set_status(audio.status(), &format!("Imported custom synthdef: {}", synthdef_name));
-                                 }
+                             } else if let Some(server) = panes.get_pane_mut::<ServerPane>("server") {
+                                 server.set_status(audio.status(), &format!("Imported custom synthdef: {}", synthdef_name));
                              }
                          }
                          Err(e) => {

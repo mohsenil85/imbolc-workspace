@@ -81,7 +81,7 @@ pub fn infer_param_range(name: &str, default: f32) -> (f32, f32) {
         n if n.contains("feedback") || n.contains("fb") => (0.0, 1.0),
         _ => {
             // Generic: ±10x default, or 0-1 if default is in that range
-            if default >= 0.0 && default <= 1.0 {
+            if (0.0..=1.0).contains(&default) {
                 (0.0, 1.0)
             } else if default > 0.0 {
                 (default * 0.1, default * 10.0)

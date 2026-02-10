@@ -249,7 +249,7 @@ pub fn selected_style_bold(is_selected: bool, fg: Color) -> Style {
 /// - `underline()` — enable underline
 ///
 /// No `italic()`, `dim()`, or `reset()` methods exist.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Style {
     pub fg: Option<Color>,
     pub bg: Option<Color>,
@@ -257,16 +257,6 @@ pub struct Style {
     pub underline: bool,
 }
 
-impl Default for Style {
-    fn default() -> Self {
-        Self {
-            fg: None,
-            bg: None,
-            bold: false,
-            underline: false,
-        }
-    }
-}
 
 impl Style {
     pub const fn new() -> Self {

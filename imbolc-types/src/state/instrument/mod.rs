@@ -23,8 +23,9 @@ use crate::{BusId, EffectId, InstrumentId, Param, ParamIndex};
 
 /// Source-type-specific configuration, enforcing mutual exclusivity at compile time.
 /// Replaces the old `sampler_config`, `drum_sequencer`, `vst_param_values`, `vst_state_path` fields.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub enum SourceExtra {
+    #[default]
     None,
     Sampler(SamplerConfig),
     Kit(DrumSequencerState),
@@ -34,42 +35,18 @@ pub enum SourceExtra {
     },
 }
 
-impl Default for SourceExtra {
-    fn default() -> Self {
-        SourceExtra::None
-    }
-}
-
 /// LFO + amp envelope configuration, always co-accessed and co-updated.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ModulationConfig {
     pub lfo: LfoConfig,
     pub amp_envelope: EnvConfig,
 }
 
-impl Default for ModulationConfig {
-    fn default() -> Self {
-        Self {
-            lfo: LfoConfig::default(),
-            amp_envelope: EnvConfig::default(),
-        }
-    }
-}
-
 /// Arpeggiator and chord-shape configuration for an instrument.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct NoteInputConfig {
     pub arpeggiator: ArpeggiatorConfig,
     pub chord_shape: Option<ChordShape>,
-}
-
-impl Default for NoteInputConfig {
-    fn default() -> Self {
-        Self {
-            arpeggiator: ArpeggiatorConfig::default(),
-            chord_shape: None,
-        }
-    }
 }
 
 /// Layer group membership and octave offset for an instrument.
@@ -163,16 +140,11 @@ impl ChannelConfig {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum OutputTarget {
+    #[default]
     Master,
     Bus(BusId),
-}
-
-impl Default for OutputTarget {
-    fn default() -> Self {
-        Self::Master
-    }
 }
 
 /// Where a send taps the instrument signal chain.

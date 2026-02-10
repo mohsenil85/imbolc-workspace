@@ -149,8 +149,8 @@ impl AutomationPane {
         // Grid dots
         for col in 0..graph_width {
             let tick = self.view_start_tick + col as u32 * tpc;
-            let is_bar = tick % 1920 == 0; // 4 beats
-            let is_beat = tick % 480 == 0;
+            let is_bar = tick.is_multiple_of(1920); // 4 beats
+            let is_beat = tick.is_multiple_of(480);
 
             for row in 0..graph_height {
                 let y = graph_y + row;
@@ -225,7 +225,7 @@ impl AutomationPane {
             let marker_style = Style::new().fg(Color::DARK_GRAY);
             for col in 0..graph_width {
                 let tick = self.view_start_tick + col as u32 * tpc;
-                if tick % 1920 == 0 {
+                if tick.is_multiple_of(1920) {
                     // Bar number
                     let bar = tick / 1920 + 1;
                     let label = format!("B{}", bar);

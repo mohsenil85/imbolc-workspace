@@ -333,7 +333,7 @@ fn save_params(
 }
 
 fn save_effects(conn: &Connection, instrument_id: u32, effects: &[crate::state::instrument::EffectSlot]) -> SqlResult<()> {
-    save_effects_to(conn, "instrument_effects", "instrument_effect_params", "effect_vst_params", "instrument_id", instrument_id as u32, effects)
+    save_effects_to(conn, "instrument_effects", "instrument_effect_params", "effect_vst_params", "instrument_id", instrument_id, effects)
 }
 
 fn save_effects_to(
@@ -985,6 +985,7 @@ pub fn encode_parameter_target(target: &crate::state::instrument::ParameterTarge
     }
 }
 
+#[allow(clippy::type_complexity)]
 pub fn encode_automation_target(
     target: &crate::state::AutomationTarget,
 ) -> (String, Option<i64>, Option<i64>, Option<i64>, Option<i64>, Option<String>) {

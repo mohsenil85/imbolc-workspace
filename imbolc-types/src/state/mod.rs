@@ -112,7 +112,7 @@ pub struct IoGeneration {
 }
 
 /// Ownership status for an instrument in network mode.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum OwnershipDisplayStatus {
     /// This client owns the instrument.
     OwnedByMe,
@@ -121,13 +121,8 @@ pub enum OwnershipDisplayStatus {
     /// No one owns the instrument.
     Unowned,
     /// Not in network mode (don't display ownership).
+    #[default]
     Local,
-}
-
-impl Default for OwnershipDisplayStatus {
-    fn default() -> Self {
-        Self::Local
-    }
 }
 
 /// Connection status for network mode display.

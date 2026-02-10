@@ -677,6 +677,7 @@ impl AudioEngine {
     }
 
     /// Play a one-shot drum sample routed through an instrument's signal chain
+    #[allow(clippy::too_many_arguments)]
     pub fn play_drum_hit_to_instrument(
         &mut self,
         buffer_id: BufferId,

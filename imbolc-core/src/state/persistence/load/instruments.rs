@@ -99,7 +99,7 @@ pub(super) fn load_instruments(conn: &Connection, instruments: &mut InstrumentSt
             if let Some(v) = r.filter_resonance { fc.resonance.value = v; }
             if let Some(v) = r.filter_resonance_min { fc.resonance.min = v; }
             if let Some(v) = r.filter_resonance_max { fc.resonance.max = v; }
-            fc.enabled = r.filter_enabled.map_or(true, |v| v != 0);
+            fc.enabled = r.filter_enabled != Some(0);
 
             // Load filter modulations
             load_modulation(conn, r.id, "cutoff", &mut fc.cutoff.mod_source)?;
@@ -115,8 +115,7 @@ pub(super) fn load_instruments(conn: &Connection, instruments: &mut InstrumentSt
 
         // Build EQ
         let eq = if let Some(eq_enabled) = r.eq_enabled {
-            let mut eq_config = crate::state::instrument::EqConfig::default();
-            eq_config.enabled = eq_enabled != 0;
+            let mut eq_config = crate::state::instrument::EqConfig { enabled: eq_enabled != 0, ..Default::default() };
 
             let mut eq_stmt = conn.prepare(
                 "SELECT band_index, band_type, freq, gain, q, enabled FROM instrument_eq_bands WHERE instrument_id = ?1 ORDER BY band_index"
@@ -147,7 +146,7 @@ pub(super) fn load_instruments(conn: &Connection, instruments: &mut InstrumentSt
         };
 
         let lfo = LfoConfig {
-            enabled: r.lfo_enabled.map_or(false, |v| v != 0),
+            enabled: r.lfo_enabled.is_some_and(|v| v != 0),
             rate: r.lfo_rate.unwrap_or(2.0),
             depth: r.lfo_depth.unwrap_or(0.5),
             shape: decode_lfo_shape(&r.lfo_shape.unwrap_or_else(|| "Sine".to_string())),
@@ -162,7 +161,7 @@ pub(super) fn load_instruments(conn: &Connection, instruments: &mut InstrumentSt
         };
 
         let arpeggiator = ArpeggiatorConfig {
-            enabled: r.arp_enabled.map_or(false, |v| v != 0),
+            enabled: r.arp_enabled.is_some_and(|v| v != 0),
             direction: decode_arp_direction(&r.arp_direction.unwrap_or_else(|| "Up".to_string())),
             rate: decode_arp_rate(&r.arp_rate.unwrap_or_else(|| "Eighth".to_string())),
             octaves: r.arp_octaves.unwrap_or(1) as u8,
@@ -554,6 +553,7 @@ fn load_drum_sequencer(
         "SELECT pad_index, buffer_id, path, name, level, slice_start, slice_end, reverse, pitch, trigger_instrument_id, trigger_freq
          FROM drum_pads WHERE instrument_id = ?1 ORDER BY pad_index"
     )?;
+    #[allow(clippy::type_complexity)]
     let pads: Vec<(usize, Option<i64>, Option<String>, String, f32, f32, f32, i32, i32, Option<i64>, f32)> =
         pad_stmt.query_map(params![instrument_id], |row| {
             Ok((

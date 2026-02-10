@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 
 use serde::{Serialize, Deserialize};
 
@@ -71,15 +72,12 @@ impl PianoRollState {
     }
 
     pub fn add_track(&mut self, instrument_id: InstrumentId) {
-        if !self.tracks.contains_key(&instrument_id) {
-            self.tracks.insert(
-                instrument_id,
-                Track {
-                    module_id: instrument_id,
-                    notes: Vec::new(),
-                    polyphonic: true,
-                },
-            );
+        if let Entry::Vacant(e) = self.tracks.entry(instrument_id) {
+            e.insert(Track {
+                module_id: instrument_id,
+                notes: Vec::new(),
+                polyphonic: true,
+            });
             self.track_order.push(instrument_id);
         }
     }

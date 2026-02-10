@@ -272,7 +272,7 @@ pub(super) fn dispatch_session(
                 "Light" => Theme::high_contrast(),
                 _ => Theme::dark(),
             };
-            result.push_status(audio.status(), &format!("Theme: {}", state.session.theme.name));
+            result.push_status(audio.status(), format!("Theme: {}", state.session.theme.name));
         }
         SessionAction::CreateCheckpoint(ref label) => {
             let path = state.project.path.clone().unwrap_or_else(default_rack_path);
@@ -283,10 +283,10 @@ pub(super) fn dispatch_session(
                 &state.instruments,
             ) {
                 Ok(id) => {
-                    result.push_status(audio.status(), &format!("Checkpoint '{}' created ({})", label, id));
+                    result.push_status(audio.status(), format!("Checkpoint '{}' created ({})", label, id));
                 }
                 Err(e) => {
-                    result.push_status(audio.status(), &format!("Checkpoint failed: {}", e));
+                    result.push_status(audio.status(), format!("Checkpoint failed: {}", e));
                 }
             }
         }
@@ -302,7 +302,7 @@ pub(super) fn dispatch_session(
                     result.push_status(audio.status(), "Checkpoint restored");
                 }
                 Err(e) => {
-                    result.push_status(audio.status(), &format!("Restore failed: {}", e));
+                    result.push_status(audio.status(), format!("Restore failed: {}", e));
                 }
             }
         }
@@ -313,7 +313,7 @@ pub(super) fn dispatch_session(
                     result.push_status(audio.status(), "Checkpoint deleted");
                 }
                 Err(e) => {
-                    result.push_status(audio.status(), &format!("Delete failed: {}", e));
+                    result.push_status(audio.status(), format!("Delete failed: {}", e));
                 }
             }
         }

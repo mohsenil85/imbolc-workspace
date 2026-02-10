@@ -397,7 +397,7 @@ impl AudioEngine {
         let client = OscClient::new(server_addr)?;
         let backend = ScBackend::new(client);
         backend.send_raw("/notify", vec![RawArg::Int(1)])
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| std::io::Error::other(e.to_string()))?;
         self.backend = Some(Box::new(backend));
         self.is_running = true;
         self.server_status = ServerStatus::Connected;
@@ -408,7 +408,7 @@ impl AudioEngine {
         let client = OscClient::new_with_monitor(server_addr, monitor)?;
         let backend = ScBackend::new(client);
         backend.send_raw("/notify", vec![RawArg::Int(1)])
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| std::io::Error::other(e.to_string()))?;
         self.backend = Some(Box::new(backend));
         self.is_running = true;
         self.server_status = ServerStatus::Connected;

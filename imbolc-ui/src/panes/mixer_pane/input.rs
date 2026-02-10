@@ -396,11 +396,10 @@ impl MixerPane {
                 Action::None
             }
             ActionId::Mixer(MixerActionId::SendPrev) => {
-                if self.detail_section == MixerSection::Sends {
-                    if self.detail_cursor > 0 {
+                if self.detail_section == MixerSection::Sends
+                    && self.detail_cursor > 0 {
                         self.detail_cursor -= 1;
                     }
-                }
                 Action::None
             }
             ActionId::Mixer(MixerActionId::SendToggle) => {
@@ -665,11 +664,10 @@ impl MixerPane {
                 Action::None
             }
             ActionId::Mixer(MixerActionId::SendPrev) => {
-                if self.group_detail_section == GroupDetailSection::Sends {
-                    if self.detail_cursor > 0 {
+                if self.group_detail_section == GroupDetailSection::Sends
+                    && self.detail_cursor > 0 {
                         self.detail_cursor -= 1;
                     }
-                }
                 Action::None
             }
             ActionId::Mixer(MixerActionId::SendToggle) => {

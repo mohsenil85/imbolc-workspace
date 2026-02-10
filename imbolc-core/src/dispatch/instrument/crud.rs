@@ -84,7 +84,7 @@ pub(super) fn handle_update(
     };
 
     if let Some(instrument) = state.instruments.instrument_mut(update.id) {
-        instrument.source = update.source.clone();
+        instrument.source = update.source;
         instrument.source_params = update.source_params.clone();
         instrument.processing_chain = update.processing_chain.clone();
         instrument.modulation.lfo = update.lfo.clone();

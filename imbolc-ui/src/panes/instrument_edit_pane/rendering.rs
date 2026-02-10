@@ -75,7 +75,7 @@ impl InstrumentEditPane {
         let source_end = source_start + source_row_count;
 
         // Render source section if any rows visible
-        if (source_start..source_end).any(|r| is_visible(r)) && visual_y < max_y {
+        if (source_start..source_end).any(&is_visible) && visual_y < max_y {
             let source_header = if self.source.is_sample() {
                 format!("SOURCE: {}  (o: load)", self.source.name())
             } else {
@@ -148,7 +148,7 @@ impl InstrumentEditPane {
                         let stage_end = stage_start + rc;
 
                         // Filter header (non-selectable)
-                        if (stage_start..stage_end).any(|r| is_visible(r)) && visual_y < max_y {
+                        if (stage_start..stage_end).any(&is_visible) && visual_y < max_y {
                             let filter_label = format!("FILTER: {}  (f: off, t: cycle)", f.filter_type.name());
                             buf.draw_line(Rect::new(content_x, visual_y, inner.width.saturating_sub(2), 1),
                                 &[(&filter_label, Style::new().fg(Color::FILTER_COLOR).bold())]);
@@ -158,7 +158,7 @@ impl InstrumentEditPane {
                         // Type row
                         if is_visible(global_row) && visual_y < max_y {
                             let is_sel = self.selected_row == global_row;
-                            render_label_value_row_buf(buf, content_x, visual_y, "Type", &f.filter_type.name(), Color::FILTER_COLOR, is_sel);
+                            render_label_value_row_buf(buf, content_x, visual_y, "Type", f.filter_type.name(), Color::FILTER_COLOR, is_sel);
                             visual_y += 1;
                         }
                         global_row += 1;
@@ -244,7 +244,7 @@ impl InstrumentEditPane {
         let lfo_start = global_row;
         let lfo_end = lfo_start + lfo_row_count;
 
-        if (lfo_start..lfo_end).any(|r| is_visible(r)) && visual_y < max_y {
+        if (lfo_start..lfo_end).any(&is_visible) && visual_y < max_y {
             let lfo_status = if self.lfo.enabled { "ON" } else { "OFF" };
             let lfo_header = format!("LFO [{}]  (l: toggle, s: shape, m: target)", lfo_status);
             buf.draw_line(Rect::new(content_x, visual_y, inner.width.saturating_sub(2), 1),
@@ -306,7 +306,7 @@ impl InstrumentEditPane {
             let env_start = global_row;
             let env_end = env_start + env_row_count;
 
-            if (env_start..env_end).any(|r| is_visible(r)) && visual_y < max_y {
+            if (env_start..env_end).any(&is_visible) && visual_y < max_y {
                 buf.draw_line(Rect::new(content_x, visual_y, inner.width.saturating_sub(2), 1),
                     &[("ENVELOPE (ADSR)  (p: poly, r: track)", Style::new().fg(Color::ENV_COLOR).bold())]);
                 visual_y += 1;
@@ -441,6 +441,7 @@ fn render_param_row_buf(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_value_row_buf(
     buf: &mut RenderBuf,
     x: u16, y: u16,
@@ -454,6 +455,7 @@ fn render_value_row_buf(
 }
 
 /// Render a value row with an optional default marker
+#[allow(clippy::too_many_arguments)]
 fn render_value_row_with_default_buf(
     buf: &mut RenderBuf,
     x: u16, y: u16,

@@ -66,6 +66,12 @@ pub struct AppState {
     pub network: Option<NetworkDisplayContext>,
 }
 
+impl Default for AppState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AppState {
     #[allow(dead_code)]
     pub fn new() -> Self {

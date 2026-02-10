@@ -27,6 +27,7 @@ pub struct MeteringUpdate {
 }
 
 /// Messages received from the server via background thread.
+#[allow(clippy::large_enum_variant)]
 enum ServerUpdate {
     State(NetworkState),
     Metering(MeteringUpdate),

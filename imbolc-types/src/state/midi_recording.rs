@@ -5,20 +5,15 @@ use crate::InstrumentId;
 use serde::{Deserialize, Serialize};
 
 /// Recording mode for MIDI automation
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum RecordMode {
     /// Not recording
+    #[default]
     Off,
     /// Armed for recording (waiting for play to start)
     Armed,
     /// Actively recording
     Recording,
-}
-
-impl Default for RecordMode {
-    fn default() -> Self {
-        Self::Off
-    }
 }
 
 /// Mapping of a MIDI CC to an automation target
@@ -193,7 +188,7 @@ impl MidiRecordingState {
 
     /// Check if a MIDI channel should be processed
     pub fn should_process_channel(&self, channel: u8) -> bool {
-        self.channel_filter.map_or(true, |f| f == channel)
+        self.channel_filter.is_none_or(|f| f == channel)
     }
 }
 

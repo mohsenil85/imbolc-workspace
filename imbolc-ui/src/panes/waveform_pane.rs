@@ -173,7 +173,7 @@ impl WaveformPane {
         let mut dot_grid: Vec<Vec<bool>> = vec![vec![false; dot_height]; dot_width];
 
         // Map samples to dots - for waveform, we show amplitude mirrored around center
-        for dot_x in 0..dot_width {
+        for (dot_x, column) in dot_grid.iter_mut().enumerate() {
             let sample_idx = (dot_x * display_len / dot_width).min(display_len - 1);
             let amplitude = display_buffer[sample_idx].abs().min(1.0);
 
@@ -185,14 +185,14 @@ impl WaveformPane {
             for dy in 0..bar_dots {
                 let y = center_dot_y.saturating_sub(dy + 1);
                 if y < dot_height {
-                    dot_grid[dot_x][y] = true;
+                    column[y] = true;
                 }
             }
             // Fill dots below center (mirror)
             for dy in 0..bar_dots {
                 let y = center_dot_y + dy;
                 if y < dot_height {
-                    dot_grid[dot_x][y] = true;
+                    column[y] = true;
                 }
             }
         }
@@ -349,7 +349,7 @@ impl WaveformPane {
 
         // Map samples to dots - oscilloscope shows actual waveform (not mirrored)
         let mut prev_dot_y: Option<usize> = None;
-        for dot_x in 0..dot_width {
+        for (dot_x, column) in dot_grid.iter_mut().enumerate() {
             let sample_idx = (dot_x * DISPLAY_SAMPLES / dot_width).min(DISPLAY_SAMPLES - 1);
             let sample = display_buffer[sample_idx].clamp(-1.0, 1.0);
 
@@ -358,15 +358,13 @@ impl WaveformPane {
             let normalized = (1.0 - sample) / 2.0; // 0 to 1
             let dot_y = ((normalized * (dot_height - 1) as f32) as usize).min(dot_height - 1);
 
-            dot_grid[dot_x][dot_y] = true;
+            column[dot_y] = true;
 
             // Connect to previous point for smooth lines
             if let Some(prev_y) = prev_dot_y {
                 let (y_min, y_max) = if dot_y < prev_y { (dot_y, prev_y) } else { (prev_y, dot_y) };
-                for fill_y in y_min..=y_max {
-                    if fill_y < dot_height {
-                        dot_grid[dot_x][fill_y] = true;
-                    }
+                for cell in &mut column[y_min..=y_max] {
+                    *cell = true;
                 }
             }
             prev_dot_y = Some(dot_y);
@@ -437,6 +435,7 @@ impl WaveformPane {
             &[(&status, Style::new().fg(Color::GRAY))]);
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn render_single_meter(&self, x: u16, y: u16, width: u16, height: u16, peak: f32, rms: f32, label: &str, buf: &mut RenderBuf) {
         // dB scale: -60 to 0
         let db_range = 60.0_f32;

@@ -12,6 +12,7 @@ pub(super) fn load_automation(conn: &Connection, session: &mut SessionState) -> 
         "SELECT id, target_type, target_instrument_id, target_bus_id, target_effect_id, target_param_idx, target_extra, enabled, record_armed, min_value, max_value
          FROM automation_lanes ORDER BY id"
     )?;
+    #[allow(clippy::type_complexity)]
     let lanes: Vec<(u32, String, Option<i64>, Option<i64>, Option<i64>, Option<i64>, Option<String>, i32, i32, f32, f32)> =
         stmt.query_map([], |row| {
             Ok((
@@ -71,6 +72,7 @@ pub(super) fn load_midi_recording(conn: &Connection, session: &mut SessionState)
         "SELECT cc_number, channel, target_type, target_instrument_id, target_bus_id, target_effect_id, target_param_idx, target_extra, min_value, max_value
          FROM midi_cc_mappings ORDER BY id"
     )?;
+    #[allow(clippy::type_complexity)]
     let cc_rows: Vec<(i32, Option<i32>, String, Option<i64>, Option<i64>, Option<i64>, Option<i64>, Option<String>, f32, f32)> =
         cc_stmt.query_map([], |row| {
             Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?,
@@ -92,6 +94,7 @@ pub(super) fn load_midi_recording(conn: &Connection, session: &mut SessionState)
         "SELECT target_type, target_instrument_id, target_bus_id, target_effect_id, target_param_idx, target_extra, center_value, range, sensitivity
          FROM midi_pitch_bend_configs ORDER BY id"
     )?;
+    #[allow(clippy::type_complexity)]
     let pb_rows: Vec<(String, Option<i64>, Option<i64>, Option<i64>, Option<i64>, Option<String>, f32, f32, f32)> =
         pb_stmt.query_map([], |row| {
             Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?,
@@ -174,6 +177,7 @@ pub(super) fn load_arrangement(conn: &Connection, session: &mut SessionState) ->
             "SELECT id, target_type, target_instrument_id, target_bus_id, target_effect_id, target_param_idx, target_extra, enabled, record_armed, min_value, max_value
              FROM arrangement_clip_automation_lanes WHERE clip_id = ?1 ORDER BY id"
         )?;
+        #[allow(clippy::type_complexity)]
         let lane_rows: Vec<(u32, String, Option<i64>, Option<i64>, Option<i64>, Option<i64>, Option<String>, i32, i32, f32, f32)> =
             lane_stmt.query_map(params![id], |row| {
                 Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?,

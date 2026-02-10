@@ -299,8 +299,8 @@ fn handle_osc_packet(packet: &OscPacket, refs: &OscRefs) {
             } else if msg.addr == "/spectrum" && msg.args.len() >= 9 {
                 // SendReply format: /spectrum nodeID replyID val0 val1 ... val6
                 let mut bands = [0.0_f32; 7];
-                for i in 0..7 {
-                    bands[i] = match msg.args.get(2 + i) {
+                for (i, band) in bands.iter_mut().enumerate() {
+                    *band = match msg.args.get(2 + i) {
                         Some(OscType::Float(v)) => *v,
                         _ => 0.0,
                     };
@@ -352,7 +352,7 @@ fn handle_osc_packet(packet: &OscPacket, refs: &OscRefs) {
                 }
             } else if msg.addr == "/vst_param" && msg.args.len() >= 5 {
                 // VSTPlugin SendNodeReply: /vst_param nodeID replyID index value display_len char0 char1 ...
-                let node_id = match msg.args.get(0) {
+                let node_id = match msg.args.first() {
                     Some(OscType::Int(v)) => *v,
                     Some(OscType::Float(v)) => *v as i32,
                     _ => return,

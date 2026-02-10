@@ -393,7 +393,7 @@ fn mixer_scope(
 pub fn coalesce_key(action: &Action, session: &SessionState, instruments: &InstrumentState) -> CoalesceKey {
     match action {
         // Instrument parameter tweaks — coalesce by instrument ID
-        Action::Instrument(a) => match a {
+        Action::Instrument(
             InstrumentAction::AdjustFilterCutoff(id, _)
             | InstrumentAction::AdjustFilterResonance(id, _)
             | InstrumentAction::AdjustEffectParam(id, _, _, _)
@@ -409,57 +409,55 @@ pub fn coalesce_key(action: &Action, session: &SessionState, instruments: &Instr
             | InstrumentAction::AdjustTrackSwing(id, _)
             | InstrumentAction::AdjustTrackHumanizeVelocity(id, _)
             | InstrumentAction::AdjustTrackHumanizeTiming(id, _)
-            | InstrumentAction::AdjustTrackTimingOffset(id, _) => {
-                CoalesceKey::InstrumentParam(*id)
-            }
-            _ => CoalesceKey::None,
-        },
+            | InstrumentAction::AdjustTrackTimingOffset(id, _),
+        ) => CoalesceKey::InstrumentParam(*id),
+        Action::Instrument(_) => CoalesceKey::None,
 
         // Mixer level/pan/send — coalesce by mixer selection target
-        Action::Mixer(a) => match a {
-            MixerAction::AdjustLevel(_) | MixerAction::AdjustPan(_) | MixerAction::AdjustSend(_, _) => {
-                match session.mixer.selection {
-                    super::session::MixerSelection::Instrument(idx) => {
-                        match instruments.instruments.get(idx) {
-                            Some(inst) => CoalesceKey::InstrumentParam(inst.id),
-                            None => CoalesceKey::None,
-                        }
+        Action::Mixer(
+            MixerAction::AdjustLevel(_) | MixerAction::AdjustPan(_) | MixerAction::AdjustSend(_, _),
+        ) => {
+            match session.mixer.selection {
+                super::session::MixerSelection::Instrument(idx) => {
+                    match instruments.instruments.get(idx) {
+                        Some(inst) => CoalesceKey::InstrumentParam(inst.id),
+                        None => CoalesceKey::None,
                     }
-                    _ => CoalesceKey::SessionParam,
                 }
+                _ => CoalesceKey::SessionParam,
             }
-            _ => CoalesceKey::None,
-        },
+        }
+        Action::Mixer(_) => CoalesceKey::None,
 
         // VST param tweaks
-        Action::VstParam(a) => match a {
+        Action::VstParam(
             VstParamAction::SetParam(id, _, _, _)
-            | VstParamAction::AdjustParam(id, _, _, _) => CoalesceKey::InstrumentParam(*id),
-            _ => CoalesceKey::None,
-        },
+            | VstParamAction::AdjustParam(id, _, _, _),
+        ) => CoalesceKey::InstrumentParam(*id),
+        Action::VstParam(_) => CoalesceKey::None,
 
         // Sequencer continuous adjustments — operate on selected instrument
-        Action::Sequencer(a) => match a {
+        Action::Sequencer(
             SequencerAction::AdjustVelocity(_, _, _)
             | SequencerAction::AdjustPadLevel(_, _)
             | SequencerAction::AdjustSwing(_)
             | SequencerAction::AdjustProbability(_, _, _)
             | SequencerAction::AdjustPadPitch(_, _)
-            | SequencerAction::AdjustStepPitch(_, _, _) => {
-                match instruments.selected_instrument() {
-                    Some(inst) => CoalesceKey::InstrumentParam(inst.id),
-                    None => CoalesceKey::None,
-                }
+            | SequencerAction::AdjustStepPitch(_, _, _),
+        ) => {
+            match instruments.selected_instrument() {
+                Some(inst) => CoalesceKey::InstrumentParam(inst.id),
+                None => CoalesceKey::None,
             }
-            _ => CoalesceKey::None,
-        },
+        }
+        Action::Sequencer(_) => CoalesceKey::None,
 
         // Session-level adjustments
-        Action::Session(a) => match a {
+        Action::Session(
             SessionAction::AdjustHumanizeVelocity(_)
-            | SessionAction::AdjustHumanizeTiming(_) => CoalesceKey::SessionParam,
-            _ => CoalesceKey::None,
-        },
+            | SessionAction::AdjustHumanizeTiming(_),
+        ) => CoalesceKey::SessionParam,
+        Action::Session(_) => CoalesceKey::None,
 
         // Everything else — no coalescing
         _ => CoalesceKey::None,
@@ -468,7 +466,7 @@ pub fn coalesce_key(action: &Action, session: &SessionState, instruments: &Instr
 
 pub fn is_undoable(action: &Action) -> bool {
     match action {
-        Action::Instrument(a) => match a {
+        Action::Instrument(a) => !matches!(a,
             crate::action::InstrumentAction::PlayNote(_, _)
             | crate::action::InstrumentAction::PlayNotes(_, _)
             | crate::action::InstrumentAction::PlayDrumPad(_)
@@ -478,17 +476,13 @@ pub fn is_undoable(action: &Action) -> bool {
             | crate::action::InstrumentAction::SelectFirst
             | crate::action::InstrumentAction::SelectLast
             | crate::action::InstrumentAction::Edit(_)
-            | crate::action::InstrumentAction::OpenVstEffectParams(_, _) => false,
-            _ => true,
-        },
-        Action::Mixer(a) => match a {
+            | crate::action::InstrumentAction::OpenVstEffectParams(_, _)),
+        Action::Mixer(a) => !matches!(a,
             crate::action::MixerAction::Move(_)
             | crate::action::MixerAction::Jump(_)
             | crate::action::MixerAction::SelectAt(_)
-            | crate::action::MixerAction::CycleSection => false,
-            _ => true,
-        },
-        Action::PianoRoll(a) => match a {
+            | crate::action::MixerAction::CycleSection),
+        Action::PianoRoll(a) => matches!(a,
             crate::action::PianoRollAction::ToggleNote { .. }
             | crate::action::PianoRollAction::ToggleLoop
             | crate::action::PianoRollAction::SetLoopStart(_)
@@ -497,64 +491,47 @@ pub fn is_undoable(action: &Action) -> bool {
             | crate::action::PianoRollAction::TogglePolyMode(_)
             | crate::action::PianoRollAction::AdjustSwing(_)
             | crate::action::PianoRollAction::DeleteNotesInRegion { .. }
-            | crate::action::PianoRollAction::PasteNotes { .. } => true,
-            crate::action::PianoRollAction::CopyNotes { .. } => false,
-            _ => false,
-        },
-        Action::Session(a) => match a {
+            | crate::action::PianoRollAction::PasteNotes { .. }),
+        Action::Session(a) => !matches!(a,
             crate::action::SessionAction::Save
             | crate::action::SessionAction::SaveAs(_)
             | crate::action::SessionAction::Load
             | crate::action::SessionAction::LoadFrom(_)
             | crate::action::SessionAction::NewProject
-            | crate::action::SessionAction::OpenFileBrowser(_) => false,
-            _ => true,
-        },
-        Action::Sequencer(a) => match a {
+            | crate::action::SessionAction::OpenFileBrowser(_)),
+        Action::Sequencer(a) => !matches!(a,
             crate::action::SequencerAction::PlayStop
             | crate::action::SequencerAction::LoadSample(_)
             | crate::action::SequencerAction::LoadSampleResult(_, _)
-            | crate::action::SequencerAction::CopySteps { .. } => false,
-            _ => true,
-        },
-        Action::Chopper(a) => match a {
+            | crate::action::SequencerAction::CopySteps { .. }),
+        Action::Chopper(a) => !matches!(a,
             crate::action::ChopperAction::LoadSample
             | crate::action::ChopperAction::LoadSampleResult(_)
             | crate::action::ChopperAction::PreviewSlice
             | crate::action::ChopperAction::SelectSlice(_)
-            | crate::action::ChopperAction::MoveCursor(_) => false,
-            _ => true,
-        },
-        Action::Automation(a) => match a {
+            | crate::action::ChopperAction::MoveCursor(_)),
+        Action::Automation(a) => !matches!(a,
             crate::action::AutomationAction::SelectLane(_)
             | crate::action::AutomationAction::ToggleRecording
             | crate::action::AutomationAction::ToggleLaneArm(_)
             | crate::action::AutomationAction::ArmAllLanes
             | crate::action::AutomationAction::DisarmAllLanes
             | crate::action::AutomationAction::RecordValue(_, _)
-            | crate::action::AutomationAction::CopyPoints(_, _, _) => false,
-            _ => true,
-        },
-        Action::Midi(a) => match a {
+            | crate::action::AutomationAction::CopyPoints(_, _, _)),
+        Action::Midi(a) => !matches!(a,
             crate::action::MidiAction::ConnectPort(_)
-            | crate::action::MidiAction::DisconnectPort => false,
-            _ => true,
-        },
-        Action::Arrangement(a) => match a {
+            | crate::action::MidiAction::DisconnectPort),
+        Action::Arrangement(a) => !matches!(a,
             crate::action::ArrangementAction::TogglePlayMode
             | crate::action::ArrangementAction::SelectPlacement(_)
             | crate::action::ArrangementAction::SelectLane(_)
             | crate::action::ArrangementAction::MoveCursor(_)
             | crate::action::ArrangementAction::ScrollView(_)
-            | crate::action::ArrangementAction::PlayStop => false,
-            _ => true,
-        },
-        Action::VstParam(a) => match a {
+            | crate::action::ArrangementAction::PlayStop),
+        Action::VstParam(a) => matches!(a,
             crate::action::VstParamAction::SetParam(_, _, _, _)
             | crate::action::VstParamAction::AdjustParam(_, _, _, _)
-            | crate::action::VstParamAction::ResetParam(_, _, _) => true,
-            _ => false,
-        },
+            | crate::action::VstParamAction::ResetParam(_, _, _)),
         Action::Undo | Action::Redo => false,
         _ => false,
     }

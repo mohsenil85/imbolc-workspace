@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Test harness utilities for imbolc-net integration tests.
 
 use std::io::{BufReader, BufWriter};

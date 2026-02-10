@@ -282,7 +282,7 @@ impl Pane for InstrumentEditPane {
                 ToggleResult::Deactivated
             }
         } else if state.instruments.selected_instrument()
-            .map_or(false, |s| s.source.is_kit())
+            .is_some_and(|s| s.source.is_kit())
         {
             self.pad_keyboard.activate();
             ToggleResult::ActivatedPad

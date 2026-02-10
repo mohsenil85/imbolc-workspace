@@ -208,6 +208,7 @@ fn render_centered_text(area: Rect, buf: &mut RenderBuf, text: &str, color: Colo
     buf.draw_line(Rect::new(x, y, text.len() as u16, 1), &[(text, style)]);
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_param_row(
     buf: &mut RenderBuf,
     label_x: u16,

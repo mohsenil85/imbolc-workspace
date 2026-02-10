@@ -73,6 +73,7 @@ impl<T: Clone + Default> TripleBufferShared<T> {
     }
 
     /// Writer: get mutable reference to back buffer (caller must ensure single writer)
+    #[allow(clippy::mut_from_ref)]
     unsafe fn back_mut(&self) -> &mut T {
         let state = self.state.load(Ordering::Acquire);
         let back_idx = Self::decode_back(state);

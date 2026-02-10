@@ -250,13 +250,13 @@ impl PianoRollPane {
                 let tick = self.view_start_tick + col as u32 * self.ticks_per_cell();
                 let x = grid_x + col;
 
-                let has_note = piano_roll.track_at(self.current_track).map_or(false, |track| {
+                let has_note = piano_roll.track_at(self.current_track).is_some_and(|track| {
                     track.notes.iter().any(|n| {
                         n.pitch == pitch && tick >= n.tick && tick < n.tick + n.duration
                     })
                 });
 
-                let is_note_start = piano_roll.track_at(self.current_track).map_or(false, |track| {
+                let is_note_start = piano_roll.track_at(self.current_track).is_some_and(|track| {
                     track.notes.iter().any(|n| n.pitch == pitch && n.tick == tick)
                 });
 
@@ -267,10 +267,10 @@ impl PianoRollPane {
 
                 let tpb = piano_roll.ticks_per_beat;
                 let tpbar = piano_roll.ticks_per_bar();
-                let is_bar_line = tick % tpbar == 0;
-                let is_beat_line = tick % tpb == 0;
+                let is_bar_line = tick.is_multiple_of(tpbar);
+                let is_beat_line = tick.is_multiple_of(tpb);
 
-                let in_selection = self.selection_anchor.map_or(false, |(anchor_tick, anchor_pitch)| {
+                let in_selection = self.selection_anchor.is_some_and(|(anchor_tick, anchor_pitch)| {
                     let (t0, t1) = if anchor_tick <= self.cursor_tick {
                         (anchor_tick, self.cursor_tick + self.ticks_per_cell())
                     } else {
@@ -326,14 +326,14 @@ impl PianoRollPane {
             let tpbar = piano_roll.ticks_per_bar();
             let x = grid_x + col;
 
-            if tick % tpbar == 0 {
+            if tick.is_multiple_of(tpbar) {
                 let bar = tick / tpbar + 1;
                 let label = format!("{}", bar);
                 let white = Style::new().fg(Color::WHITE);
                 for (j, ch) in label.chars().enumerate() {
                     buf.set_cell(x + j as u16, footer_y, ch, white);
                 }
-            } else if tick % tpb == 0 {
+            } else if tick.is_multiple_of(tpb) {
                 buf.set_cell(x, footer_y, '·', Style::new().fg(Color::GRAY));
             }
         }
@@ -341,7 +341,7 @@ impl PianoRollPane {
         // Status line
         let status_y = footer_y + 1;
         let vel_str = if let Some((anchor_tick, anchor_pitch)) = self.selection_anchor {
-            let t_diff = (self.cursor_tick as i64 - anchor_tick as i64).abs() as u32 + self.ticks_per_cell();
+            let t_diff = (self.cursor_tick as i64 - anchor_tick as i64).unsigned_abs() as u32 + self.ticks_per_cell();
             let p_diff = (self.cursor_pitch as i16 - anchor_pitch as i16).abs() + 1;
             format!("Sel: {:.1} beats x {} pitches", t_diff as f32 / piano_roll.ticks_per_beat as f32, p_diff)
         } else {

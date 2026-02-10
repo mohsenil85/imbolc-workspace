@@ -276,7 +276,7 @@ impl Pane for DocsPane {
 
     fn render(&mut self, area: Rect, buf: &mut RenderBuf, _state: &AppState) {
         // Calculate dimensions
-        let width = area.width.min(80).max(40);
+        let width = area.width.clamp(40, 80);
         let height = area.height.saturating_sub(4).max(10);
         let rect = center_rect(area, width, height);
 

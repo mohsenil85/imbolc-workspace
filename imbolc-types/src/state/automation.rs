@@ -5,18 +5,13 @@ use serde::{Deserialize, Serialize};
 use crate::{BusId, EffectId, InstrumentId, ParamIndex, ParameterTarget};
 
 /// Whether target uses continuous interpolation or discrete steps.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum ValueKind {
     /// 0.0-1.0 with interpolation
+    #[default]
     Continuous,
     /// Step behavior, no interpolation
     Discrete,
-}
-
-impl Default for ValueKind {
-    fn default() -> Self {
-        Self::Continuous
-    }
 }
 
 /// Discrete value representation for non-continuous automation.
@@ -39,9 +34,10 @@ pub enum DiscreteValueKind {
 pub type AutomationLaneId = u32;
 
 /// Interpolation curve type between automation points.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum CurveType {
     /// Linear interpolation (default)
+    #[default]
     Linear,
     /// Exponential curve (good for volume, frequency)
     Exponential,
@@ -49,12 +45,6 @@ pub enum CurveType {
     Step,
     /// S-curve (smooth transitions)
     SCurve,
-}
-
-impl Default for CurveType {
-    fn default() -> Self {
-        Self::Linear
-    }
 }
 
 /// A single automation point.

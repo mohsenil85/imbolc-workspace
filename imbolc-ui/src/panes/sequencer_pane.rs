@@ -74,30 +74,30 @@ impl Pane for SequencerPane {
 
         match action {
             ActionId::Sequencer(SequencerActionId::VelUp) => {
-                return Action::Sequencer(SequencerAction::AdjustVelocity(
+                Action::Sequencer(SequencerAction::AdjustVelocity(
                     self.cursor_pad,
                     self.cursor_step,
                     10,
-                ));
+                ))
             }
             ActionId::Sequencer(SequencerActionId::VelDown) => {
-                return Action::Sequencer(SequencerAction::AdjustVelocity(
+                Action::Sequencer(SequencerAction::AdjustVelocity(
                     self.cursor_pad,
                     self.cursor_step,
                     -10,
-                ));
+                ))
             }
             ActionId::Sequencer(SequencerActionId::PadLevelDown) => {
-                return Action::Sequencer(SequencerAction::AdjustPadLevel(
+                Action::Sequencer(SequencerAction::AdjustPadLevel(
                     self.cursor_pad,
                     -0.05,
-                ));
+                ))
             }
             ActionId::Sequencer(SequencerActionId::PadLevelUp) => {
-                return Action::Sequencer(SequencerAction::AdjustPadLevel(
+                Action::Sequencer(SequencerAction::AdjustPadLevel(
                     self.cursor_pad,
                     0.05,
-                ));
+                ))
             }
             ActionId::Sequencer(SequencerActionId::Up) => {
                 self.selection_anchor = None;
@@ -314,9 +314,9 @@ impl Pane for SequencerPane {
                 let is_playhead = seq.playing && step_idx == seq.current_step;
 
                 let step = &pattern.steps[pad_idx][step_idx];
-                let is_beat = step_idx % 4 == 0;
+                let is_beat = step_idx.is_multiple_of(4);
 
-                let in_selection = self.selection_anchor.map_or(false, |(anchor_pad, anchor_step)| {
+                let in_selection = self.selection_anchor.is_some_and(|(anchor_pad, anchor_step)| {
                     let (p0, p1) = if anchor_pad <= self.cursor_pad {
                         (anchor_pad, self.cursor_pad)
                     } else {

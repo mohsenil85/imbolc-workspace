@@ -24,7 +24,7 @@ pub fn tick_arpeggiator(
         .collect();
 
     for (instrument_id, config) in arp_instruments {
-        let arp = arp_states.entry(instrument_id).or_insert_with(ArpPlayState::default);
+        let arp = arp_states.entry(instrument_id).or_default();
 
         if arp.held_notes.is_empty() {
             // Release any currently sounding note
@@ -102,13 +102,11 @@ pub fn tick_arpeggiator(
                                 arp.step_index = seq_len - 2;
                                 arp.ascending = false;
                             }
+                        } else if arp.step_index == 0 {
+                            arp.step_index = 1;
+                            arp.ascending = true;
                         } else {
-                            if arp.step_index == 0 {
-                                arp.step_index = 1;
-                                arp.ascending = true;
-                            } else {
-                                arp.step_index -= 1;
-                            }
+                            arp.step_index -= 1;
                         }
                         sequence[arp.step_index.min(seq_len - 1)]
                     }
@@ -128,7 +126,7 @@ pub fn tick_arpeggiator(
                 let targets = instruments.layer_group_members(instrument_id);
                 for &target_id in &targets {
                     let inst = instruments.instrument(target_id);
-                    let skip = inst.map_or(true, |inst| {
+                    let skip = inst.is_none_or(|inst| {
                         !inst.mixer.active || if any_solo { !inst.mixer.solo } else { inst.mixer.mute }
                     });
                     if skip { continue; }

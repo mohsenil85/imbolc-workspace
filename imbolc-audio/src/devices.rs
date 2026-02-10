@@ -3,20 +3,15 @@ use std::process::Command;
 use serde::{Deserialize, Serialize};
 
 /// Audio buffer size options for scsynth
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum BufferSize {
     B64 = 64,
     B128 = 128,
     B256 = 256,
+    #[default]
     B512 = 512,
     B1024 = 1024,
     B2048 = 2048,
-}
-
-impl Default for BufferSize {
-    fn default() -> Self {
-        BufferSize::B512
-    }
 }
 
 impl BufferSize {

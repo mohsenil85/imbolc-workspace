@@ -105,7 +105,7 @@ impl FileBrowserPane {
                 if is_dir {
                     if let Some(ref bundles) = self.bundle_extensions {
                         if path.extension()
-                            .map_or(false, |e| bundles.iter().any(|ext| e == ext.as_str()))
+                            .is_some_and(|e| bundles.iter().any(|ext| e == ext.as_str()))
                         {
                             is_dir = false; // Treat as file
                         }
@@ -117,7 +117,7 @@ impl FileBrowserPane {
                     if let Some(ref exts) = self.filter_extensions {
                         if path
                             .extension()
-                            .map_or(true, |e| !exts.iter().any(|ext| e == ext.as_str()))
+                            .is_none_or(|e| !exts.iter().any(|ext| e == ext.as_str()))
                         {
                             continue;
                         }

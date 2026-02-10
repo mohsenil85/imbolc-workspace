@@ -36,16 +36,11 @@ pub struct AudioClip {
     pub sample_rate: u32,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum PlayMode {
+    #[default]
     Pattern,
     Song,
-}
-
-impl Default for PlayMode {
-    fn default() -> Self {
-        Self::Pattern
-    }
 }
 
 /// Reusable pattern of notes for a single instrument.

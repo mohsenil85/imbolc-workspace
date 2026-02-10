@@ -49,8 +49,8 @@ impl RatatuiBackend {
         execute!(io::stdout(), EnterAlternateScreen, EnableMouseCapture)?;
 
         // Enable Kitty keyboard protocol if supported
-        if supports_enhancement {
-            if execute!(
+        if supports_enhancement
+            && execute!(
                 io::stdout(),
                 PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES)
             )
@@ -58,7 +58,6 @@ impl RatatuiBackend {
             {
                 self.keyboard_enhancement_enabled = true;
             }
-        }
 
         self.terminal.clear()?;
         Ok(())

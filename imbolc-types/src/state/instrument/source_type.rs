@@ -567,63 +567,6 @@ impl SourceType {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn source_type_name_non_empty() {
-        for st in SourceType::all() {
-            assert!(!st.name().is_empty(), "{:?} has empty name", st);
-        }
-    }
-
-    #[test]
-    fn source_type_synth_def_name_prefixed() {
-        for st in SourceType::all() {
-            assert!(st.synth_def_name().starts_with("imbolc_"), "{:?}", st);
-        }
-    }
-
-    #[test]
-    fn source_type_all_excludes_custom_vst() {
-        let all = SourceType::all();
-        assert!(all.iter().all(|s| !s.is_custom()));
-        assert!(all.iter().all(|s| !s.is_vst()));
-    }
-
-    #[test]
-    fn source_type_is_sample_checks() {
-        assert!(SourceType::PitchedSampler.is_sample());
-        assert!(!SourceType::Saw.is_sample());
-    }
-
-    #[test]
-    fn source_type_is_kit() {
-        assert!(SourceType::Kit.is_kit());
-        assert!(!SourceType::Saw.is_kit());
-    }
-
-    #[test]
-    fn source_type_custom_id() {
-        assert_eq!(SourceType::Custom(CustomSynthDefId::new(5)).custom_id(), Some(CustomSynthDefId::new(5)));
-        assert_eq!(SourceType::Saw.custom_id(), None);
-    }
-
-    #[test]
-    fn source_type_vst_id() {
-        assert_eq!(SourceType::Vst(VstPluginId::new(3)).vst_id(), Some(VstPluginId::new(3)));
-        assert_eq!(SourceType::Saw.vst_id(), None);
-    }
-
-    #[test]
-    fn source_type_default_params_non_empty() {
-        // Basic oscillators should have params
-        assert!(!SourceType::Saw.default_params().is_empty());
-        assert!(!SourceType::FM.default_params().is_empty());
-    }
-}
-
 use crate::state::custom_synthdef::CustomSynthDefRegistry;
 use crate::state::vst::VstPluginRegistry;
 
@@ -723,5 +666,62 @@ impl SourceTypeExt for SourceType {
             types.push(SourceType::Custom(synthdef.id));
         }
         types
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn source_type_name_non_empty() {
+        for st in SourceType::all() {
+            assert!(!st.name().is_empty(), "{:?} has empty name", st);
+        }
+    }
+
+    #[test]
+    fn source_type_synth_def_name_prefixed() {
+        for st in SourceType::all() {
+            assert!(st.synth_def_name().starts_with("imbolc_"), "{:?}", st);
+        }
+    }
+
+    #[test]
+    fn source_type_all_excludes_custom_vst() {
+        let all = SourceType::all();
+        assert!(all.iter().all(|s| !s.is_custom()));
+        assert!(all.iter().all(|s| !s.is_vst()));
+    }
+
+    #[test]
+    fn source_type_is_sample_checks() {
+        assert!(SourceType::PitchedSampler.is_sample());
+        assert!(!SourceType::Saw.is_sample());
+    }
+
+    #[test]
+    fn source_type_is_kit() {
+        assert!(SourceType::Kit.is_kit());
+        assert!(!SourceType::Saw.is_kit());
+    }
+
+    #[test]
+    fn source_type_custom_id() {
+        assert_eq!(SourceType::Custom(CustomSynthDefId::new(5)).custom_id(), Some(CustomSynthDefId::new(5)));
+        assert_eq!(SourceType::Saw.custom_id(), None);
+    }
+
+    #[test]
+    fn source_type_vst_id() {
+        assert_eq!(SourceType::Vst(VstPluginId::new(3)).vst_id(), Some(VstPluginId::new(3)));
+        assert_eq!(SourceType::Saw.vst_id(), None);
+    }
+
+    #[test]
+    fn source_type_default_params_non_empty() {
+        // Basic oscillators should have params
+        assert!(!SourceType::Saw.default_params().is_empty());
+        assert!(!SourceType::FM.default_params().is_empty());
     }
 }

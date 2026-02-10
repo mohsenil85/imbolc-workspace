@@ -25,6 +25,7 @@ pub struct LogEntry {
 
 /// Payload variants for log entries.
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum LogEntryKind {
     /// Projectable action (replaces AudioCmd::ForwardAction).
     Action {

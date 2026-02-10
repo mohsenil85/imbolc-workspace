@@ -49,7 +49,7 @@ impl ServerPane {
         let selected_output = match &config.output_device {
             Some(name) => {
                 let outputs: Vec<_> = devices.iter()
-                    .filter(|d| d.output_channels.map_or(false, |c| c > 0))
+                    .filter(|d| d.output_channels.is_some_and(|c| c > 0))
                     .collect();
                 outputs.iter().position(|d| d.name == *name)
                     .map(|i| i + 1)
@@ -60,7 +60,7 @@ impl ServerPane {
         let selected_input = match &config.input_device {
             Some(name) => {
                 let inputs: Vec<_> = devices.iter()
-                    .filter(|d| d.input_channels.map_or(false, |c| c > 0))
+                    .filter(|d| d.input_channels.is_some_and(|c| c > 0))
                     .collect();
                 inputs.iter().position(|d| d.name == *name)
                     .map(|i| i + 1)
@@ -156,13 +156,13 @@ impl ServerPane {
 
     fn output_devices(&self) -> Vec<&AudioDevice> {
         self.devices.iter()
-            .filter(|d| d.output_channels.map_or(false, |c| c > 0))
+            .filter(|d| d.output_channels.is_some_and(|c| c > 0))
             .collect()
     }
 
     fn input_devices(&self) -> Vec<&AudioDevice> {
         self.devices.iter()
-            .filter(|d| d.input_channels.map_or(false, |c| c > 0))
+            .filter(|d| d.input_channels.is_some_and(|c| c > 0))
             .collect()
     }
 
@@ -288,7 +288,7 @@ impl ServerPane {
                     .filter(|e| {
                         e.path()
                             .extension()
-                            .map_or(false, |ext| ext == "scsyndef")
+                            .is_some_and(|ext| ext == "scsyndef")
                     })
                     .count()
             })

@@ -46,14 +46,9 @@ fn sender_loop(
     rx: Receiver<OscSendEntry>,
     queue_depth: std::sync::Arc<std::sync::atomic::AtomicUsize>,
 ) {
-    loop {
-        match rx.recv() {
-            Ok(entry) => {
-                queue_depth.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
-                let _ = socket.send_to(&entry.encoded_bundle, server_addr);
-            }
-            Err(_) => break, // Channel disconnected — engine shut down
-        }
+    while let Ok(entry) = rx.recv() {
+        queue_depth.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+        let _ = socket.send_to(&entry.encoded_bundle, server_addr);
     }
 }
 

@@ -571,6 +571,26 @@ impl EffectChain {
     }
 }
 
+use crate::state::vst::VstPluginRegistry;
+
+/// Extension trait for EffectType methods that require registry access
+pub trait EffectTypeExt {
+    /// Get display name with VST plugin registry lookup
+    fn display_name(&self, vst_registry: &VstPluginRegistry) -> String;
+}
+
+impl EffectTypeExt for EffectType {
+    fn display_name(&self, vst_registry: &VstPluginRegistry) -> String {
+        match self {
+            EffectType::Vst(id) => vst_registry
+                .get(*id)
+                .map(|p| p.name.clone())
+                .unwrap_or_else(|| "VST".to_string()),
+            _ => self.name().to_string(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -716,29 +736,8 @@ mod tests {
 
     #[test]
     fn effect_chain_recalculate_empty() {
-        let mut chain = EffectChain::default();
-        chain.next_effect_id = EffectId::new(5);
+        let mut chain = EffectChain { next_effect_id: EffectId::new(5), ..Default::default() };
         chain.recalculate_next_effect_id();
         assert_eq!(chain.next_effect_id, EffectId::new(0));
-    }
-}
-
-use crate::state::vst::VstPluginRegistry;
-
-/// Extension trait for EffectType methods that require registry access
-pub trait EffectTypeExt {
-    /// Get display name with VST plugin registry lookup
-    fn display_name(&self, vst_registry: &VstPluginRegistry) -> String;
-}
-
-impl EffectTypeExt for EffectType {
-    fn display_name(&self, vst_registry: &VstPluginRegistry) -> String {
-        match self {
-            EffectType::Vst(id) => vst_registry
-                .get(*id)
-                .map(|p| p.name.clone())
-                .unwrap_or_else(|| "VST".to_string()),
-            _ => self.name().to_string(),
-        }
     }
 }

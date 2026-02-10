@@ -14,7 +14,7 @@ use crate::{BusId, EffectId, ParamIndex};
 /// - Consistent naming across systems
 /// - Single source of truth for modulatable parameters
 /// - Easy extension when adding new parameters
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub enum ParameterTarget {
     // === Mixer/Routing ===
     /// Output level (0.0-1.0)
@@ -26,6 +26,7 @@ pub enum ParameterTarget {
 
     // === Filter ===
     /// Filter cutoff frequency (20-20000 Hz)
+    #[default]
     FilterCutoff,
     /// Filter resonance (0.0-1.0)
     FilterResonance,
@@ -387,8 +388,3 @@ impl ParameterTarget {
     }
 }
 
-impl Default for ParameterTarget {
-    fn default() -> Self {
-        Self::FilterCutoff
-    }
-}

@@ -90,7 +90,7 @@ impl LayerStack {
 
     /// Check if a layer is currently active.
     pub fn has_layer(&self, name: &str) -> bool {
-        self.active.iter().any(|n| *n == name)
+        self.active.contains(&name)
     }
 
     /// Collect all commands from active layers for the command palette.

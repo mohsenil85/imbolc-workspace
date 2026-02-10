@@ -433,7 +433,7 @@ fn probe_vst3_params_inner(bundle_path: &Path) -> Result<Vec<Vst3ParamInfo>, Str
             continue;
         }
         params.push(Vst3ParamInfo {
-            index: i as i32,
+            index: i,
             id: info.id,
             name: string128_to_string(&info.title),
             units: string128_to_string(&info.units),

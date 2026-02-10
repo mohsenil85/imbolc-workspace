@@ -37,201 +37,176 @@ impl AddPane {
 
     /// Build options without registries (used for initial state)
     fn build_options_static() -> Vec<AddOption> {
-        let mut options = Vec::new();
-
-        // Basic Oscillators
-        options.push(AddOption::Separator("── Oscillators ──"));
-        options.push(AddOption::Source(SourceType::Saw));
-        options.push(AddOption::Source(SourceType::Sin));
-        options.push(AddOption::Source(SourceType::Sqr));
-        options.push(AddOption::Source(SourceType::Tri));
-        options.push(AddOption::Source(SourceType::Noise));
-        options.push(AddOption::Source(SourceType::Pulse));
-        options.push(AddOption::Source(SourceType::SuperSaw));
-        options.push(AddOption::Source(SourceType::Sync));
-
-        // Modulation / FM
-        options.push(AddOption::Separator("── Modulation ──"));
-        options.push(AddOption::Source(SourceType::Ring));
-        options.push(AddOption::Source(SourceType::FBSin));
-        options.push(AddOption::Source(SourceType::FM));
-        options.push(AddOption::Source(SourceType::PhaseMod));
-        options.push(AddOption::Source(SourceType::FMBell));
-        options.push(AddOption::Source(SourceType::FMBrass));
-
-        // Classic Synths
-        options.push(AddOption::Separator("── Classic ──"));
-        options.push(AddOption::Source(SourceType::Choir));
-        options.push(AddOption::Source(SourceType::EPiano));
-        options.push(AddOption::Source(SourceType::Organ));
-        options.push(AddOption::Source(SourceType::BrassStab));
-        options.push(AddOption::Source(SourceType::Strings));
-        options.push(AddOption::Source(SourceType::Acid));
-
-        // Physical Modeling
-        options.push(AddOption::Separator("── Physical ──"));
-        options.push(AddOption::Source(SourceType::Pluck));
-        options.push(AddOption::Source(SourceType::Formant));
-        options.push(AddOption::Source(SourceType::Bowed));
-        options.push(AddOption::Source(SourceType::Blown));
-        options.push(AddOption::Source(SourceType::Membrane));
-
-        // Mallet Percussion
-        options.push(AddOption::Separator("── Mallet ──"));
-        options.push(AddOption::Source(SourceType::Marimba));
-        options.push(AddOption::Source(SourceType::Vibes));
-        options.push(AddOption::Source(SourceType::Kalimba));
-        options.push(AddOption::Source(SourceType::SteelDrum));
-        options.push(AddOption::Source(SourceType::TubularBell));
-        options.push(AddOption::Source(SourceType::Glockenspiel));
-
-        // Plucked Strings
-        options.push(AddOption::Separator("── Plucked ──"));
-        options.push(AddOption::Source(SourceType::Guitar));
-        options.push(AddOption::Source(SourceType::BassGuitar));
-        options.push(AddOption::Source(SourceType::Harp));
-        options.push(AddOption::Source(SourceType::Koto));
-
-        // Drums
-        options.push(AddOption::Separator("── Drums ──"));
-        options.push(AddOption::Source(SourceType::Kick));
-        options.push(AddOption::Source(SourceType::Snare));
-        options.push(AddOption::Source(SourceType::HihatClosed));
-        options.push(AddOption::Source(SourceType::HihatOpen));
-        options.push(AddOption::Source(SourceType::Clap));
-        options.push(AddOption::Source(SourceType::Cowbell));
-        options.push(AddOption::Source(SourceType::Rim));
-        options.push(AddOption::Source(SourceType::Tom));
-        options.push(AddOption::Source(SourceType::Clave));
-        options.push(AddOption::Source(SourceType::Conga));
-
-        // Experimental
-        options.push(AddOption::Separator("── Experimental ──"));
-        options.push(AddOption::Source(SourceType::Gendy));
-        options.push(AddOption::Source(SourceType::Chaos));
-
-        // Synthesis
-        options.push(AddOption::Separator("── Synthesis ──"));
-        options.push(AddOption::Source(SourceType::Additive));
-        options.push(AddOption::Source(SourceType::Wavetable));
-        options.push(AddOption::Source(SourceType::Granular));
-
-        // Audio / Routing
-        options.push(AddOption::Separator("── Routing ──"));
-        options.push(AddOption::Source(SourceType::AudioIn));
-        options.push(AddOption::Source(SourceType::BusIn));
-
-        // Samplers
-        options.push(AddOption::Separator("── Samplers ──"));
-        options.push(AddOption::Source(SourceType::PitchedSampler));
-        options.push(AddOption::Source(SourceType::TimeStretch));
-        options.push(AddOption::Source(SourceType::Kit));
-
-        // Custom section
-        options.push(AddOption::Separator("── Custom ──"));
-        options.push(AddOption::ImportCustom);
-
-        // VST section
-        options.push(AddOption::Separator("── VST ──"));
-        options.push(AddOption::ImportVst);
-
-        options
+        vec![
+            // Basic Oscillators
+            AddOption::Separator("── Oscillators ──"),
+            AddOption::Source(SourceType::Saw),
+            AddOption::Source(SourceType::Sin),
+            AddOption::Source(SourceType::Sqr),
+            AddOption::Source(SourceType::Tri),
+            AddOption::Source(SourceType::Noise),
+            AddOption::Source(SourceType::Pulse),
+            AddOption::Source(SourceType::SuperSaw),
+            AddOption::Source(SourceType::Sync),
+            // Modulation / FM
+            AddOption::Separator("── Modulation ──"),
+            AddOption::Source(SourceType::Ring),
+            AddOption::Source(SourceType::FBSin),
+            AddOption::Source(SourceType::FM),
+            AddOption::Source(SourceType::PhaseMod),
+            AddOption::Source(SourceType::FMBell),
+            AddOption::Source(SourceType::FMBrass),
+            // Classic Synths
+            AddOption::Separator("── Classic ──"),
+            AddOption::Source(SourceType::Choir),
+            AddOption::Source(SourceType::EPiano),
+            AddOption::Source(SourceType::Organ),
+            AddOption::Source(SourceType::BrassStab),
+            AddOption::Source(SourceType::Strings),
+            AddOption::Source(SourceType::Acid),
+            // Physical Modeling
+            AddOption::Separator("── Physical ──"),
+            AddOption::Source(SourceType::Pluck),
+            AddOption::Source(SourceType::Formant),
+            AddOption::Source(SourceType::Bowed),
+            AddOption::Source(SourceType::Blown),
+            AddOption::Source(SourceType::Membrane),
+            // Mallet Percussion
+            AddOption::Separator("── Mallet ──"),
+            AddOption::Source(SourceType::Marimba),
+            AddOption::Source(SourceType::Vibes),
+            AddOption::Source(SourceType::Kalimba),
+            AddOption::Source(SourceType::SteelDrum),
+            AddOption::Source(SourceType::TubularBell),
+            AddOption::Source(SourceType::Glockenspiel),
+            // Plucked Strings
+            AddOption::Separator("── Plucked ──"),
+            AddOption::Source(SourceType::Guitar),
+            AddOption::Source(SourceType::BassGuitar),
+            AddOption::Source(SourceType::Harp),
+            AddOption::Source(SourceType::Koto),
+            // Drums
+            AddOption::Separator("── Drums ──"),
+            AddOption::Source(SourceType::Kick),
+            AddOption::Source(SourceType::Snare),
+            AddOption::Source(SourceType::HihatClosed),
+            AddOption::Source(SourceType::HihatOpen),
+            AddOption::Source(SourceType::Clap),
+            AddOption::Source(SourceType::Cowbell),
+            AddOption::Source(SourceType::Rim),
+            AddOption::Source(SourceType::Tom),
+            AddOption::Source(SourceType::Clave),
+            AddOption::Source(SourceType::Conga),
+            // Experimental
+            AddOption::Separator("── Experimental ──"),
+            AddOption::Source(SourceType::Gendy),
+            AddOption::Source(SourceType::Chaos),
+            // Synthesis
+            AddOption::Separator("── Synthesis ──"),
+            AddOption::Source(SourceType::Additive),
+            AddOption::Source(SourceType::Wavetable),
+            AddOption::Source(SourceType::Granular),
+            // Audio / Routing
+            AddOption::Separator("── Routing ──"),
+            AddOption::Source(SourceType::AudioIn),
+            AddOption::Source(SourceType::BusIn),
+            // Samplers
+            AddOption::Separator("── Samplers ──"),
+            AddOption::Source(SourceType::PitchedSampler),
+            AddOption::Source(SourceType::TimeStretch),
+            AddOption::Source(SourceType::Kit),
+            // Custom section
+            AddOption::Separator("── Custom ──"),
+            AddOption::ImportCustom,
+            // VST section
+            AddOption::Separator("── VST ──"),
+            AddOption::ImportVst,
+        ]
     }
 
     /// Build options with custom synthdefs and VST plugins from registries
     fn build_options(&self, custom_registry: &CustomSynthDefRegistry, vst_registry: &VstPluginRegistry) -> Vec<AddOption> {
-        let mut options = Vec::new();
-
-        // Basic Oscillators
-        options.push(AddOption::Separator("── Oscillators ──"));
-        options.push(AddOption::Source(SourceType::Saw));
-        options.push(AddOption::Source(SourceType::Sin));
-        options.push(AddOption::Source(SourceType::Sqr));
-        options.push(AddOption::Source(SourceType::Tri));
-        options.push(AddOption::Source(SourceType::Noise));
-        options.push(AddOption::Source(SourceType::Pulse));
-        options.push(AddOption::Source(SourceType::SuperSaw));
-        options.push(AddOption::Source(SourceType::Sync));
-
-        // Modulation / FM
-        options.push(AddOption::Separator("── Modulation ──"));
-        options.push(AddOption::Source(SourceType::Ring));
-        options.push(AddOption::Source(SourceType::FBSin));
-        options.push(AddOption::Source(SourceType::FM));
-        options.push(AddOption::Source(SourceType::PhaseMod));
-        options.push(AddOption::Source(SourceType::FMBell));
-        options.push(AddOption::Source(SourceType::FMBrass));
-
-        // Classic Synths
-        options.push(AddOption::Separator("── Classic ──"));
-        options.push(AddOption::Source(SourceType::Choir));
-        options.push(AddOption::Source(SourceType::EPiano));
-        options.push(AddOption::Source(SourceType::Organ));
-        options.push(AddOption::Source(SourceType::BrassStab));
-        options.push(AddOption::Source(SourceType::Strings));
-        options.push(AddOption::Source(SourceType::Acid));
-
-        // Physical Modeling
-        options.push(AddOption::Separator("── Physical ──"));
-        options.push(AddOption::Source(SourceType::Pluck));
-        options.push(AddOption::Source(SourceType::Formant));
-        options.push(AddOption::Source(SourceType::Bowed));
-        options.push(AddOption::Source(SourceType::Blown));
-        options.push(AddOption::Source(SourceType::Membrane));
-
-        // Mallet Percussion
-        options.push(AddOption::Separator("── Mallet ──"));
-        options.push(AddOption::Source(SourceType::Marimba));
-        options.push(AddOption::Source(SourceType::Vibes));
-        options.push(AddOption::Source(SourceType::Kalimba));
-        options.push(AddOption::Source(SourceType::SteelDrum));
-        options.push(AddOption::Source(SourceType::TubularBell));
-        options.push(AddOption::Source(SourceType::Glockenspiel));
-
-        // Plucked Strings
-        options.push(AddOption::Separator("── Plucked ──"));
-        options.push(AddOption::Source(SourceType::Guitar));
-        options.push(AddOption::Source(SourceType::BassGuitar));
-        options.push(AddOption::Source(SourceType::Harp));
-        options.push(AddOption::Source(SourceType::Koto));
-
-        // Drums
-        options.push(AddOption::Separator("── Drums ──"));
-        options.push(AddOption::Source(SourceType::Kick));
-        options.push(AddOption::Source(SourceType::Snare));
-        options.push(AddOption::Source(SourceType::HihatClosed));
-        options.push(AddOption::Source(SourceType::HihatOpen));
-        options.push(AddOption::Source(SourceType::Clap));
-        options.push(AddOption::Source(SourceType::Cowbell));
-        options.push(AddOption::Source(SourceType::Rim));
-        options.push(AddOption::Source(SourceType::Tom));
-        options.push(AddOption::Source(SourceType::Clave));
-        options.push(AddOption::Source(SourceType::Conga));
-
-        // Experimental
-        options.push(AddOption::Separator("── Experimental ──"));
-        options.push(AddOption::Source(SourceType::Gendy));
-        options.push(AddOption::Source(SourceType::Chaos));
-
-        // Synthesis
-        options.push(AddOption::Separator("── Synthesis ──"));
-        options.push(AddOption::Source(SourceType::Additive));
-        options.push(AddOption::Source(SourceType::Wavetable));
-        options.push(AddOption::Source(SourceType::Granular));
-
-        // Audio / Routing
-        options.push(AddOption::Separator("── Routing ──"));
-        options.push(AddOption::Source(SourceType::AudioIn));
-        options.push(AddOption::Source(SourceType::BusIn));
-
-        // Samplers
-        options.push(AddOption::Separator("── Samplers ──"));
-        options.push(AddOption::Source(SourceType::PitchedSampler));
-        options.push(AddOption::Source(SourceType::TimeStretch));
-        options.push(AddOption::Source(SourceType::Kit));
-
-        // Custom section
-        options.push(AddOption::Separator("── Custom ──"));
+        let mut options = vec![
+            // Basic Oscillators
+            AddOption::Separator("── Oscillators ──"),
+            AddOption::Source(SourceType::Saw),
+            AddOption::Source(SourceType::Sin),
+            AddOption::Source(SourceType::Sqr),
+            AddOption::Source(SourceType::Tri),
+            AddOption::Source(SourceType::Noise),
+            AddOption::Source(SourceType::Pulse),
+            AddOption::Source(SourceType::SuperSaw),
+            AddOption::Source(SourceType::Sync),
+            // Modulation / FM
+            AddOption::Separator("── Modulation ──"),
+            AddOption::Source(SourceType::Ring),
+            AddOption::Source(SourceType::FBSin),
+            AddOption::Source(SourceType::FM),
+            AddOption::Source(SourceType::PhaseMod),
+            AddOption::Source(SourceType::FMBell),
+            AddOption::Source(SourceType::FMBrass),
+            // Classic Synths
+            AddOption::Separator("── Classic ──"),
+            AddOption::Source(SourceType::Choir),
+            AddOption::Source(SourceType::EPiano),
+            AddOption::Source(SourceType::Organ),
+            AddOption::Source(SourceType::BrassStab),
+            AddOption::Source(SourceType::Strings),
+            AddOption::Source(SourceType::Acid),
+            // Physical Modeling
+            AddOption::Separator("── Physical ──"),
+            AddOption::Source(SourceType::Pluck),
+            AddOption::Source(SourceType::Formant),
+            AddOption::Source(SourceType::Bowed),
+            AddOption::Source(SourceType::Blown),
+            AddOption::Source(SourceType::Membrane),
+            // Mallet Percussion
+            AddOption::Separator("── Mallet ──"),
+            AddOption::Source(SourceType::Marimba),
+            AddOption::Source(SourceType::Vibes),
+            AddOption::Source(SourceType::Kalimba),
+            AddOption::Source(SourceType::SteelDrum),
+            AddOption::Source(SourceType::TubularBell),
+            AddOption::Source(SourceType::Glockenspiel),
+            // Plucked Strings
+            AddOption::Separator("── Plucked ──"),
+            AddOption::Source(SourceType::Guitar),
+            AddOption::Source(SourceType::BassGuitar),
+            AddOption::Source(SourceType::Harp),
+            AddOption::Source(SourceType::Koto),
+            // Drums
+            AddOption::Separator("── Drums ──"),
+            AddOption::Source(SourceType::Kick),
+            AddOption::Source(SourceType::Snare),
+            AddOption::Source(SourceType::HihatClosed),
+            AddOption::Source(SourceType::HihatOpen),
+            AddOption::Source(SourceType::Clap),
+            AddOption::Source(SourceType::Cowbell),
+            AddOption::Source(SourceType::Rim),
+            AddOption::Source(SourceType::Tom),
+            AddOption::Source(SourceType::Clave),
+            AddOption::Source(SourceType::Conga),
+            // Experimental
+            AddOption::Separator("── Experimental ──"),
+            AddOption::Source(SourceType::Gendy),
+            AddOption::Source(SourceType::Chaos),
+            // Synthesis
+            AddOption::Separator("── Synthesis ──"),
+            AddOption::Source(SourceType::Additive),
+            AddOption::Source(SourceType::Wavetable),
+            AddOption::Source(SourceType::Granular),
+            // Audio / Routing
+            AddOption::Separator("── Routing ──"),
+            AddOption::Source(SourceType::AudioIn),
+            AddOption::Source(SourceType::BusIn),
+            // Samplers
+            AddOption::Separator("── Samplers ──"),
+            AddOption::Source(SourceType::PitchedSampler),
+            AddOption::Source(SourceType::TimeStretch),
+            AddOption::Source(SourceType::Kit),
+            // Custom section
+            AddOption::Separator("── Custom ──"),
+        ];
 
         // Custom synthdefs
         for synthdef in &custom_registry.synthdefs {

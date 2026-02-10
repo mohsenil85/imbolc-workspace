@@ -81,7 +81,9 @@ pub fn dispatch_action(
         state.project.dirty = true;
     }
 
-    let result = match action {
+    
+
+    match action {
         Action::Quit => DispatchResult::with_quit(),
         Action::Nav(_) => DispatchResult::none(), // Handled by PaneManager
         Action::Instrument(a) => instrument::dispatch_instrument(a, state, audio, effects),
@@ -125,9 +127,7 @@ pub fn dispatch_action(
                 DispatchResult::none()
             }
         }
-    };
-
-    result
+    }
 }
 
 /// Map an undo scope to the minimal AudioDirty flags needed.

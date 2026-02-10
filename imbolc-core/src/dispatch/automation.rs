@@ -163,11 +163,7 @@ pub(crate) fn record_automation_point(state: &mut AppState, target: AutomationTa
         // Point thinning: skip if value changed less than threshold and tick delta is small
         if let Some(last) = lane.points.last() {
             let value_delta = (value - last.value).abs();
-            let tick_delta = if playhead > last.tick {
-                playhead - last.tick
-            } else {
-                last.tick - playhead
-            };
+            let tick_delta = playhead.abs_diff(last.tick);
             if value_delta < RECORD_VALUE_THRESHOLD && tick_delta < RECORD_MIN_TICK_DELTA {
                 return;
             }

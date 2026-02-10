@@ -21,6 +21,7 @@ pub use imbolc_types::{
 /// Feedback from async I/O operations to the main thread.
 /// This type stays in imbolc-core because it references SessionState and InstrumentState.
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum IoFeedback {
     SaveComplete { id: u64, path: PathBuf, result: Result<String, String> },
     LoadComplete { id: u64, path: PathBuf, result: Result<(SessionState, InstrumentState, String), String> },

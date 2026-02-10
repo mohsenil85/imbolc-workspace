@@ -16,7 +16,7 @@ pub(super) fn dispatch_piano_roll(
             state.session.piano_roll.toggle_note(*track, *pitch, *tick, *duration, *velocity);
             let mut result = DispatchResult::none();
             result.audio_dirty.piano_roll = true;
-            return result;
+            result
         }
         PianoRollAction::PlayStop => {
             // Ignore play/stop while exporting — user must cancel first
@@ -37,7 +37,7 @@ pub(super) fn dispatch_piano_roll(
             }
             // Clear recording if stopping via normal play/stop
             state.session.piano_roll.recording = false;
-            return DispatchResult::none();
+            DispatchResult::none()
         }
         PianoRollAction::PlayStopRecord => {
             let is_playing = state.audio.playing;
@@ -62,25 +62,25 @@ pub(super) fn dispatch_piano_roll(
                 effects.push(AudioSideEffect::ClearActiveNotes);
                 state.session.piano_roll.recording = false;
             }
-            return DispatchResult::none();
+            DispatchResult::none()
         }
         PianoRollAction::ToggleLoop => {
             state.session.piano_roll.looping = !state.session.piano_roll.looping;
             let mut result = DispatchResult::none();
             result.audio_dirty.piano_roll = true;
-            return result;
+            result
         }
         PianoRollAction::SetLoopStart(tick) => {
             state.session.piano_roll.loop_start = *tick;
             let mut result = DispatchResult::none();
             result.audio_dirty.piano_roll = true;
-            return result;
+            result
         }
         PianoRollAction::SetLoopEnd(tick) => {
             state.session.piano_roll.loop_end = *tick;
             let mut result = DispatchResult::none();
             result.audio_dirty.piano_roll = true;
-            return result;
+            result
         }
         PianoRollAction::CycleTimeSig => {
             let new_ts = match state.session.time_signature {
@@ -95,7 +95,7 @@ pub(super) fn dispatch_piano_roll(
             let mut result = DispatchResult::none();
             result.audio_dirty.piano_roll = true;
             result.audio_dirty.session = true;
-            return result;
+            result
         }
         PianoRollAction::TogglePolyMode(track_idx) => {
             if let Some(track) = state.session.piano_roll.track_at_mut(*track_idx) {
@@ -103,7 +103,7 @@ pub(super) fn dispatch_piano_roll(
             }
             let mut result = DispatchResult::none();
             result.audio_dirty.piano_roll = true;
-            return result;
+            result
         }
         PianoRollAction::PlayNote { pitch, velocity, instrument_id, track } => {
             let pitch = *pitch;
@@ -160,7 +160,7 @@ pub(super) fn dispatch_piano_roll(
                 result.audio_dirty.piano_roll = true;
                 return result;
             }
-            return DispatchResult::none();
+            DispatchResult::none()
         }
         PianoRollAction::PlayNotes { pitches, velocity, instrument_id, track } => {
             let velocity = *velocity;
@@ -220,14 +220,14 @@ pub(super) fn dispatch_piano_roll(
                 result.audio_dirty.piano_roll = true;
                 return result;
             }
-            return DispatchResult::none();
+            DispatchResult::none()
         }
         PianoRollAction::AdjustSwing(delta) => {
             let pr = &mut state.session.piano_roll;
             pr.swing_amount = (pr.swing_amount + delta).clamp(0.0, 1.0);
             let mut result = DispatchResult::none();
             result.audio_dirty.piano_roll = true;
-            return result;
+            result
         }
         PianoRollAction::RenderToWav(instrument_id) => {
             let instrument_id = *instrument_id;
@@ -266,7 +266,7 @@ pub(super) fn dispatch_piano_roll(
 
             let mut result = DispatchResult::with_status(imbolc_audio::ServerStatus::Running, "Rendering...");
             result.audio_dirty.piano_roll = true;
-            return result;
+            result
         }
         PianoRollAction::DeleteNotesInRegion { track, start_tick, end_tick, start_pitch, end_pitch } => {
             if let Some(t) = state.session.piano_roll.track_at_mut(*track) {
@@ -277,14 +277,14 @@ pub(super) fn dispatch_piano_roll(
             }
             let mut result = DispatchResult::none();
             result.audio_dirty.piano_roll = true;
-            return result;
+            result
         }
         PianoRollAction::PasteNotes { track, anchor_tick, anchor_pitch, notes } => {
             if let Some(t) = state.session.piano_roll.track_at_mut(*track) {
                 for cn in notes {
                     let tick = *anchor_tick + cn.tick_offset;
                     let pitch_i16 = *anchor_pitch as i16 + cn.pitch_offset;
-                    if pitch_i16 < 0 || pitch_i16 > 127 { continue; }
+                    if !(0..=127).contains(&pitch_i16) { continue; }
                     let pitch = pitch_i16 as u8;
                     // Avoid duplicates at same (pitch, tick)
                     if !t.notes.iter().any(|n| n.pitch == pitch && n.tick == tick) {
@@ -301,7 +301,7 @@ pub(super) fn dispatch_piano_roll(
             }
             let mut result = DispatchResult::none();
             result.audio_dirty.piano_roll = true;
-            return result;
+            result
         }
         PianoRollAction::BounceToWav => {
             if state.io.pending_render.is_some() || state.io.pending_export.is_some() {
@@ -342,7 +342,7 @@ pub(super) fn dispatch_piano_roll(
                 "Bouncing to WAV...",
             );
             result.audio_dirty.piano_roll = true;
-            return result;
+            result
         }
         PianoRollAction::ExportStems => {
             if state.io.pending_render.is_some() || state.io.pending_export.is_some() {
@@ -393,10 +393,10 @@ pub(super) fn dispatch_piano_roll(
 
             let mut result = DispatchResult::with_status(
                 imbolc_audio::ServerStatus::Running,
-                format!("Exporting stems..."),
+                "Exporting stems...".to_string(),
             );
             result.audio_dirty.piano_roll = true;
-            return result;
+            result
         }
         PianoRollAction::CancelExport => {
             if state.io.pending_export.is_some() {
@@ -417,7 +417,7 @@ pub(super) fn dispatch_piano_roll(
                 result.audio_dirty.piano_roll = true;
                 return result;
             }
-            return DispatchResult::none();
+            DispatchResult::none()
         }
         PianoRollAction::CopyNotes { track, start_tick, end_tick, start_pitch, end_pitch } => {
             if let Some(t) = state.session.piano_roll.track_at(*track) {
@@ -439,7 +439,7 @@ pub(super) fn dispatch_piano_roll(
                     state.clipboard.contents = Some(ClipboardContents::PianoRollNotes(notes));
                 }
             }
-            return DispatchResult::none();
+            DispatchResult::none()
         }
         PianoRollAction::ReleaseNote { pitch, instrument_id } => {
             // Fan-out to layer group members
@@ -456,7 +456,7 @@ pub(super) fn dispatch_piano_roll(
                     }
                 }
             }
-            return DispatchResult::none();
+            DispatchResult::none()
         }
         PianoRollAction::ReleaseNotes { pitches, instrument_id } => {
             // Fan-out to layer group members
@@ -475,7 +475,7 @@ pub(super) fn dispatch_piano_roll(
                     }
                 }
             }
-            return DispatchResult::none();
+            DispatchResult::none()
         }
     }
 }

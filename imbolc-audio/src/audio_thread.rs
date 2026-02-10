@@ -340,9 +340,7 @@ impl AudioThread {
         match cmd {
             AudioCmd::Connect { server_addr, reply } => {
                 if self.pending_connect.is_some() {
-                    let _ = reply.send(Err(std::io::Error::new(
-                        std::io::ErrorKind::Other, "Connect already in progress",
-                    )));
+                    let _ = reply.send(Err(std::io::Error::other("Connect already in progress")));
                 } else {
                     let rx = AudioEngine::connect_with_monitor_async(
                         server_addr, self.monitor.clone(),
@@ -1202,9 +1200,7 @@ impl AudioThread {
                     self.engine.set_status(ServerStatus::Error);
                     self.send_server_status(ServerStatus::Error, &msg);
                     if let Some(reply) = reply {
-                        let _ = reply.send(Err(std::io::Error::new(
-                            std::io::ErrorKind::Other, msg,
-                        )));
+                        let _ = reply.send(Err(std::io::Error::other(msg)));
                     }
                 }
                 Err(std::sync::mpsc::TryRecvError::Empty) => {}
@@ -1213,9 +1209,7 @@ impl AudioThread {
                     self.engine.set_status(ServerStatus::Error);
                     self.send_server_status(ServerStatus::Error, "Connect thread terminated unexpectedly");
                     if let Some(reply) = reply {
-                        let _ = reply.send(Err(std::io::Error::new(
-                            std::io::ErrorKind::Other, "Connect thread terminated unexpectedly",
-                        )));
+                        let _ = reply.send(Err(std::io::Error::other("Connect thread terminated unexpectedly")));
                     }
                 }
             }
@@ -1272,7 +1266,7 @@ impl AudioThread {
                 p95_tick_us,
                 overruns,
                 schedule_lookahead_ms: (self.engine.schedule_lookahead_secs * 1000.0) as f32,
-                osc_send_queue_depth: self.engine.osc_send_queue_depth() as u16,
+                osc_send_queue_depth: self.engine.osc_send_queue_depth(),
             });
         }
 

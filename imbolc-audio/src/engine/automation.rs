@@ -268,11 +268,9 @@ impl AudioEngine {
             ParameterTarget::TimeSignature => {
                 // Decode time signature from normalized value and update state
                 let target = AutomationTarget::track_time_signature(instrument_id);
-                if let Some(discrete) = target.normalized_to_discrete(value) {
-                    if let imbolc_types::DiscreteValue::TimeSignature(num, denom) = discrete {
-                        if let Some(inst) = state.instrument_mut(instrument_id) {
-                            inst.groove.time_signature = Some((num, denom));
-                        }
+                if let Some(imbolc_types::DiscreteValue::TimeSignature(num, denom)) = target.normalized_to_discrete(value) {
+                    if let Some(inst) = state.instrument_mut(instrument_id) {
+                        inst.groove.time_signature = Some((num, denom));
                     }
                 }
             }
@@ -557,11 +555,9 @@ impl AudioEngine {
             }
             ParameterTarget::TimeSignature => {
                 let target = AutomationTarget::track_time_signature(instrument_id);
-                if let Some(discrete) = target.normalized_to_discrete(value) {
-                    if let imbolc_types::DiscreteValue::TimeSignature(num, denom) = discrete {
-                        if let Some(inst) = state.instrument_mut(instrument_id) {
-                            inst.groove.time_signature = Some((num, denom));
-                        }
+                if let Some(imbolc_types::DiscreteValue::TimeSignature(num, denom)) = target.normalized_to_discrete(value) {
+                    if let Some(inst) = state.instrument_mut(instrument_id) {
+                        inst.groove.time_signature = Some((num, denom));
                     }
                 }
             }

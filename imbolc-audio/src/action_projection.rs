@@ -136,7 +136,7 @@ fn project_instrument(
         }
         InstrumentAction::Update(update) => {
             if let Some(instrument) = instruments.instrument_mut(update.id) {
-                instrument.source = update.source.clone();
+                instrument.source = update.source;
                 instrument.source_params = update.source_params.clone();
                 instrument.processing_chain = update.processing_chain.clone();
                 instrument.modulation.lfo = update.lfo.clone();
@@ -501,7 +501,7 @@ fn project_instrument(
         }
         InstrumentAction::SetLfoTarget(id, target) => {
             if let Some(inst) = instruments.instrument_mut(*id) {
-                inst.modulation.lfo.target = target.clone();
+                inst.modulation.lfo.target = *target;
             }
             true
         }
@@ -1024,7 +1024,7 @@ fn project_piano_roll(action: &PianoRollAction, session: &mut SessionState) -> b
                 for cn in notes {
                     let tick = *anchor_tick + cn.tick_offset;
                     let pitch_i16 = *anchor_pitch as i16 + cn.pitch_offset;
-                    if pitch_i16 < 0 || pitch_i16 > 127 { continue; }
+                    if !(0..=127).contains(&pitch_i16) { continue; }
                     let pitch = pitch_i16 as u8;
                     if !t.notes.iter().any(|n| n.pitch == pitch && n.tick == tick) {
                         let pos = t.notes.partition_point(|n| n.tick < tick);

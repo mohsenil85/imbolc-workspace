@@ -195,9 +195,9 @@ impl PianoKeyboard {
     /// Returns Some(pitches) if this is a NEW key press (spawn voices)
     /// Returns None if this is key repeat (sustain, ignore)
     pub fn key_pressed(&mut self, c: char, pitches: Vec<u8>, now: Instant) -> Option<Vec<u8>> {
-        if self.active_keys.contains_key(&c) {
+        if let std::collections::hash_map::Entry::Occupied(mut e) = self.active_keys.entry(c) {
             // Key is already held - just update timestamp (sustain)
-            self.active_keys.insert(c, (pitches, now));
+            e.insert((pitches, now));
             return None;
         }
         // New press - key wasn't being held

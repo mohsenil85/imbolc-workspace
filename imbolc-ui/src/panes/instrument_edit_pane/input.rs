@@ -229,14 +229,13 @@ impl InstrumentEditPane {
             ActionId::InstrumentEdit(InstrumentEditActionId::EnterEdit) => {
                 let (section, local_idx) = self.row_info(self.selected_row);
                 // On the sample row, trigger load_sample instead of text edit
-                if self.source.is_sample() {
-                    if section == InstrumentSection::Source && local_idx == 0 {
+                if self.source.is_sample()
+                    && section == InstrumentSection::Source && local_idx == 0 {
                         if let Some(id) = self.instrument_id {
                             return Action::Session(SessionAction::OpenFileBrowser(FileSelectAction::LoadPitchedSample(id)));
                         }
                         return Action::None;
                     }
-                }
                 // Skip text edit on effect header rows and EQ rows
                 if let InstrumentSection::Processing(i) = section {
                     match self.processing_chain.get(i) {
@@ -260,7 +259,7 @@ impl InstrumentEditPane {
                 if let Some(idx) = self.processing_chain.iter().position(|s| s.is_filter()) {
                     // If cursor is on a filter, remove that one; otherwise remove first
                     let remove_idx = if let InstrumentSection::Processing(i) = self.current_section() {
-                        if self.processing_chain.get(i).map_or(false, |s| s.is_filter()) {
+                        if self.processing_chain.get(i).is_some_and(|s| s.is_filter()) {
                             i
                         } else {
                             idx
@@ -280,7 +279,7 @@ impl InstrumentEditPane {
             ActionId::InstrumentEdit(InstrumentEditActionId::CycleFilterType) => {
                 // Find filter to cycle: prefer the one the cursor is on, else first in chain
                 let filter_idx = if let InstrumentSection::Processing(i) = self.current_section() {
-                    if self.processing_chain.get(i).map_or(false, |s| s.is_filter()) {
+                    if self.processing_chain.get(i).is_some_and(|s| s.is_filter()) {
                         Some(i)
                     } else {
                         self.processing_chain.iter().position(|s| s.is_filter())
@@ -311,7 +310,7 @@ impl InstrumentEditPane {
             }
             ActionId::InstrumentEdit(InstrumentEditActionId::RemoveEffect) => {
                 if let InstrumentSection::Processing(i) = self.current_section() {
-                    if self.processing_chain.get(i).map_or(false, |s| s.is_effect()) {
+                    if self.processing_chain.get(i).is_some_and(|s| s.is_effect()) {
                         self.processing_chain.remove(i);
                         let max = self.total_rows().saturating_sub(1);
                         self.selected_row = self.selected_row.min(max);

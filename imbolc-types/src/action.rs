@@ -505,7 +505,7 @@ impl AudioDirty {
 }
 
 /// Result of dispatching an action — contains side effects for the UI layer to process.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct DispatchResult {
     pub quit: bool,
     pub nav: Vec<NavIntent>,
@@ -516,20 +516,6 @@ pub struct DispatchResult {
     pub stop_playback: bool,
     /// Signal that the playhead should be reset to 0 (processed by the UI layer, not dispatch)
     pub reset_playhead: bool,
-}
-
-impl Default for DispatchResult {
-    fn default() -> Self {
-        Self {
-            quit: false,
-            nav: Vec::new(),
-            status: Vec::new(),
-            project_name: None,
-            audio_dirty: AudioDirty::default(),
-            stop_playback: false,
-            reset_playhead: false,
-        }
-    }
 }
 
 impl DispatchResult {
@@ -1135,11 +1121,13 @@ mod tests {
 
     #[test]
     fn merge_filter_overflow_escalates() {
-        let mut a = AudioDirty::default();
-        a.filter_params = [
-            Some((InstrumentId::new(1), FilterParamKind::Cutoff, 500.0)),
-            Some((InstrumentId::new(1), FilterParamKind::Resonance, 0.7)),
-        ];
+        let mut a = AudioDirty {
+            filter_params: [
+                Some((InstrumentId::new(1), FilterParamKind::Cutoff, 500.0)),
+                Some((InstrumentId::new(1), FilterParamKind::Resonance, 0.7)),
+            ],
+            ..Default::default()
+        };
         let mut b = AudioDirty::default();
         b.filter_params[0] = Some((InstrumentId::new(2), FilterParamKind::Cutoff, 1000.0));
         a.merge(b);
@@ -1195,11 +1183,13 @@ mod tests {
 
     #[test]
     fn merge_lfo_overflow_escalates() {
-        let mut a = AudioDirty::default();
-        a.lfo_params = [
-            Some((InstrumentId::new(1), LfoParamKind::Rate, 5.0)),
-            Some((InstrumentId::new(1), LfoParamKind::Depth, 0.8)),
-        ];
+        let mut a = AudioDirty {
+            lfo_params: [
+                Some((InstrumentId::new(1), LfoParamKind::Rate, 5.0)),
+                Some((InstrumentId::new(1), LfoParamKind::Depth, 0.8)),
+            ],
+            ..Default::default()
+        };
         let mut b = AudioDirty::default();
         b.lfo_params[0] = Some((InstrumentId::new(2), LfoParamKind::Rate, 10.0));
         a.merge(b);
