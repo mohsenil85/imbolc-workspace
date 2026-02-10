@@ -1,6 +1,6 @@
 mod common;
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use imbolc_net::server::NetServer;
 use imbolc_net::protocol::{NetworkAction, ServerMessage};
 use imbolc_types::{InstrumentAction, MixerAction, ServerAction, SourceType, VstParamAction, VstTarget};
@@ -594,4 +594,114 @@ fn test_patch_threshold_coalescing() {
         }
         other => panic!("Expected StatePatchUpdate, got {:?}", other),
     }
+}
+
+// ── Slow-client mitigation ──────────────────────────────────────
+
+#[test]
+fn test_slow_client_does_not_block_fast_client() {
+    let mut server = NetServer::bind("127.0.0.1:0").unwrap();
+    let addr = server.local_addr().unwrap().to_string();
+    let state = common::make_test_state(&server);
+
+    // Alice reads promptly
+    let mut alice = common::RawClient::connect(&addr).unwrap();
+    alice.send_hello("Alice", vec![], false).unwrap();
+    common::drive_until_clients(&mut server, &state, 1, Duration::from_secs(2));
+    let _welcome_a = alice.recv().unwrap();
+
+    // Bob connects but will NOT read — his TCP buffer will fill up
+    let state = common::make_test_state(&server);
+    let mut bob = common::RawClient::connect(&addr).unwrap();
+    bob.writer.get_ref().set_nodelay(true).unwrap();
+    bob.send_hello("Bob", vec![], false).unwrap();
+    common::drive_until_clients(&mut server, &state, 2, Duration::from_secs(2));
+    // Don't read Bob's welcome — let his buffer fill
+
+    // Broadcast many messages — Alice should receive them even if Bob is slow
+    let start = Instant::now();
+    let mut alice_received = 0u32;
+    for i in 0..20 {
+        server.mark_dirty(&NetworkAction::Server(ServerAction::Connect));
+        server.reset_rate_limit();
+        let state = common::make_test_state(&server);
+        server.broadcast_state_patch(&state);
+        server.flush_outboxes();
+
+        // Try to read from Alice with a short timeout
+        alice.reader.get_ref().set_read_timeout(Some(Duration::from_millis(200))).unwrap();
+        if let Ok(msg) = alice.recv() {
+            if matches!(msg, ServerMessage::StatePatchUpdate { .. }) {
+                alice_received += 1;
+            }
+        }
+
+        // Check we haven't been blocked for too long
+        if start.elapsed() > Duration::from_secs(10) {
+            panic!("Server loop took too long — slow client is blocking (iteration {})", i);
+        }
+    }
+
+    // Alice should have received most/all messages
+    assert!(alice_received >= 10,
+        "Alice should receive most broadcasts (got {}/20), slow Bob should not block her",
+        alice_received);
+}
+
+#[test]
+fn test_stalled_client_suspended_via_outbox_overflow() {
+    let mut server = NetServer::bind("127.0.0.1:0").unwrap();
+    let addr = server.local_addr().unwrap().to_string();
+    let state = common::make_test_state(&server);
+
+    // Connect a client normally
+    let mut client = common::RawClient::connect(&addr).unwrap();
+    client.send_hello("Stalled", vec![], false).unwrap();
+    common::drive_until_clients(&mut server, &state, 1, Duration::from_secs(2));
+    let _welcome = client.recv().unwrap();
+    assert_eq!(server.client_count(), 1);
+
+    // Drop the client side — this will cause writes to eventually fail with BrokenPipe.
+    // We need a small delay for the TCP RST to propagate.
+    drop(client);
+    std::thread::sleep(Duration::from_millis(50));
+
+    // Inject frames into the outbox. When flush_outboxes tries to write them,
+    // the broken connection will cause an error, triggering suspension.
+    server.inject_outbox_frames(10);
+    server.flush_outboxes();
+
+    assert_eq!(server.client_count(), 0,
+        "Client with broken connection should be suspended after flush_outboxes");
+}
+
+#[test]
+fn test_broken_client_detected_on_broadcast() {
+    let mut server = NetServer::bind("127.0.0.1:0").unwrap();
+    let addr = server.local_addr().unwrap().to_string();
+    let state = common::make_test_state(&server);
+
+    // Connect a client normally
+    let mut client = common::RawClient::connect(&addr).unwrap();
+    client.send_hello("Stalled", vec![], false).unwrap();
+    common::drive_until_clients(&mut server, &state, 1, Duration::from_secs(2));
+    let _welcome = client.recv().unwrap();
+    assert_eq!(server.client_count(), 1);
+
+    // Drop the client and wait for TCP RST to propagate
+    drop(client);
+    std::thread::sleep(Duration::from_millis(100));
+
+    // The first write may succeed (buffered by kernel). Keep broadcasting
+    // until the broken pipe is detected — should happen within a few writes.
+    for _ in 0..10 {
+        server.broadcast_shutdown();
+        if server.client_count() == 0 {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+
+    assert_eq!(server.client_count(), 0,
+        "Client with broken connection should be suspended after repeated writes");
 }

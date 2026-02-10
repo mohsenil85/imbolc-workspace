@@ -2,33 +2,62 @@
 //!
 //! Accepts client connections, receives actions, and broadcasts state updates.
 
-use std::collections::{HashMap, HashSet};
-use std::io::{self, BufReader, BufWriter};
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::io::{self, BufReader, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use log::{error, info, warn};
 
 use imbolc_types::{InstrumentAction, InstrumentId, VstParamAction};
 
-use crate::framing::{read_message, serialize_frame, write_message, write_raw_frame};
+use crate::framing::{read_message, serialize_frame, write_message};
 use crate::protocol::{
     ClientId, ClientMessage, NetworkAction, NetworkState, OwnerInfo,
     PrivilegeLevel, ServerMessage, SessionToken, StatePatch,
 };
 
+/// What kind of frame is being queued — determines the drop policy.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum FrameKind {
+    /// Transient metering data — always droppable.
+    Metering,
+    /// Incremental state patch — superseded by newer patches or full syncs.
+    StatePatch,
+    /// Full state sync — supersedes all patches and older syncs.
+    FullSync,
+    /// Control messages (ping, shutdown, privilege) — never dropped.
+    Control,
+}
+
+/// A queued frame awaiting delivery to a slow client.
+struct QueuedFrame {
+    data: Vec<u8>,
+    /// Bytes already written (for partial write resume).
+    offset: usize,
+    kind: FrameKind,
+}
+
+/// Maximum number of frames in a client's outbox before declaring it stalled.
+const MAX_OUTBOX_DEPTH: usize = 8;
+
+/// Write timeout for client sockets (10ms).
+const WRITE_TIMEOUT: Duration = Duration::from_millis(10);
+
 /// A connected client with its write half.
 struct ClientConnection {
     name: String,
-    writer: BufWriter<TcpStream>,
+    stream: TcpStream,
     /// Instruments this client owns (can mutate).
     owned_instruments: HashSet<InstrumentId>,
     /// Session token for reconnection.
     session_token: SessionToken,
     /// Last time we received any message from this client.
     last_seen: Instant,
+    /// Per-client outbox for frames that couldn't be fully written.
+    outbox: VecDeque<QueuedFrame>,
 }
 
 /// A suspended session awaiting reconnection.
@@ -130,18 +159,106 @@ impl DirtyFlags {
 }
 
 impl ClientConnection {
+    /// Serialize and send a message through the outbox path.
     fn send(&mut self, msg: &ServerMessage) -> io::Result<()> {
-        write_message(&mut self.writer, msg)
+        let frame = serialize_frame(msg)?;
+        self.send_frame(&frame, FrameKind::Control)
     }
 
-    fn send_raw(&mut self, frame: &[u8]) -> io::Result<()> {
-        write_raw_frame(&mut self.writer, frame)
+    /// Try to write a frame directly; queue the remainder on partial write or timeout.
+    fn send_frame(&mut self, data: &[u8], kind: FrameKind) -> io::Result<()> {
+        // First try a direct write
+        match self.stream.write(data) {
+            Ok(n) if n == data.len() => {
+                // Wrote everything — still need to push through to the OS
+                Ok(())
+            }
+            Ok(n) => {
+                // Partial write — queue the remainder
+                self.queue_frame(data[n..].to_vec(), kind);
+                Ok(())
+            }
+            Err(ref e) if e.kind() == io::ErrorKind::WouldBlock
+                || e.kind() == io::ErrorKind::TimedOut =>
+            {
+                // Timeout — queue the whole frame
+                self.queue_frame(data.to_vec(), kind);
+                Ok(())
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Apply the drop policy and push a frame into the outbox.
+    fn queue_frame(&mut self, data: Vec<u8>, kind: FrameKind) {
+        match kind {
+            FrameKind::Metering => {
+                // Drop all pending (unstarted) metering frames — keep only latest
+                self.outbox.retain(|f| f.kind != FrameKind::Metering || f.offset > 0);
+            }
+            FrameKind::StatePatch => {
+                // Drop all unstarted StatePatch and FullSync frames
+                self.outbox.retain(|f| {
+                    f.offset > 0
+                        || (f.kind != FrameKind::StatePatch && f.kind != FrameKind::FullSync)
+                });
+            }
+            FrameKind::FullSync => {
+                // Drop all unstarted StatePatch and FullSync frames
+                self.outbox.retain(|f| {
+                    f.offset > 0
+                        || (f.kind != FrameKind::StatePatch && f.kind != FrameKind::FullSync)
+                });
+            }
+            FrameKind::Control => {
+                // Never drop control frames, and don't drop anything else
+            }
+        }
+        self.outbox.push_back(QueuedFrame {
+            data,
+            offset: 0,
+            kind,
+        });
+    }
+
+    /// Drain the outbox by writing queued frames. Returns Ok(true) if outbox is empty.
+    fn flush_outbox(&mut self) -> io::Result<bool> {
+        while let Some(front) = self.outbox.front_mut() {
+            let remaining = &front.data[front.offset..];
+            match self.stream.write(remaining) {
+                Ok(0) => {
+                    // Connection closed
+                    return Err(io::Error::new(io::ErrorKind::WriteZero, "write returned 0"));
+                }
+                Ok(n) => {
+                    front.offset += n;
+                    if front.offset >= front.data.len() {
+                        self.outbox.pop_front();
+                    } else {
+                        // Partial write — stop for now
+                        return Ok(false);
+                    }
+                }
+                Err(ref e) if e.kind() == io::ErrorKind::WouldBlock
+                    || e.kind() == io::ErrorKind::TimedOut =>
+                {
+                    return Ok(false);
+                }
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(true)
+    }
+
+    /// True if the outbox exceeds the maximum depth threshold.
+    fn is_stalled(&self) -> bool {
+        self.outbox.len() > MAX_OUTBOX_DEPTH
     }
 }
 
 /// A pending connection awaiting Hello handshake.
 struct PendingConnection {
-    writer: BufWriter<TcpStream>,
+    stream: TcpStream,
 }
 
 /// Network server that accepts client connections and coordinates actions.
@@ -200,7 +317,7 @@ impl NetServer {
             seq: 0,
             force_full_sync: false,
             last_full_sync: Instant::now(),
-            last_patch_broadcast: Instant::now() - std::time::Duration::from_secs(1),
+            last_patch_broadcast: Instant::now() - Duration::from_secs(1),
         })
     }
 
@@ -230,8 +347,11 @@ impl NetServer {
                         }
                     };
 
-                    // Set up writer (don't send Welcome yet — wait for Hello)
-                    let writer = BufWriter::new(stream);
+                    // Set write timeout so slow clients don't block the server
+                    if let Err(e) = stream.set_write_timeout(Some(WRITE_TIMEOUT)) {
+                        error!("Failed to set write timeout: {}", e);
+                        continue;
+                    }
 
                     // Start reader thread
                     let action_tx = self.action_tx.clone();
@@ -240,7 +360,7 @@ impl NetServer {
                     });
 
                     // Store as pending (will become full client on Hello)
-                    self.pending.insert(client_id, PendingConnection { writer });
+                    self.pending.insert(client_id, PendingConnection { stream });
 
                     info!("Client {:?} TCP connected from {}, awaiting Hello", client_id, addr);
                 }
@@ -304,17 +424,18 @@ impl NetServer {
                                     restored_instruments: suspended.owned_instruments.iter().copied().collect(),
                                     privilege,
                                 };
-                                if let Err(e) = write_message(&mut pending.writer, &msg) {
+                                if let Err(e) = write_message(&mut pending.stream, &msg) {
                                     error!("Failed to send reconnect success to {:?}: {}", client_id, e);
                                     continue;
                                 }
 
                                 self.clients.insert(client_id, ClientConnection {
                                     name: suspended.client_name,
-                                    writer: pending.writer,
+                                    stream: pending.stream,
                                     owned_instruments: suspended.owned_instruments,
                                     session_token,
                                     last_seen: Instant::now(),
+                                    outbox: VecDeque::new(),
                                 });
 
                                 info!("Client {:?} reconnected successfully", client_id);
@@ -326,7 +447,7 @@ impl NetServer {
                                 let msg = ServerMessage::ReconnectFailed {
                                     reason: "Session expired or invalid token".into(),
                                 };
-                                let _ = write_message(&mut pending.writer, &msg);
+                                let _ = write_message(&mut pending.stream, &msg);
                             }
                             continue;
                         }
@@ -371,7 +492,7 @@ impl NetServer {
                             privilege,
                             session_token: session_token.clone(),
                         };
-                        if let Err(e) = write_message(&mut pending.writer, &welcome) {
+                        if let Err(e) = write_message(&mut pending.stream, &welcome) {
                             error!("Failed to send welcome to {:?}: {}", client_id, e);
                             // Clean up ownership we just assigned
                             for id in &granted {
@@ -386,10 +507,11 @@ impl NetServer {
                         // Promote to full client
                         self.clients.insert(client_id, ClientConnection {
                             name: client_name.clone(),
-                            writer: pending.writer,
+                            stream: pending.stream,
                             owned_instruments: granted.iter().copied().collect(),
                             session_token,
                             last_seen: Instant::now(),
+                            outbox: VecDeque::new(),
                         });
 
                         info!(
@@ -745,7 +867,7 @@ impl NetServer {
         };
 
         let msg = ServerMessage::StatePatchUpdate { patch };
-        self.broadcast(&msg);
+        self.broadcast(&msg, FrameKind::StatePatch);
         self.dirty.clear();
         self.last_patch_broadcast = now;
     }
@@ -757,7 +879,7 @@ impl NetServer {
             state: state.clone(),
             seq: self.seq,
         };
-        self.broadcast(&msg);
+        self.broadcast(&msg, FrameKind::FullSync);
         self.dirty.clear();
         self.last_full_sync = Instant::now();
         self.force_full_sync = false;
@@ -779,7 +901,7 @@ impl NetServer {
         let msg = ServerMessage::StateUpdate {
             state: state.clone(),
         };
-        self.broadcast(&msg);
+        self.broadcast(&msg, FrameKind::StatePatch);
     }
 
     /// Broadcast metering data to all connected clients.
@@ -789,12 +911,12 @@ impl NetServer {
             bpm,
             peaks,
         };
-        self.broadcast(&msg);
+        self.broadcast(&msg, FrameKind::Metering);
     }
 
     /// Broadcast a shutdown message to all clients.
     pub fn broadcast_shutdown(&mut self) {
-        self.broadcast(&ServerMessage::Shutdown);
+        self.broadcast(&ServerMessage::Shutdown, FrameKind::Control);
     }
 
     /// Get the number of connected clients.
@@ -836,14 +958,62 @@ impl NetServer {
 
     /// Reset the rate limiter so the next `broadcast_state_patch` is not throttled.
     pub fn reset_rate_limit(&mut self) {
-        self.last_patch_broadcast = Instant::now() - std::time::Duration::from_millis(100);
+        self.last_patch_broadcast = Instant::now() - Duration::from_millis(100);
+    }
+
+    /// Inject large dummy frames into all clients' outboxes (for testing stall detection).
+    ///
+    /// Pushes `count` large Control frames (64KB each) into each client's outbox.
+    /// Since Control frames are never dropped by the drop policy, and the frames
+    /// are too large to all fit in the TCP send buffer, this lets tests trigger
+    /// the stall threshold without needing the remote side to stop reading.
+    pub fn inject_outbox_frames(&mut self, count: usize) {
+        for client in self.clients.values_mut() {
+            for _ in 0..count {
+                client.outbox.push_back(QueuedFrame {
+                    data: vec![0u8; 64 * 1024], // 64KB per frame to saturate buffer
+                    offset: 0,
+                    kind: FrameKind::Control,
+                });
+            }
+        }
+    }
+
+    /// Flush all client outboxes, suspending any disconnected or stalled clients.
+    ///
+    /// Call once per server loop iteration, before `accept_connections()`.
+    pub fn flush_outboxes(&mut self) {
+        let mut to_suspend = Vec::new();
+
+        for (&id, client) in &mut self.clients {
+            if !client.outbox.is_empty() {
+                match client.flush_outbox() {
+                    Err(e) => {
+                        warn!("Client {:?} write error during flush: {}", id, e);
+                        to_suspend.push(id);
+                    }
+                    Ok(_) => {
+                        if client.is_stalled() {
+                            warn!("Client {:?} '{}' stalled (outbox depth {}), suspending",
+                                id, client.name, client.outbox.len());
+                            to_suspend.push(id);
+                        }
+                    }
+                }
+            }
+        }
+
+        for id in to_suspend {
+            self.suspend_client(id);
+        }
     }
 
     /// Send a message to all connected clients.
     ///
     /// Serializes the message once and writes the pre-serialized frame to each client,
-    /// avoiding redundant JSON serialization per client.
-    fn broadcast(&mut self, msg: &ServerMessage) {
+    /// avoiding redundant JSON serialization per client. Slow clients get frames queued
+    /// in their outbox with the specified drop policy.
+    fn broadcast(&mut self, msg: &ServerMessage, kind: FrameKind) {
         let frame = match serialize_frame(msg) {
             Ok(f) => f,
             Err(e) => {
@@ -852,17 +1022,38 @@ impl NetServer {
             }
         };
 
-        let mut disconnected = Vec::new();
+        let mut to_suspend = Vec::new();
 
-        for (id, client) in &mut self.clients {
-            if let Err(e) = client.send_raw(&frame) {
+        for (&id, client) in &mut self.clients {
+            // Try to drain any pending outbox first
+            if !client.outbox.is_empty() {
+                match client.flush_outbox() {
+                    Err(e) => {
+                        warn!("Client {:?} write error during broadcast flush: {}", id, e);
+                        to_suspend.push(id);
+                        continue;
+                    }
+                    Ok(_) => {}
+                }
+            }
+
+            // Send the new frame
+            if let Err(e) = client.send_frame(&frame, kind) {
                 warn!("Failed to send to client {:?}: {}", id, e);
-                disconnected.push(*id);
+                to_suspend.push(id);
+                continue;
+            }
+
+            // Check if outbox overflow means client is too slow
+            if client.is_stalled() {
+                warn!("Client {:?} '{}' stalled (outbox depth {}), suspending",
+                    id, client.name, client.outbox.len());
+                to_suspend.push(id);
             }
         }
 
-        // Suspend disconnected clients (preserves ownership for reconnection)
-        for id in disconnected {
+        // Suspend disconnected/stalled clients (preserves ownership for reconnection)
+        for id in to_suspend {
             self.suspend_client(id);
         }
     }
@@ -1138,5 +1329,121 @@ mod tests {
         }
         assert!(!d.ownership);
         assert!(!d.privileged_client);
+    }
+
+    // ── Outbox drop policy ──────────────────────────────────────────
+
+    /// Helper: create a QueuedFrame with given kind and offset.
+    fn make_frame(kind: FrameKind, offset: usize) -> QueuedFrame {
+        QueuedFrame {
+            data: vec![0u8; 100],
+            offset,
+            kind,
+        }
+    }
+
+    /// Helper: create a ClientConnection with an outbox (no real socket needed for unit tests).
+    fn make_test_client(outbox: VecDeque<QueuedFrame>) -> ClientConnection {
+        // Use a loopback TCP connection — we only test the outbox logic, not actual I/O
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let stream = TcpStream::connect(addr).unwrap();
+        let _ = listener.accept().unwrap();
+        ClientConnection {
+            name: "test".into(),
+            stream,
+            owned_instruments: HashSet::new(),
+            session_token: SessionToken::new(),
+            last_seen: Instant::now(),
+            outbox,
+        }
+    }
+
+    #[test]
+    fn drop_policy_metering() {
+        let mut outbox = VecDeque::new();
+        outbox.push_back(make_frame(FrameKind::Metering, 0));
+        outbox.push_back(make_frame(FrameKind::Metering, 0));
+        outbox.push_back(make_frame(FrameKind::Metering, 0));
+        let mut client = make_test_client(outbox);
+        // Queue a new metering frame — should drop the 3 pending ones
+        client.queue_frame(vec![0u8; 50], FrameKind::Metering);
+        assert_eq!(client.outbox.len(), 1, "only the new metering frame should remain");
+        assert_eq!(client.outbox[0].data.len(), 50, "should be the new frame");
+    }
+
+    #[test]
+    fn drop_policy_state_patch_superseded() {
+        let mut outbox = VecDeque::new();
+        outbox.push_back(make_frame(FrameKind::StatePatch, 0));
+        outbox.push_back(make_frame(FrameKind::Control, 0)); // control: not dropped
+        outbox.push_back(make_frame(FrameKind::FullSync, 0));
+        let mut client = make_test_client(outbox);
+        client.queue_frame(vec![0u8; 50], FrameKind::StatePatch);
+        // StatePatch drops unstarted StatePatch + FullSync, keeps Control
+        assert_eq!(client.outbox.len(), 2);
+        assert_eq!(client.outbox[0].kind, FrameKind::Control);
+        assert_eq!(client.outbox[1].kind, FrameKind::StatePatch);
+    }
+
+    #[test]
+    fn drop_policy_full_sync_supersedes_patches() {
+        let mut outbox = VecDeque::new();
+        outbox.push_back(make_frame(FrameKind::StatePatch, 0));
+        outbox.push_back(make_frame(FrameKind::StatePatch, 0));
+        outbox.push_back(make_frame(FrameKind::FullSync, 0));
+        let mut client = make_test_client(outbox);
+        client.queue_frame(vec![0u8; 50], FrameKind::FullSync);
+        // FullSync drops all unstarted patches + older full syncs
+        assert_eq!(client.outbox.len(), 1);
+        assert_eq!(client.outbox[0].kind, FrameKind::FullSync);
+        assert_eq!(client.outbox[0].data.len(), 50);
+    }
+
+    #[test]
+    fn drop_policy_preserves_partial_writes() {
+        let mut outbox = VecDeque::new();
+        outbox.push_back(make_frame(FrameKind::StatePatch, 10)); // offset > 0 = partial
+        outbox.push_back(make_frame(FrameKind::Metering, 5)); // offset > 0 = partial
+        outbox.push_back(make_frame(FrameKind::StatePatch, 0)); // unstarted
+        let mut client = make_test_client(outbox);
+        // Queue FullSync — should drop only the unstarted StatePatch
+        client.queue_frame(vec![0u8; 50], FrameKind::FullSync);
+        assert_eq!(client.outbox.len(), 3);
+        assert_eq!(client.outbox[0].kind, FrameKind::StatePatch);
+        assert_eq!(client.outbox[0].offset, 10); // preserved
+        assert_eq!(client.outbox[1].kind, FrameKind::Metering);
+        assert_eq!(client.outbox[1].offset, 5); // preserved
+        assert_eq!(client.outbox[2].kind, FrameKind::FullSync);
+    }
+
+    #[test]
+    fn drop_policy_control_never_dropped() {
+        let mut outbox = VecDeque::new();
+        outbox.push_back(make_frame(FrameKind::Control, 0));
+        outbox.push_back(make_frame(FrameKind::Control, 0));
+        outbox.push_back(make_frame(FrameKind::Control, 0));
+        let mut client = make_test_client(outbox);
+        client.queue_frame(vec![0u8; 50], FrameKind::Control);
+        // Control frames are never dropped
+        assert_eq!(client.outbox.len(), 4);
+    }
+
+    #[test]
+    fn is_stalled_threshold() {
+        let mut outbox = VecDeque::new();
+        // Fill to exactly MAX_OUTBOX_DEPTH
+        for _ in 0..MAX_OUTBOX_DEPTH {
+            outbox.push_back(make_frame(FrameKind::Control, 0));
+        }
+        let client = make_test_client(outbox);
+        assert!(!client.is_stalled(), "at threshold should not be stalled");
+
+        let mut outbox2 = VecDeque::new();
+        for _ in 0..=MAX_OUTBOX_DEPTH {
+            outbox2.push_back(make_frame(FrameKind::Control, 0));
+        }
+        let client2 = make_test_client(outbox2);
+        assert!(client2.is_stalled(), "above threshold should be stalled");
     }
 }

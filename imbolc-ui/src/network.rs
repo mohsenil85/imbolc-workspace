@@ -72,6 +72,9 @@ pub fn run_server() -> std::io::Result<()> {
     let mut last_client_count = 0usize;
 
     loop {
+        // Flush pending outbox data for slow clients
+        server.flush_outboxes();
+
         // Accept new connections (no state needed)
         server.accept_connections();
 
