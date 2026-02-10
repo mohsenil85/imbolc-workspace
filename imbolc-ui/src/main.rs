@@ -197,6 +197,7 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
     let mut pending_audio_dirty = AudioDirty::default();
     let mut needs_full_sync = false;
     let mut quit_after_save = false;
+    let mut render_needed = true; // render first frame
 
     // CLI argument: optional project path (skip flags like --verbose)
     let project_arg = std::env::args()
@@ -252,11 +253,28 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
         // Sync layer stack in case dispatch switched panes last iteration
         layer_stack.set_pane_layer(panes.active().id());
 
-        if let Some(app_event) = backend.poll_event(Duration::from_millis(2)) {
+        // Batch event processing: drain up to 16 events per iteration to avoid
+        // rendering intermediate states during rapid input (e.g. key repeats).
+        let mut should_quit = false;
+        let mut events_processed = 0u8;
+        'events: loop {
+            let timeout = if events_processed == 0 {
+                Duration::from_millis(2)
+            } else {
+                Duration::ZERO
+            };
+            let app_event = match backend.poll_event(timeout) {
+                Some(e) => e,
+                None => break,
+            };
+            events_processed += 1;
+
             let pane_action = match app_event {
                 AppEvent::Resize(_, _) => {
-                    // Terminal resized — just continue to redraw
-                    continue;
+                    // Terminal resized — just continue to next event
+                    render_needed = true;
+                    if events_processed >= 16 { break; }
+                    continue 'events;
                 }
                 AppEvent::Mouse(mouse_event) => {
                     panes.active_mut().handle_mouse(&mouse_event, last_area, dispatcher.state())
@@ -268,7 +286,8 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
                             if let KeyCode::Char(c) = event.key {
                                 if let Some(d) = c.to_digit(10) {
                                     select_mode = InstrumentSelectMode::WaitingSecondDigit(d as u8);
-                                    continue;
+                                    if events_processed >= 16 { break; }
+                                    continue 'events;
                                 }
                             }
                             // Non-digit cancels
@@ -283,7 +302,8 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
                                     let target = if combined == 0 { 10 } else { combined };
                                     select_instrument(target as usize, &mut dispatcher, &mut panes, &mut audio);
                                     select_mode = InstrumentSelectMode::Normal;
-                                    continue;
+                                    if events_processed >= 16 { break; }
+                                    continue 'events;
                                 }
                             }
                             // Non-digit cancels
@@ -307,12 +327,16 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
                                 &mut needs_full_sync,
                                 &mut layer_stack,
                             ) {
-                                GlobalResult::Quit => break,
+                                GlobalResult::Quit => { should_quit = true; break 'events; }
                                 GlobalResult::RefreshScreen => {
                                     backend.clear()?;
-                                    continue;
+                                    if events_processed >= 16 { break; }
+                                    continue 'events;
                                 }
-                                GlobalResult::Handled => continue,
+                                GlobalResult::Handled => {
+                                    if events_processed >= 16 { break; }
+                                    continue 'events;
+                                }
                                 GlobalResult::NotHandled => {
                                     panes.active_mut().handle_action(action, &event, dispatcher.state())
                                 }
@@ -411,7 +435,7 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
                             &mut select_mode, &mut pending_audio_dirty, &mut needs_full_sync,
                             &mut layer_stack,
                         );
-                        if matches!(global_result, GlobalResult::Quit) { break; }
+                        if matches!(global_result, GlobalResult::Quit) { should_quit = true; break 'events; }
                         if matches!(global_result, GlobalResult::NotHandled) {
                             let dummy_event = ui::InputEvent::new(KeyCode::Enter, ui::Modifiers::none());
                             let re_action = panes.active_mut().handle_action(cmd, &dummy_event, dispatcher.state());
@@ -420,7 +444,7 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
                                 sync_pane_layer(&mut panes, &mut layer_stack);
                             }
                             let r = dispatcher.dispatch_with_audio(&re_action, &mut audio);
-                            if r.quit { break; }
+                            if r.quit { should_quit = true; break 'events; }
                             if !is_action_projectable(&re_action) && r.audio_dirty.any() {
                                 needs_full_sync = true;
                             }
@@ -487,7 +511,8 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
             } else {
                 let dispatch_result = dispatcher.dispatch_with_audio(&pane_action, &mut audio);
                 if dispatch_result.quit {
-                    break;
+                    should_quit = true;
+                    break 'events;
                 }
                 if !is_action_projectable(&pane_action) && dispatch_result.audio_dirty.any() {
                     needs_full_sync = true;
@@ -495,10 +520,21 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
                 pending_audio_dirty.merge(dispatch_result.audio_dirty);
                 apply_dispatch_result(dispatch_result, &mut dispatcher, &mut panes, &mut app_frame, &mut audio);
             }
+
+            if events_processed >= 16 { break; }
+        }
+        if events_processed > 0 {
+            render_needed = true;
+        }
+        if should_quit {
+            break;
         }
 
         // Process time-based pane updates (key releases, etc.)
         let tick_actions = panes.active_mut().tick(dispatcher.state());
+        if !tick_actions.is_empty() {
+            render_needed = true;
+        }
         for action in &tick_actions {
             let r = dispatcher.dispatch_with_audio(action, &mut audio);
             if !is_action_projectable(action) && r.audio_dirty.any() {
@@ -654,6 +690,7 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
 
         // Drain audio feedback
         for feedback in audio.drain_feedback() {
+            render_needed = true;
             let action = Action::AudioFeedback(feedback);
             let r = dispatcher.dispatch_with_audio(&action, &mut audio);
             if !is_action_projectable(&action) && r.audio_dirty.any() {
@@ -666,6 +703,7 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
         // Poll MIDI events
         for event in midi_input.poll_events() {
             if let Some(action) = midi_dispatch::process_midi_event(&event, dispatcher.state()) {
+                render_needed = true;
                 let r = dispatcher.dispatch_with_audio(&action, &mut audio);
                 if !is_action_projectable(&action) && r.audio_dirty.any() {
                     needs_full_sync = true;
@@ -677,86 +715,95 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
         // Visual updates and rendering at ~60fps
         let now_render = Instant::now();
         if now_render.duration_since(last_render_time).as_millis() >= 16 {
-            last_render_time = now_render;
-
-            // Update master meter from real audio peak
-            {
-                let peak = if audio.is_running() {
-                    audio.master_peak()
-                } else {
-                    0.0
-                };
-                let mute = dispatcher.state().session.mixer.master_mute;
-                app_frame.set_master_peak(peak, mute);
+            // Always render when audio is running (meters, playhead, recording timer)
+            if audio.is_running() {
+                render_needed = true;
             }
 
-            // Update SC CPU and latency indicators
-            {
-                let cpu = if audio.is_running() { audio.sc_cpu() } else { 0.0 };
-                let osc_latency = if audio.is_running() { audio.osc_latency_ms() } else { 0.0 };
-                let audio_latency = audio.audio_latency_ms();
-                app_frame.set_sc_metrics(cpu, osc_latency, audio_latency);
-            }
+            if render_needed {
+                last_render_time = now_render;
 
-            // Update recording state
-            {
-                let state = dispatcher.state_mut();
-                state.recording.recording = audio.is_recording();
-                state.recording.recording_secs = audio.recording_elapsed()
-                    .map(|d| d.as_secs()).unwrap_or(0);
-                app_frame.recording = state.recording.recording;
-                app_frame.recording_secs = state.recording.recording_secs;
-            }
+                // Update master meter from real audio peak
+                {
+                    let peak = if audio.is_running() {
+                        audio.master_peak()
+                    } else {
+                        0.0
+                    };
+                    let mute = dispatcher.state().session.mixer.master_mute;
+                    app_frame.set_master_peak(peak, mute);
+                }
 
-            // Update visualization data from audio analysis synths
-            {
-                let state = dispatcher.state_mut();
-                state.audio.visualization.spectrum_bands = audio.spectrum_bands();
-                let (peak_l, peak_r, rms_l, rms_r) = audio.lufs_data();
-                state.audio.visualization.peak_l = peak_l;
-                state.audio.visualization.peak_r = peak_r;
-                state.audio.visualization.rms_l = rms_l;
-                state.audio.visualization.rms_r = rms_r;
-                let scope = audio.scope_buffer();
-                state.audio.visualization.scope_buffer.clear();
-                state.audio.visualization.scope_buffer.extend(scope);
-            }
+                // Update SC CPU and latency indicators
+                {
+                    let cpu = if audio.is_running() { audio.sc_cpu() } else { 0.0 };
+                    let osc_latency = if audio.is_running() { audio.osc_latency_ms() } else { 0.0 };
+                    let audio_latency = audio.audio_latency_ms();
+                    app_frame.set_sc_metrics(cpu, osc_latency, audio_latency);
+                }
 
-            // Update waveform cache for waveform pane
-            if panes.active().id() == "waveform" {
-                if let Some(wf) = panes.get_pane_mut::<WaveformPane>("waveform") {
-                    if dispatcher.state().recorded_waveform_peaks.is_none() {
-                        let inst_data = dispatcher.state().instruments.selected_instrument()
-                            .filter(|s| s.source.is_audio_input() || s.source.is_bus_in())
-                            .map(|s| s.id);
-                        wf.audio_in_waveform = inst_data.map(|id| audio.audio_in_waveform(id));
+                // Update recording state
+                {
+                    let state = dispatcher.state_mut();
+                    state.recording.recording = audio.is_recording();
+                    state.recording.recording_secs = audio.recording_elapsed()
+                        .map(|d| d.as_secs()).unwrap_or(0);
+                    app_frame.recording = state.recording.recording;
+                    app_frame.recording_secs = state.recording.recording_secs;
+                }
+
+                // Update visualization data only when waveform pane is active
+                if panes.active().id() == "waveform" {
+                    let state = dispatcher.state_mut();
+                    state.audio.visualization.spectrum_bands = audio.spectrum_bands();
+                    let (peak_l, peak_r, rms_l, rms_r) = audio.lufs_data();
+                    state.audio.visualization.peak_l = peak_l;
+                    state.audio.visualization.peak_r = peak_r;
+                    state.audio.visualization.rms_l = rms_l;
+                    state.audio.visualization.rms_r = rms_r;
+                    let scope = audio.scope_buffer();
+                    state.audio.visualization.scope_buffer.clear();
+                    state.audio.visualization.scope_buffer.extend(scope);
+                }
+
+                // Update waveform cache for waveform pane
+                if panes.active().id() == "waveform" {
+                    if let Some(wf) = panes.get_pane_mut::<WaveformPane>("waveform") {
+                        if dispatcher.state().recorded_waveform_peaks.is_none() {
+                            let inst_data = dispatcher.state().instruments.selected_instrument()
+                                .filter(|s| s.source.is_audio_input() || s.source.is_bus_in())
+                                .map(|s| s.id);
+                            wf.audio_in_waveform = inst_data.map(|id| audio.audio_in_waveform(id));
+                        }
                     }
+                } else {
+                    if let Some(wf) = panes.get_pane_mut::<WaveformPane>("waveform") {
+                        wf.audio_in_waveform = None;
+                    }
+                    dispatcher.state_mut().recorded_waveform_peaks = None;
                 }
-            } else {
-                if let Some(wf) = panes.get_pane_mut::<WaveformPane>("waveform") {
-                    wf.audio_in_waveform = None;
+
+                // Copy audio-owned state into AppState for pane rendering.
+                {
+                    let ars = audio.read_state();
+                    let state = dispatcher.state_mut();
+                    state.audio.playhead = ars.playhead;
+                    state.audio.bpm = ars.bpm;
+                    state.audio.playing = ars.playing;
+                    state.audio.server_status = ars.server_status;
                 }
-                dispatcher.state_mut().recorded_waveform_peaks = None;
-            }
 
-            // Copy audio-owned state into AppState for pane rendering.
-            {
-                let ars = audio.read_state();
-                let state = dispatcher.state_mut();
-                state.audio.playhead = ars.playhead;
-                state.audio.bpm = ars.bpm;
-                state.audio.playing = ars.playing;
-                state.audio.server_status = ars.server_status;
-            }
+                // Render
+                let mut frame = backend.begin_frame()?;
+                let area = frame.area();
+                last_area = area;
+                let mut rbuf = ui::RenderBuf::new(frame.buffer_mut());
+                app_frame.render_buf(area, &mut rbuf, dispatcher.state());
+                panes.render(area, &mut rbuf, dispatcher.state());
+                backend.end_frame(frame)?;
 
-            // Render
-            let mut frame = backend.begin_frame()?;
-            let area = frame.area();
-            last_area = area;
-            let mut rbuf = ui::RenderBuf::new(frame.buffer_mut());
-            app_frame.render_buf(area, &mut rbuf, dispatcher.state());
-            panes.render(area, &mut rbuf, dispatcher.state());
-            backend.end_frame(frame)?;
+                render_needed = false;
+            }
         }
     }
 

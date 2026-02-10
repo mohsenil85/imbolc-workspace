@@ -24,7 +24,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use imbolc_audio::AudioHandle;
 use crate::state::AppState;
 use crate::action::{Action, AudioDirty, ClickAction, DispatchResult, IoFeedback, TunerAction};
-use crate::state::undo::{is_undoable, undo_scope, UndoScope};
+use crate::state::undo::{coalesce_key, is_undoable, undo_scope, UndoScope};
 
 pub use helpers::{
     adjust_groove_param, adjust_instrument_param, compute_waveform_peaks,
@@ -69,10 +69,12 @@ pub fn dispatch_action(
     effects: &mut Vec<AudioSideEffect>,
     io_tx: &Sender<IoFeedback>,
 ) -> DispatchResult {
-    // Auto-push undo snapshot for undoable actions
+    // Auto-push undo snapshot for undoable actions (with coalescing for param sweeps)
     if is_undoable(action) {
-        let scope = undo_scope(action, &state.session, &state.instruments);
-        state.undo_history.push_scoped(scope, &state.session, &state.instruments);
+        let automation_recording = state.recording.automation_recording && state.audio.playing;
+        let scope = undo_scope(action, &state.session, &state.instruments, automation_recording);
+        let key = coalesce_key(action, &state.session, &state.instruments);
+        state.undo_history.push_coalesced(scope, &state.session, &state.instruments, key);
         state.project.dirty = true;
     }
 

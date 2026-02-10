@@ -49,7 +49,7 @@ Optional: override SynthDef location with `IMBOLC_SYNTHDEFS_DIR=/path/to/synthde
 
 ### UI
 
-- TUI with 27 panes: instruments, instrument editor, piano roll, sequencer, track/arrangement, mixer, automation, EQ, VST params, server control, waveform/spectrum/oscilloscope/LUFS meter, project browser, docs, command palette, help, groove, tuner, checkpoints, and more.
+- TUI with 27 panes: instruments, instrument editor, piano roll, sequencer, track/arrangement, mixer, automation, EQ, VST params, server control, waveform/spectrum/oscilloscope/level meter, project browser, docs, command palette, help, groove, tuner, checkpoints, and more.
 - Keyboard-first navigation with contextual help and command palette.
 - Performance mode: piano/pad overlay (`/`).
 - Full undo/redo history and clipboard.
@@ -101,7 +101,7 @@ Setup notes:
 
 ### Threading model
 
-Three main threads: **UI** (60 fps render + input), **dispatch** (action handling + state mutation), and **audio** (~2 kHz tick loop driving SuperCollider over OSC). A shared retained **event log** (`EventLogWriter`/`EventLogReader`) connects dispatch to audio — the main thread appends `Arc<LogEntry>` entries and the audio thread drains them within a 100 µs budget. No shared locks; all communication is channel-based.
+Two main threads: the **UI/dispatch loop** (60 fps render + input + state mutation) and **audio** (~2 kHz tick loop driving SuperCollider over OSC). A shared retained **event log** (`EventLogWriter`/`EventLogReader`) connects dispatch to audio — the main thread appends `Arc<LogEntry>` entries and the audio thread drains them within a 100 µs budget. No shared locks; all communication is channel-based.
 
 The audio thread is the **timing authority** for transport state (`playing`, `playhead`, `bpm`). The main thread keeps a read-only mirror updated via `PlayingChanged` feedback. Dispatch dual-writes for immediate UI consistency.
 
@@ -131,11 +131,11 @@ Scope-aware `UndoEntry` variants (`SingleInstrument`, `Session`, `Full`). A scop
 
 ### Networking
 
-LAN collaboration via `imbolc-net`: single audio server, multiple clients, control data over TCP (no audio over network, no drift correction needed). Per-instrument dirty flags with `InstrumentPatch` delta updates, rate-limited at ~30 Hz with threshold coalescing (falls back to full snapshot when >50% of instruments are dirty).
+LAN collaboration via `imbolc-net` (feature-flagged: `--features net` / `mdns`): single audio server, multiple clients, control data over TCP (no audio over network, no drift correction needed). Per-instrument dirty flags with `InstrumentPatch` delta updates, rate-limited at ~30 Hz with threshold coalescing (falls back to full snapshot when >50% of instruments are dirty).
 
 ### Routing
 
-Output targets route instruments to master (hardware bus 0) or named buses. Per-send tap points (`PreInsert` or `PostInsert`, default post-insert) control where sends read from the signal chain.
+Output targets route instruments to master (hardware bus 0) or named buses. Per-send tap points (`PreInsert` or `PostInsert`, default post-insert) control where sends read from the signal chain. Routing rebuilds are incremental where possible — add/delete instrument and bus/layer-group effect changes rebuild only their segments, with full rebuilds reserved for structural changes.
 
 ### Roadmap
 

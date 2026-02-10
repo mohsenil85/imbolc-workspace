@@ -1,18 +1,11 @@
 # Scaling Analysis
 
 Analysis of scaling bottlenecks in Imbolc's local and network architectures,
-ranked by impact. Updated Feb 2025 after several optimization passes.
+ranked by impact. Updated Feb 2026 after main-thread optimization pass.
 
 ---
 
 ## Local Scaling Issues
-
-### Medium Impact
-
-1. **Main thread serialization ceiling**. Event polling, dispatch, undo
-   cloning, audio feedback, MIDI, and rendering all happen on one thread in one
-   loop iteration. Heavy dispatch + complex pane render could approach the 16ms
-   frame budget.
 
 ### Resolved
 
@@ -46,6 +39,26 @@ ranked by impact. Updated Feb 2025 after several optimization passes.
   now maintains a `HashMap<InstrumentId, usize>` index for O(1) lookups via
   `instrument()` and `instrument_mut()`, with linear-scan fallback.
 
+- ~~Main thread serialization ceiling~~ — **Resolved: six-part optimization.**
+  Event polling, dispatch, undo cloning, audio feedback, MIDI, and rendering all
+  ran serially in one loop iteration. Addressed with:
+  1. **VecDeque undo stacks** — `remove(0)` at max depth was O(n), now O(1)
+     `pop_front()`.
+  2. **Fix undo escalation** — param tweaks during playback (without automation
+     recording) no longer escalate to `Full` scope. Uses precise
+     `automation_recording && playing` check instead of `playing` proxy.
+  3. **Undo coalescing** — sequential param tweaks within 500ms share a single
+     snapshot (`CoalesceKey` by instrument ID or session). A 30-key sweep
+     produces 1 undo entry instead of 30.
+  4. **Conditional visualization** — spectrum bands, LUFS, and scope buffer
+     (~580 floats) only copied from audio thread when waveform pane is active.
+  5. **UI dirty tracking** — `render_needed` flag skips all render work (buffer
+     allocation, widget drawing, terminal I/O) when idle with no playback.
+  6. **Batch event processing** — drains up to 16 events per loop iteration
+     (zero-timeout subsequent polls), preventing intermediate renders during
+     rapid input. Combined with coalescing, a 10-event param sweep produces 1
+     render and 1 undo snapshot instead of 10 of each.
+
 ### What's Well-Designed Locally
 
 - Lock-free audio thread
@@ -56,6 +69,10 @@ ranked by impact. Updated Feb 2025 after several optimization passes.
 - Arrangement cache
 - Binary search on sorted notes
 - Scoped undo (single-instrument snapshots)
+- Undo coalescing for parameter sweeps
+- Batch event processing (up to 16 per frame)
+- UI dirty tracking (zero render cost when idle)
+- Conditional visualization data copying
 
 ---
 

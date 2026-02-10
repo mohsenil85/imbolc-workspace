@@ -1,6 +1,10 @@
+use std::collections::VecDeque;
+use std::time::Instant;
+
 use super::{InstrumentState, SessionState};
 use crate::action::{
-    Action, BusAction, InstrumentAction, MixerAction, VstParamAction,
+    Action, BusAction, InstrumentAction, MixerAction, SequencerAction, SessionAction,
+    VstParamAction,
 };
 use imbolc_types::InstrumentId;
 use super::instrument::Instrument;
@@ -19,6 +23,21 @@ pub enum UndoScope {
     Full,
 }
 
+/// Identifies a gesture for undo coalescing. Sequential actions with the same
+/// key within `COALESCE_WINDOW` share a single undo snapshot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CoalesceKey {
+    /// Parameter tweaks on the same instrument (filter, LFO, envelope, effects, etc.)
+    InstrumentParam(InstrumentId),
+    /// Session-level parameter tweaks (BPM, master level, humanize, etc.)
+    SessionParam,
+    /// No coalescing — structural changes always get their own snapshot.
+    None,
+}
+
+/// Maximum time between coalesced actions (500ms).
+const COALESCE_WINDOW: std::time::Duration = std::time::Duration::from_millis(500);
+
 /// A single undo/redo entry storing only the state that was affected.
 enum UndoEntry {
     SingleInstrument {
@@ -34,17 +53,21 @@ enum UndoEntry {
 }
 
 pub struct UndoHistory {
-    undo_stack: Vec<UndoEntry>,
-    redo_stack: Vec<UndoEntry>,
+    undo_stack: VecDeque<UndoEntry>,
+    redo_stack: VecDeque<UndoEntry>,
     max_depth: usize,
+    last_coalesce_key: CoalesceKey,
+    last_push_time: Instant,
 }
 
 impl UndoHistory {
     pub fn new(max_depth: usize) -> Self {
         Self {
-            undo_stack: Vec::new(),
-            redo_stack: Vec::new(),
+            undo_stack: VecDeque::new(),
+            redo_stack: VecDeque::new(),
             max_depth,
+            last_coalesce_key: CoalesceKey::None,
+            last_push_time: Instant::now(),
         }
     }
 
@@ -79,22 +102,51 @@ impl UndoHistory {
         };
 
         if self.undo_stack.len() >= self.max_depth {
-            self.undo_stack.remove(0);
+            self.undo_stack.pop_front();
         }
-        self.undo_stack.push(entry);
+        self.undo_stack.push_back(entry);
         self.redo_stack.clear();
     }
 
     /// Push a snapshot from owned values (used by automation.rs when starting recording).
     pub fn push_from(&mut self, session: SessionState, instruments: InstrumentState) {
         if self.undo_stack.len() >= self.max_depth {
-            self.undo_stack.remove(0);
+            self.undo_stack.pop_front();
         }
-        self.undo_stack.push(UndoEntry::Full {
+        self.undo_stack.push_back(UndoEntry::Full {
             session: Box::new(session),
             instruments: Box::new(instruments),
         });
         self.redo_stack.clear();
+    }
+
+    /// Push a scoped snapshot with coalescing support. If `key` matches the
+    /// previous push's key and less than `COALESCE_WINDOW` has elapsed, the
+    /// push is skipped — keeping the pre-gesture snapshot already on the stack.
+    pub fn push_coalesced(
+        &mut self,
+        scope: UndoScope,
+        session: &SessionState,
+        instruments: &InstrumentState,
+        key: CoalesceKey,
+    ) {
+        let now = Instant::now();
+        if key != CoalesceKey::None
+            && key == self.last_coalesce_key
+            && now.duration_since(self.last_push_time) < COALESCE_WINDOW
+        {
+            // Same gesture, within window — skip the push to keep the
+            // original pre-gesture snapshot on the stack.
+            self.last_push_time = now;
+            return;
+        }
+        self.push_scoped(scope, session, instruments);
+        self.last_coalesce_key = key;
+        self.last_push_time = now;
+    }
+
+    fn clear_coalesce(&mut self) {
+        self.last_coalesce_key = CoalesceKey::None;
     }
 
     /// Undo: pop from undo stack, create inverse from current state, apply stored entry.
@@ -104,11 +156,12 @@ impl UndoHistory {
         session: &mut SessionState,
         instruments: &mut InstrumentState,
     ) -> Option<UndoScope> {
-        let entry = self.undo_stack.pop()?;
+        self.clear_coalesce();
+        let entry = self.undo_stack.pop_back()?;
         let scope = entry_scope(&entry);
         let inverse = create_inverse(&entry, session, instruments);
         apply_entry(entry, session, instruments);
-        self.redo_stack.push(inverse);
+        self.redo_stack.push_back(inverse);
         Some(scope)
     }
 
@@ -119,11 +172,12 @@ impl UndoHistory {
         session: &mut SessionState,
         instruments: &mut InstrumentState,
     ) -> Option<UndoScope> {
-        let entry = self.redo_stack.pop()?;
+        self.clear_coalesce();
+        let entry = self.redo_stack.pop_back()?;
         let scope = entry_scope(&entry);
         let inverse = create_inverse(&entry, session, instruments);
         apply_entry(entry, session, instruments);
-        self.undo_stack.push(inverse);
+        self.undo_stack.push_back(inverse);
         Some(scope)
     }
 
@@ -138,6 +192,7 @@ impl UndoHistory {
     pub fn clear(&mut self) {
         self.undo_stack.clear();
         self.redo_stack.clear();
+        self.clear_coalesce();
     }
 }
 
@@ -216,8 +271,11 @@ fn apply_entry(
 }
 
 /// Determine the undo scope for an action based on what state it will touch.
-pub fn undo_scope(action: &Action, session: &SessionState, instruments: &InstrumentState) -> UndoScope {
-    let recording = session.piano_roll.playing; // proxy for "automation might be recorded"
+/// `automation_recording` should be true only when automation is actively being
+/// recorded during playback — this escalates param tweaks to Full scope so the
+/// automation lane changes are also captured.
+pub fn undo_scope(action: &Action, session: &SessionState, instruments: &InstrumentState, automation_recording: bool) -> UndoScope {
+    let recording = automation_recording;
 
     match action {
         // Instrument add/delete always touch both state trees
@@ -327,6 +385,84 @@ fn mixer_scope(
                 UndoScope::Session
             }
         }
+    }
+}
+
+/// Map an action to a coalesce key. Actions with the same key that arrive
+/// within `COALESCE_WINDOW` share a single undo snapshot.
+pub fn coalesce_key(action: &Action, session: &SessionState, instruments: &InstrumentState) -> CoalesceKey {
+    match action {
+        // Instrument parameter tweaks — coalesce by instrument ID
+        Action::Instrument(a) => match a {
+            InstrumentAction::AdjustFilterCutoff(id, _)
+            | InstrumentAction::AdjustFilterResonance(id, _)
+            | InstrumentAction::AdjustEffectParam(id, _, _, _)
+            | InstrumentAction::AdjustLfoRate(id, _)
+            | InstrumentAction::AdjustLfoDepth(id, _)
+            | InstrumentAction::AdjustEnvelopeAttack(id, _)
+            | InstrumentAction::AdjustEnvelopeDecay(id, _)
+            | InstrumentAction::AdjustEnvelopeSustain(id, _)
+            | InstrumentAction::AdjustEnvelopeRelease(id, _)
+            | InstrumentAction::AdjustArpOctaves(id, _)
+            | InstrumentAction::AdjustArpGate(id, _)
+            | InstrumentAction::AdjustLayerOctaveOffset(id, _)
+            | InstrumentAction::AdjustTrackSwing(id, _)
+            | InstrumentAction::AdjustTrackHumanizeVelocity(id, _)
+            | InstrumentAction::AdjustTrackHumanizeTiming(id, _)
+            | InstrumentAction::AdjustTrackTimingOffset(id, _) => {
+                CoalesceKey::InstrumentParam(*id)
+            }
+            _ => CoalesceKey::None,
+        },
+
+        // Mixer level/pan/send — coalesce by mixer selection target
+        Action::Mixer(a) => match a {
+            MixerAction::AdjustLevel(_) | MixerAction::AdjustPan(_) | MixerAction::AdjustSend(_, _) => {
+                match session.mixer.selection {
+                    super::session::MixerSelection::Instrument(idx) => {
+                        match instruments.instruments.get(idx) {
+                            Some(inst) => CoalesceKey::InstrumentParam(inst.id),
+                            None => CoalesceKey::None,
+                        }
+                    }
+                    _ => CoalesceKey::SessionParam,
+                }
+            }
+            _ => CoalesceKey::None,
+        },
+
+        // VST param tweaks
+        Action::VstParam(a) => match a {
+            VstParamAction::SetParam(id, _, _, _)
+            | VstParamAction::AdjustParam(id, _, _, _) => CoalesceKey::InstrumentParam(*id),
+            _ => CoalesceKey::None,
+        },
+
+        // Sequencer continuous adjustments — operate on selected instrument
+        Action::Sequencer(a) => match a {
+            SequencerAction::AdjustVelocity(_, _, _)
+            | SequencerAction::AdjustPadLevel(_, _)
+            | SequencerAction::AdjustSwing(_)
+            | SequencerAction::AdjustProbability(_, _, _)
+            | SequencerAction::AdjustPadPitch(_, _)
+            | SequencerAction::AdjustStepPitch(_, _, _) => {
+                match instruments.selected_instrument() {
+                    Some(inst) => CoalesceKey::InstrumentParam(inst.id),
+                    None => CoalesceKey::None,
+                }
+            }
+            _ => CoalesceKey::None,
+        },
+
+        // Session-level adjustments
+        Action::Session(a) => match a {
+            SessionAction::AdjustHumanizeVelocity(_)
+            | SessionAction::AdjustHumanizeTiming(_) => CoalesceKey::SessionParam,
+            _ => CoalesceKey::None,
+        },
+
+        // Everything else — no coalescing
+        _ => CoalesceKey::None,
     }
 }
 
@@ -633,36 +769,42 @@ mod tests {
 
         // Instrument Add => Full
         let action = Action::Instrument(InstrumentAction::Add(SourceType::Saw));
-        assert_eq!(undo_scope(&action, &session, &instruments), UndoScope::Full);
+        assert_eq!(undo_scope(&action, &session, &instruments, false), UndoScope::Full);
 
         // Instrument Delete => Full
         let action = Action::Instrument(InstrumentAction::Delete(id1));
-        assert_eq!(undo_scope(&action, &session, &instruments), UndoScope::Full);
+        assert_eq!(undo_scope(&action, &session, &instruments, false), UndoScope::Full);
 
-        // Instrument param tweak => SingleInstrument
+        // Instrument param tweak => SingleInstrument (no automation recording)
         let action = Action::Instrument(InstrumentAction::AdjustFilterCutoff(id1, 0.1));
         assert_eq!(
-            undo_scope(&action, &session, &instruments),
+            undo_scope(&action, &session, &instruments, false),
             UndoScope::SingleInstrument(id1)
+        );
+
+        // Instrument param tweak => Full (automation recording active)
+        assert_eq!(
+            undo_scope(&action, &session, &instruments, true),
+            UndoScope::Full
         );
 
         // PianoRoll => Session
         let action = Action::PianoRoll(crate::action::PianoRollAction::ToggleLoop);
-        assert_eq!(undo_scope(&action, &session, &instruments), UndoScope::Session);
+        assert_eq!(undo_scope(&action, &session, &instruments, false), UndoScope::Session);
 
         // Bus Add => Full
         let action = Action::Bus(BusAction::Add);
-        assert_eq!(undo_scope(&action, &session, &instruments), UndoScope::Full);
+        assert_eq!(undo_scope(&action, &session, &instruments, false), UndoScope::Full);
 
         // Bus Rename => Session
         let action = Action::Bus(BusAction::Rename(1, "Test".to_string()));
-        assert_eq!(undo_scope(&action, &session, &instruments), UndoScope::Session);
+        assert_eq!(undo_scope(&action, &session, &instruments, false), UndoScope::Session);
 
         // Sequencer (with selected instrument) => SingleInstrument
         instruments.selected = Some(0);
         let action = Action::Sequencer(crate::action::SequencerAction::ToggleStep(0, 0));
         assert_eq!(
-            undo_scope(&action, &session, &instruments),
+            undo_scope(&action, &session, &instruments, false),
             UndoScope::SingleInstrument(id1)
         );
 
@@ -674,7 +816,7 @@ mod tests {
             0.5,
         ));
         assert_eq!(
-            undo_scope(&action, &session, &instruments),
+            undo_scope(&action, &session, &instruments, false),
             UndoScope::SingleInstrument(id1)
         );
     }
