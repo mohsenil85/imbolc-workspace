@@ -446,7 +446,11 @@ impl AudioThread {
     /// Apply a single event log entry — same logic as the former handle_state_cmd().
     fn apply_log_entry(&mut self, entry: &LogEntry) {
         match &entry.kind {
-            LogEntryKind::Action { action, rebuild_routing, rebuild_instrument_routing, mixer_dirty } => {
+            LogEntryKind::Action {
+                action, rebuild_routing, rebuild_instrument_routing,
+                add_instrument_routing, delete_instrument_routing,
+                rebuild_bus_processing, mixer_dirty,
+            } => {
                 let projected = super::action_projection::project_action(
                     action,
                     &mut self.instruments,
@@ -458,8 +462,20 @@ impl AudioThread {
 
                 if *rebuild_routing {
                     self.routing_rebuild = Some(super::engine::routing::RoutingRebuildPhase::TearDown);
-                } else if let Some(id) = rebuild_instrument_routing {
-                    let _ = self.engine.rebuild_single_instrument_routing(*id, &self.instruments, &self.session);
+                } else {
+                    // Targeted routing operations (only if no full rebuild)
+                    if let Some(id) = delete_instrument_routing {
+                        let _ = self.engine.delete_instrument_routing(*id);
+                    }
+                    if let Some(id) = add_instrument_routing {
+                        let _ = self.engine.add_instrument_routing(*id, &self.instruments, &self.session);
+                    }
+                    for id in rebuild_instrument_routing.iter().flatten() {
+                        let _ = self.engine.rebuild_single_instrument_routing(*id, &self.instruments, &self.session);
+                    }
+                    if *rebuild_bus_processing {
+                        let _ = self.engine.rebuild_bus_processing(&self.instruments, &self.session);
+                    }
                 }
                 if *mixer_dirty {
                     let _ = self.engine.update_all_instrument_mixer_params(&self.instruments, &self.session);

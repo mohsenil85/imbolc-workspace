@@ -98,39 +98,33 @@ impl UndoHistory {
     }
 
     /// Undo: pop from undo stack, create inverse from current state, apply stored entry.
-    /// Returns `true` if a step was undone.
+    /// Returns the scope of the undone entry, or `None` if nothing to undo.
     pub fn undo(
         &mut self,
         session: &mut SessionState,
         instruments: &mut InstrumentState,
-    ) -> bool {
-        let entry = match self.undo_stack.pop() {
-            Some(e) => e,
-            None => return false,
-        };
-
+    ) -> Option<UndoScope> {
+        let entry = self.undo_stack.pop()?;
+        let scope = entry_scope(&entry);
         let inverse = create_inverse(&entry, session, instruments);
         apply_entry(entry, session, instruments);
         self.redo_stack.push(inverse);
-        true
+        Some(scope)
     }
 
     /// Redo: pop from redo stack, create inverse from current state, apply stored entry.
-    /// Returns `true` if a step was redone.
+    /// Returns the scope of the redone entry, or `None` if nothing to redo.
     pub fn redo(
         &mut self,
         session: &mut SessionState,
         instruments: &mut InstrumentState,
-    ) -> bool {
-        let entry = match self.redo_stack.pop() {
-            Some(e) => e,
-            None => return false,
-        };
-
+    ) -> Option<UndoScope> {
+        let entry = self.redo_stack.pop()?;
+        let scope = entry_scope(&entry);
         let inverse = create_inverse(&entry, session, instruments);
         apply_entry(entry, session, instruments);
         self.undo_stack.push(inverse);
-        true
+        Some(scope)
     }
 
     pub fn can_undo(&self) -> bool {
@@ -144,6 +138,16 @@ impl UndoHistory {
     pub fn clear(&mut self) {
         self.undo_stack.clear();
         self.redo_stack.clear();
+    }
+}
+
+/// Map an undo entry back to its scope.
+fn entry_scope(entry: &UndoEntry) -> UndoScope {
+    match entry {
+        UndoEntry::SingleInstrument { id, .. } => UndoScope::SingleInstrument(*id),
+        UndoEntry::Instruments(_) => UndoScope::Instruments,
+        UndoEntry::Session(_) => UndoScope::Session,
+        UndoEntry::Full { .. } => UndoScope::Full,
     }
 }
 
@@ -441,7 +445,7 @@ mod tests {
         assert_eq!(history.undo_stack.len(), 1);
 
         let undone = history.undo(&mut session, &mut instruments);
-        assert!(undone);
+        assert!(undone.is_some());
         assert!(!history.can_undo());
         assert!(history.can_redo());
     }
@@ -460,11 +464,11 @@ mod tests {
         session.mixer.master_level = 0.5;
 
         // Undo — should restore master_level to 1.0
-        assert!(history.undo(&mut session, &mut instruments));
+        assert!(history.undo(&mut session, &mut instruments).is_some());
         assert_eq!(session.mixer.master_level, 1.0);
 
         // Redo — should restore master_level to 0.5
-        assert!(history.redo(&mut session, &mut instruments));
+        assert!(history.redo(&mut session, &mut instruments).is_some());
         assert_eq!(session.mixer.master_level, 0.5);
     }
 
@@ -524,19 +528,19 @@ mod tests {
     }
 
     #[test]
-    fn undo_empty_returns_false() {
+    fn undo_empty_returns_none() {
         let mut history = UndoHistory::new(5);
         let mut session = SessionState::new();
         let mut instruments = InstrumentState::new();
-        assert!(!history.undo(&mut session, &mut instruments));
+        assert!(history.undo(&mut session, &mut instruments).is_none());
     }
 
     #[test]
-    fn redo_empty_returns_false() {
+    fn redo_empty_returns_none() {
         let mut history = UndoHistory::new(5);
         let mut session = SessionState::new();
         let mut instruments = InstrumentState::new();
-        assert!(!history.redo(&mut session, &mut instruments));
+        assert!(history.redo(&mut session, &mut instruments).is_none());
     }
 
     #[test]
@@ -575,7 +579,7 @@ mod tests {
         instruments.instrument_mut(id2).unwrap().level = 0.7;
 
         // Undo should only revert instrument 1
-        assert!(history.undo(&mut session, &mut instruments));
+        assert!(history.undo(&mut session, &mut instruments).is_some());
         // Instrument 1 reverted to default (0.8)
         assert!(
             (instruments.instrument(id1).unwrap().level - 0.8).abs() < f32::EPSILON,
@@ -607,7 +611,7 @@ mod tests {
         instruments.instrument_mut(id1).unwrap().level = 0.1;
 
         // Undo should only revert session
-        assert!(history.undo(&mut session, &mut instruments));
+        assert!(history.undo(&mut session, &mut instruments).is_some());
         assert!(
             (session.mixer.master_level - 1.0).abs() < f32::EPSILON,
             "master_level should be reverted to 1.0, got {}",

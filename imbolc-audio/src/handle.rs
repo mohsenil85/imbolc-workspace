@@ -288,7 +288,10 @@ impl AudioHandle {
         self.event_log.append(LogEntryKind::Action {
             action: Box::new(action.clone()),
             rebuild_routing: dirty.routing,
-            rebuild_instrument_routing: dirty.routing_instrument,
+            rebuild_instrument_routing: dirty.routing_instruments,
+            add_instrument_routing: dirty.routing_add_instrument,
+            delete_instrument_routing: dirty.routing_delete_instrument,
+            rebuild_bus_processing: dirty.routing_bus_processing,
             mixer_dirty: dirty.mixer_params,
         });
     }

@@ -53,7 +53,7 @@ where
 
     let mut result = DispatchResult::none();
     result.audio_dirty.instruments = true;
-    result.audio_dirty.routing_instrument = Some(id);
+    result.audio_dirty.set_routing_instrument(id);
 
     if let Some((target, value)) = record_target {
         record_automation_point(state, target, value);

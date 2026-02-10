@@ -70,7 +70,7 @@ pub fn dispatch_audio_feedback(
             }
 
             result.audio_dirty.instruments = true;
-            result.audio_dirty.routing_instrument = Some(*instrument_id);
+            result.audio_dirty.set_routing_instrument(*instrument_id);
             result.push_status(audio.status(), "Render complete".to_string());
         }
         AudioFeedback::CompileResult(res) | AudioFeedback::LoadResult(res) => {

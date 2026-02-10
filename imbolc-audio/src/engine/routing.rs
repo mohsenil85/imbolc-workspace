@@ -867,6 +867,222 @@ impl AudioEngine {
         Ok(())
     }
 
+    /// Build routing for a newly added instrument without tearing down other instruments.
+    /// Allocates buses and creates the signal chain + sends for just the new instrument.
+    pub fn add_instrument_routing(
+        &mut self,
+        instrument_id: InstrumentId,
+        state: &InstrumentState,
+        session: &SessionState,
+    ) -> Result<(), String> {
+        if !self.is_running {
+            return Ok(());
+        }
+
+        let instrument = match state.instruments.iter().find(|i| i.id == instrument_id) {
+            Some(i) => i,
+            None => return Err(format!("Instrument {} not found", instrument_id)),
+        };
+
+        let any_solo = state.any_instrument_solo();
+        self.build_instrument_chain(instrument, any_solo, session)?;
+
+        // Sync voice allocator bus watermarks (bus allocator extends naturally for new instruments)
+        self.voice_allocator.sync_bus_watermarks(self.bus_allocator.next_audio_bus, self.bus_allocator.next_control_bus);
+
+        self.build_instrument_sends(instrument)?;
+        self.restore_instrument_vst_params(instrument);
+
+        Ok(())
+    }
+
+    /// Tear down routing for a deleted instrument without rebuilding other instruments.
+    /// Frees nodes, voices, sends, and buses for just the removed instrument.
+    pub fn delete_instrument_routing(
+        &mut self,
+        instrument_id: InstrumentId,
+    ) -> Result<(), String> {
+        if !self.is_running {
+            return Ok(());
+        }
+
+        let client = self.backend.as_ref().ok_or("Not connected")?;
+
+        // Free instrument nodes
+        if let Some(nodes) = self.node_map.remove(&instrument_id) {
+            for node_id in nodes.all_node_ids() {
+                self.node_registry.unregister(node_id);
+                let _ = client.free_node(node_id);
+            }
+        }
+
+        // Free send nodes
+        let send_keys: Vec<(InstrumentId, u8)> = self.send_node_map.keys()
+            .filter(|(id, _)| *id == instrument_id)
+            .copied()
+            .collect();
+        for key in send_keys {
+            if let Some(node_id) = self.send_node_map.remove(&key) {
+                self.node_registry.unregister(node_id);
+                let _ = client.free_node(node_id);
+            }
+        }
+
+        // Free active voices
+        let drained = self.voice_allocator.drain_instrument(instrument_id);
+        for voice in &drained {
+            self.node_registry.unregister(voice.group_id);
+            self.node_registry.unregister(voice.midi_node_id);
+            self.node_registry.unregister(voice.source_node);
+            let _ = client.free_node(voice.group_id);
+        }
+
+        // Clean up final bus entry
+        self.instrument_final_buses.remove(&instrument_id);
+
+        // Free allocated buses for this instrument (watermark-only, doesn't affect others)
+        self.bus_allocator.free_module_buses(instrument_id);
+
+        Ok(())
+    }
+
+    /// Rebuild only the bus processing section (GROUP_BUS_PROCESSING) without touching
+    /// instrument nodes or voices. Tears down bus output synths, bus effects, layer group
+    /// outputs/effects/sends/EQ, then recreates them.
+    pub fn rebuild_bus_processing(
+        &mut self,
+        state: &InstrumentState,
+        session: &SessionState,
+    ) -> Result<(), String> {
+        if !self.is_running {
+            return Ok(());
+        }
+
+        let client = self.backend.as_ref().ok_or("Not connected")?;
+
+        // Tear down existing bus processing nodes
+        for &node_id in self.bus_node_map.values() {
+            self.node_registry.unregister(node_id);
+            let _ = client.free_node(node_id);
+        }
+        for &node_id in self.bus_effect_node_map.values() {
+            self.node_registry.unregister(node_id);
+            let _ = client.free_node(node_id);
+        }
+        for &node_id in self.layer_group_node_map.values() {
+            self.node_registry.unregister(node_id);
+            let _ = client.free_node(node_id);
+        }
+        for &node_id in self.layer_group_send_node_map.values() {
+            self.node_registry.unregister(node_id);
+            let _ = client.free_node(node_id);
+        }
+        for &node_id in self.layer_group_effect_node_map.values() {
+            self.node_registry.unregister(node_id);
+            let _ = client.free_node(node_id);
+        }
+        for &node_id in self.layer_group_eq_node_map.values() {
+            self.node_registry.unregister(node_id);
+            let _ = client.free_node(node_id);
+        }
+        self.bus_node_map.clear();
+        self.bus_effect_node_map.clear();
+        self.layer_group_node_map.clear();
+        self.layer_group_send_node_map.clear();
+        self.layer_group_effect_node_map.clear();
+        self.layer_group_eq_node_map.clear();
+
+        // Re-allocate layer group audio buses (new groups may have been added)
+        // Keep existing bus_audio_buses — they don't change for bus effect rebuilds
+        self.layer_group_audio_buses.clear();
+        for group_id in state.active_layer_groups() {
+            let group_bus = self.bus_allocator.get_or_alloc_audio_bus(
+                u32::MAX - 256 - group_id,
+                "layer_group_out",
+            );
+            self.layer_group_audio_buses.insert(group_id, group_bus);
+        }
+
+        // Rebuild layer group effects + outputs + sends
+        for group_mixer in &session.mixer.layer_group_mixers {
+            if let Some(&group_bus) = self.layer_group_audio_buses.get(&group_mixer.group_id) {
+                let post_effect_bus = self.build_layer_group_effect_chain(group_mixer, group_bus, session)?;
+
+                let node_id = self.next_node_id;
+                self.next_node_id += 1;
+                let mute = session.mixer.effective_layer_group_mute(group_mixer);
+
+                let group_out = match group_mixer.output_target {
+                    imbolc_types::OutputTarget::Bus(id) => {
+                        self.bus_audio_buses.get(&id).copied().unwrap_or(0) as f32
+                    }
+                    imbolc_types::OutputTarget::Master => 0.0,
+                };
+
+                let params = vec![
+                    ("in".to_string(), post_effect_bus as f32),
+                    ("out".to_string(), group_out),
+                    ("level".to_string(), group_mixer.level),
+                    ("mute".to_string(), if mute { 1.0 } else { 0.0 }),
+                    ("pan".to_string(), group_mixer.pan),
+                ];
+                let client = self.backend.as_ref().ok_or("Not connected")?;
+                client
+                    .create_synth("imbolc_bus_out", node_id, GROUP_BUS_PROCESSING, &params)
+                    .map_err(|e| e.to_string())?;
+                self.node_registry.register(node_id);
+                self.layer_group_node_map.insert(group_mixer.group_id, node_id);
+
+                for send in &group_mixer.sends {
+                    if !send.enabled || send.level <= 0.0 {
+                        continue;
+                    }
+                    if let Some(&bus_audio) = self.bus_audio_buses.get(&send.bus_id) {
+                        let send_node_id = self.next_node_id;
+                        self.next_node_id += 1;
+                        let send_params = vec![
+                            ("in".to_string(), group_bus as f32),
+                            ("out".to_string(), bus_audio as f32),
+                            ("level".to_string(), send.level),
+                        ];
+                        let client = self.backend.as_ref().ok_or("Not connected")?;
+                        client
+                            .create_synth("imbolc_send", send_node_id, GROUP_BUS_PROCESSING, &send_params)
+                            .map_err(|e| e.to_string())?;
+                        self.node_registry.register(send_node_id);
+                        self.layer_group_send_node_map
+                            .insert((group_mixer.group_id, send.bus_id), send_node_id);
+                    }
+                }
+            }
+        }
+
+        // Rebuild bus effects + output synths
+        for bus in &session.mixer.buses {
+            if let Some(&bus_audio) = self.bus_audio_buses.get(&bus.id) {
+                let post_effect_bus = self.build_bus_effect_chain(bus, bus_audio, session)?;
+
+                let node_id = self.next_node_id;
+                self.next_node_id += 1;
+                let mute = session.effective_bus_mute(bus);
+                let params = vec![
+                    ("in".to_string(), post_effect_bus as f32),
+                    ("level".to_string(), bus.level),
+                    ("mute".to_string(), if mute { 1.0 } else { 0.0 }),
+                    ("pan".to_string(), bus.pan),
+                ];
+                let client = self.backend.as_ref().ok_or("Not connected")?;
+                client
+                    .create_synth("imbolc_bus_out", node_id, GROUP_BUS_PROCESSING, &params)
+                    .map_err(|e| e.to_string())?;
+                self.node_registry.register(node_id);
+                self.bus_node_map.insert(bus.id, node_id);
+            }
+        }
+
+        Ok(())
+    }
+
     /// Rebuild routing for a single instrument without tearing down the entire graph.
     /// Frees only that instrument's nodes (source, filter, EQ, effects, output, sends)
     /// and recreates them. Other instruments remain untouched.

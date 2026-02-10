@@ -14,7 +14,7 @@ pub(super) fn handle_toggle_lfo(state: &mut AppState, id: InstrumentId) -> Dispa
     }
     let mut result = DispatchResult::none();
     result.audio_dirty.instruments = true;
-    result.audio_dirty.routing_instrument = Some(id);
+    result.audio_dirty.set_routing_instrument(id);
     result
 }
 
@@ -85,7 +85,7 @@ pub(super) fn handle_set_lfo_shape(
     }
     let mut result = DispatchResult::none();
     result.audio_dirty.instruments = true;
-    result.audio_dirty.routing_instrument = Some(id);
+    result.audio_dirty.set_routing_instrument(id);
     result
 }
 
@@ -99,6 +99,6 @@ pub(super) fn handle_set_lfo_target(
     }
     let mut result = DispatchResult::none();
     result.audio_dirty.instruments = true;
-    result.audio_dirty.routing_instrument = Some(id);
+    result.audio_dirty.set_routing_instrument(id);
     result
 }

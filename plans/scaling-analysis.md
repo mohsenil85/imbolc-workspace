@@ -7,23 +7,24 @@ ranked by impact. Updated Feb 2025 after several optimization passes.
 
 ## Local Scaling Issues
 
-### High Impact
-
-1. **Full routing rebuild tears down ALL voices** (`audio/engine/routing.rs`).
-   Adding/removing an instrument or toggling an effect frees every synth node
-   across all instruments, then recreates them. With 30 instruments each having
-   3 effects, that's ~150+ node creates in one burst — audible dropout. The
-   single-instrument rebuild path (`rebuild_single_instrument_routing`) only
-   fires in specific cases.
-
 ### Medium Impact
 
-2. **Main thread serialization ceiling**. Event polling, dispatch, undo
+1. **Main thread serialization ceiling**. Event polling, dispatch, undo
    cloning, audio feedback, MIDI, and rendering all happen on one thread in one
    loop iteration. Heavy dispatch + complex pane render could approach the 16ms
    frame budget.
 
 ### Resolved
+
+- ~~Full routing rebuild tears down ALL voices~~ — **Resolved: targeted routing
+  rebuild.** Add/delete instrument use `routing_add_instrument` /
+  `routing_delete_instrument` flags to build/free only the affected instrument's
+  chain. Bus/group effect changes use `routing_bus_processing` to rebuild only
+  the bus processing section. `routing_instruments: [Option<InstrumentId>; 4]`
+  supports up to 4 concurrent single-instrument rebuilds per frame before
+  escalating to full rebuild. Scoped undo (`SingleInstrument`) uses targeted
+  flags instead of `AudioDirty::all()`.
+  See [targeted-routing-rebuild.md](targeted-routing-rebuild.md).
 
 - ~~Full state clone on every undoable action~~ — **Resolved: scoped undo.**
   `UndoScope::SingleInstrument(id)` clones only the affected instrument for

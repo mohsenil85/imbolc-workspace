@@ -183,7 +183,7 @@ fn handle_move_stage(state: &mut AppState, id: crate::state::InstrumentId, stage
     }
     let mut result = DispatchResult::none();
     result.audio_dirty.instruments = true;
-    result.audio_dirty.routing_instrument = Some(id);
+    result.audio_dirty.set_routing_instrument(id);
     result
 }
 
@@ -195,7 +195,7 @@ fn handle_toggle_channel_config(state: &mut AppState, id: crate::state::Instrume
         // Mark routing dirty to rebuild signal chain with new channel config
         DispatchResult {
             audio_dirty: AudioDirty {
-                routing_instrument: Some(id),
+                routing_instruments: [Some(id), None, None, None],
                 ..Default::default()
             },
             ..Default::default()

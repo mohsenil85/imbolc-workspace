@@ -71,6 +71,6 @@ pub(super) fn handle_toggle_eq(
     }
     let mut result = DispatchResult::none();
     result.audio_dirty.instruments = true;
-    result.audio_dirty.routing_instrument = Some(instrument_id);
+    result.audio_dirty.set_routing_instrument(instrument_id);
     result
 }

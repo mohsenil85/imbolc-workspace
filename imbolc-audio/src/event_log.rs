@@ -30,7 +30,10 @@ pub enum LogEntryKind {
     Action {
         action: Box<Action>,
         rebuild_routing: bool,
-        rebuild_instrument_routing: Option<InstrumentId>,
+        rebuild_instrument_routing: [Option<InstrumentId>; 4],
+        add_instrument_routing: Option<InstrumentId>,
+        delete_instrument_routing: Option<InstrumentId>,
+        rebuild_bus_processing: bool,
         mixer_dirty: bool,
     },
     /// Full state checkpoint (replaces AudioCmd::FullStateSync).
@@ -146,7 +149,10 @@ mod tests {
         LogEntryKind::Action {
             action: Box::new(Action::Undo),
             rebuild_routing: false,
-            rebuild_instrument_routing: None,
+            rebuild_instrument_routing: [None; 4],
+            add_instrument_routing: None,
+            delete_instrument_routing: None,
+            rebuild_bus_processing: false,
             mixer_dirty: false,
         }
     }

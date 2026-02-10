@@ -80,7 +80,7 @@ pub fn dispatch_bus(action: &BusAction, state: &mut AppState) -> DispatchResult 
             if let Some(bus) = state.session.bus_mut(*bus_id) {
                 bus.add_effect(*effect_type);
             }
-            result.audio_dirty.routing = true;
+            result.audio_dirty.routing_bus_processing = true;
             result.audio_dirty.session = true;
             result.nav.push(NavIntent::Pop);
         }
@@ -89,7 +89,7 @@ pub fn dispatch_bus(action: &BusAction, state: &mut AppState) -> DispatchResult 
             if let Some(bus) = state.session.bus_mut(*bus_id) {
                 bus.remove_effect(*effect_id);
             }
-            result.audio_dirty.routing = true;
+            result.audio_dirty.routing_bus_processing = true;
             result.audio_dirty.session = true;
         }
 
@@ -97,7 +97,7 @@ pub fn dispatch_bus(action: &BusAction, state: &mut AppState) -> DispatchResult 
             if let Some(bus) = state.session.bus_mut(*bus_id) {
                 bus.move_effect(*effect_id, *direction);
             }
-            result.audio_dirty.routing = true;
+            result.audio_dirty.routing_bus_processing = true;
             result.audio_dirty.session = true;
         }
 
@@ -107,7 +107,7 @@ pub fn dispatch_bus(action: &BusAction, state: &mut AppState) -> DispatchResult 
                     effect.enabled = !effect.enabled;
                 }
             }
-            result.audio_dirty.routing = true;
+            result.audio_dirty.routing_bus_processing = true;
             result.audio_dirty.session = true;
         }
 
@@ -156,7 +156,7 @@ pub fn dispatch_layer_group(
             if let Some(gm) = state.session.mixer.layer_group_mixer_mut(*group_id) {
                 gm.add_effect(*effect_type);
             }
-            result.audio_dirty.routing = true;
+            result.audio_dirty.routing_bus_processing = true;
             result.audio_dirty.session = true;
             result.nav.push(NavIntent::Pop);
         }
@@ -165,7 +165,7 @@ pub fn dispatch_layer_group(
             if let Some(gm) = state.session.mixer.layer_group_mixer_mut(*group_id) {
                 gm.remove_effect(*effect_id);
             }
-            result.audio_dirty.routing = true;
+            result.audio_dirty.routing_bus_processing = true;
             result.audio_dirty.session = true;
         }
 
@@ -173,7 +173,7 @@ pub fn dispatch_layer_group(
             if let Some(gm) = state.session.mixer.layer_group_mixer_mut(*group_id) {
                 gm.move_effect(*effect_id, *direction);
             }
-            result.audio_dirty.routing = true;
+            result.audio_dirty.routing_bus_processing = true;
             result.audio_dirty.session = true;
         }
 
@@ -183,7 +183,7 @@ pub fn dispatch_layer_group(
                     effect.enabled = !effect.enabled;
                 }
             }
-            result.audio_dirty.routing = true;
+            result.audio_dirty.routing_bus_processing = true;
             result.audio_dirty.session = true;
         }
 
@@ -218,7 +218,7 @@ pub fn dispatch_layer_group(
             if let Some(gm) = state.session.mixer.layer_group_mixer_mut(*group_id) {
                 gm.toggle_eq();
             }
-            result.audio_dirty.routing = true;
+            result.audio_dirty.routing_bus_processing = true;
             result.audio_dirty.session = true;
         }
 
@@ -345,7 +345,7 @@ mod tests {
         let bus = state.session.bus(1).unwrap();
         assert_eq!(bus.effects.len(), 1);
         assert_eq!(bus.effects[0].effect_type, EffectType::Reverb);
-        assert!(result.audio_dirty.routing);
+        assert!(result.audio_dirty.routing_bus_processing);
     }
 
     #[test]
@@ -357,7 +357,7 @@ mod tests {
 
         let result = dispatch_bus(&BusAction::RemoveEffect(1, effect_id), &mut state);
         assert!(state.session.bus(1).unwrap().effects.is_empty());
-        assert!(result.audio_dirty.routing);
+        assert!(result.audio_dirty.routing_bus_processing);
     }
 
     #[test]
@@ -425,7 +425,7 @@ mod tests {
         let gm = state.session.mixer.layer_group_mixer(1).unwrap();
         assert_eq!(gm.effects.len(), 1);
         assert_eq!(gm.effects[0].effect_type, EffectType::TapeComp);
-        assert!(result.audio_dirty.routing);
+        assert!(result.audio_dirty.routing_bus_processing);
     }
 
     #[test]
@@ -460,7 +460,7 @@ mod tests {
 
         let result = dispatch_layer_group(&LayerGroupAction::ToggleEq(1), &mut state, &audio, &mut effects);
         assert!(state.session.mixer.layer_group_mixer(1).unwrap().eq().is_none());
-        assert!(result.audio_dirty.routing);
+        assert!(result.audio_dirty.routing_bus_processing);
         assert!(result.audio_dirty.session);
 
         dispatch_layer_group(&LayerGroupAction::ToggleEq(1), &mut state, &audio, &mut effects);

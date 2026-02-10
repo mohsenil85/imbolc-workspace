@@ -9,11 +9,11 @@ pub(super) fn handle_add(
     state: &mut AppState,
     source_type: crate::state::SourceType,
 ) -> DispatchResult {
-    state.add_instrument(source_type);
+    let new_id = state.add_instrument(source_type);
     let mut result = DispatchResult::with_nav(NavIntent::SwitchTo("instrument_edit"));
     result.audio_dirty.instruments = true;
     result.audio_dirty.piano_roll = true;
-    result.audio_dirty.routing = true;
+    result.audio_dirty.routing_add_instrument = Some(new_id);
     result
 }
 
@@ -56,7 +56,7 @@ pub(super) fn handle_delete(
     result.audio_dirty.instruments = true;
     result.audio_dirty.piano_roll = true;
     result.audio_dirty.automation = true;
-    result.audio_dirty.routing = true;
+    result.audio_dirty.routing_delete_instrument = Some(inst_id);
     result
 }
 
@@ -126,7 +126,7 @@ pub(super) fn handle_update(
 
     let mut result = DispatchResult::none();
     result.audio_dirty.instruments = true;
-    result.audio_dirty.routing_instrument = Some(update.id);
+    result.audio_dirty.set_routing_instrument(update.id);
     result
 }
 

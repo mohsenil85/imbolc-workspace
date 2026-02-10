@@ -24,7 +24,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use imbolc_audio::AudioHandle;
 use crate::state::AppState;
 use crate::action::{Action, AudioDirty, ClickAction, DispatchResult, IoFeedback, TunerAction};
-use crate::state::undo::{is_undoable, undo_scope};
+use crate::state::undo::{is_undoable, undo_scope, UndoScope};
 
 pub use helpers::{
     adjust_groove_param, adjust_instrument_param, compute_waveform_peaks,
@@ -101,20 +101,20 @@ pub fn dispatch_action(
         // SaveAndQuit is intercepted in main.rs before reaching dispatch
         Action::SaveAndQuit => DispatchResult::none(),
         Action::Undo => {
-            if state.undo_history.undo(&mut state.session, &mut state.instruments) {
+            if let Some(scope) = state.undo_history.undo(&mut state.session, &mut state.instruments) {
                 state.project.dirty = true;
                 let mut r = DispatchResult::none();
-                r.audio_dirty = AudioDirty::all();
+                r.audio_dirty = audio_dirty_for_undo_scope(scope);
                 r
             } else {
                 DispatchResult::none()
             }
         }
         Action::Redo => {
-            if state.undo_history.redo(&mut state.session, &mut state.instruments) {
+            if let Some(scope) = state.undo_history.redo(&mut state.session, &mut state.instruments) {
                 state.project.dirty = true;
                 let mut r = DispatchResult::none();
-                r.audio_dirty = AudioDirty::all();
+                r.audio_dirty = audio_dirty_for_undo_scope(scope);
                 r
             } else {
                 DispatchResult::none()
@@ -123,6 +123,14 @@ pub fn dispatch_action(
     };
 
     result
+}
+
+/// Map an undo scope to the minimal AudioDirty flags needed.
+fn audio_dirty_for_undo_scope(scope: UndoScope) -> AudioDirty {
+    match scope {
+        UndoScope::SingleInstrument(id) => AudioDirty::for_instrument(id),
+        _ => AudioDirty::all(),
+    }
 }
 
 /// Dispatch tuner actions.

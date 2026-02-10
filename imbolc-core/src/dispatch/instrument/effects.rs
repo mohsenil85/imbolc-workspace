@@ -16,7 +16,7 @@ pub(super) fn handle_add_effect(
     }
     let mut result = DispatchResult::with_nav(NavIntent::Pop);
     result.audio_dirty.instruments = true;
-    result.audio_dirty.routing_instrument = Some(id);
+    result.audio_dirty.set_routing_instrument(id);
     result
 }
 
@@ -30,7 +30,7 @@ pub(super) fn handle_remove_effect(
     }
     let mut result = DispatchResult::none();
     result.audio_dirty.instruments = true;
-    result.audio_dirty.routing_instrument = Some(id);
+    result.audio_dirty.set_routing_instrument(id);
     result
 }
 
@@ -129,7 +129,7 @@ pub(super) fn handle_load_ir_result(
 
     let mut result = DispatchResult::with_nav(NavIntent::Pop);
     result.audio_dirty.instruments = true;
-    result.audio_dirty.routing_instrument = Some(instrument_id);
+    result.audio_dirty.set_routing_instrument(instrument_id);
     result
 }
 

@@ -219,9 +219,20 @@ pub struct AudioDirty {
     pub piano_roll: bool,
     pub automation: bool,
     pub routing: bool,
-    /// When set, only rebuild routing for this specific instrument (optimization).
+    /// When set, rebuild routing for these specific instruments (optimization).
+    /// If `routing` is also true, these are ignored and a full rebuild is performed.
+    /// Supports up to 4 instruments per frame; overflow escalates to full rebuild.
+    pub routing_instruments: [Option<InstrumentId>; 4],
+    /// When set, build routing for a newly added instrument without tearing down others.
     /// If `routing` is also true, this is ignored and a full rebuild is performed.
-    pub routing_instrument: Option<InstrumentId>,
+    pub routing_add_instrument: Option<InstrumentId>,
+    /// When set, tear down routing for a deleted instrument without rebuilding others.
+    /// If `routing` is also true, this is ignored and a full rebuild is performed.
+    pub routing_delete_instrument: Option<InstrumentId>,
+    /// When set, rebuild only the bus processing section (GROUP_BUS_PROCESSING)
+    /// without touching instrument nodes or voices.
+    /// If `routing` is also true, this is ignored and a full rebuild is performed.
+    pub routing_bus_processing: bool,
     pub mixer_params: bool,
     /// Targeted filter param update: (instrument_id, param_kind, value).
     /// Sends /n_set directly to the filter node without routing rebuild.
@@ -249,7 +260,10 @@ impl AudioDirty {
             piano_roll: true,
             automation: true,
             routing: true,
-            routing_instrument: None,
+            routing_instruments: [None; 4],
+            routing_add_instrument: None,
+            routing_delete_instrument: None,
+            routing_bus_processing: false,
             mixer_params: true,
             filter_param: None,
             effect_param: None,
@@ -265,7 +279,10 @@ impl AudioDirty {
             || self.piano_roll
             || self.automation
             || self.routing
-            || self.routing_instrument.is_some()
+            || self.routing_instruments.iter().any(|id| id.is_some())
+            || self.routing_add_instrument.is_some()
+            || self.routing_delete_instrument.is_some()
+            || self.routing_bus_processing
             || self.mixer_params
             || self.filter_param.is_some()
             || self.effect_param.is_some()
@@ -280,19 +297,54 @@ impl AudioDirty {
         self.piano_roll |= other.piano_roll;
         self.automation |= other.automation;
         self.routing |= other.routing;
-        // Merge routing_instrument: if both have a targeted instrument but they differ,
-        // escalate to full rebuild. If only one has it, keep it.
-        match (self.routing_instrument, other.routing_instrument) {
-            (Some(a), Some(b)) if a != b => {
-                // Different instruments targeted — escalate to full rebuild
+        // Merge routing_instruments: collect unique IDs into the array.
+        // Overflow (>4 unique instruments) escalates to full rebuild.
+        for other_id in other.routing_instruments.iter().flatten() {
+            // Skip if already present
+            if self.routing_instruments.iter().flatten().any(|id| id == other_id) {
+                continue;
+            }
+            // Find an empty slot
+            if let Some(slot) = self.routing_instruments.iter_mut().find(|s| s.is_none()) {
+                *slot = Some(*other_id);
+            } else {
+                // All 4 slots full — escalate to full rebuild
                 self.routing = true;
-                self.routing_instrument = None;
+                self.routing_instruments = [None; 4];
+                break;
+            }
+        }
+        // Merge routing_add_instrument: conflict escalates to full rebuild
+        match (self.routing_add_instrument, other.routing_add_instrument) {
+            (Some(a), Some(b)) if a != b => {
+                self.routing = true;
+                self.routing_add_instrument = None;
             }
             (None, Some(id)) => {
-                self.routing_instrument = Some(id);
+                self.routing_add_instrument = Some(id);
             }
-            _ => {} // keep existing
+            _ => {}
         }
+        // Merge routing_delete_instrument: conflict escalates to full rebuild
+        match (self.routing_delete_instrument, other.routing_delete_instrument) {
+            (Some(a), Some(b)) if a != b => {
+                self.routing = true;
+                self.routing_delete_instrument = None;
+            }
+            (None, Some(id)) => {
+                self.routing_delete_instrument = Some(id);
+            }
+            _ => {}
+        }
+        // If add and delete target different instruments in same frame, escalate
+        if let (Some(add), Some(del)) = (self.routing_add_instrument, self.routing_delete_instrument) {
+            if add != del {
+                self.routing = true;
+                self.routing_add_instrument = None;
+                self.routing_delete_instrument = None;
+            }
+        }
+        self.routing_bus_processing |= other.routing_bus_processing;
         self.mixer_params |= other.mixer_params;
         // Targeted param updates: last one wins (these are real-time tweaks)
         if other.filter_param.is_some() {
@@ -309,6 +361,31 @@ impl AudioDirty {
         }
         if other.layer_group_effect_param.is_some() {
             self.layer_group_effect_param = other.layer_group_effect_param;
+        }
+    }
+
+    /// Set a single-instrument routing rebuild. Finds an empty slot in the array.
+    /// If all slots are full, escalates to full rebuild.
+    pub fn set_routing_instrument(&mut self, id: InstrumentId) {
+        // Skip if already present
+        if self.routing_instruments.iter().flatten().any(|existing| *existing == id) {
+            return;
+        }
+        if let Some(slot) = self.routing_instruments.iter_mut().find(|s| s.is_none()) {
+            *slot = Some(id);
+        } else {
+            // Overflow — escalate to full rebuild
+            self.routing = true;
+            self.routing_instruments = [None; 4];
+        }
+    }
+
+    /// Create an AudioDirty with just instruments + routing for a single instrument.
+    pub fn for_instrument(id: InstrumentId) -> Self {
+        Self {
+            instruments: true,
+            routing_instruments: [Some(id), None, None, None],
+            ..Self::default()
         }
     }
 

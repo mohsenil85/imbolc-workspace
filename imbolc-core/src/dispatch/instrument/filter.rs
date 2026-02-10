@@ -13,7 +13,7 @@ pub(super) fn handle_set_filter(
     }
     let mut result = DispatchResult::none();
     result.audio_dirty.instruments = true;
-    result.audio_dirty.routing_instrument = Some(id);
+    result.audio_dirty.set_routing_instrument(id);
     result
 }
 
@@ -23,7 +23,7 @@ pub(super) fn handle_toggle_filter(state: &mut AppState, id: InstrumentId) -> Di
     }
     let mut result = DispatchResult::none();
     result.audio_dirty.instruments = true;
-    result.audio_dirty.routing_instrument = Some(id);
+    result.audio_dirty.set_routing_instrument(id);
     result
 }
 
