@@ -62,12 +62,7 @@ ranked by impact. Updated Feb 2025 after several optimization passes.
 
 ### High Impact
 
-1. **Slow-client poisons the server**. `broadcast()` writes sequentially to
-   each client on the main thread. If one client's TCP buffer is full,
-   `write_all` blocks, stalling updates to all other clients. No outbound
-   queue, no dropping stale updates.
-
-2. **Subsystem-level granularity, not field-level**. `StatePatch` tracks dirty
+1. **Subsystem-level granularity, not field-level**. `StatePatch` tracks dirty
    at the `session`/`instruments` level. Adding one note sends the entire
    `PianoRollState` (all tracks, all notes). Changing one instrument param
    sends all instruments. As projects grow, these payloads go from ~50KB to
@@ -89,6 +84,13 @@ ranked by impact. Updated Feb 2025 after several optimization passes.
    broadcast cycle, leaving a stale-state gap.
 
 ### Resolved
+
+- ~~Slow-client poisons the server~~ — **Resolved: per-client outbox with
+  drop policy.** `ClientConnection` uses raw `TcpStream` with 10ms
+  `SO_SNDTIMEO`. Per-client `VecDeque<QueuedFrame>` outbox with frame-kind
+  drop policy: Metering (keep latest), StatePatch/FullSync (supersede older),
+  Control (never drop). `flush_outboxes()` drains queues each loop iteration.
+  Clients exceeding `MAX_OUTBOX_DEPTH` are suspended.
 
 - ~~Per-client JSON re-serialization~~ — **Resolved: serialize-once broadcast.**
   `broadcast()` now calls `serialize_frame()` once and writes the pre-serialized
@@ -119,6 +121,7 @@ ranked by impact. Updated Feb 2025 after several optimization passes.
 - Rate-limited patch broadcasting (~30 Hz)
 - Per-instrument delta patches
 - Serialize-once broadcast
+- Per-client outbox with frame-kind drop policy (slow-client isolation)
 
 ---
 
@@ -126,12 +129,9 @@ ranked by impact. Updated Feb 2025 after several optimization passes.
 
 Items remaining for future optimization work:
 
-1. **Slow-client mitigation** — add per-client outbound queues with backpressure
-   or drop-stale-update semantics so one blocked client doesn't stall others.
-
-2. **Field-level state diffing** — reduce session-level patch granularity.
+1. **Field-level state diffing** — reduce session-level patch granularity.
    E.g., send only the changed notes in a track, not the entire PianoRollState.
 
-3. **Binary wire format** — switch from JSON to bincode or MessagePack for
+2. **Binary wire format** — switch from JSON to bincode or MessagePack for
    smaller payloads and faster serialization. May require a protocol version
    negotiation step.
