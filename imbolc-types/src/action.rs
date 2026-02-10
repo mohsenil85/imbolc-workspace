@@ -660,7 +660,6 @@ pub enum InstrumentAction {
     Update(Box<InstrumentUpdate>),
     AddEffect(InstrumentId, EffectType),
     RemoveEffect(InstrumentId, EffectId),
-    MoveEffect(InstrumentId, EffectId, i8),
     MoveStage(InstrumentId, usize, i8),
     SetFilter(InstrumentId, Option<FilterType>),
     ToggleEffectBypass(InstrumentId, EffectId),
@@ -742,7 +741,6 @@ impl InstrumentAction {
             | Self::Edit(id)
             | Self::AddEffect(id, _)
             | Self::RemoveEffect(id, _)
-            | Self::MoveEffect(id, _, _)
             | Self::MoveStage(id, _, _)
             | Self::SetFilter(id, _)
             | Self::ToggleEffectBypass(id, _)

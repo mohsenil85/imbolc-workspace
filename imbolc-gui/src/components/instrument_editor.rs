@@ -20,22 +20,22 @@ pub fn InstrumentEditor() -> Element {
         let s = state.read();
         s.app.instruments.selected_instrument().map(|i| {
             // Gather filter info
-            let (filter_enabled, filter_type, cutoff, resonance) = match &i.filter {
+            let (filter_enabled, filter_type, cutoff, resonance) = match i.filter() {
                 Some(f) => (true, Some(f.filter_type), f.cutoff.value, f.resonance.value),
                 None => (false, None, 1000.0, 0.5),
             };
 
-            // Gather effects info
-            let effects_info: Vec<(u32, String, bool, Vec<(String, f32, f32, f32)>)> = i
-                .effects
-                .iter()
+            // Gather effects info (effect_id, chain_index, name, enabled, params)
+            let effects_info: Vec<(u32, usize, String, bool, Vec<(String, f32, f32, f32)>)> = i
+                .effects()
                 .map(|e| {
+                    let chain_idx = i.effect_chain_index(e.id).unwrap_or(0);
                     let params: Vec<(String, f32, f32, f32)> = e
                         .params
                         .iter()
                         .map(|p| (p.name.clone(), p.value.to_f32(), p.min, p.max))
                         .collect();
-                    (e.id, e.effect_type.name().to_string(), e.enabled, params)
+                    (e.id, chain_idx, e.effect_type.name().to_string(), e.enabled, params)
                 })
                 .collect();
 
@@ -266,15 +266,16 @@ pub fn InstrumentEditor() -> Element {
                     div { class: "editor-section",
                         h4 { "Effects ({effects_count})" }
                         div { class: "effects-chain",
-                            for (idx, (effect_id, effect_name, enabled, params)) in effects_info.iter().enumerate() {
+                            for (idx, (effect_id, chain_idx, effect_name, enabled, params)) in effects_info.iter().enumerate() {
                                 EffectSlotComponent {
                                     key: "{effect_id}",
                                     instrument_id: id,
                                     effect_id: *effect_id,
+                                    chain_index: *chain_idx,
                                     effect_name: effect_name.clone(),
                                     enabled: *enabled,
                                     params: params.clone(),
-                                    can_move_up: idx > 0,
+                                    can_move_up: *chain_idx > 0,
                                     can_move_down: idx < effects_count - 1,
                                 }
                             }

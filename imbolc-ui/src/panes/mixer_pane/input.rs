@@ -346,10 +346,13 @@ impl MixerPane {
             ActionId::Mixer(MixerActionId::MoveUp) => {
                 if self.detail_section == MixerSection::Effects {
                     if let Some((ei, _)) = self.decode_effect_cursor(state) {
-                        if ei > 0 {
-                            return Action::Instrument(InstrumentAction::MoveEffect(
-                                inst_id, ei, -1,
-                            ));
+                        let inst = state.instruments.instrument(inst_id);
+                        if let Some(chain_idx) = inst.and_then(|i| i.effect_chain_index(ei)) {
+                            if chain_idx > 0 {
+                                return Action::Instrument(InstrumentAction::MoveStage(
+                                    inst_id, chain_idx, -1,
+                                ));
+                            }
                         }
                     }
                 }
@@ -358,7 +361,14 @@ impl MixerPane {
             ActionId::Mixer(MixerActionId::MoveDown) => {
                 if self.detail_section == MixerSection::Effects {
                     if let Some((ei, _)) = self.decode_effect_cursor(state) {
-                        return Action::Instrument(InstrumentAction::MoveEffect(inst_id, ei, 1));
+                        let inst = state.instruments.instrument(inst_id);
+                        if let Some(chain_idx) = inst.and_then(|i| i.effect_chain_index(ei)) {
+                            if chain_idx + 1 < inst.unwrap().processing_chain.len() {
+                                return Action::Instrument(InstrumentAction::MoveStage(
+                                    inst_id, chain_idx, 1,
+                                ));
+                            }
+                        }
                     }
                 }
                 Action::None

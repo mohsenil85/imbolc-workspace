@@ -34,21 +34,6 @@ pub(super) fn handle_remove_effect(
     result
 }
 
-pub(super) fn handle_move_effect(
-    state: &mut AppState,
-    id: crate::state::InstrumentId,
-    effect_id: crate::state::EffectId,
-    direction: i8,
-) -> DispatchResult {
-    if let Some(instrument) = state.instruments.instrument_mut(id) {
-        instrument.move_effect(effect_id, direction);
-    }
-    let mut result = DispatchResult::none();
-    result.audio_dirty.instruments = true;
-    result.audio_dirty.routing_instrument = Some(id);
-    result
-}
-
 pub(super) fn handle_toggle_effect_bypass(
     state: &mut AppState,
     id: crate::state::InstrumentId,

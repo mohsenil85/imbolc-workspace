@@ -82,19 +82,16 @@ multiple filters exist.
   `instrument_row_info()` covering chains with different stage orders,
   empty chains, and chains with all three stage types
 
-### A3. Actions (`imbolc-types/src/action.rs`) — partially done
+### ~~A3. Actions (`imbolc-types/src/action.rs`)~~ ✓
 
-- ~~Add `InstrumentAction::MoveStage(InstrumentId, usize, i8)` for
-  moving any stage~~ ✓
-- ~~Update `InstrumentUpdate` to use `processing_chain` instead of
-  separate fields~~ ✓
-- Remove `MoveEffect` — `MoveStage` subsumes it. Having two ways to
-  move effects is a maintenance burden with no user-facing benefit;
-  callers can find the chain index via `effect_chain_index(id)`.
-  **A6 done — instrument_edit_pane now uses `MoveStage`.** Remaining:
-  evaluate bus/group `MoveEffect` variants for migration to a
-  unified move action, then remove `MoveEffect` from action.rs and
-  all remaining call sites (~12 in dispatch, action_projection).
+**Done.** Added `MoveStage`, updated `InstrumentUpdate`, removed
+`InstrumentAction::MoveEffect` (variant, dispatch handler in
+`effects.rs`, action projection arm, `Instrument::move_effect()`
+method and its test). Mixer pane (`mixer_pane/input.rs`) and GUI
+(`effect_slot.rs`, `instrument_editor.rs`) now use
+`effect_chain_index()` + `MoveStage`. `BusAction::MoveEffect` and
+`LayerGroupAction::MoveEffect` stay — buses and layer groups have
+flat `effects: Vec<EffectSlot>`, no `processing_chain`.
 
 ### ~~A4. Dispatch (`imbolc-core/src/dispatch/instrument/`)~~ ✓
 
@@ -366,10 +363,9 @@ Instrument struct, and delivers the highest-value feature
 (reverb/compression buses). Phase A is larger and more invasive.
 
 1. ~~Phase B (bus effects)~~ — **Complete.** All B1–B7 done (B7 = layer group EQ).
-2. Phase A (flexible chain) — **Nearly complete.** A1–A8 done.
-   Remaining: A3 (`MoveEffect` removal — now unblocked, instrument
-   side done, evaluate bus/group migration). All 713 tests pass
-   (236 types + 278 core + 121 UI + 78 net).
+2. ~~Phase A (flexible chain)~~ — **Complete.** All A1–A8 done, A3
+   `MoveEffect` removal complete. 235 types + 278 core + 121 UI +
+   78 net = 712 tests pass.
 
 They share no code dependencies, so Phase A can't break Phase B. Bus
 effects stay as plain `Vec<EffectSlot>` (buses don't have filter/EQ,

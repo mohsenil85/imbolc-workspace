@@ -140,7 +140,7 @@ Top-level dispatch is in `src/dispatch/mod.rs`. Each `Action` variant routes to 
 | `crud.rs` | Add, Delete, Edit, Update |
 | `playback.rs` | PlayNote, PlayNotes, PlayDrumPad |
 | `selection.rs` | Select, SelectNext/Prev/First/Last |
-| `effects.rs` | AddEffect, RemoveEffect, MoveEffect, ToggleBypass, AdjustParam |
+| `effects.rs` | AddEffect, RemoveEffect, ToggleBypass, AdjustParam |
 | `filter.rs` | SetFilter, ToggleFilter, CycleFilterType, AdjustCutoff/Resonance |
 | `lfo.rs` | ToggleLfo, AdjustRate/Depth, SetShape/Target |
 | `envelope.rs` | AdjustAttack/Decay/Sustain/Release |

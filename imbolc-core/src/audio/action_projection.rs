@@ -157,12 +157,6 @@ fn project_instrument(
             }
             true
         }
-        InstrumentAction::MoveEffect(id, effect_id, direction) => {
-            if let Some(instrument) = instruments.instrument_mut(*id) {
-                instrument.move_effect(*effect_id, *direction);
-            }
-            true
-        }
         InstrumentAction::SetFilter(id, filter_type) => {
             if let Some(instrument) = instruments.instrument_mut(*id) {
                 instrument.set_filter(*filter_type);

@@ -11,6 +11,7 @@ use imbolc_types::{Action, EffectType, InstrumentAction, InstrumentId};
 pub fn EffectSlotComponent(
     instrument_id: InstrumentId,
     effect_id: u32,
+    chain_index: usize,
     effect_name: String,
     enabled: bool,
     params: Vec<(String, f32, f32, f32)>, // (name, value, min, max)
@@ -32,7 +33,7 @@ pub fn EffectSlotComponent(
                         disabled: !can_move_up,
                         onclick: move |_| {
                             dispatch.dispatch_action(Action::Instrument(
-                                InstrumentAction::MoveEffect(instrument_id, effect_id, -1)
+                                InstrumentAction::MoveStage(instrument_id, chain_index, -1)
                             ));
                         },
                         "^"
@@ -43,7 +44,7 @@ pub fn EffectSlotComponent(
                         disabled: !can_move_down,
                         onclick: move |_| {
                             dispatch.dispatch_action(Action::Instrument(
-                                InstrumentAction::MoveEffect(instrument_id, effect_id, 1)
+                                InstrumentAction::MoveStage(instrument_id, chain_index, 1)
                             ));
                         },
                         "v"

@@ -758,15 +758,6 @@ impl Instrument {
         }
     }
 
-    /// Move an effect within the full processing chain by its EffectId.
-    pub fn move_effect(&mut self, id: EffectId, direction: i8) -> bool {
-        if let Some(idx) = self.effect_chain_index(id) {
-            self.move_stage(idx, direction)
-        } else {
-            false
-        }
-    }
-
     /// Move any stage within the processing chain by chain index.
     pub fn move_stage(&mut self, idx: usize, direction: i8) -> bool {
         if idx >= self.processing_chain.len() {
@@ -999,18 +990,6 @@ mod tests {
         assert!(inst.effect_by_id(id).is_some());
         assert!(inst.remove_effect(id));
         assert!(inst.effect_by_id(id).is_none());
-    }
-
-    #[test]
-    fn instrument_move_effect() {
-        let mut inst = Instrument::new(1, SourceType::Saw);
-        let id1 = inst.add_effect(EffectType::Delay);
-        let id2 = inst.add_effect(EffectType::Reverb);
-        assert_eq!(inst.effect_position(id1), Some(0));
-        assert_eq!(inst.effect_position(id2), Some(1));
-        inst.move_effect(id2, -1);
-        assert_eq!(inst.effect_position(id2), Some(0));
-        assert_eq!(inst.effect_position(id1), Some(1));
     }
 
     #[test]

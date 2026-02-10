@@ -41,7 +41,7 @@ Comprehensive code map for agents. Read this first to avoid re-exploring.
 | `crud.rs` | Add, Delete, Edit, Update | Instrument lifecycle, source params |
 | `playback.rs` | PlayNote, PlayNotes, PlayDrumPad | Voice triggering via audio side-effects |
 | `selection.rs` | Select, SelectNext/Prev/First/Last | Instrument selection state |
-| `effects.rs` | AddEffect, RemoveEffect, MoveEffect, ToggleEffectBypass, AdjustEffectParam, LoadIRResult, OpenVstEffectParams | Effect chain management |
+| `effects.rs` | AddEffect, RemoveEffect, ToggleEffectBypass, AdjustEffectParam, LoadIRResult, OpenVstEffectParams | Effect chain management |
 | `filter.rs` | SetFilter, ToggleFilter, CycleFilterType, AdjustFilterCutoff/Resonance | Filter configuration |
 | `lfo.rs` | ToggleLfo, AdjustLfoRate/Depth, SetLfoShape/Target | LFO modulation |
 | `envelope.rs` | AdjustEnvelopeAttack/Decay/Sustain/Release | ADSR envelope |

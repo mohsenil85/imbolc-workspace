@@ -50,9 +50,6 @@ pub(super) fn dispatch_instrument(
         InstrumentAction::RemoveEffect(id, effect_id) => {
             effects::handle_remove_effect(state, *id, *effect_id)
         }
-        InstrumentAction::MoveEffect(id, effect_id, direction) => {
-            effects::handle_move_effect(state, *id, *effect_id, *direction)
-        }
         InstrumentAction::SetFilter(id, filter_type) => {
             filter::handle_set_filter(state, *id, *filter_type)
         }
