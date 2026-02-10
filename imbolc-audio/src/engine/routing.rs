@@ -690,6 +690,9 @@ impl AudioEngine {
             return Ok(());
         }
 
+        // Force group recreation — the server may have been restarted or groups
+        // may have been lost (e.g. race condition during startup).
+        self.groups_created = false;
         self.ensure_groups()?;
         self.ensure_safety_limiter()?;
 
@@ -1166,6 +1169,8 @@ impl AudioEngine {
                 if !self.is_running {
                     return Ok(RebuildStepResult::Done);
                 }
+                // Force group recreation — server may have lost them.
+                self.groups_created = false;
                 self.ensure_groups()?;
                 self.ensure_safety_limiter()?;
 

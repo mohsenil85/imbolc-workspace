@@ -400,6 +400,7 @@ impl AudioEngine {
             .map_err(|e| std::io::Error::other(e.to_string()))?;
         self.backend = Some(Box::new(backend));
         self.is_running = true;
+        self.groups_created = false;
         self.server_status = ServerStatus::Connected;
         Ok(())
     }
@@ -411,6 +412,7 @@ impl AudioEngine {
             .map_err(|e| std::io::Error::other(e.to_string()))?;
         self.backend = Some(Box::new(backend));
         self.is_running = true;
+        self.groups_created = false;
         self.server_status = ServerStatus::Connected;
         Ok(())
     }
