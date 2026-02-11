@@ -163,6 +163,31 @@ impl AddEffectPane {
         self.adjust_scroll();
     }
 
+    /// Convert the given option to an Action based on current effect target
+    fn option_to_action(&self, option: &AddEffectOption, state: &AppState) -> Action {
+        match option {
+            AddEffectOption::Effect(effect_type) => match self.effect_target {
+                EffectTarget::Bus(bus_id) => {
+                    Action::Bus(BusAction::AddEffect(bus_id, *effect_type))
+                }
+                EffectTarget::LayerGroup(group_id) => {
+                    Action::LayerGroup(LayerGroupAction::AddEffect(group_id, *effect_type))
+                }
+                EffectTarget::Instrument => {
+                    if let Some(inst) = state.instruments.selected_instrument() {
+                        Action::Instrument(InstrumentAction::AddEffect(inst.id, *effect_type))
+                    } else {
+                        Action::None
+                    }
+                }
+            },
+            AddEffectOption::ImportVst => {
+                Action::Session(SessionAction::OpenFileBrowser(FileSelectAction::ImportVstEffect))
+            }
+            AddEffectOption::Separator(_) => Action::None,
+        }
+    }
+
     fn select_prev(&mut self) {
         let len = self.cached_options.len();
         if len == 0 {
@@ -192,33 +217,7 @@ impl Pane for AddEffectPane {
         match action {
             ActionId::Add(AddActionId::Confirm) => {
                 if let Some(option) = self.cached_options.get(self.selected) {
-                    match option {
-                        AddEffectOption::Effect(effect_type) => match self.effect_target {
-                            EffectTarget::Bus(bus_id) => {
-                                Action::Bus(BusAction::AddEffect(bus_id, *effect_type))
-                            }
-                            EffectTarget::LayerGroup(group_id) => {
-                                Action::LayerGroup(LayerGroupAction::AddEffect(
-                                    group_id,
-                                    *effect_type,
-                                ))
-                            }
-                            EffectTarget::Instrument => {
-                                if let Some(inst) = state.instruments.selected_instrument() {
-                                    Action::Instrument(InstrumentAction::AddEffect(
-                                        inst.id,
-                                        *effect_type,
-                                    ))
-                                } else {
-                                    Action::None
-                                }
-                            }
-                        },
-                        AddEffectOption::ImportVst => {
-                            Action::Session(SessionAction::OpenFileBrowser(FileSelectAction::ImportVstEffect))
-                        }
-                        AddEffectOption::Separator(_) => Action::None,
-                    }
+                    self.option_to_action(option, state)
                 } else {
                     Action::None
                 }
@@ -254,37 +253,7 @@ impl Pane for AddEffectPane {
                         }
                         self.selected = idx;
                         self.adjust_scroll();
-                        // Confirm on click
-                        match &self.cached_options[idx] {
-                            AddEffectOption::Effect(effect_type) => match self.effect_target {
-                                EffectTarget::Bus(bus_id) => {
-                                    return Action::Bus(BusAction::AddEffect(
-                                        bus_id,
-                                        *effect_type,
-                                    ));
-                                }
-                                EffectTarget::LayerGroup(group_id) => {
-                                    return Action::LayerGroup(LayerGroupAction::AddEffect(
-                                        group_id,
-                                        *effect_type,
-                                    ));
-                                }
-                                EffectTarget::Instrument => {
-                                    if let Some(inst) = state.instruments.selected_instrument() {
-                                        return Action::Instrument(InstrumentAction::AddEffect(
-                                            inst.id,
-                                            *effect_type,
-                                        ));
-                                    }
-                                }
-                            },
-                            AddEffectOption::ImportVst => {
-                                return Action::Session(SessionAction::OpenFileBrowser(
-                                    FileSelectAction::ImportVstEffect,
-                                ));
-                            }
-                            AddEffectOption::Separator(_) => {}
-                        }
+                        return self.option_to_action(&self.cached_options[idx].clone(), state);
                     }
                 }
                 Action::None

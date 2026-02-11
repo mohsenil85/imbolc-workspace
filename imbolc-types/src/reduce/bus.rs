@@ -78,18 +78,7 @@ pub(super) fn reduce_bus(
             if let Some(bus) = session.bus_mut(*bus_id) {
                 if let Some(effect) = bus.effect_chain.effect_by_id_mut(*effect_id) {
                     if let Some(param) = effect.params.get_mut(param_idx.get()) {
-                        let range = param.max - param.min;
-                        match &mut param.value {
-                            crate::ParamValue::Float(ref mut v) => {
-                                *v = (*v + delta * range * 0.02).clamp(param.min, param.max);
-                            }
-                            crate::ParamValue::Int(ref mut v) => {
-                                *v = (*v + (delta * range * 0.02) as i32).clamp(param.min as i32, param.max as i32);
-                            }
-                            crate::ParamValue::Bool(ref mut b) => {
-                                *b = !*b;
-                            }
-                        }
+                        param.adjust_delta(*delta);
                     }
                 }
             }
@@ -133,18 +122,7 @@ pub(super) fn reduce_layer_group(
             if let Some(gm) = session.mixer.layer_group_mixer_mut(*group_id) {
                 if let Some(effect) = gm.effect_chain.effect_by_id_mut(*effect_id) {
                     if let Some(param) = effect.params.get_mut(param_idx.get()) {
-                        let range = param.max - param.min;
-                        match &mut param.value {
-                            crate::ParamValue::Float(ref mut v) => {
-                                *v = (*v + delta * range * 0.02).clamp(param.min, param.max);
-                            }
-                            crate::ParamValue::Int(ref mut v) => {
-                                *v = (*v + (delta * range * 0.02) as i32).clamp(param.min as i32, param.max as i32);
-                            }
-                            crate::ParamValue::Bool(ref mut b) => {
-                                *b = !*b;
-                            }
-                        }
+                        param.adjust_delta(*delta);
                     }
                 }
             }

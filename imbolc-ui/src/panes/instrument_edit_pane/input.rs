@@ -12,17 +12,17 @@ impl InstrumentEditPane {
         match action {
             // Piano mode actions
             ActionId::Mode(ModeActionId::PianoEscape) => {
-                self.piano.deactivate();
+                self.perf.piano.deactivate();
                 Action::ExitPerformanceMode
             }
-            ActionId::Mode(ModeActionId::PianoOctaveDown) => { self.piano.octave_down(); Action::None }
-            ActionId::Mode(ModeActionId::PianoOctaveUp) => { self.piano.octave_up(); Action::None }
+            ActionId::Mode(ModeActionId::PianoOctaveDown) => { self.perf.piano.octave_down(); Action::None }
+            ActionId::Mode(ModeActionId::PianoOctaveUp) => { self.perf.piano.octave_up(); Action::None }
             ActionId::Mode(ModeActionId::PianoKey) | ActionId::Mode(ModeActionId::PianoSpace) => {
                 if let KeyCode::Char(c) = event.key {
                     let c = translate_key(c, state.keyboard_layout);
-                    if let Some(pitches) = self.piano.key_to_pitches(c) {
+                    if let Some(pitches) = self.perf.piano.key_to_pitches(c) {
                         // Check if this is a new press or key repeat (sustain)
-                        if let Some(new_pitches) = self.piano.key_pressed(c, pitches.clone(), event.timestamp) {
+                        if let Some(new_pitches) = self.perf.piano.key_pressed(c, pitches.clone(), event.timestamp) {
                             // NEW press - spawn voice(s)
                             if new_pitches.len() == 1 {
                                 return Action::Instrument(InstrumentAction::PlayNote(new_pitches[0], 100));
@@ -37,13 +37,13 @@ impl InstrumentEditPane {
             }
             // Pad layer actions
             ActionId::Mode(ModeActionId::PadEscape) => {
-                self.pad_keyboard.deactivate();
+                self.perf.pad.deactivate();
                 Action::ExitPerformanceMode
             }
             ActionId::Mode(ModeActionId::PadKey) => {
                 if let KeyCode::Char(c) = event.key {
                     let c = translate_key(c, state.keyboard_layout);
-                    if let Some(pad_idx) = self.pad_keyboard.key_to_pad(c) {
+                    if let Some(pad_idx) = self.perf.pad.key_to_pad(c) {
                         return Action::Instrument(InstrumentAction::PlayDrumPad(pad_idx));
                     }
                 }

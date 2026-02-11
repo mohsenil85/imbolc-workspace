@@ -134,6 +134,25 @@ impl Param {
         }
     }
 
+    /// Adjust by a raw delta scaled to 2% of range. Returns `Some(new_value)` for Float params.
+    pub fn adjust_delta(&mut self, delta: f32) -> Option<f32> {
+        let range = self.max - self.min;
+        match &mut self.value {
+            ParamValue::Float(v) => {
+                *v = (*v + delta * range * 0.02).clamp(self.min, self.max);
+                Some(*v)
+            }
+            ParamValue::Int(v) => {
+                *v = (*v + (delta * range * 0.02) as i32).clamp(self.min as i32, self.max as i32);
+                None
+            }
+            ParamValue::Bool(b) => {
+                *b = !*b;
+                None
+            }
+        }
+    }
+
     /// Get the current value as a display string
     pub fn value_string(&self) -> String {
         match &self.value {
@@ -284,6 +303,40 @@ mod tests {
         assert!(p.parse_and_set("off"));
         assert_eq!(p.value.to_f32(), 0.0);
         assert!(!p.parse_and_set("maybe"));
+    }
+
+    #[test]
+    fn adjust_delta_float() {
+        let mut p = float_param("gain", 0.5, 0.0, 1.0);
+        let result = p.adjust_delta(1.0);
+        // delta=1.0, range=1.0, step=0.02 → 0.5 + 0.02 = 0.52
+        assert!(result.is_some());
+        assert!((result.unwrap() - 0.52).abs() < 0.001);
+        assert!((p.value.to_f32() - 0.52).abs() < 0.001);
+    }
+
+    #[test]
+    fn adjust_delta_float_clamps() {
+        let mut p = float_param("gain", 0.99, 0.0, 1.0);
+        let result = p.adjust_delta(5.0);
+        assert_eq!(result, Some(1.0));
+    }
+
+    #[test]
+    fn adjust_delta_int() {
+        let mut p = int_param("steps", 5, 0.0, 100.0);
+        let result = p.adjust_delta(1.0);
+        // delta=1.0, range=100, step=2.0 → 5 + 2 = 7
+        assert!(result.is_none());
+        assert_eq!(p.value.to_f32() as i32, 7);
+    }
+
+    #[test]
+    fn adjust_delta_bool() {
+        let mut p = bool_param("on", false);
+        let result = p.adjust_delta(1.0);
+        assert!(result.is_none());
+        assert_eq!(p.value.to_f32(), 1.0);
     }
 
     #[test]

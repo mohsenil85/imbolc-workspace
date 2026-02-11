@@ -102,26 +102,10 @@ pub fn dispatch_bus(action: &BusAction, state: &mut AppState) -> DispatchResult 
         }
 
         BusAction::AdjustEffectParam(bus_id, effect_id, param_idx, delta) => {
-            let mut targeted_value: Option<f32> = None;
-            if let Some(bus) = state.session.bus_mut(*bus_id) {
-                if let Some(effect) = bus.effect_chain.effect_by_id_mut(*effect_id) {
-                    if let Some(param) = effect.params.get_mut(param_idx.get()) {
-                        let range = param.max - param.min;
-                        match &mut param.value {
-                            crate::state::ParamValue::Float(v) => {
-                                *v = (*v + delta * range * 0.02).clamp(param.min, param.max);
-                                targeted_value = Some(*v);
-                            }
-                            crate::state::ParamValue::Int(v) => {
-                                *v = (*v + (delta * range * 0.02) as i32).clamp(param.min as i32, param.max as i32);
-                            }
-                            crate::state::ParamValue::Bool(b) => {
-                                *b = !*b;
-                            }
-                        }
-                    }
-                }
-            }
+            let targeted_value = state.session.bus_mut(*bus_id)
+                .and_then(|bus| bus.effect_chain.effect_by_id_mut(*effect_id))
+                .and_then(|effect| effect.params.get_mut(param_idx.get()))
+                .and_then(|param| param.adjust_delta(*delta));
             result.audio_effects.push(AudioEffect::RebuildSession);
             if let Some(value) = targeted_value {
                 result.audio_effects.push(AudioEffect::SetBusEffectParam(*bus_id, *effect_id, *param_idx, value));
@@ -177,26 +161,10 @@ pub fn dispatch_layer_group(
         }
 
         LayerGroupAction::AdjustEffectParam(group_id, effect_id, param_idx, delta) => {
-            let mut targeted_value: Option<f32> = None;
-            if let Some(gm) = state.session.mixer.layer_group_mixer_mut(*group_id) {
-                if let Some(effect) = gm.effect_chain.effect_by_id_mut(*effect_id) {
-                    if let Some(param) = effect.params.get_mut(param_idx.get()) {
-                        let range = param.max - param.min;
-                        match &mut param.value {
-                            crate::state::ParamValue::Float(v) => {
-                                *v = (*v + delta * range * 0.02).clamp(param.min, param.max);
-                                targeted_value = Some(*v);
-                            }
-                            crate::state::ParamValue::Int(v) => {
-                                *v = (*v + (delta * range * 0.02) as i32).clamp(param.min as i32, param.max as i32);
-                            }
-                            crate::state::ParamValue::Bool(b) => {
-                                *b = !*b;
-                            }
-                        }
-                    }
-                }
-            }
+            let targeted_value = state.session.mixer.layer_group_mixer_mut(*group_id)
+                .and_then(|gm| gm.effect_chain.effect_by_id_mut(*effect_id))
+                .and_then(|effect| effect.params.get_mut(param_idx.get()))
+                .and_then(|param| param.adjust_delta(*delta));
             result.audio_effects.push(AudioEffect::RebuildSession);
             if let Some(value) = targeted_value {
                 result.audio_effects.push(AudioEffect::SetLayerGroupEffectParam(*group_id, *effect_id, *param_idx, value));

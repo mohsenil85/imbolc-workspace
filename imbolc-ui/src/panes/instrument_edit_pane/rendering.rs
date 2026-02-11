@@ -51,12 +51,12 @@ impl InstrumentEditPane {
         }
 
         // Piano/Pad mode indicator
-        if self.pad_keyboard.is_active() {
-            let pad_str = self.pad_keyboard.status_label();
+        if self.perf.pad.is_active() {
+            let pad_str = self.perf.pad.status_label();
             let pad_style = Style::new().fg(Color::BLACK).bg(Color::KIT_COLOR);
             buf.draw_line(Rect::new(rect.x + 1, rect.y, pad_str.len() as u16, 1), &[(&pad_str, pad_style)]);
-        } else if self.piano.is_active() {
-            let piano_str = self.piano.status_label();
+        } else if self.perf.piano.is_active() {
+            let piano_str = self.perf.piano.status_label();
             let piano_style = Style::new().fg(Color::BLACK).bg(Color::PINK);
             buf.draw_line(Rect::new(rect.x + 1, rect.y, piano_str.len() as u16, 1), &[(&piano_str, piano_style)]);
         }

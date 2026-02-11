@@ -3,7 +3,6 @@ mod input;
 mod rendering;
 
 use std::any::Any;
-use std::time::Instant;
 
 use imbolc_types::{ChannelConfig, ProcessingStage};
 use crate::state::{
@@ -12,7 +11,8 @@ use crate::state::{
     instrument::{instrument_row_count, instrument_section_for_row, instrument_row_info},
 };
 use crate::ui::widgets::TextInput;
-use crate::ui::{Rect, RenderBuf, Action, InputEvent, Keymap, MouseEvent, PadKeyboard, Pane, PianoKeyboard, PianoRollAction, ToggleResult};
+use crate::ui::{Rect, RenderBuf, Action, InputEvent, Keymap, MouseEvent, Pane, ToggleResult};
+use crate::ui::performance::PerformanceController;
 use crate::ui::action_id::ActionId;
 
 pub struct InstrumentEditPane {
@@ -33,8 +33,7 @@ pub struct InstrumentEditPane {
     editing: bool,
     edit_input: TextInput,
     edit_backup_value: Option<String>,
-    piano: PianoKeyboard,
-    pad_keyboard: PadKeyboard,
+    perf: PerformanceController,
 }
 
 impl InstrumentEditPane {
@@ -57,8 +56,7 @@ impl InstrumentEditPane {
             editing: false,
             edit_input: TextInput::new(""),
             edit_backup_value: None,
-            piano: PianoKeyboard::new(),
-            pad_keyboard: PadKeyboard::new(),
+            perf: PerformanceController::new(),
         }
     }
 
@@ -230,34 +228,10 @@ impl Pane for InstrumentEditPane {
     }
 
     fn tick(&mut self, state: &AppState) -> Vec<Action> {
-        if !self.piano.is_active() || !self.piano.has_active_keys() {
-            return vec![];
-        }
-        let now = Instant::now();
-        let released = self.piano.check_releases(now);
-        if released.is_empty() {
-            return vec![];
-        }
-        // Get the currently selected instrument ID
         let instrument_id = state.instruments.selected_instrument()
             .map(|inst| inst.id)
             .unwrap_or(InstrumentId::new(0));
-        // Flatten all released pitches (handles chords)
-        released.into_iter()
-            .map(|(_, pitches)| {
-                if pitches.len() == 1 {
-                    Action::PianoRoll(PianoRollAction::ReleaseNote {
-                        pitch: pitches[0],
-                        instrument_id,
-                    })
-                } else {
-                    Action::PianoRoll(PianoRollAction::ReleaseNotes {
-                        pitches,
-                        instrument_id,
-                    })
-                }
-            })
-            .collect()
+        self.perf.tick_releases(instrument_id)
     }
 
     fn on_enter(&mut self, state: &AppState) {
@@ -271,41 +245,21 @@ impl Pane for InstrumentEditPane {
     }
 
     fn toggle_performance_mode(&mut self, state: &AppState) -> ToggleResult {
-        if self.pad_keyboard.is_active() {
-            self.pad_keyboard.deactivate();
-            ToggleResult::Deactivated
-        } else if self.piano.is_active() {
-            self.piano.handle_escape();
-            if self.piano.is_active() {
-                ToggleResult::CycledLayout
-            } else {
-                ToggleResult::Deactivated
-            }
-        } else if state.instruments.selected_instrument()
-            .is_some_and(|s| s.source.is_kit())
-        {
-            self.pad_keyboard.activate();
-            ToggleResult::ActivatedPad
-        } else {
-            self.piano.activate();
-            ToggleResult::ActivatedPiano
-        }
+        let is_kit = state.instruments.selected_instrument()
+            .is_some_and(|s| s.source.is_kit());
+        self.perf.toggle(is_kit)
     }
 
     fn activate_piano(&mut self) {
-        if !self.piano.is_active() { self.piano.activate(); }
-        self.pad_keyboard.deactivate();
+        self.perf.activate_piano();
     }
 
     fn activate_pad(&mut self) {
-        if !self.pad_keyboard.is_active() { self.pad_keyboard.activate(); }
-        self.piano.deactivate();
+        self.perf.activate_pad();
     }
 
     fn deactivate_performance(&mut self) {
-        self.piano.release_all();
-        self.piano.deactivate();
-        self.pad_keyboard.deactivate();
+        self.perf.deactivate();
     }
 
     fn supports_performance_mode(&self) -> bool { true }

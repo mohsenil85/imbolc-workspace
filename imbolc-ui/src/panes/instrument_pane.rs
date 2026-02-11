@@ -1,9 +1,9 @@
 use std::any::Any;
-use std::time::Instant;
 
 use crate::state::{AppState, OwnershipDisplayStatus, SourceType};
 use crate::ui::layout_helpers::center_rect;
-use crate::ui::{Rect, RenderBuf, Action, NavAction, InstrumentAction, PianoRollAction, SessionAction, Color, InputEvent, KeyCode, Keymap, MouseEvent, MouseEventKind, MouseButton, PadKeyboard, Pane, PianoKeyboard, Style, ToggleResult, translate_key};
+use crate::ui::{Rect, RenderBuf, Action, NavAction, InstrumentAction, SessionAction, Color, InputEvent, KeyCode, Keymap, MouseEvent, MouseEventKind, MouseButton, Pane, Style, ToggleResult, translate_key};
+use crate::ui::performance::PerformanceController;
 use crate::ui::action_id::{ActionId, InstrumentListActionId, ModeActionId};
 use imbolc_types::InstrumentId;
 
@@ -40,8 +40,7 @@ fn source_color(source: SourceType) -> Color {
 
 pub struct InstrumentPane {
     keymap: Keymap,
-    piano: PianoKeyboard,
-    pad_keyboard: PadKeyboard,
+    perf: PerformanceController,
     /// When Some, we're waiting for the user to select a target instrument to link with
     linking_from: Option<crate::state::InstrumentId>,
 }
@@ -50,8 +49,7 @@ impl InstrumentPane {
     pub fn new(keymap: Keymap) -> Self {
         Self {
             keymap,
-            piano: PianoKeyboard::new(),
-            pad_keyboard: PadKeyboard::new(),
+            perf: PerformanceController::new(),
             linking_from: None,
         }
     }
@@ -178,22 +176,22 @@ impl Pane for InstrumentPane {
 
             // Piano layer actions
             ActionId::Mode(ModeActionId::PianoEscape) => {
-                let was_active = self.piano.is_active();
-                self.piano.handle_escape();
-                if was_active && !self.piano.is_active() {
+                let was_active = self.perf.piano.is_active();
+                self.perf.piano.handle_escape();
+                if was_active && !self.perf.piano.is_active() {
                     Action::ExitPerformanceMode
                 } else {
                     Action::None
                 }
             }
-            ActionId::Mode(ModeActionId::PianoOctaveDown) => { self.piano.octave_down(); Action::None }
-            ActionId::Mode(ModeActionId::PianoOctaveUp) => { self.piano.octave_up(); Action::None }
+            ActionId::Mode(ModeActionId::PianoOctaveDown) => { self.perf.piano.octave_down(); Action::None }
+            ActionId::Mode(ModeActionId::PianoOctaveUp) => { self.perf.piano.octave_up(); Action::None }
             ActionId::Mode(ModeActionId::PianoKey) | ActionId::Mode(ModeActionId::PianoSpace) => {
                 if let KeyCode::Char(c) = event.key {
                     let c = translate_key(c, state.keyboard_layout);
-                    if let Some(pitches) = self.piano.key_to_pitches(c) {
+                    if let Some(pitches) = self.perf.piano.key_to_pitches(c) {
                         // Check if this is a new press or key repeat (sustain)
-                        if let Some(new_pitches) = self.piano.key_pressed(c, pitches.clone(), event.timestamp) {
+                        if let Some(new_pitches) = self.perf.piano.key_pressed(c, pitches.clone(), event.timestamp) {
                             // NEW press - spawn voice(s)
                             if new_pitches.len() == 1 {
                                 return Action::Instrument(InstrumentAction::PlayNote(new_pitches[0], 100));
@@ -209,13 +207,13 @@ impl Pane for InstrumentPane {
 
             // Pad layer actions
             ActionId::Mode(ModeActionId::PadEscape) => {
-                self.pad_keyboard.deactivate();
+                self.perf.pad.deactivate();
                 Action::ExitPerformanceMode
             }
             ActionId::Mode(ModeActionId::PadKey) => {
                 if let KeyCode::Char(c) = event.key {
                     let c = translate_key(c, state.keyboard_layout);
-                    if let Some(pad_idx) = self.pad_keyboard.key_to_pad(c) {
+                    if let Some(pad_idx) = self.perf.pad.key_to_pad(c) {
                         return Action::Instrument(InstrumentAction::PlayDrumPad(pad_idx));
                     }
                 }
@@ -351,15 +349,15 @@ impl Pane for InstrumentPane {
         }
 
         // Piano/Pad mode indicator
-        if self.pad_keyboard.is_active() {
-            let pad_str = self.pad_keyboard.status_label();
+        if self.perf.pad.is_active() {
+            let pad_str = self.perf.pad.status_label();
             let pad_x = rect.x + rect.width - pad_str.len() as u16 - 1;
             buf.draw_line(
                 Rect::new(pad_x, rect.y, pad_str.len() as u16, 1),
                 &[(&pad_str, Style::new().fg(Color::BLACK).bg(Color::KIT_COLOR))],
             );
-        } else if self.piano.is_active() {
-            let piano_str = self.piano.status_label();
+        } else if self.perf.piano.is_active() {
+            let piano_str = self.perf.piano.status_label();
             let piano_x = rect.x + rect.width - piano_str.len() as u16 - 1;
             buf.draw_line(
                 Rect::new(piano_x, rect.y, piano_str.len() as u16, 1),
@@ -416,72 +414,28 @@ impl Pane for InstrumentPane {
     }
 
     fn tick(&mut self, state: &AppState) -> Vec<Action> {
-        if !self.piano.is_active() || !self.piano.has_active_keys() {
-            return vec![];
-        }
-        let now = Instant::now();
-        let released = self.piano.check_releases(now);
-        if released.is_empty() {
-            return vec![];
-        }
-        // Get the currently selected instrument ID
         let instrument_id = state.instruments.selected_instrument()
             .map(|inst| inst.id)
             .unwrap_or(InstrumentId::new(0));
-        // Flatten all released pitches (handles chords)
-        released.into_iter()
-            .map(|(_, pitches)| {
-                if pitches.len() == 1 {
-                    Action::PianoRoll(PianoRollAction::ReleaseNote {
-                        pitch: pitches[0],
-                        instrument_id,
-                    })
-                } else {
-                    Action::PianoRoll(PianoRollAction::ReleaseNotes {
-                        pitches,
-                        instrument_id,
-                    })
-                }
-            })
-            .collect()
+        self.perf.tick_releases(instrument_id)
     }
 
     fn toggle_performance_mode(&mut self, state: &AppState) -> ToggleResult {
-        if self.pad_keyboard.is_active() {
-            self.pad_keyboard.deactivate();
-            ToggleResult::Deactivated
-        } else if self.piano.is_active() {
-            self.piano.handle_escape();
-            if self.piano.is_active() {
-                ToggleResult::CycledLayout
-            } else {
-                ToggleResult::Deactivated
-            }
-        } else if state.instruments.selected_instrument()
-            .is_some_and(|s| s.source.is_kit())
-        {
-            self.pad_keyboard.activate();
-            ToggleResult::ActivatedPad
-        } else {
-            self.piano.activate();
-            ToggleResult::ActivatedPiano
-        }
+        let is_kit = state.instruments.selected_instrument()
+            .is_some_and(|s| s.source.is_kit());
+        self.perf.toggle(is_kit)
     }
 
     fn activate_piano(&mut self) {
-        if !self.piano.is_active() { self.piano.activate(); }
-        self.pad_keyboard.deactivate();
+        self.perf.activate_piano();
     }
 
     fn activate_pad(&mut self) {
-        if !self.pad_keyboard.is_active() { self.pad_keyboard.activate(); }
-        self.piano.deactivate();
+        self.perf.activate_pad();
     }
 
     fn deactivate_performance(&mut self) {
-        self.piano.release_all();
-        self.piano.deactivate();
-        self.pad_keyboard.deactivate();
+        self.perf.deactivate();
     }
 
     fn supports_performance_mode(&self) -> bool { true }

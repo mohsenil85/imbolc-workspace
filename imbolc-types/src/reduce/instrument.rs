@@ -116,21 +116,7 @@ pub(super) fn reduce(
             if let Some(instrument) = instruments.instrument_mut(*id) {
                 if let Some(effect) = instrument.effects_mut().find(|e| e.id == *effect_id) {
                     if let Some(param) = effect.params.get_mut(param_idx.get()) {
-                        use crate::ParamValue;
-                        match &mut param.value {
-                            ParamValue::Float(ref mut v) => {
-                                let range = param.max - param.min;
-                                *v = (*v + delta * range * 0.02).clamp(param.min, param.max);
-                            }
-                            ParamValue::Int(ref mut v) => {
-                                let range = param.max - param.min;
-                                *v = (*v + (delta * range * 0.02) as i32)
-                                    .clamp(param.min as i32, param.max as i32);
-                            }
-                            ParamValue::Bool(ref mut v) => {
-                                *v = !*v;
-                            }
-                        }
+                        param.adjust_delta(*delta);
                     }
                 }
             }

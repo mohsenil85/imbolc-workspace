@@ -35,8 +35,8 @@ impl AddPane {
     }
 
 
-    /// Build options without registries (used for initial state)
-    fn build_options_static() -> Vec<AddOption> {
+    /// Base source options shared by all builds
+    fn base_source_options() -> Vec<AddOption> {
         vec![
             // Basic Oscillators
             AddOption::Separator("── Oscillators ──"),
@@ -115,116 +115,35 @@ impl AddPane {
             AddOption::Source(SourceType::PitchedSampler),
             AddOption::Source(SourceType::TimeStretch),
             AddOption::Source(SourceType::Kit),
-            // Custom section
-            AddOption::Separator("── Custom ──"),
-            AddOption::ImportCustom,
-            // VST section
-            AddOption::Separator("── VST ──"),
-            AddOption::ImportVst,
         ]
+    }
+
+    /// Build options without registries (used for initial state)
+    fn build_options_static() -> Vec<AddOption> {
+        let mut options = Self::base_source_options();
+        options.push(AddOption::Separator("── Custom ──"));
+        options.push(AddOption::ImportCustom);
+        options.push(AddOption::Separator("── VST ──"));
+        options.push(AddOption::ImportVst);
+        options
     }
 
     /// Build options with custom synthdefs and VST plugins from registries
     fn build_options(&self, custom_registry: &CustomSynthDefRegistry, vst_registry: &VstPluginRegistry) -> Vec<AddOption> {
-        let mut options = vec![
-            // Basic Oscillators
-            AddOption::Separator("── Oscillators ──"),
-            AddOption::Source(SourceType::Saw),
-            AddOption::Source(SourceType::Sin),
-            AddOption::Source(SourceType::Sqr),
-            AddOption::Source(SourceType::Tri),
-            AddOption::Source(SourceType::Noise),
-            AddOption::Source(SourceType::Pulse),
-            AddOption::Source(SourceType::SuperSaw),
-            AddOption::Source(SourceType::Sync),
-            // Modulation / FM
-            AddOption::Separator("── Modulation ──"),
-            AddOption::Source(SourceType::Ring),
-            AddOption::Source(SourceType::FBSin),
-            AddOption::Source(SourceType::FM),
-            AddOption::Source(SourceType::PhaseMod),
-            AddOption::Source(SourceType::FMBell),
-            AddOption::Source(SourceType::FMBrass),
-            // Classic Synths
-            AddOption::Separator("── Classic ──"),
-            AddOption::Source(SourceType::Choir),
-            AddOption::Source(SourceType::EPiano),
-            AddOption::Source(SourceType::Organ),
-            AddOption::Source(SourceType::BrassStab),
-            AddOption::Source(SourceType::Strings),
-            AddOption::Source(SourceType::Acid),
-            // Physical Modeling
-            AddOption::Separator("── Physical ──"),
-            AddOption::Source(SourceType::Pluck),
-            AddOption::Source(SourceType::Formant),
-            AddOption::Source(SourceType::Bowed),
-            AddOption::Source(SourceType::Blown),
-            AddOption::Source(SourceType::Membrane),
-            // Mallet Percussion
-            AddOption::Separator("── Mallet ──"),
-            AddOption::Source(SourceType::Marimba),
-            AddOption::Source(SourceType::Vibes),
-            AddOption::Source(SourceType::Kalimba),
-            AddOption::Source(SourceType::SteelDrum),
-            AddOption::Source(SourceType::TubularBell),
-            AddOption::Source(SourceType::Glockenspiel),
-            // Plucked Strings
-            AddOption::Separator("── Plucked ──"),
-            AddOption::Source(SourceType::Guitar),
-            AddOption::Source(SourceType::BassGuitar),
-            AddOption::Source(SourceType::Harp),
-            AddOption::Source(SourceType::Koto),
-            // Drums
-            AddOption::Separator("── Drums ──"),
-            AddOption::Source(SourceType::Kick),
-            AddOption::Source(SourceType::Snare),
-            AddOption::Source(SourceType::HihatClosed),
-            AddOption::Source(SourceType::HihatOpen),
-            AddOption::Source(SourceType::Clap),
-            AddOption::Source(SourceType::Cowbell),
-            AddOption::Source(SourceType::Rim),
-            AddOption::Source(SourceType::Tom),
-            AddOption::Source(SourceType::Clave),
-            AddOption::Source(SourceType::Conga),
-            // Experimental
-            AddOption::Separator("── Experimental ──"),
-            AddOption::Source(SourceType::Gendy),
-            AddOption::Source(SourceType::Chaos),
-            // Synthesis
-            AddOption::Separator("── Synthesis ──"),
-            AddOption::Source(SourceType::Additive),
-            AddOption::Source(SourceType::Wavetable),
-            AddOption::Source(SourceType::Granular),
-            // Audio / Routing
-            AddOption::Separator("── Routing ──"),
-            AddOption::Source(SourceType::AudioIn),
-            AddOption::Source(SourceType::BusIn),
-            // Samplers
-            AddOption::Separator("── Samplers ──"),
-            AddOption::Source(SourceType::PitchedSampler),
-            AddOption::Source(SourceType::TimeStretch),
-            AddOption::Source(SourceType::Kit),
-            // Custom section
-            AddOption::Separator("── Custom ──"),
-        ];
+        let mut options = Self::base_source_options();
 
-        // Custom synthdefs
+        // Custom section
+        options.push(AddOption::Separator("── Custom ──"));
         for synthdef in &custom_registry.synthdefs {
             options.push(AddOption::Source(SourceType::Custom(synthdef.id)));
         }
-
-        // Import custom option
         options.push(AddOption::ImportCustom);
 
         // VST section
         options.push(AddOption::Separator("── VST ──"));
-
-        // Registered VST instruments
         for plugin in vst_registry.instruments() {
             options.push(AddOption::Source(SourceType::Vst(plugin.id)));
         }
-
-        // Import VST option
         options.push(AddOption::ImportVst);
 
         options
@@ -247,6 +166,20 @@ impl AddPane {
         let opts = &self.cached_options;
         self.selector.select_next(len, |i| matches!(opts.get(i), Some(AddOption::Separator(_))));
         self.selector.adjust_scroll(22); // Conservative visible rows estimate
+    }
+
+    /// Convert the currently-selected option to an Action
+    fn selected_option_action(&self) -> Action {
+        match self.cached_options.get(self.selector.selected) {
+            Some(AddOption::Source(source)) => Action::Instrument(InstrumentAction::Add(*source)),
+            Some(AddOption::ImportCustom) => {
+                Action::Session(SessionAction::OpenFileBrowser(FileSelectAction::ImportCustomSynthDef))
+            }
+            Some(AddOption::ImportVst) => {
+                Action::Session(SessionAction::OpenFileBrowser(FileSelectAction::ImportVstInstrument))
+            }
+            Some(AddOption::Separator(_)) | None => Action::None,
+        }
     }
 
     /// Move to previous selectable item
@@ -424,22 +357,7 @@ impl Pane for AddPane {
 
     fn handle_action(&mut self, action: ActionId, _event: &InputEvent, state: &AppState) -> Action {
         match action {
-            ActionId::Add(AddActionId::Confirm) => {
-                if let Some(option) = self.cached_options.get(self.selector.selected) {
-                    match option {
-                        AddOption::Source(source) => Action::Instrument(InstrumentAction::Add(*source)),
-                        AddOption::ImportCustom => {
-                            Action::Session(SessionAction::OpenFileBrowser(FileSelectAction::ImportCustomSynthDef))
-                        }
-                        AddOption::ImportVst => {
-                            Action::Session(SessionAction::OpenFileBrowser(FileSelectAction::ImportVstInstrument))
-                        }
-                        AddOption::Separator(_) => Action::None,
-                    }
-                } else {
-                    Action::None
-                }
-            }
+            ActionId::Add(AddActionId::Confirm) => self.selected_option_action(),
             ActionId::Add(AddActionId::Cancel) => {
                 if state.instruments.instruments.is_empty() {
                     Action::Nav(NavAction::SwitchPane("server"))
@@ -472,22 +390,11 @@ impl Pane for AddPane {
                 if row >= list_y && (row - list_y) < visible_rows as u16 {
                     let idx = self.selector.scroll_offset + (row - list_y) as usize;
                     if idx < self.cached_options.len() {
-                        // Skip separators
                         if matches!(self.cached_options.get(idx), Some(AddOption::Separator(_))) {
                             return Action::None;
                         }
                         self.selector.selected = idx;
-                        // Confirm selection
-                        match &self.cached_options[idx] {
-                            AddOption::Source(source) => return Action::Instrument(InstrumentAction::Add(*source)),
-                            AddOption::ImportCustom => {
-                                return Action::Session(SessionAction::OpenFileBrowser(FileSelectAction::ImportCustomSynthDef));
-                            }
-                            AddOption::ImportVst => {
-                                return Action::Session(SessionAction::OpenFileBrowser(FileSelectAction::ImportVstInstrument));
-                            }
-                            AddOption::Separator(_) => {}
-                        }
+                        return self.selected_option_action();
                     }
                 }
                 Action::None

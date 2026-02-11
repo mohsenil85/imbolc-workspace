@@ -61,23 +61,10 @@ pub(super) fn handle_adjust_effect_param(
         let inst_id = instrument.id;
         if let Some(effect) = instrument.effect_by_id_mut(effect_id) {
             if let Some(param) = effect.params.get_mut(param_idx.get()) {
-                let range = param.max - param.min;
-                match &mut param.value {
-                    crate::state::ParamValue::Float(v) => {
-                        *v = (*v + delta * range * 0.02).clamp(param.min, param.max);
-                        // Targeted param update for float params
-                        targeted_value = Some(*v);
-                        if state.recording.automation_recording && state.audio.playing {
-                            let target = AutomationTarget::effect_param(inst_id, effect_id, param_idx);
-                            record_target = Some((target.clone(), target.normalize_value(*v)));
-                        }
-                    }
-                    crate::state::ParamValue::Int(v) => {
-                        *v = (*v + (delta * range * 0.02) as i32).clamp(param.min as i32, param.max as i32);
-                    }
-                    crate::state::ParamValue::Bool(b) => {
-                        *b = !*b;
-                    }
+                targeted_value = param.adjust_delta(delta);
+                if targeted_value.is_some() && state.recording.automation_recording && state.audio.playing {
+                    let target = AutomationTarget::effect_param(inst_id, effect_id, param_idx);
+                    record_target = Some((target.clone(), target.normalize_value(targeted_value.unwrap())));
                 }
             }
         }

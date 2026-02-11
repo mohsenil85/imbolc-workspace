@@ -1,4 +1,5 @@
 pub mod action_id;
+pub mod filterable_list;
 pub mod frame;
 pub mod input;
 pub mod keybindings;
@@ -8,6 +9,7 @@ pub mod layout_helpers;
 pub mod list_selector;
 pub mod pad_keyboard;
 pub mod pane;
+pub mod performance;
 pub mod piano_keyboard;
 pub mod rat_compat;
 pub mod ratatui_impl;

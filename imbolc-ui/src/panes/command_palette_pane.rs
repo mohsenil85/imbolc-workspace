@@ -2,136 +2,54 @@ use std::any::Any;
 
 use crate::state::AppState;
 use crate::ui::action_id::{ActionId, ModeActionId};
+use crate::ui::filterable_list::{FilterableItem, FilterableList};
 use crate::ui::layout_helpers::center_rect;
-use crate::ui::widgets::TextInput;
 use crate::ui::{Rect, RenderBuf, Action, Color, InputEvent, KeyCode, Keymap, NavAction, Pane, Style};
+
+struct CommandEntry {
+    action: ActionId,
+    description: String,
+    keybinding: String,
+}
+
+impl FilterableItem for CommandEntry {
+    fn primary_text(&self) -> &str { self.action.as_str() }
+    fn secondary_text(&self) -> &str { &self.description }
+}
 
 pub struct CommandPalettePane {
     keymap: Keymap,
-    /// (action, description, keybinding display)
-    commands: Vec<(ActionId, String, String)>,
-    text_input: TextInput,
-    /// Indices into `commands` matching current filter
-    filtered: Vec<usize>,
-    /// Index within `filtered`
-    selected: usize,
-    scroll: usize,
-    /// The manually-typed prefix (separate from input which changes during tab cycling)
-    filter_base: String,
+    list: FilterableList<CommandEntry>,
     pending_command: Option<ActionId>,
 }
 
 impl CommandPalettePane {
     pub fn new(keymap: Keymap) -> Self {
-        let mut text_input = TextInput::new("");
-        text_input.set_focused(true);
         Self {
             keymap,
-            commands: Vec::new(),
-            text_input,
-            filtered: Vec::new(),
-            selected: 0,
-            scroll: 0,
-            filter_base: String::new(),
+            list: FilterableList::new(10),
             pending_command: None,
         }
     }
 
     /// Called before push to populate the palette with available commands.
     pub fn open(&mut self, commands: Vec<(ActionId, &'static str, String)>) {
-        self.commands = commands
+        let entries = commands
             .into_iter()
-            .map(|(a, d, k)| (a, d.to_string(), k))
+            .map(|(action, desc, keybinding)| CommandEntry {
+                action,
+                description: desc.to_string(),
+                keybinding,
+            })
             .collect();
-        self.text_input.set_value("");
-        self.text_input.set_focused(true);
-        self.filter_base.clear();
+        self.list.set_items(entries);
         self.pending_command = None;
-        self.selected = 0;
-        self.scroll = 0;
-        self.update_filter();
     }
 
     /// Called by main.rs after pop to get the confirmed command.
     pub fn take_command(&mut self) -> Option<ActionId> {
         self.pending_command.take()
     }
-
-    fn update_filter(&mut self) {
-        let query = self.filter_base.to_lowercase();
-        self.filtered = self
-            .commands
-            .iter()
-            .enumerate()
-            .filter(|(_, (action, desc, _))| {
-                if query.is_empty() {
-                    return true;
-                }
-                action.as_str().to_lowercase().contains(&query)
-                    || desc.to_lowercase().contains(&query)
-            })
-            .map(|(i, _)| i)
-            .collect();
-        self.selected = 0;
-        self.scroll = 0;
-    }
-
-    fn tab_complete(&mut self) {
-        if self.filtered.is_empty() {
-            return;
-        }
-
-        let input = self.text_input.value().to_string();
-
-        // Find longest common prefix of all filtered action names
-        let first_action_str = self.commands[self.filtered[0]].0.as_str();
-        let mut lcp = first_action_str.to_string();
-        for &idx in &self.filtered[1..] {
-            let action_str = self.commands[idx].0.as_str();
-            lcp = longest_common_prefix(&lcp, action_str);
-            if lcp.is_empty() {
-                break;
-            }
-        }
-
-        if lcp.len() > input.len() && lcp.starts_with(&input) {
-            // LCP extends beyond current input — fill in LCP
-            self.text_input.set_value(&lcp);
-            self.filter_base = lcp;
-            self.update_filter();
-        } else if self.filtered.len() == 1 {
-            // Single match — fill in completely
-            let action_str = self.commands[self.filtered[0]].0.as_str();
-            self.text_input.set_value(action_str);
-            self.filter_base = action_str.to_string();
-            self.update_filter();
-        } else if self.filtered.len() > 1 {
-            // Already at LCP and multiple matches — cycle selected
-            self.selected = (self.selected + 1) % self.filtered.len();
-            self.ensure_visible();
-            let idx = self.filtered[self.selected];
-            let action_str = self.commands[idx].0.as_str();
-            self.text_input.set_value(action_str);
-            // Don't change filter_base — keep showing all matches
-        }
-    }
-
-    fn ensure_visible(&mut self) {
-        let max_visible = 10;
-        if self.selected < self.scroll {
-            self.scroll = self.selected;
-        } else if self.selected >= self.scroll + max_visible {
-            self.scroll = self.selected.saturating_sub(max_visible - 1);
-        }
-    }
-}
-
-fn longest_common_prefix(a: &str, b: &str) -> String {
-    a.chars()
-        .zip(b.chars())
-        .take_while(|(ca, cb)| ca == cb)
-        .map(|(c, _)| c)
-        .collect()
 }
 
 impl Pane for CommandPalettePane {
@@ -142,9 +60,8 @@ impl Pane for CommandPalettePane {
     fn handle_action(&mut self, action: ActionId, _event: &InputEvent, _state: &AppState) -> Action {
         match action {
             ActionId::Mode(ModeActionId::PaletteConfirm) => {
-                if !self.filtered.is_empty() {
-                    let idx = self.filtered[self.selected];
-                    self.pending_command = Some(self.commands[idx].0);
+                if let Some(entry) = self.list.selected_item() {
+                    self.pending_command = Some(entry.action);
                 }
                 Action::Nav(NavAction::PopPane)
             }
@@ -158,44 +75,17 @@ impl Pane for CommandPalettePane {
 
     fn handle_raw_input(&mut self, event: &InputEvent, _state: &AppState) -> Action {
         match event.key {
-            KeyCode::Tab => {
-                self.tab_complete();
-            }
-            KeyCode::Up => {
-                if !self.filtered.is_empty() {
-                    if self.selected > 0 {
-                        self.selected -= 1;
-                    } else {
-                        self.selected = self.filtered.len() - 1;
-                    }
-                    self.ensure_visible();
-                    let idx = self.filtered[self.selected];
-                    let action_str = self.commands[idx].0.as_str();
-                    self.text_input.set_value(action_str);
-                }
-            }
-            KeyCode::Down => {
-                if !self.filtered.is_empty() {
-                    self.selected = (self.selected + 1) % self.filtered.len();
-                    self.ensure_visible();
-                    let idx = self.filtered[self.selected];
-                    let action_str = self.commands[idx].0.as_str();
-                    self.text_input.set_value(action_str);
-                }
-            }
-            _ => {
-                // Delegate text editing to rat-widget TextInput
-                self.text_input.handle_input(event);
-                self.filter_base = self.text_input.value().to_string();
-                self.update_filter();
-            }
+            KeyCode::Tab => self.list.tab_complete(),
+            KeyCode::Up => self.list.move_up(),
+            KeyCode::Down => self.list.move_down(),
+            _ => self.list.handle_text_input(event),
         }
         Action::None
     }
 
     fn render(&mut self, area: Rect, buf: &mut RenderBuf, _state: &AppState) {
-        let max_visible: usize = 10;
-        let list_height = self.filtered.len().min(max_visible);
+        let max_visible = self.list.max_visible();
+        let list_height = self.list.filtered().len().min(max_visible);
         let total_height = (3 + list_height).max(5) as u16;
         let width = 60u16.min(area.width.saturating_sub(4));
         let rect = center_rect(area, width, total_height);
@@ -218,9 +108,7 @@ impl Pane for CommandPalettePane {
         // Prompt line: render ": " prefix then TextInput
         let prompt_y = inner.y;
         buf.draw_line(Rect::new(inner.x, prompt_y, 2, 1), &[(": ", Style::new().fg(Color::CYAN).bold())]);
-
-        // TextInput renders after the ": " prefix
-        self.text_input.render_buf(buf.raw_buf(), inner.x + 2, prompt_y, inner.width.saturating_sub(2));
+        self.list.text_input.render_buf(buf.raw_buf(), inner.x + 2, prompt_y, inner.width.saturating_sub(2));
 
         // Divider
         if inner.height > 1 {
@@ -233,7 +121,7 @@ impl Pane for CommandPalettePane {
         let list_start_y = inner.y + 2;
         let available_rows = (inner.height as usize).saturating_sub(2);
 
-        if self.filtered.is_empty() {
+        if self.list.filtered().is_empty() {
             if available_rows > 0 {
                 let no_match_area = Rect::new(inner.x + 1, list_start_y, inner.width.saturating_sub(2), 1);
                 buf.draw_line(no_match_area, &[("No matches", Style::new().fg(Color::DARK_GRAY))]);
@@ -241,23 +129,26 @@ impl Pane for CommandPalettePane {
             return;
         }
 
-        let visible_count = available_rows.min(self.filtered.len().saturating_sub(self.scroll));
+        let items = self.list.items();
+        let filtered = self.list.filtered();
+        let scroll = self.list.scroll();
+        let selected = self.list.selected();
+        let visible_count = available_rows.min(filtered.len().saturating_sub(scroll));
         for row in 0..visible_count {
-            let filter_idx = self.scroll + row;
-            if filter_idx >= self.filtered.len() {
+            let filter_idx = scroll + row;
+            if filter_idx >= filtered.len() {
                 break;
             }
-            let cmd_idx = self.filtered[filter_idx];
-            let (ref action, ref desc, ref key) = self.commands[cmd_idx];
+            let cmd_idx = filtered[filter_idx];
+            let entry = &items[cmd_idx];
             let y = list_start_y + row as u16;
             if y >= inner.y + inner.height {
                 break;
             }
 
-            let is_selected = filter_idx == self.selected;
+            let is_selected = filter_idx == selected;
             let row_area = Rect::new(inner.x, y, inner.width, 1);
 
-            // Clear row with selection bg if selected
             if is_selected {
                 for x in row_area.x..row_area.x + row_area.width {
                     buf.set_cell(x, y, ' ', Style::new().bg(Color::SELECTION_BG));
@@ -280,14 +171,12 @@ impl Pane for CommandPalettePane {
                 Style::new().fg(Color::DARK_GRAY)
             };
 
-            // Layout: " action_name  description     keybinding "
             let w = inner.width as usize;
-            let key_display = format!(" {} ", key);
+            let key_display = format!(" {} ", entry.keybinding);
             let key_len = key_display.len();
-            let action_display = format!(" {}", action.as_str());
-            let desc_display = format!("  {}", desc);
+            let action_display = format!(" {}", entry.action.as_str());
+            let desc_display = format!("  {}", entry.description);
 
-            // Truncate if needed
             let remaining = w.saturating_sub(key_len);
             let action_len = action_display.len().min(remaining);
             let desc_remaining = remaining.saturating_sub(action_len);
