@@ -12,9 +12,18 @@ The leaf crate of the Imbolc workspace. Contains data structures used across imb
 src/
   lib.rs              — Re-exports, type aliases (InstrumentId, EffectId, etc.)
   action.rs           — Action enum for UI -> core dispatch
-  dispatch.rs         — Dispatcher trait
   param.rs            — Param, ParamValue, frequency helpers
   audio.rs            — AudioFeedback, ServerStatus, ExportKind
+  reduce/             — Pure state-mutation reducers (single source of truth)
+    mod.rs              — reduce_action(), is_reducible()
+    instrument.rs       — Instrument action reducer + initialize_instrument_from_registries()
+    mixer.rs            — Mixer action reducer
+    piano_roll.rs       — Piano roll action reducer
+    automation.rs       — Automation action reducer
+    bus.rs              — Bus/layer group action reducer
+    session.rs          — Session action reducer
+    vst_param.rs        — VST param action reducer
+    click.rs            — Click track reducer
   state/
     mod.rs            — AppState components, re-exports
     instrument/       — Instrument types
@@ -56,7 +65,6 @@ src/
 | `FilterType` | `state/instrument/filter.rs` | Filter types: LowPass, HighPass, BandPass, Notch |
 | `Action` | `action.rs` | Enum of all actions dispatched from UI to core |
 | `Param` / `ParamValue` | `param.rs` | Generic parameter with Float/Int/Bool values |
-| `Dispatcher` | `dispatch.rs` | Trait for action dispatch implementations |
 | `InstrumentState` | `state/instrument_state.rs` | Collection of instruments + selection state |
 | `SessionState` | `state/session.rs` | Global session: arrangement, mixer, automation, transport |
 | `PianoRollState` | `state/piano_roll.rs` | Tracks, notes, grid settings |

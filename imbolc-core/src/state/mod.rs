@@ -119,48 +119,10 @@ impl AppState {
     /// Add an instrument, with custom synthdef param setup and piano roll track auto-creation.
     pub fn add_instrument(&mut self, source: SourceType) -> InstrumentId {
         let id = self.instruments.add_instrument(source);
-
-        // For custom synthdefs, set params from registry
-        if let SourceType::Custom(custom_id) = source {
-            if let Some(synthdef) = self.session.custom_synthdefs.get(custom_id) {
-                if let Some(inst) = self.instruments.instrument_mut(id) {
-                    inst.name = format!("{}-{}", synthdef.synthdef_name, id);
-                    inst.source_params = synthdef
-                        .params
-                        .iter()
-                        .map(|p| param::Param {
-                            name: p.name.clone(),
-                            value: param::ParamValue::Float(p.default),
-                            min: p.min,
-                            max: p.max,
-                        })
-                        .collect();
-                }
-            }
-        }
-
-        // For VST instruments, set name from registry
-        if let SourceType::Vst(vst_id) = source {
-            if let Some(plugin) = self.session.vst_plugins.get(vst_id) {
-                if let Some(inst) = self.instruments.instrument_mut(id) {
-                    inst.name = format!("{}-{}", plugin.name.to_lowercase(), id);
-                    inst.source_params = plugin
-                        .params
-                        .iter()
-                        .map(|p| param::Param {
-                            name: p.name.clone(),
-                            value: param::ParamValue::Float(p.default),
-                            min: 0.0,
-                            max: 1.0,
-                        })
-                        .collect();
-                }
-            }
-        }
-
-        // Always add a piano roll track for every instrument
+        imbolc_types::reduce::initialize_instrument_from_registries(
+            id, source, &mut self.instruments, &self.session,
+        );
         self.session.piano_roll.add_track(id);
-
         id
     }
 

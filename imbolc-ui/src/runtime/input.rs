@@ -326,6 +326,13 @@ impl AppRuntime {
                 self.dispatcher.state_mut().midi.connected_port = None;
             }
 
+            // Intercept Quit — handle in runtime, not dispatch
+            // (Action::Quit from quit_prompt_pane bypasses dispatch since to_domain() returns None)
+            if matches!(&pane_action, Action::Quit) {
+                should_quit = true;
+                break 'events;
+            }
+
             // Intercept SaveAndQuit — handle in runtime, not dispatch
             if matches!(&pane_action, Action::SaveAndQuit) {
                 if self.dispatcher.state().project.path.is_some() {

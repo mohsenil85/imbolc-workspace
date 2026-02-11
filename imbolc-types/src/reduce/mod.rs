@@ -12,6 +12,7 @@
 //! - Send audio commands
 
 mod instrument;
+pub use instrument::initialize_instrument_from_registries;
 mod mixer;
 mod piano_roll;
 mod automation;

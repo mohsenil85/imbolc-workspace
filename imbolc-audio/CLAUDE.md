@@ -17,7 +17,6 @@ src/
   audio_thread.rs       — AudioThread (runs in separate thread)
   commands.rs           — AudioCmd and AudioFeedback enums
   playback.rs           — Playback scheduling, sequencer tick
-  action_projection.rs  — State diff → OSC command projection
   snapshot.rs           — State snapshots for audio thread
   triple_buffer.rs      — Lock-free state transfer
   osc_client.rs         — OSC message sending

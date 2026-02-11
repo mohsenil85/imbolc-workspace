@@ -117,3 +117,76 @@ impl Pane for QuitPromptPane {
         self
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ui::Modifiers;
+
+    fn make_pane() -> QuitPromptPane {
+        QuitPromptPane::new(Keymap::new())
+    }
+
+    fn key(code: KeyCode) -> InputEvent {
+        InputEvent::new(code, Modifiers::none())
+    }
+
+    fn state() -> AppState {
+        AppState::new()
+    }
+
+    #[test]
+    fn d_key_returns_quit() {
+        let mut pane = make_pane();
+        let action = pane.handle_raw_input(&key(KeyCode::Char('D')), &state());
+        assert!(matches!(action, Action::Quit));
+    }
+
+    #[test]
+    fn s_key_returns_save_and_quit() {
+        let mut pane = make_pane();
+        let action = pane.handle_raw_input(&key(KeyCode::Char('S')), &state());
+        assert!(matches!(action, Action::SaveAndQuit));
+    }
+
+    #[test]
+    fn escape_returns_pop_pane() {
+        let mut pane = make_pane();
+        let action = pane.handle_raw_input(&key(KeyCode::Escape), &state());
+        assert!(matches!(action, Action::Nav(NavAction::PopPane)));
+    }
+
+    #[test]
+    fn c_key_returns_pop_pane() {
+        let mut pane = make_pane();
+        let action = pane.handle_raw_input(&key(KeyCode::Char('c')), &state());
+        assert!(matches!(action, Action::Nav(NavAction::PopPane)));
+    }
+
+    #[test]
+    fn enter_on_dont_save_returns_quit() {
+        let mut pane = make_pane();
+        // Navigate to DontSave
+        pane.handle_raw_input(&key(KeyCode::Right), &state());
+        let action = pane.handle_raw_input(&key(KeyCode::Enter), &state());
+        assert!(matches!(action, Action::Quit));
+    }
+
+    #[test]
+    fn enter_on_save_returns_save_and_quit() {
+        let mut pane = make_pane();
+        // Default selection is Save
+        let action = pane.handle_raw_input(&key(KeyCode::Enter), &state());
+        assert!(matches!(action, Action::SaveAndQuit));
+    }
+
+    #[test]
+    fn enter_on_cancel_returns_pop_pane() {
+        let mut pane = make_pane();
+        // Navigate to Cancel
+        pane.handle_raw_input(&key(KeyCode::Right), &state());
+        pane.handle_raw_input(&key(KeyCode::Right), &state());
+        let action = pane.handle_raw_input(&key(KeyCode::Enter), &state());
+        assert!(matches!(action, Action::Nav(NavAction::PopPane)));
+    }
+}

@@ -111,41 +111,32 @@ AppState (imbolc-core/src/state/mod.rs)
 └── network: Option<NetworkDisplayContext>
 ```
 
-## AudioDirty Flags Reference
+## AudioEffect Reference
 
-`AudioDirty` is `Copy` (must stay Copy — used by-value at dozens of call sites).
+`AudioEffect` is the typed event stream replacing the old `AudioDirty` boolean flags. Dispatch handlers push `AudioEffect` variants into `DispatchResult.audio_effects: Vec<AudioEffect>`.
 
-### Structural flags (trigger rebuilds)
+### AudioEffect Variants
 
-| Flag | Type | When to set | Audio engine response |
-|---|---|---|---|
-| `instruments` | `bool` | Instrument add/delete, source/processing chain change | Rebuild instrument chains |
-| `session` | `bool` | BPM/key/scale/time signature/humanize changes | Update session snapshot |
-| `piano_roll` | `bool` | Note edits, loop change | Update piano-roll snapshot |
-| `automation` | `bool` | Automation lane/point change | Update automation snapshot |
-| `routing` | `bool` | Structural routing changes | Full SC node graph rebuild |
-| `routing_instruments` | `[Option<InstrumentId>; 4]` | Targeted per-instrument rebuild | Rebuild only those instrument chains |
-| `routing_add_instrument` | `Option<InstrumentId>` | Add instrument without teardown | Build new chain + sends |
-| `routing_delete_instrument` | `Option<InstrumentId>` | Delete instrument without teardown | Free nodes/voices/sends for that instrument |
-| `routing_bus_processing` | `bool` | Bus/layer-group effect changes | Rebuild GROUP_BUS_PROCESSING only |
-| `mixer_params` | `bool` | Level/pan/mute/solo on instruments/buses/groups | Update mixer node params |
+| Variant | Purpose |
+|---|---|
+| `RebuildInstruments` | Instrument add/delete, source/processing chain change |
+| `UpdateSession` | BPM/key/scale/time signature/humanize changes |
+| `UpdatePianoRoll` | Note edits, loop change |
+| `UpdateAutomation` | Automation lane/point change |
+| `RebuildRouting` | Full SC node graph rebuild |
+| `RebuildRoutingForInstrument(InstrumentId)` | Targeted per-instrument rebuild |
+| `AddInstrumentRouting(InstrumentId)` | Add instrument without teardown |
+| `DeleteInstrumentRouting(InstrumentId)` | Delete instrument without teardown |
+| `RebuildBusProcessing` | Bus/layer-group effect changes |
+| `UpdateMixerParams` | Level/pan/mute/solo on instruments/buses/groups |
+| `UpdateFilterParam(InstrumentId, FilterParamKind, f32)` | Direct filter node update |
+| `UpdateEffectParam(InstrumentId, EffectId, usize, f32)` | Direct effect node update |
+| `UpdateLfoParam(InstrumentId, LfoParamKind, f32)` | Direct LFO node update |
+| `UpdateBusEffectParam(u8, EffectId, usize, f32)` | Direct bus effect update |
+| `UpdateLayerGroupEffectParam(u32, EffectId, usize, f32)` | Direct layer group effect update |
+| `UpdateEqParam(InstrumentId)` | EQ parameter update |
 
-### Targeted param flags (send /n_set, no rebuild)
-
-| Flag | Type | Purpose |
-|---|---|---|
-| `filter_param` | `Option<(InstrumentId, FilterParamKind, f32)>` | Direct filter node update |
-| `effect_param` | `Option<(InstrumentId, EffectId, usize, f32)>` | Direct effect node update |
-| `lfo_param` | `Option<(InstrumentId, LfoParamKind, f32)>` | Direct LFO node update |
-| `bus_effect_param` | `Option<(u8, EffectId, usize, f32)>` | Direct bus effect update |
-| `layer_group_effect_param` | `Option<(u32, EffectId, usize, f32)>` | Direct layer group effect update |
-
-**Merge rules**:
-- Booleans OR.
-- `routing_instruments` collects unique IDs up to 4; overflow escalates to `routing = true`.
-- `routing_add_instrument` / `routing_delete_instrument` conflicts escalate to `routing = true`.
-- Full `routing` overrides targeted routing flags.
-- Targeted params: last writer wins.
+Effects are collected in `DispatchResult.audio_effects: Vec<AudioEffect>` and applied by the runtime after dispatch returns.
 
 ## Module Maps
 
@@ -180,7 +171,6 @@ AppState (imbolc-core/src/state/mod.rs)
 | `vst_param.rs` | VST parameter editing |
 | `arrangement.rs` | Clip/arrangement actions |
 | `audio_feedback.rs` | Audio feedback processing |
-| `side_effects.rs` | `AudioSideEffect` enum (voice spawn, sample free, etc.) |
 
 ### imbolc-audio: src/ (separate crate, re-exported by core as `pub use imbolc_audio as audio`)
 
@@ -195,7 +185,6 @@ AppState (imbolc-core/src/state/mod.rs)
 | `arpeggiator_tick.rs` | Arpeggiator tick scheduling |
 | `drum_tick.rs` | Drum sequencer tick scheduling |
 | `click_tick.rs` | Click track tick scheduling |
-| `action_projection.rs` | Action → audio-thread projection |
 | `snapshot.rs` | State snapshot type aliases |
 | `event_log.rs` | Event log for projectable actions + snapshots |
 | `osc_sender.rs` | Background OSC bundle sender |
@@ -220,7 +209,6 @@ AppState (imbolc-core/src/state/mod.rs)
 | `drum_tick.rs` | Drum sequencer playback |
 | `arpeggiator_tick.rs` | Arpeggiator playback |
 | `click_tick.rs` | Click track timing |
-| `action_projection.rs` | Projectable action detection |
 | `devices.rs` | Audio device enumeration |
 | `telemetry.rs` | OSC queue depth, latency metrics |
 

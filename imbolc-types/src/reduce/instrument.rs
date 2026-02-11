@@ -1,6 +1,6 @@
 use crate::{
-    InstrumentAction, InstrumentId, InstrumentState, SessionState,
-    BusId, EqParamKind, FilterType,
+    InstrumentAction, InstrumentId, InstrumentState, SessionState, SourceType,
+    BusId, EqParamKind, FilterType, Param, ParamValue,
 };
 
 pub(super) fn reduce(
@@ -11,6 +11,7 @@ pub(super) fn reduce(
     match action {
         InstrumentAction::Add(source_type) => {
             let id = instruments.add_instrument(*source_type);
+            initialize_instrument_from_registries(id, *source_type, instruments, session);
             session.piano_roll.add_track(id);
             true
         }
@@ -435,6 +436,50 @@ pub(super) fn reduce(
     }
 }
 
+/// Initialize instrument name and source_params from Custom/VST registries.
+/// Called by the reducer and by `AppState::add_instrument()` to keep them aligned.
+pub fn initialize_instrument_from_registries(
+    id: InstrumentId,
+    source_type: SourceType,
+    instruments: &mut InstrumentState,
+    session: &SessionState,
+) {
+    if let SourceType::Custom(custom_id) = source_type {
+        if let Some(synthdef) = session.custom_synthdefs.get(custom_id) {
+            if let Some(inst) = instruments.instrument_mut(id) {
+                inst.name = format!("{}-{}", synthdef.synthdef_name, id);
+                inst.source_params = synthdef
+                    .params
+                    .iter()
+                    .map(|p| Param {
+                        name: p.name.clone(),
+                        value: ParamValue::Float(p.default),
+                        min: p.min,
+                        max: p.max,
+                    })
+                    .collect();
+            }
+        }
+    }
+    if let SourceType::Vst(vst_id) = source_type {
+        if let Some(plugin) = session.vst_plugins.get(vst_id) {
+            if let Some(inst) = instruments.instrument_mut(id) {
+                inst.name = format!("{}-{}", plugin.name.to_lowercase(), id);
+                inst.source_params = plugin
+                    .params
+                    .iter()
+                    .map(|p| Param {
+                        name: p.name.clone(),
+                        value: ParamValue::Float(p.default),
+                        min: 0.0,
+                        max: 1.0,
+                    })
+                    .collect();
+            }
+        }
+    }
+}
+
 fn reduce_link_layer(
     instruments: &mut InstrumentState,
     session: &mut SessionState,
@@ -485,6 +530,143 @@ fn reduce_unlink_layer(
                 }
             }
             session.mixer.remove_layer_group_mixer(g);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::state::custom_synthdef::{CustomSynthDef, ParamSpec};
+    use crate::state::vst::{VstPlugin, VstParamSpec, VstPluginKind};
+    use crate::{CustomSynthDefId, VstPluginId};
+    use std::path::PathBuf;
+
+    fn make_session_with_custom() -> SessionState {
+        let mut session = SessionState::new();
+        let synthdef = CustomSynthDef {
+            id: CustomSynthDefId::new(0),
+            name: "test".to_string(),
+            synthdef_name: "imbolc_test".to_string(),
+            source_path: PathBuf::from("/tmp/test.scd"),
+            params: vec![
+                ParamSpec { name: "freq".to_string(), default: 440.0, min: 20.0, max: 20000.0 },
+                ParamSpec { name: "amp".to_string(), default: 0.5, min: 0.0, max: 1.0 },
+            ],
+        };
+        session.custom_synthdefs.add(synthdef);
+        session
+    }
+
+    fn make_session_with_vst() -> SessionState {
+        let mut session = SessionState::new();
+        let plugin = VstPlugin {
+            id: VstPluginId::new(0),
+            name: "TestSynth".to_string(),
+            plugin_path: PathBuf::from("/tmp/test.vst3"),
+            kind: VstPluginKind::Instrument,
+            params: vec![
+                VstParamSpec { index: 0, name: "cutoff".to_string(), default: 0.7, label: None },
+                VstParamSpec { index: 1, name: "resonance".to_string(), default: 0.3, label: None },
+            ],
+        };
+        session.vst_plugins.add(plugin);
+        session
+    }
+
+    #[test]
+    fn add_custom_initializes_params_from_registry() {
+        let mut session = make_session_with_custom();
+        let mut instruments = InstrumentState::new();
+        let custom_id = CustomSynthDefId::new(0);
+
+        reduce(&InstrumentAction::Add(SourceType::Custom(custom_id)), &mut instruments, &mut session);
+
+        let inst = &instruments.instruments[0];
+        assert!(inst.name.starts_with("imbolc_test-"));
+        assert_eq!(inst.source_params.len(), 2);
+        assert_eq!(inst.source_params[0].name, "freq");
+        assert_eq!(inst.source_params[0].min, 20.0);
+        assert_eq!(inst.source_params[0].max, 20000.0);
+        assert_eq!(inst.source_params[1].name, "amp");
+    }
+
+    #[test]
+    fn add_vst_initializes_params_from_registry() {
+        let mut session = make_session_with_vst();
+        let mut instruments = InstrumentState::new();
+        let vst_id = VstPluginId::new(0);
+
+        reduce(&InstrumentAction::Add(SourceType::Vst(vst_id)), &mut instruments, &mut session);
+
+        let inst = &instruments.instruments[0];
+        assert!(inst.name.starts_with("testsynth-"));
+        assert_eq!(inst.source_params.len(), 2);
+        assert_eq!(inst.source_params[0].name, "cutoff");
+        assert_eq!(inst.source_params[0].min, 0.0);
+        assert_eq!(inst.source_params[0].max, 1.0);
+        assert_eq!(inst.source_params[1].name, "resonance");
+    }
+
+    #[test]
+    fn add_basic_source_uses_default_params() {
+        let mut session = SessionState::new();
+        let mut instruments = InstrumentState::new();
+
+        reduce(&InstrumentAction::Add(SourceType::Saw), &mut instruments, &mut session);
+
+        let inst = &instruments.instruments[0];
+        // Saw gets default_params() from SourceType, not from registries
+        assert_eq!(inst.source_params, SourceType::Saw.default_params());
+    }
+
+    #[test]
+    fn initialize_helper_matches_reducer_for_custom() {
+        let mut session = make_session_with_custom();
+        let custom_id = CustomSynthDefId::new(0);
+
+        // Path A: via reducer
+        let mut instruments_a = InstrumentState::new();
+        reduce(&InstrumentAction::Add(SourceType::Custom(custom_id)), &mut instruments_a, &mut session);
+
+        // Path B: via helper directly
+        let mut instruments_b = InstrumentState::new();
+        let id = instruments_b.add_instrument(SourceType::Custom(custom_id));
+        initialize_instrument_from_registries(id, SourceType::Custom(custom_id), &mut instruments_b, &session);
+
+        let a = &instruments_a.instruments[0];
+        let b = &instruments_b.instruments[0];
+        assert_eq!(a.name, b.name);
+        assert_eq!(a.source_params.len(), b.source_params.len());
+        for (pa, pb) in a.source_params.iter().zip(b.source_params.iter()) {
+            assert_eq!(pa.name, pb.name);
+            assert_eq!(pa.min, pb.min);
+            assert_eq!(pa.max, pb.max);
+        }
+    }
+
+    #[test]
+    fn initialize_helper_matches_reducer_for_vst() {
+        let mut session = make_session_with_vst();
+        let vst_id = VstPluginId::new(0);
+
+        // Path A: via reducer
+        let mut instruments_a = InstrumentState::new();
+        reduce(&InstrumentAction::Add(SourceType::Vst(vst_id)), &mut instruments_a, &mut session);
+
+        // Path B: via helper directly
+        let mut instruments_b = InstrumentState::new();
+        let id = instruments_b.add_instrument(SourceType::Vst(vst_id));
+        initialize_instrument_from_registries(id, SourceType::Vst(vst_id), &mut instruments_b, &session);
+
+        let a = &instruments_a.instruments[0];
+        let b = &instruments_b.instruments[0];
+        assert_eq!(a.name, b.name);
+        assert_eq!(a.source_params.len(), b.source_params.len());
+        for (pa, pb) in a.source_params.iter().zip(b.source_params.iter()) {
+            assert_eq!(pa.name, pb.name);
+            assert_eq!(pa.min, pb.min);
+            assert_eq!(pa.max, pb.max);
         }
     }
 }
