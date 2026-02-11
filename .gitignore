@@ -4,3 +4,5 @@
 *.vst
 .mcp.json
 cclsp.json
+*/.obsidian
+.DS_Store
