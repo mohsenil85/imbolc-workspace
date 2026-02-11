@@ -17,7 +17,7 @@ pub fn App() -> Element {
     let mut shared_state = use_context_provider(|| Signal::new(SharedState::new()));
 
     // Create keybindings
-    let keybindings = use_signal(|| Keybindings::new());
+    let keybindings = use_signal(Keybindings::new);
 
     // Track which panel is focused
     let mut focused_panel = use_signal(|| "arrangement");

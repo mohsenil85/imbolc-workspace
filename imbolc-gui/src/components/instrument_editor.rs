@@ -26,6 +26,7 @@ pub fn InstrumentEditor() -> Element {
             };
 
             // Gather effects info (effect_id, chain_index, name, enabled, params)
+            #[allow(clippy::type_complexity)]
             let effects_info: Vec<(EffectId, usize, String, bool, Vec<(String, f32, f32, f32)>)> = i
                 .effects()
                 .map(|e| {

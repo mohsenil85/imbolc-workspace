@@ -9,6 +9,7 @@ MIDI) work. The goal is to harden it for public alpha/beta — early
 adopters who'll tolerate rough edges but expect stability.
 
 **Decisions locked in:**
+
 - TUI is the product (imbolc-gui can be dropped/fenced)
 - Network (imbolc-net) deferred entirely — solo experience only
 - Architecture questions get pragmatic defaults, not deep redesigns
@@ -22,12 +23,14 @@ Clean build = professional signal. Zero warnings makes regressions
 visible.
 
 ### 0.1 Fix compile error -- DONE
+
 - [x] `imbolc-ui/src/panes/global_actions.rs:186` — non-exhaustive match
   on `PaneId::Tuner`. Add the missing arm.
 - [x] `imbolc-ui/src/ui/action_id.rs` — verify `PaneId::Tuner` variant
   exists and is handled
 
 ### 0.2 Fix all compiler warnings (~33) -- DONE
+
 - [x] `imbolc-ui/src/ui/mod.rs:30` — remove unused imports
   `selected_style_bold`, `selected_style`
 - [x] `imbolc-ui/src/main.rs:64` — prefix `discover_mode` with `_` (or
@@ -47,6 +50,7 @@ visible.
 **Done when:** `cargo build` produces zero warnings.
 
 ### 0.3 Quick wins from TASKS.md -- DONE
+
 - [x] Remove time signature from piano roll header (`piano_roll_pane.rs`)
 - [x] Remove inline help text from pane `render()` methods (all panes)
 
@@ -57,6 +61,7 @@ visible.
 An alpha that crashes or silently fails destroys trust.
 
 ### 1.1 Notification/feedback system -- DONE
+
 - [x] Add `StatusMessage { text, level, timestamp }` ring buffer to
   `AppState`
 - [x] Render one-line status bar at bottom of frame (`frame.rs`)
@@ -69,6 +74,7 @@ An alpha that crashes or silently fails destroys trust.
 `imbolc-ui/src/main.rs`
 
 ### 1.2 Terminal size handling -- DONE
+
 - [x] On startup + `Event::Resize`: check against minimum (80x24)
 - [x] If too small: render centered message, skip pane rendering
 - [x] Clamp layout dimensions to available space
@@ -76,6 +82,7 @@ An alpha that crashes or silently fails destroys trust.
 **Files:** `imbolc-ui/src/main.rs`, `imbolc-ui/src/ui/frame.rs`
 
 ### 1.3 Panic recovery hook -- DONE
+
 - [x] Set a panic hook that restores terminal state (disable raw mode,
   show cursor)
 - [x] Attempt autosave on panic before exiting
@@ -84,6 +91,7 @@ An alpha that crashes or silently fails destroys trust.
 **Files:** `imbolc-ui/src/main.rs`
 
 ### 1.4 Audit production unwraps -- DONE
+
 - [x] Review all `.unwrap()` outside test modules in imbolc-core and
   imbolc-ui
 - [x] Replace with proper error handling or document with comments
@@ -97,6 +105,7 @@ Without CI, regressions creep in silently. Required before inviting
 testers.
 
 ### 2.1 GitHub Actions CI
+
 - `.github/workflows/ci.yml`
 - Matrix: ubuntu-latest, macos-latest
 - Steps: `cargo check`, `cargo build --release`, `cargo test` (skip
@@ -104,12 +113,14 @@ testers.
 - Run on push to main + PRs
 
 ### 2.2 Release workflow
+
 - `.github/workflows/release.yml` triggered by `v*` tags
 - Build release binaries: macOS (aarch64 + x86_64), Linux (x86_64)
 - Bundle `synthdefs/` directory
 - Attach to GitHub Release
 
 ### 2.3 Clippy cleanup
+
 - Fix any new clippy warnings
 - Consider `clippy::unwrap_used` as a warning (not deny)
 
@@ -120,6 +131,7 @@ testers.
 Alpha testers need to install and run without hand-holding.
 
 ### 3.1 Installation guide
+
 - macOS: Homebrew SuperCollider setup, scsynth PATH, VSTPlugin
   (optional)
 - Linux: Package manager commands
@@ -127,10 +139,12 @@ Alpha testers need to install and run without hand-holding.
 - Common errors + troubleshooting section
 
 ### 3.2 Getting Started tutorial
+
 Step-by-step: launch → add instrument → play notes → program pattern →
 add effects → mix → save → export
 
 ### 3.3 Docs audit
+
 - Add "Last verified" header to each file in `docs/`
 - Archive completed design docs to `docs/archive/`
 - Ensure `architecture.md` and `keybindings.md` are current
@@ -140,9 +154,11 @@ add effects → mix → save → export
 ## Phase 4: Core Alpha Features (2-3 weeks)
 
 ### 4.1 Audio export (WAV render)
+
 **Critical** — a DAW that can't export audio isn't a DAW.
 
 Plumbing already exists:
+
 - `AudioCmd::Render/Export` variants in
   `imbolc-core/src/audio/commands.rs`
 - `RenderState`, `ExportState`, `ExportKind` structs exist
@@ -157,11 +173,13 @@ completion.
 `imbolc-ui/src/panes/piano_roll_pane/`
 
 ### 4.2 Autosave / crash recovery
+
 - Periodic autosave (every 2-5 min) to `.imbolc.autosave`
 - On startup, detect autosave + offer recovery
 - Use existing IO channel for non-blocking save
 
 ### 4.3 Automation recording + playback
+
 Per TASKS.md: data structures exist and are persisted, but recording
 mode, playback interpolation, and editing are missing.
 
@@ -181,15 +199,19 @@ mode, playback interpolation, and editing are missing.
 ## Phase 5: Polish & Quality (1-2 weeks)
 
 ### 5.1 Test coverage expansion
+
 Target: 700+ tests (up from 524). Focus on:
+
 - Dispatch round-trip tests (action → state change)
 - Render smoke tests for critical panes (ratatui `TestBackend`)
 - Persistence round-trip (save → load → verify)
 
 ### 5.2 Sequencer: note duration grid selection
+
 Small feature from TASKS.md — keybind to cycle grid resolution.
 
 ### 5.3 MIDI Learn
+
 CC mapping state exists, needs "learn mode" UI toggle + auto-bind next
 incoming CC.
 
@@ -198,10 +220,12 @@ incoming CC.
 ## Phase 6: Pre-Release (1 week)
 
 ### 6.1 Workspace cleanup
+
 - Remove `imbolc-gui` from workspace members (or feature-gate)
 - Mark `imbolc-net` as experimental/deferred in README
 
 ### 6.2 Release prep
+
 - CHANGELOG.md
 - Verify LICENSE (GPL v3)
 - README: CI badge, terminal recording/screenshots, clean up sponsor
@@ -260,6 +284,7 @@ Phase 6 (days 30-35)   ██████  Pre-release
 ## Verification
 
 After each phase:
+
 - `cargo build` — zero warnings
 - `cargo test` — all tests pass
 - `cargo clippy` — clean (after Phase 2)

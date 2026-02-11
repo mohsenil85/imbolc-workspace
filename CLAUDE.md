@@ -2,6 +2,10 @@
 
 Multi-crate Rust workspace for Imbolc, a terminal-based DAW (Digital Audio Workstation).
 
+## Design Philosophy
+
+For each proposed change, examine the existing system and redesign it into the most elegant solution that would have emerged if the change had been a foundational assumption from the start.
+
 ## Workspace Structure
 
 ```

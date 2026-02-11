@@ -2,6 +2,7 @@ mod types;
 mod target;
 mod lane;
 mod state;
+#[cfg(test)]
 mod tests;
 
 pub use types::{AutomationLaneId, CurveType, AutomationPoint};

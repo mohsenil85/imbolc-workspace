@@ -15,25 +15,16 @@ pub fn DetailView() -> Element {
         let s = state.read();
         let arrangement = &s.app.session.arrangement;
 
-        if let Some(placement_idx) = arrangement.selected_placement {
-            if let Some(placement) = arrangement.placements.get(placement_idx) {
-                if let Some(clip) = arrangement.clip(placement.clip_id) {
-                    Some((
-                        clip.id,
-                        clip.instrument_id,
-                        clip.length_ticks,
-                        clip.notes.is_empty(), // is_audio_clip: if no notes, it might be audio
-                        clip.name.clone(),
-                    ))
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        } else {
-            None
-        }
+        arrangement.selected_placement
+            .and_then(|idx| arrangement.placements.get(idx))
+            .and_then(|placement| arrangement.clip(placement.clip_id))
+            .map(|clip| (
+                clip.id,
+                clip.instrument_id,
+                clip.length_ticks,
+                clip.notes.is_empty(), // is_audio_clip: if no notes, it might be audio
+                clip.name.clone(),
+            ))
     };
 
     match selection_info {

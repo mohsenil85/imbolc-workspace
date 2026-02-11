@@ -395,197 +395,6 @@ pub(super) fn dispatch_sequencer(
 
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use imbolc_audio::AudioHandle;
-
-    fn setup() -> (AppState, AudioHandle) {
-        let mut state = AppState::new();
-        state.add_instrument(crate::state::SourceType::Kit);
-        state.instruments.selected = Some(0);
-        (state, AudioHandle::new())
-    }
-
-    #[test]
-    fn toggle_step() {
-        let (mut state, audio) = setup();
-        let mut effects = Vec::new();
-        dispatch_sequencer(&SequencerAction::ToggleStep(0, 0), &mut state, &audio, &mut effects);
-        let seq = state.instruments.selected_drum_sequencer().unwrap();
-        assert!(seq.pattern().steps[0][0].active);
-
-        dispatch_sequencer(&SequencerAction::ToggleStep(0, 0), &mut state, &audio, &mut effects);
-        let seq = state.instruments.selected_drum_sequencer().unwrap();
-        assert!(!seq.pattern().steps[0][0].active);
-    }
-
-    #[test]
-    fn adjust_velocity_clamps() {
-        let (mut state, audio) = setup();
-        let mut effects = Vec::new();
-        // Default velocity is 100
-        dispatch_sequencer(&SequencerAction::AdjustVelocity(0, 0, 50), &mut state, &audio, &mut effects);
-        let vel = state.instruments.selected_drum_sequencer().unwrap().pattern().steps[0][0].velocity;
-        assert_eq!(vel, 127);
-
-        dispatch_sequencer(&SequencerAction::AdjustVelocity(0, 0, -127), &mut state, &audio, &mut effects);
-        let vel = state.instruments.selected_drum_sequencer().unwrap().pattern().steps[0][0].velocity;
-        assert_eq!(vel, 1);
-    }
-
-    #[test]
-    fn clear_pad() {
-        let (mut state, audio) = setup();
-        let mut effects = Vec::new();
-        dispatch_sequencer(&SequencerAction::ToggleStep(0, 0), &mut state, &audio, &mut effects);
-        dispatch_sequencer(&SequencerAction::ToggleStep(0, 1), &mut state, &audio, &mut effects);
-        dispatch_sequencer(&SequencerAction::ClearPad(0), &mut state, &audio, &mut effects);
-        let seq = state.instruments.selected_drum_sequencer().unwrap();
-        assert!(seq.pattern().steps[0].iter().all(|s| !s.active));
-    }
-
-    #[test]
-    fn clear_pattern() {
-        let (mut state, audio) = setup();
-        let mut effects = Vec::new();
-        dispatch_sequencer(&SequencerAction::ToggleStep(0, 0), &mut state, &audio, &mut effects);
-        dispatch_sequencer(&SequencerAction::ClearPattern, &mut state, &audio, &mut effects);
-        let seq = state.instruments.selected_drum_sequencer().unwrap();
-        assert!(seq.pattern().steps.iter().all(|pad| pad.iter().all(|s| !s.active)));
-    }
-
-    #[test]
-    fn cycle_pattern_length() {
-        let (mut state, audio) = setup();
-        let mut effects = Vec::new();
-        // Default: 16
-        let expected_lengths = [32, 64, 8, 16];
-        for expected in expected_lengths {
-            dispatch_sequencer(&SequencerAction::CyclePatternLength, &mut state, &audio, &mut effects);
-            let len = state.instruments.selected_drum_sequencer().unwrap().pattern().length;
-            assert_eq!(len, expected);
-        }
-    }
-
-    #[test]
-    fn next_prev_pattern_wraps() {
-        let (mut state, audio) = setup();
-        let mut effects = Vec::new();
-        let n_patterns = state.instruments.selected_drum_sequencer().unwrap().patterns.len();
-        for _ in 0..n_patterns {
-            dispatch_sequencer(&SequencerAction::NextPattern, &mut state, &audio, &mut effects);
-        }
-        assert_eq!(state.instruments.selected_drum_sequencer().unwrap().current_pattern, 0);
-
-        dispatch_sequencer(&SequencerAction::PrevPattern, &mut state, &audio, &mut effects);
-        assert_eq!(state.instruments.selected_drum_sequencer().unwrap().current_pattern, n_patterns - 1);
-    }
-
-    #[test]
-    fn adjust_pad_level_clamps() {
-        let (mut state, audio) = setup();
-        let mut effects = Vec::new();
-        dispatch_sequencer(&SequencerAction::AdjustPadLevel(0, 2.0), &mut state, &audio, &mut effects);
-        let level = state.instruments.selected_drum_sequencer().unwrap().pads[0].level;
-        assert!((level - 1.0).abs() < f32::EPSILON);
-
-        dispatch_sequencer(&SequencerAction::AdjustPadLevel(0, -5.0), &mut state, &audio, &mut effects);
-        let level = state.instruments.selected_drum_sequencer().unwrap().pads[0].level;
-        assert!((level - 0.0).abs() < f32::EPSILON);
-    }
-
-    #[test]
-    fn play_stop_toggles_and_resets() {
-        let (mut state, audio) = setup();
-        let mut effects = Vec::new();
-        dispatch_sequencer(&SequencerAction::PlayStop, &mut state, &audio, &mut effects);
-        assert!(state.instruments.selected_drum_sequencer().unwrap().playing);
-
-        dispatch_sequencer(&SequencerAction::PlayStop, &mut state, &audio, &mut effects);
-        let seq = state.instruments.selected_drum_sequencer().unwrap();
-        assert!(!seq.playing);
-        assert_eq!(seq.current_step, 0);
-    }
-
-    #[test]
-    fn adjust_swing_clamps() {
-        let (mut state, audio) = setup();
-        let mut effects = Vec::new();
-        dispatch_sequencer(&SequencerAction::AdjustSwing(2.0), &mut state, &audio, &mut effects);
-        assert!((state.instruments.selected_drum_sequencer().unwrap().swing_amount - 1.0).abs() < f32::EPSILON);
-        dispatch_sequencer(&SequencerAction::AdjustSwing(-5.0), &mut state, &audio, &mut effects);
-        assert!((state.instruments.selected_drum_sequencer().unwrap().swing_amount - 0.0).abs() < f32::EPSILON);
-    }
-
-    #[test]
-    fn apply_euclidean() {
-        let (mut state, audio) = setup();
-        let mut effects = Vec::new();
-        // Use steps=16 to match default pattern length, so rhythm doesn't repeat
-        dispatch_sequencer(
-            &SequencerAction::ApplyEuclidean { pad: 0, pulses: 4, steps: 16, rotation: 0 },
-            &mut state,
-            &audio,
-            &mut effects,
-        );
-        let seq = state.instruments.selected_drum_sequencer().unwrap();
-        let active_count = seq.pattern().steps[0].iter().filter(|s| s.active).count();
-        assert_eq!(active_count, 4);
-    }
-
-    #[test]
-    fn adjust_probability_clamps() {
-        let (mut state, audio) = setup();
-        let mut effects = Vec::new();
-        dispatch_sequencer(&SequencerAction::AdjustProbability(0, 0, -2.0), &mut state, &audio, &mut effects);
-        let prob = state.instruments.selected_drum_sequencer().unwrap().pattern().steps[0][0].probability;
-        assert!((prob - 0.0).abs() < f32::EPSILON);
-    }
-
-    #[test]
-    fn adjust_pad_pitch_clamps() {
-        let (mut state, audio) = setup();
-        let mut effects = Vec::new();
-        dispatch_sequencer(&SequencerAction::AdjustPadPitch(0, 50), &mut state, &audio, &mut effects);
-        assert_eq!(state.instruments.selected_drum_sequencer().unwrap().pads[0].pitch, 24);
-        dispatch_sequencer(&SequencerAction::AdjustPadPitch(0, -100), &mut state, &audio, &mut effects);
-        assert_eq!(state.instruments.selected_drum_sequencer().unwrap().pads[0].pitch, -24);
-    }
-
-    #[test]
-    fn adjust_step_pitch_clamps() {
-        let (mut state, audio) = setup();
-        let mut effects = Vec::new();
-        dispatch_sequencer(&SequencerAction::AdjustStepPitch(0, 0, 50), &mut state, &audio, &mut effects);
-        assert_eq!(state.instruments.selected_drum_sequencer().unwrap().pattern().steps[0][0].pitch_offset, 24);
-        dispatch_sequencer(&SequencerAction::AdjustStepPitch(0, 0, -100), &mut state, &audio, &mut effects);
-        assert_eq!(state.instruments.selected_drum_sequencer().unwrap().pattern().steps[0][0].pitch_offset, -24);
-    }
-
-    #[test]
-    fn chain_operations() {
-        let (mut state, audio) = setup();
-        let mut effects = Vec::new();
-        dispatch_sequencer(&SequencerAction::ToggleChain, &mut state, &audio, &mut effects);
-        assert!(state.instruments.selected_drum_sequencer().unwrap().chain_enabled);
-
-        dispatch_sequencer(&SequencerAction::AddChainStep(0), &mut state, &audio, &mut effects);
-        dispatch_sequencer(&SequencerAction::AddChainStep(1), &mut state, &audio, &mut effects);
-        assert_eq!(state.instruments.selected_drum_sequencer().unwrap().chain.len(), 2);
-
-        dispatch_sequencer(&SequencerAction::MoveChainStep(0, 1), &mut state, &audio, &mut effects);
-        assert_eq!(state.instruments.selected_drum_sequencer().unwrap().chain, vec![1, 0]);
-
-        dispatch_sequencer(&SequencerAction::RemoveChainStep(0), &mut state, &audio, &mut effects);
-        assert_eq!(state.instruments.selected_drum_sequencer().unwrap().chain, vec![0]);
-
-        // Out of bounds add — should be no-op (pattern index 99 doesn't exist)
-        dispatch_sequencer(&SequencerAction::AddChainStep(99), &mut state, &audio, &mut effects);
-        assert_eq!(state.instruments.selected_drum_sequencer().unwrap().chain.len(), 1);
-    }
-}
-
 pub(super) fn dispatch_chopper(
     action: &ChopperAction,
     state: &mut AppState,
@@ -809,5 +618,196 @@ pub(super) fn dispatch_chopper(
             // Cursor tracked locally in pane
             DispatchResult::none()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use imbolc_audio::AudioHandle;
+
+    fn setup() -> (AppState, AudioHandle) {
+        let mut state = AppState::new();
+        state.add_instrument(crate::state::SourceType::Kit);
+        state.instruments.selected = Some(0);
+        (state, AudioHandle::new())
+    }
+
+    #[test]
+    fn toggle_step() {
+        let (mut state, audio) = setup();
+        let mut effects = Vec::new();
+        dispatch_sequencer(&SequencerAction::ToggleStep(0, 0), &mut state, &audio, &mut effects);
+        let seq = state.instruments.selected_drum_sequencer().unwrap();
+        assert!(seq.pattern().steps[0][0].active);
+
+        dispatch_sequencer(&SequencerAction::ToggleStep(0, 0), &mut state, &audio, &mut effects);
+        let seq = state.instruments.selected_drum_sequencer().unwrap();
+        assert!(!seq.pattern().steps[0][0].active);
+    }
+
+    #[test]
+    fn adjust_velocity_clamps() {
+        let (mut state, audio) = setup();
+        let mut effects = Vec::new();
+        // Default velocity is 100
+        dispatch_sequencer(&SequencerAction::AdjustVelocity(0, 0, 50), &mut state, &audio, &mut effects);
+        let vel = state.instruments.selected_drum_sequencer().unwrap().pattern().steps[0][0].velocity;
+        assert_eq!(vel, 127);
+
+        dispatch_sequencer(&SequencerAction::AdjustVelocity(0, 0, -127), &mut state, &audio, &mut effects);
+        let vel = state.instruments.selected_drum_sequencer().unwrap().pattern().steps[0][0].velocity;
+        assert_eq!(vel, 1);
+    }
+
+    #[test]
+    fn clear_pad() {
+        let (mut state, audio) = setup();
+        let mut effects = Vec::new();
+        dispatch_sequencer(&SequencerAction::ToggleStep(0, 0), &mut state, &audio, &mut effects);
+        dispatch_sequencer(&SequencerAction::ToggleStep(0, 1), &mut state, &audio, &mut effects);
+        dispatch_sequencer(&SequencerAction::ClearPad(0), &mut state, &audio, &mut effects);
+        let seq = state.instruments.selected_drum_sequencer().unwrap();
+        assert!(seq.pattern().steps[0].iter().all(|s| !s.active));
+    }
+
+    #[test]
+    fn clear_pattern() {
+        let (mut state, audio) = setup();
+        let mut effects = Vec::new();
+        dispatch_sequencer(&SequencerAction::ToggleStep(0, 0), &mut state, &audio, &mut effects);
+        dispatch_sequencer(&SequencerAction::ClearPattern, &mut state, &audio, &mut effects);
+        let seq = state.instruments.selected_drum_sequencer().unwrap();
+        assert!(seq.pattern().steps.iter().all(|pad| pad.iter().all(|s| !s.active)));
+    }
+
+    #[test]
+    fn cycle_pattern_length() {
+        let (mut state, audio) = setup();
+        let mut effects = Vec::new();
+        // Default: 16
+        let expected_lengths = [32, 64, 8, 16];
+        for expected in expected_lengths {
+            dispatch_sequencer(&SequencerAction::CyclePatternLength, &mut state, &audio, &mut effects);
+            let len = state.instruments.selected_drum_sequencer().unwrap().pattern().length;
+            assert_eq!(len, expected);
+        }
+    }
+
+    #[test]
+    fn next_prev_pattern_wraps() {
+        let (mut state, audio) = setup();
+        let mut effects = Vec::new();
+        let n_patterns = state.instruments.selected_drum_sequencer().unwrap().patterns.len();
+        for _ in 0..n_patterns {
+            dispatch_sequencer(&SequencerAction::NextPattern, &mut state, &audio, &mut effects);
+        }
+        assert_eq!(state.instruments.selected_drum_sequencer().unwrap().current_pattern, 0);
+
+        dispatch_sequencer(&SequencerAction::PrevPattern, &mut state, &audio, &mut effects);
+        assert_eq!(state.instruments.selected_drum_sequencer().unwrap().current_pattern, n_patterns - 1);
+    }
+
+    #[test]
+    fn adjust_pad_level_clamps() {
+        let (mut state, audio) = setup();
+        let mut effects = Vec::new();
+        dispatch_sequencer(&SequencerAction::AdjustPadLevel(0, 2.0), &mut state, &audio, &mut effects);
+        let level = state.instruments.selected_drum_sequencer().unwrap().pads[0].level;
+        assert!((level - 1.0).abs() < f32::EPSILON);
+
+        dispatch_sequencer(&SequencerAction::AdjustPadLevel(0, -5.0), &mut state, &audio, &mut effects);
+        let level = state.instruments.selected_drum_sequencer().unwrap().pads[0].level;
+        assert!((level - 0.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn play_stop_toggles_and_resets() {
+        let (mut state, audio) = setup();
+        let mut effects = Vec::new();
+        dispatch_sequencer(&SequencerAction::PlayStop, &mut state, &audio, &mut effects);
+        assert!(state.instruments.selected_drum_sequencer().unwrap().playing);
+
+        dispatch_sequencer(&SequencerAction::PlayStop, &mut state, &audio, &mut effects);
+        let seq = state.instruments.selected_drum_sequencer().unwrap();
+        assert!(!seq.playing);
+        assert_eq!(seq.current_step, 0);
+    }
+
+    #[test]
+    fn adjust_swing_clamps() {
+        let (mut state, audio) = setup();
+        let mut effects = Vec::new();
+        dispatch_sequencer(&SequencerAction::AdjustSwing(2.0), &mut state, &audio, &mut effects);
+        assert!((state.instruments.selected_drum_sequencer().unwrap().swing_amount - 1.0).abs() < f32::EPSILON);
+        dispatch_sequencer(&SequencerAction::AdjustSwing(-5.0), &mut state, &audio, &mut effects);
+        assert!((state.instruments.selected_drum_sequencer().unwrap().swing_amount - 0.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn apply_euclidean() {
+        let (mut state, audio) = setup();
+        let mut effects = Vec::new();
+        // Use steps=16 to match default pattern length, so rhythm doesn't repeat
+        dispatch_sequencer(
+            &SequencerAction::ApplyEuclidean { pad: 0, pulses: 4, steps: 16, rotation: 0 },
+            &mut state,
+            &audio,
+            &mut effects,
+        );
+        let seq = state.instruments.selected_drum_sequencer().unwrap();
+        let active_count = seq.pattern().steps[0].iter().filter(|s| s.active).count();
+        assert_eq!(active_count, 4);
+    }
+
+    #[test]
+    fn adjust_probability_clamps() {
+        let (mut state, audio) = setup();
+        let mut effects = Vec::new();
+        dispatch_sequencer(&SequencerAction::AdjustProbability(0, 0, -2.0), &mut state, &audio, &mut effects);
+        let prob = state.instruments.selected_drum_sequencer().unwrap().pattern().steps[0][0].probability;
+        assert!((prob - 0.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn adjust_pad_pitch_clamps() {
+        let (mut state, audio) = setup();
+        let mut effects = Vec::new();
+        dispatch_sequencer(&SequencerAction::AdjustPadPitch(0, 50), &mut state, &audio, &mut effects);
+        assert_eq!(state.instruments.selected_drum_sequencer().unwrap().pads[0].pitch, 24);
+        dispatch_sequencer(&SequencerAction::AdjustPadPitch(0, -100), &mut state, &audio, &mut effects);
+        assert_eq!(state.instruments.selected_drum_sequencer().unwrap().pads[0].pitch, -24);
+    }
+
+    #[test]
+    fn adjust_step_pitch_clamps() {
+        let (mut state, audio) = setup();
+        let mut effects = Vec::new();
+        dispatch_sequencer(&SequencerAction::AdjustStepPitch(0, 0, 50), &mut state, &audio, &mut effects);
+        assert_eq!(state.instruments.selected_drum_sequencer().unwrap().pattern().steps[0][0].pitch_offset, 24);
+        dispatch_sequencer(&SequencerAction::AdjustStepPitch(0, 0, -100), &mut state, &audio, &mut effects);
+        assert_eq!(state.instruments.selected_drum_sequencer().unwrap().pattern().steps[0][0].pitch_offset, -24);
+    }
+
+    #[test]
+    fn chain_operations() {
+        let (mut state, audio) = setup();
+        let mut effects = Vec::new();
+        dispatch_sequencer(&SequencerAction::ToggleChain, &mut state, &audio, &mut effects);
+        assert!(state.instruments.selected_drum_sequencer().unwrap().chain_enabled);
+
+        dispatch_sequencer(&SequencerAction::AddChainStep(0), &mut state, &audio, &mut effects);
+        dispatch_sequencer(&SequencerAction::AddChainStep(1), &mut state, &audio, &mut effects);
+        assert_eq!(state.instruments.selected_drum_sequencer().unwrap().chain.len(), 2);
+
+        dispatch_sequencer(&SequencerAction::MoveChainStep(0, 1), &mut state, &audio, &mut effects);
+        assert_eq!(state.instruments.selected_drum_sequencer().unwrap().chain, vec![1, 0]);
+
+        dispatch_sequencer(&SequencerAction::RemoveChainStep(0), &mut state, &audio, &mut effects);
+        assert_eq!(state.instruments.selected_drum_sequencer().unwrap().chain, vec![0]);
+
+        // Out of bounds add — should be no-op (pattern index 99 doesn't exist)
+        dispatch_sequencer(&SequencerAction::AddChainStep(99), &mut state, &audio, &mut effects);
+        assert_eq!(state.instruments.selected_drum_sequencer().unwrap().chain.len(), 1);
     }
 }

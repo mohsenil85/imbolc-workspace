@@ -5,23 +5,12 @@ use std::collections::HashMap;
 use dioxus::prelude::*;
 
 /// Modifier keys state.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub struct Modifiers {
     pub ctrl: bool,
     pub shift: bool,
     pub alt: bool,
     pub meta: bool,
-}
-
-impl Default for Modifiers {
-    fn default() -> Self {
-        Self {
-            ctrl: false,
-            shift: false,
-            alt: false,
-            meta: false,
-        }
-    }
 }
 
 impl Modifiers {
