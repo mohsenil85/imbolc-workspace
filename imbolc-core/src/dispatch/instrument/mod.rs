@@ -11,9 +11,9 @@ mod playback;
 mod sample;
 mod selection;
 
+use crate::action::{AudioEffect, DispatchResult, InstrumentAction};
 use crate::audio::AudioHandle;
 use crate::state::AppState;
-use crate::action::{AudioEffect, DispatchResult, InstrumentAction};
 
 pub(super) fn dispatch_instrument(
     action: &InstrumentAction,
@@ -141,25 +141,39 @@ pub(super) fn dispatch_instrument(
     }
 }
 
-fn handle_move_stage(state: &mut AppState, id: crate::state::InstrumentId, stage_idx: usize, direction: i8) -> DispatchResult {
+fn handle_move_stage(
+    state: &mut AppState,
+    id: crate::state::InstrumentId,
+    stage_idx: usize,
+    direction: i8,
+) -> DispatchResult {
     imbolc_types::reduce::reduce_action(
-        &imbolc_types::DomainAction::Instrument(InstrumentAction::MoveStage(id, stage_idx, direction)),
+        &imbolc_types::DomainAction::Instrument(InstrumentAction::MoveStage(
+            id, stage_idx, direction,
+        )),
         &mut state.instruments,
         &mut state.session,
     );
     let mut result = DispatchResult::none();
     result.audio_effects.push(AudioEffect::RebuildInstruments);
-    result.audio_effects.push(AudioEffect::RebuildRoutingForInstrument(id));
+    result
+        .audio_effects
+        .push(AudioEffect::RebuildRoutingForInstrument(id));
     result
 }
 
-fn handle_toggle_channel_config(state: &mut AppState, id: crate::state::InstrumentId) -> DispatchResult {
+fn handle_toggle_channel_config(
+    state: &mut AppState,
+    id: crate::state::InstrumentId,
+) -> DispatchResult {
     imbolc_types::reduce::reduce_action(
         &imbolc_types::DomainAction::Instrument(InstrumentAction::ToggleChannelConfig(id)),
         &mut state.instruments,
         &mut state.session,
     );
     let mut result = DispatchResult::default();
-    result.audio_effects.push(AudioEffect::RebuildRoutingForInstrument(id));
+    result
+        .audio_effects
+        .push(AudioEffect::RebuildRoutingForInstrument(id));
     result
 }

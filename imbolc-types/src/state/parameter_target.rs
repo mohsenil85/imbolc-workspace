@@ -225,7 +225,9 @@ impl ParameterTarget {
             Self::DelayFeedback => "Delay Feedback".to_string(),
             Self::ReverbMix => "Reverb Mix".to_string(),
             Self::GateRate => "Gate Rate".to_string(),
-            Self::EffectParam(fx_id, param_idx) => format!("FX{} Param{}", fx_id.get() + 1, param_idx.get() + 1),
+            Self::EffectParam(fx_id, param_idx) => {
+                format!("FX{} Param{}", fx_id.get() + 1, param_idx.get() + 1)
+            }
             Self::EffectBypass(fx_id) => format!("FX{} Bypass", fx_id.get() + 1),
             Self::EqBandFreq(band) => format!("EQ B{} Freq", band + 1),
             Self::EqBandGain(band) => format!("EQ B{} Gain", band + 1),
@@ -244,11 +246,22 @@ impl ParameterTarget {
     /// Get the default min/max range for this parameter.
     pub fn default_range(&self) -> (f32, f32) {
         match self {
-            Self::Level | Self::FilterResonance | Self::Sustain | Self::LfoDepth
-            | Self::Swing | Self::HumanizeVelocity | Self::HumanizeTiming
-            | Self::SampleAmp | Self::PulseWidth | Self::WavetablePosition
-            | Self::RingModDepth | Self::GrainDensity | Self::FbFeedback
-            | Self::SendLevel(_) | Self::EffectParam(_, _) | Self::VstParam(_) => (0.0, 1.0),
+            Self::Level
+            | Self::FilterResonance
+            | Self::Sustain
+            | Self::LfoDepth
+            | Self::Swing
+            | Self::HumanizeVelocity
+            | Self::HumanizeTiming
+            | Self::SampleAmp
+            | Self::PulseWidth
+            | Self::WavetablePosition
+            | Self::RingModDepth
+            | Self::GrainDensity
+            | Self::FbFeedback
+            | Self::SendLevel(_)
+            | Self::EffectParam(_, _)
+            | Self::VstParam(_) => (0.0, 1.0),
 
             Self::Pan => (-1.0, 1.0),
 
@@ -270,8 +283,8 @@ impl ParameterTarget {
             Self::FilterBypass | Self::EffectBypass(_) | Self::TimeSignature => (0.0, 1.0),
 
             // Voice synthesis params - ranges vary by implementation
-            Self::Pitch => (-24.0, 24.0),           // semitones
-            Self::Detune => (-100.0, 100.0),        // cents
+            Self::Pitch => (-24.0, 24.0),    // semitones
+            Self::Detune => (-100.0, 100.0), // cents
             Self::FmIndex => (0.0, 20.0),
             Self::FormantFreq => (100.0, 5000.0),
             Self::SyncRatio => (1.0, 8.0),
@@ -387,4 +400,3 @@ impl ParameterTarget {
         }
     }
 }
-

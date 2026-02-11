@@ -6,7 +6,12 @@ use crate::ui::{Action, AutomationAction, InputEvent};
 use super::{AutomationFocus, AutomationPane, TargetPickerState};
 
 impl AutomationPane {
-    pub(super) fn handle_action_impl(&mut self, action: ActionId, _event: &InputEvent, state: &AppState) -> Action {
+    pub(super) fn handle_action_impl(
+        &mut self,
+        action: ActionId,
+        _event: &InputEvent,
+        state: &AppState,
+    ) -> Action {
         // If target picker is active, delegate to it
         if matches!(self.target_picker, TargetPickerState::Active { .. }) {
             return self.handle_target_picker_action(action, state);
@@ -23,7 +28,8 @@ impl AutomationPane {
             }
 
             // Lane list actions
-            ActionId::Automation(AutomationActionId::Up) | ActionId::Automation(AutomationActionId::Prev) => {
+            ActionId::Automation(AutomationActionId::Up)
+            | ActionId::Automation(AutomationActionId::Prev) => {
                 if self.focus == AutomationFocus::LaneList {
                     Action::Automation(AutomationAction::SelectLane(-1))
                 } else {
@@ -32,7 +38,8 @@ impl AutomationPane {
                     Action::None
                 }
             }
-            ActionId::Automation(AutomationActionId::Down) | ActionId::Automation(AutomationActionId::Next) => {
+            ActionId::Automation(AutomationActionId::Down)
+            | ActionId::Automation(AutomationActionId::Next) => {
                 if self.focus == AutomationFocus::LaneList {
                     Action::Automation(AutomationAction::SelectLane(1))
                 } else {
@@ -65,7 +72,10 @@ impl AutomationPane {
                 let editing_clip = state.session.arrangement.editing_clip.is_some();
                 let mut options: Vec<AutomationTarget> = Vec::new();
                 if let Some(inst) = state.instruments.selected_instrument() {
-                    options = AutomationTarget::targets_for_instrument_context(inst, &state.session.vst_plugins);
+                    options = AutomationTarget::targets_for_instrument_context(
+                        inst,
+                        &state.session.vst_plugins,
+                    );
                     // Add send targets
                     let id = inst.id;
                     for &bus_id in inst.mixer.sends.keys() {
@@ -114,7 +124,11 @@ impl AutomationPane {
                                 Action::Automation(AutomationAction::RemovePoint(id, tick))
                             } else {
                                 // Add new point
-                                Action::Automation(AutomationAction::AddPoint(id, tick, self.cursor_value))
+                                Action::Automation(AutomationAction::AddPoint(
+                                    id,
+                                    tick,
+                                    self.cursor_value,
+                                ))
                             }
                         } else {
                             Action::None
@@ -154,7 +168,9 @@ impl AutomationPane {
                                     CurveType::Step => CurveType::SCurve,
                                     CurveType::SCurve => CurveType::Linear,
                                 };
-                                return Action::Automation(AutomationAction::SetCurveType(id, tick, new_curve));
+                                return Action::Automation(AutomationAction::SetCurveType(
+                                    id, tick, new_curve,
+                                ));
                             }
                         }
                     }
@@ -229,18 +245,34 @@ impl AutomationPane {
     }
 
     /// Handle actions while the target picker is active
-    pub(super) fn handle_target_picker_action(&mut self, action: ActionId, _state: &AppState) -> Action {
-        if let TargetPickerState::Active { ref options, ref mut cursor } = self.target_picker {
+    pub(super) fn handle_target_picker_action(
+        &mut self,
+        action: ActionId,
+        _state: &AppState,
+    ) -> Action {
+        if let TargetPickerState::Active {
+            ref options,
+            ref mut cursor,
+        } = self.target_picker
+        {
             match action {
-                ActionId::Automation(AutomationActionId::Up) | ActionId::Automation(AutomationActionId::Prev) => {
-                    if *cursor > 0 { *cursor -= 1; }
+                ActionId::Automation(AutomationActionId::Up)
+                | ActionId::Automation(AutomationActionId::Prev) => {
+                    if *cursor > 0 {
+                        *cursor -= 1;
+                    }
                     Action::None
                 }
-                ActionId::Automation(AutomationActionId::Down) | ActionId::Automation(AutomationActionId::Next) => {
-                    if *cursor + 1 < options.len() { *cursor += 1; }
+                ActionId::Automation(AutomationActionId::Down)
+                | ActionId::Automation(AutomationActionId::Next) => {
+                    if *cursor + 1 < options.len() {
+                        *cursor += 1;
+                    }
                     Action::None
                 }
-                ActionId::Automation(AutomationActionId::Confirm) | ActionId::Automation(AutomationActionId::AddLane) | ActionId::Automation(AutomationActionId::PlacePoint) => {
+                ActionId::Automation(AutomationActionId::Confirm)
+                | ActionId::Automation(AutomationActionId::AddLane)
+                | ActionId::Automation(AutomationActionId::PlacePoint) => {
                     if let Some(target) = options.get(*cursor).cloned() {
                         self.target_picker = TargetPickerState::Inactive;
                         Action::Automation(AutomationAction::AddLane(target))
@@ -248,7 +280,8 @@ impl AutomationPane {
                         Action::None
                     }
                 }
-                ActionId::Automation(AutomationActionId::Cancel) | ActionId::Automation(AutomationActionId::Escape) => {
+                ActionId::Automation(AutomationActionId::Cancel)
+                | ActionId::Automation(AutomationActionId::Escape) => {
                     self.target_picker = TargetPickerState::Inactive;
                     Action::None
                 }

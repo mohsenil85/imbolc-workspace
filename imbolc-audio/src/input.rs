@@ -101,7 +101,8 @@ impl TrackRecording {
         if self.samples.is_empty() || self.sample_rate == 0 {
             return 0;
         }
-        let duration_secs = self.samples.len() as f32 / (self.sample_rate as f32 * self.channels as f32);
+        let duration_secs =
+            self.samples.len() as f32 / (self.sample_rate as f32 * self.channels as f32);
         let beats = duration_secs * (bpm / 60.0);
         (beats * ticks_per_beat as f32) as u32
     }
@@ -156,11 +157,7 @@ impl AudioInputManager {
     pub fn available_devices(&self) -> Vec<String> {
         self.host
             .input_devices()
-            .map(|devices| {
-                devices
-                    .filter_map(|d| d.name().ok())
-                    .collect()
-            })
+            .map(|devices| devices.filter_map(|d| d.name().ok()).collect())
             .unwrap_or_default()
     }
 

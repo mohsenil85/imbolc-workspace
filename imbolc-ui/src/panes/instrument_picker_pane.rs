@@ -4,8 +4,8 @@ use crate::state::{AppState, InstrumentId};
 use crate::ui::action_id::{ActionId, AddActionId};
 use crate::ui::layout_helpers::center_rect;
 use crate::ui::{
-    Rect, RenderBuf, Action, Color, InputEvent, Keymap, MouseEvent,
-    MouseEventKind, MouseButton, NavAction, Pane, SequencerAction, Style,
+    Action, Color, InputEvent, Keymap, MouseButton, MouseEvent, MouseEventKind, NavAction, Pane,
+    Rect, RenderBuf, SequencerAction, Style,
 };
 
 const LIST_HEIGHT: usize = 12;
@@ -43,7 +43,10 @@ impl InstrumentPickerPane {
         let current_kit_id = state.instruments.selected_instrument().map(|i| i.id);
 
         // Build list of instruments that can be triggered (exclude the current Kit)
-        self.cached_instruments = state.instruments.instruments.iter()
+        self.cached_instruments = state
+            .instruments
+            .instruments
+            .iter()
             .filter(|i| {
                 // Exclude the current Kit instrument
                 if Some(i.id) == current_kit_id {
@@ -91,10 +94,14 @@ impl InstrumentPickerPane {
 
     fn confirm_selection(&self, state: &AppState) -> Action {
         // Get the target pad from state
-        let target_pad = state.instruments.selected_drum_sequencer()
+        let target_pad = state
+            .instruments
+            .selected_drum_sequencer()
             .and_then(|seq| seq.editing_pad);
 
-        if let (Some(pad_idx), Some((instrument_id, _))) = (target_pad, self.cached_instruments.get(self.selected)) {
+        if let (Some(pad_idx), Some((instrument_id, _))) =
+            (target_pad, self.cached_instruments.get(self.selected))
+        {
             // Default trigger frequency of 440 Hz (A4)
             Action::Sequencer(SequencerAction::SetPadInstrument(
                 pad_idx,
@@ -174,7 +181,9 @@ impl Pane for InstrumentPickerPane {
         let content_y = inner.y + 1;
 
         // Get the pad number from state
-        let pad_num = state.instruments.selected_drum_sequencer()
+        let pad_num = state
+            .instruments
+            .selected_drum_sequencer()
             .and_then(|seq| seq.editing_pad)
             .map(|p| p + 1)
             .unwrap_or(0);
@@ -192,11 +201,17 @@ impl Pane for InstrumentPickerPane {
         if self.cached_instruments.is_empty() {
             buf.draw_line(
                 Rect::new(content_x, list_y, inner.width.saturating_sub(2), 1),
-                &[("No instruments available.", Style::new().fg(Color::DARK_GRAY))],
+                &[(
+                    "No instruments available.",
+                    Style::new().fg(Color::DARK_GRAY),
+                )],
             );
             buf.draw_line(
                 Rect::new(content_x, list_y + 1, inner.width.saturating_sub(2), 1),
-                &[("Add a synth instrument first.", Style::new().fg(Color::DARK_GRAY))],
+                &[(
+                    "Add a synth instrument first.",
+                    Style::new().fg(Color::DARK_GRAY),
+                )],
             );
         } else {
             for (visual_i, i) in (self.scroll_offset..self.cached_instruments.len()).enumerate() {
@@ -209,12 +224,19 @@ impl Pane for InstrumentPickerPane {
                 let is_selected = i == self.selected;
 
                 // Find instrument to get source type
-                let source_label = state.instruments.instrument(*id)
+                let source_label = state
+                    .instruments
+                    .instrument(*id)
                     .map(|inst| format!("{:?}", inst.source))
                     .unwrap_or_default();
 
                 if is_selected {
-                    buf.set_cell(content_x, y, '>', Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG).bold());
+                    buf.set_cell(
+                        content_x,
+                        y,
+                        '>',
+                        Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG).bold(),
+                    );
                 }
 
                 let name_style = if is_selected {
@@ -230,7 +252,11 @@ impl Pane for InstrumentPickerPane {
                 };
 
                 // Display name
-                let display_name = if name.len() > 20 { &name[..20] } else { name.as_str() };
+                let display_name = if name.len() > 20 {
+                    &name[..20]
+                } else {
+                    name.as_str()
+                };
                 buf.draw_line(
                     Rect::new(content_x + 2, y, 22, 1),
                     &[(display_name, name_style)],
@@ -254,7 +280,6 @@ impl Pane for InstrumentPickerPane {
                 }
             }
         }
-
     }
 
     fn keymap(&self) -> &Keymap {

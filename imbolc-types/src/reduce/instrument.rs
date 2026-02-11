@@ -1,6 +1,6 @@
 use crate::{
-    InstrumentAction, InstrumentId, InstrumentState, SessionState, SourceType,
-    BusId, EqParamKind, FilterType, Param, ParamValue,
+    BusId, EqParamKind, FilterType, InstrumentAction, InstrumentId, InstrumentState, Param,
+    ParamValue, SessionState, SourceType,
 };
 
 pub(super) fn reduce(
@@ -156,8 +156,7 @@ pub(super) fn reduce(
         InstrumentAction::LoadSampleResult(instrument_id, path) => {
             let buffer_id = instruments.next_sampler_buffer_id;
             instruments.next_sampler_buffer_id += 1;
-            let sample_name = path.file_stem()
-                .map(|s| s.to_string_lossy().to_string());
+            let sample_name = path.file_stem().map(|s| s.to_string_lossy().to_string());
             if let Some(instrument) = instruments.instrument_mut(*instrument_id) {
                 if let Some(config) = instrument.sampler_config_mut() {
                     config.buffer_id = Some(buffer_id);
@@ -174,7 +173,8 @@ pub(super) fn reduce(
         }
         InstrumentAction::CycleArpDirection(id) => {
             if let Some(inst) = instruments.instrument_mut(*id) {
-                inst.note_input.arpeggiator.direction = inst.note_input.arpeggiator.direction.next();
+                inst.note_input.arpeggiator.direction =
+                    inst.note_input.arpeggiator.direction.next();
             }
             true
         }
@@ -186,14 +186,15 @@ pub(super) fn reduce(
         }
         InstrumentAction::AdjustArpOctaves(id, delta) => {
             if let Some(inst) = instruments.instrument_mut(*id) {
-                inst.note_input.arpeggiator.octaves = (inst.note_input.arpeggiator.octaves as i8 + delta)
-                    .clamp(1, 4) as u8;
+                inst.note_input.arpeggiator.octaves =
+                    (inst.note_input.arpeggiator.octaves as i8 + delta).clamp(1, 4) as u8;
             }
             true
         }
         InstrumentAction::AdjustArpGate(id, delta) => {
             if let Some(inst) = instruments.instrument_mut(*id) {
-                inst.note_input.arpeggiator.gate = (inst.note_input.arpeggiator.gate + delta).clamp(0.1, 1.0);
+                inst.note_input.arpeggiator.gate =
+                    (inst.note_input.arpeggiator.gate + delta).clamp(0.1, 1.0);
             }
             true
         }
@@ -278,7 +279,9 @@ pub(super) fn reduce(
         }
         InstrumentAction::AdjustTrackSwing(id, delta) => {
             if let Some(inst) = instruments.instrument_mut(*id) {
-                let current = inst.groove.swing_amount
+                let current = inst
+                    .groove
+                    .swing_amount
                     .unwrap_or(session.piano_roll.swing_amount);
                 inst.groove.swing_amount = Some((current + delta).clamp(0.0, 1.0));
             }
@@ -292,7 +295,9 @@ pub(super) fn reduce(
         }
         InstrumentAction::AdjustTrackHumanizeVelocity(id, delta) => {
             if let Some(inst) = instruments.instrument_mut(*id) {
-                let current = inst.groove.humanize_velocity
+                let current = inst
+                    .groove
+                    .humanize_velocity
                     .unwrap_or(session.humanize.velocity);
                 inst.groove.humanize_velocity = Some((current + delta).clamp(0.0, 1.0));
             }
@@ -306,7 +311,9 @@ pub(super) fn reduce(
         }
         InstrumentAction::AdjustTrackHumanizeTiming(id, delta) => {
             if let Some(inst) = instruments.instrument_mut(*id) {
-                let current = inst.groove.humanize_timing
+                let current = inst
+                    .groove
+                    .humanize_timing
                     .unwrap_or(session.humanize.timing);
                 inst.groove.humanize_timing = Some((current + delta).clamp(0.0, 1.0));
             }
@@ -320,8 +327,8 @@ pub(super) fn reduce(
         }
         InstrumentAction::AdjustTrackTimingOffset(id, delta) => {
             if let Some(inst) = instruments.instrument_mut(*id) {
-                inst.groove.timing_offset_ms = (inst.groove.timing_offset_ms + delta)
-                    .clamp(-50.0, 50.0);
+                inst.groove.timing_offset_ms =
+                    (inst.groove.timing_offset_ms + delta).clamp(-50.0, 50.0);
             }
             true
         }
@@ -361,13 +368,15 @@ pub(super) fn reduce(
         }
         InstrumentAction::AdjustLfoRate(id, delta) => {
             if let Some(inst) = instruments.instrument_mut(*id) {
-                inst.modulation.lfo.rate = (inst.modulation.lfo.rate + delta * 0.5).clamp(0.1, 20.0);
+                inst.modulation.lfo.rate =
+                    (inst.modulation.lfo.rate + delta * 0.5).clamp(0.1, 20.0);
             }
             true
         }
         InstrumentAction::AdjustLfoDepth(id, delta) => {
             if let Some(inst) = instruments.instrument_mut(*id) {
-                inst.modulation.lfo.depth = (inst.modulation.lfo.depth + delta * 0.05).clamp(0.0, 1.0);
+                inst.modulation.lfo.depth =
+                    (inst.modulation.lfo.depth + delta * 0.05).clamp(0.0, 1.0);
             }
             true
         }
@@ -386,29 +395,29 @@ pub(super) fn reduce(
         // Envelope actions
         InstrumentAction::AdjustEnvelopeAttack(id, delta) => {
             if let Some(inst) = instruments.instrument_mut(*id) {
-                inst.modulation.amp_envelope.attack = (inst.modulation.amp_envelope.attack + delta * 0.1)
-                    .clamp(0.001, 2.0);
+                inst.modulation.amp_envelope.attack =
+                    (inst.modulation.amp_envelope.attack + delta * 0.1).clamp(0.001, 2.0);
             }
             true
         }
         InstrumentAction::AdjustEnvelopeDecay(id, delta) => {
             if let Some(inst) = instruments.instrument_mut(*id) {
-                inst.modulation.amp_envelope.decay = (inst.modulation.amp_envelope.decay + delta * 0.1)
-                    .clamp(0.001, 2.0);
+                inst.modulation.amp_envelope.decay =
+                    (inst.modulation.amp_envelope.decay + delta * 0.1).clamp(0.001, 2.0);
             }
             true
         }
         InstrumentAction::AdjustEnvelopeSustain(id, delta) => {
             if let Some(inst) = instruments.instrument_mut(*id) {
-                inst.modulation.amp_envelope.sustain = (inst.modulation.amp_envelope.sustain + delta * 0.05)
-                    .clamp(0.0, 1.0);
+                inst.modulation.amp_envelope.sustain =
+                    (inst.modulation.amp_envelope.sustain + delta * 0.05).clamp(0.0, 1.0);
             }
             true
         }
         InstrumentAction::AdjustEnvelopeRelease(id, delta) => {
             if let Some(inst) = instruments.instrument_mut(*id) {
-                inst.modulation.amp_envelope.release = (inst.modulation.amp_envelope.release + delta * 0.2)
-                    .clamp(0.001, 5.0);
+                inst.modulation.amp_envelope.release =
+                    (inst.modulation.amp_envelope.release + delta * 0.2).clamp(0.001, 5.0);
             }
             true
         }
@@ -505,7 +514,9 @@ fn reduce_unlink_layer(
         inst.layer.group = None;
     }
     if let Some(g) = old_group {
-        let remaining: Vec<InstrumentId> = instruments.instruments.iter()
+        let remaining: Vec<InstrumentId> = instruments
+            .instruments
+            .iter()
             .filter(|i| i.layer.group == Some(g))
             .map(|i| i.id)
             .collect();
@@ -524,7 +535,7 @@ fn reduce_unlink_layer(
 mod tests {
     use super::*;
     use crate::state::custom_synthdef::{CustomSynthDef, ParamSpec};
-    use crate::state::vst::{VstPlugin, VstParamSpec, VstPluginKind};
+    use crate::state::vst::{VstParamSpec, VstPlugin, VstPluginKind};
     use crate::{CustomSynthDefId, VstPluginId};
     use std::path::PathBuf;
 
@@ -536,8 +547,18 @@ mod tests {
             synthdef_name: "imbolc_test".to_string(),
             source_path: PathBuf::from("/tmp/test.scd"),
             params: vec![
-                ParamSpec { name: "freq".to_string(), default: 440.0, min: 20.0, max: 20000.0 },
-                ParamSpec { name: "amp".to_string(), default: 0.5, min: 0.0, max: 1.0 },
+                ParamSpec {
+                    name: "freq".to_string(),
+                    default: 440.0,
+                    min: 20.0,
+                    max: 20000.0,
+                },
+                ParamSpec {
+                    name: "amp".to_string(),
+                    default: 0.5,
+                    min: 0.0,
+                    max: 1.0,
+                },
             ],
         };
         session.custom_synthdefs.add(synthdef);
@@ -552,8 +573,18 @@ mod tests {
             plugin_path: PathBuf::from("/tmp/test.vst3"),
             kind: VstPluginKind::Instrument,
             params: vec![
-                VstParamSpec { index: 0, name: "cutoff".to_string(), default: 0.7, label: None },
-                VstParamSpec { index: 1, name: "resonance".to_string(), default: 0.3, label: None },
+                VstParamSpec {
+                    index: 0,
+                    name: "cutoff".to_string(),
+                    default: 0.7,
+                    label: None,
+                },
+                VstParamSpec {
+                    index: 1,
+                    name: "resonance".to_string(),
+                    default: 0.3,
+                    label: None,
+                },
             ],
         };
         session.vst_plugins.add(plugin);
@@ -566,7 +597,11 @@ mod tests {
         let mut instruments = InstrumentState::new();
         let custom_id = CustomSynthDefId::new(0);
 
-        reduce(&InstrumentAction::Add(SourceType::Custom(custom_id)), &mut instruments, &mut session);
+        reduce(
+            &InstrumentAction::Add(SourceType::Custom(custom_id)),
+            &mut instruments,
+            &mut session,
+        );
 
         let inst = &instruments.instruments[0];
         assert!(inst.name.starts_with("imbolc_test-"));
@@ -583,7 +618,11 @@ mod tests {
         let mut instruments = InstrumentState::new();
         let vst_id = VstPluginId::new(0);
 
-        reduce(&InstrumentAction::Add(SourceType::Vst(vst_id)), &mut instruments, &mut session);
+        reduce(
+            &InstrumentAction::Add(SourceType::Vst(vst_id)),
+            &mut instruments,
+            &mut session,
+        );
 
         let inst = &instruments.instruments[0];
         assert!(inst.name.starts_with("testsynth-"));
@@ -599,7 +638,11 @@ mod tests {
         let mut session = SessionState::new();
         let mut instruments = InstrumentState::new();
 
-        reduce(&InstrumentAction::Add(SourceType::Saw), &mut instruments, &mut session);
+        reduce(
+            &InstrumentAction::Add(SourceType::Saw),
+            &mut instruments,
+            &mut session,
+        );
 
         let inst = &instruments.instruments[0];
         // Saw gets default_params() from SourceType, not from registries
@@ -613,12 +656,21 @@ mod tests {
 
         // Path A: via reducer
         let mut instruments_a = InstrumentState::new();
-        reduce(&InstrumentAction::Add(SourceType::Custom(custom_id)), &mut instruments_a, &mut session);
+        reduce(
+            &InstrumentAction::Add(SourceType::Custom(custom_id)),
+            &mut instruments_a,
+            &mut session,
+        );
 
         // Path B: via helper directly
         let mut instruments_b = InstrumentState::new();
         let id = instruments_b.add_instrument(SourceType::Custom(custom_id));
-        initialize_instrument_from_registries(id, SourceType::Custom(custom_id), &mut instruments_b, &session);
+        initialize_instrument_from_registries(
+            id,
+            SourceType::Custom(custom_id),
+            &mut instruments_b,
+            &session,
+        );
 
         let a = &instruments_a.instruments[0];
         let b = &instruments_b.instruments[0];
@@ -638,12 +690,21 @@ mod tests {
 
         // Path A: via reducer
         let mut instruments_a = InstrumentState::new();
-        reduce(&InstrumentAction::Add(SourceType::Vst(vst_id)), &mut instruments_a, &mut session);
+        reduce(
+            &InstrumentAction::Add(SourceType::Vst(vst_id)),
+            &mut instruments_a,
+            &mut session,
+        );
 
         // Path B: via helper directly
         let mut instruments_b = InstrumentState::new();
         let id = instruments_b.add_instrument(SourceType::Vst(vst_id));
-        initialize_instrument_from_registries(id, SourceType::Vst(vst_id), &mut instruments_b, &session);
+        initialize_instrument_from_registries(
+            id,
+            SourceType::Vst(vst_id),
+            &mut instruments_b,
+            &session,
+        );
 
         let a = &instruments_a.instruments[0];
         let b = &instruments_b.instruments[0];

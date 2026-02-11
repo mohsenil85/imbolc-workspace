@@ -2,9 +2,9 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use super::engine::AudioEngine;
-use imbolc_types::{ArpDirection, InstrumentId};
-use crate::arp_state::ArpPlayState;
 use super::snapshot::{InstrumentSnapshot, SessionSnapshot};
+use crate::arp_state::ArpPlayState;
+use imbolc_types::{ArpDirection, InstrumentId};
 
 pub fn tick_arpeggiator(
     instruments: &InstrumentSnapshot,
@@ -32,7 +32,8 @@ pub fn tick_arpeggiator(
                 if engine.is_running() {
                     let targets = instruments.layer_group_members(instrument_id);
                     for &target_id in &targets {
-                        let release_pitch = instruments.instrument(target_id)
+                        let release_pitch = instruments
+                            .instrument(target_id)
                             .map_or(pitch, |i| i.offset_pitch(pitch));
                         let _ = engine.release_voice(target_id, release_pitch, 0.0, instruments);
                     }
@@ -59,7 +60,11 @@ pub fn tick_arpeggiator(
         let steps_per_second = (bpm as f64 / 60.0) * config.rate.steps_per_beat() as f64;
         arp.accumulator += elapsed.as_secs_f64() * steps_per_second;
 
-        let step_duration_secs = if steps_per_second > 0.0 { 1.0 / steps_per_second } else { 0.0 };
+        let step_duration_secs = if steps_per_second > 0.0 {
+            1.0 / steps_per_second
+        } else {
+            0.0
+        };
         let mut step_offset: f64 = engine.schedule_lookahead_secs;
 
         while arp.accumulator >= 1.0 {
@@ -70,9 +75,15 @@ pub fn tick_arpeggiator(
                 if engine.is_running() {
                     let targets = instruments.layer_group_members(instrument_id);
                     for &target_id in &targets {
-                        let release_pitch = instruments.instrument(target_id)
+                        let release_pitch = instruments
+                            .instrument(target_id)
                             .map_or(pitch, |i| i.offset_pitch(pitch));
-                        let _ = engine.release_voice(target_id, release_pitch, step_offset, instruments);
+                        let _ = engine.release_voice(
+                            target_id,
+                            release_pitch,
+                            step_offset,
+                            instruments,
+                        );
                     }
                 }
             }
@@ -113,7 +124,9 @@ pub fn tick_arpeggiator(
                 }
                 ArpDirection::Random => {
                     // Use inline RNG to pick random index
-                    *rng_state = rng_state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+                    *rng_state = rng_state
+                        .wrapping_mul(6364136223846793005)
+                        .wrapping_add(1442695040888963407);
                     let r = ((*rng_state >> 33) as usize) % seq_len;
                     sequence[r]
                 }
@@ -127,11 +140,25 @@ pub fn tick_arpeggiator(
                 for &target_id in &targets {
                     let inst = instruments.instrument(target_id);
                     let skip = inst.is_none_or(|inst| {
-                        !inst.mixer.active || if any_solo { !inst.mixer.solo } else { inst.mixer.mute }
+                        !inst.mixer.active
+                            || if any_solo {
+                                !inst.mixer.solo
+                            } else {
+                                inst.mixer.mute
+                            }
                     });
-                    if skip { continue; }
+                    if skip {
+                        continue;
+                    }
                     let target_pitch = inst.map_or(pitch, |i| i.offset_pitch(pitch));
-                    let _ = engine.spawn_voice(target_id, target_pitch, vel_f, step_offset, instruments, session);
+                    let _ = engine.spawn_voice(
+                        target_id,
+                        target_pitch,
+                        vel_f,
+                        step_offset,
+                        instruments,
+                        session,
+                    );
                 }
             }
             arp.current_pitch = Some(pitch);
@@ -153,7 +180,8 @@ pub fn tick_arpeggiator(
                 if engine.is_running() {
                     let targets = instruments.layer_group_members(*id);
                     for &target_id in &targets {
-                        let release_pitch = instruments.instrument(target_id)
+                        let release_pitch = instruments
+                            .instrument(target_id)
                             .map_or(pitch, |i| i.offset_pitch(pitch));
                         let _ = engine.release_voice(target_id, release_pitch, 0.0, instruments);
                     }

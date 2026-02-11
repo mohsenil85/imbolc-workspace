@@ -18,8 +18,8 @@ use imbolc_types::{
 
 use crate::framing::{read_message, serialize_frame, write_message};
 use crate::protocol::{
-    ClientId, ClientMessage, NetworkAction, NetworkState, OwnerInfo,
-    PrivilegeLevel, ServerMessage, SessionToken, StatePatch,
+    ClientId, ClientMessage, NetworkAction, NetworkState, OwnerInfo, PrivilegeLevel, ServerMessage,
+    SessionToken, StatePatch,
 };
 
 /// What kind of frame is being queued — determines the drop policy.
@@ -114,11 +114,7 @@ impl DirtyFlags {
     ///
     /// `session` is needed to resolve piano roll track indices to `InstrumentId`.
     /// Pass `None` in unit tests — PianoRoll actions will fall back to structural.
-    pub fn mark_from_action(
-        &mut self,
-        action: &NetworkAction,
-        session: Option<&SessionState>,
-    ) {
+    pub fn mark_from_action(&mut self, action: &NetworkAction, session: Option<&SessionState>) {
         match action {
             NetworkAction::Instrument(a) => {
                 match a.target_instrument_id() {
@@ -191,23 +187,17 @@ impl DirtyFlags {
 
     /// Resolve a piano roll track index to an `InstrumentId` using session state.
     /// Falls back to structural if session is unavailable or index is out of bounds.
-    fn resolve_track_id(
-        &mut self,
-        track: usize,
-        session: Option<&SessionState>,
-    ) {
+    fn resolve_track_id(&mut self, track: usize, session: Option<&SessionState>) {
         match session.and_then(|s| s.piano_roll.track_order.get(track).copied()) {
-            Some(id) => { self.dirty_piano_roll_tracks.insert(id); }
+            Some(id) => {
+                self.dirty_piano_roll_tracks.insert(id);
+            }
             None => self.piano_roll_structural = true,
         }
     }
 
     /// Mark piano roll dirty flags based on the specific PianoRollAction variant.
-    fn mark_piano_roll_action(
-        &mut self,
-        action: &PianoRollAction,
-        session: Option<&SessionState>,
-    ) {
+    fn mark_piano_roll_action(&mut self, action: &PianoRollAction, session: Option<&SessionState>) {
         match action {
             // Per-track note edits
             PianoRollAction::ToggleNote { track, .. } => {
@@ -349,8 +339,8 @@ impl ClientWriter {
                 self.queue_frame(data[n..].to_vec(), kind);
                 Ok(())
             }
-            Err(ref e) if e.kind() == io::ErrorKind::WouldBlock
-                || e.kind() == io::ErrorKind::TimedOut =>
+            Err(ref e)
+                if e.kind() == io::ErrorKind::WouldBlock || e.kind() == io::ErrorKind::TimedOut =>
             {
                 // Timeout — queue the whole frame
                 self.queue_frame(data.to_vec(), kind);
@@ -365,7 +355,8 @@ impl ClientWriter {
         match kind {
             FrameKind::Metering => {
                 // Drop all pending (unstarted) metering frames — keep only latest
-                self.outbox.retain(|f| f.kind != FrameKind::Metering || f.offset > 0);
+                self.outbox
+                    .retain(|f| f.kind != FrameKind::Metering || f.offset > 0);
             }
             FrameKind::StatePatch => {
                 // Drop all unstarted StatePatch and FullSync frames
@@ -410,8 +401,9 @@ impl ClientWriter {
                         return Ok(false);
                     }
                 }
-                Err(ref e) if e.kind() == io::ErrorKind::WouldBlock
-                    || e.kind() == io::ErrorKind::TimedOut =>
+                Err(ref e)
+                    if e.kind() == io::ErrorKind::WouldBlock
+                        || e.kind() == io::ErrorKind::TimedOut =>
                 {
                     return Ok(false);
                 }
@@ -432,13 +424,20 @@ impl ClientWriter {
 /// Commands sent from the main thread to the writer thread.
 enum WriterCommand {
     /// Register a new client's write half after handshake.
-    AddClient { client_id: ClientId, stream: TcpStream },
+    AddClient {
+        client_id: ClientId,
+        stream: TcpStream,
+    },
     /// Remove a client (suspended/disconnected).
     RemoveClient { client_id: ClientId },
     /// Broadcast pre-serialized frame to all clients.
     Broadcast { frame: Vec<u8>, kind: FrameKind },
     /// Send pre-serialized frame to one client.
-    SendTo { client_id: ClientId, frame: Vec<u8>, kind: FrameKind },
+    SendTo {
+        client_id: ClientId,
+        frame: Vec<u8>,
+        kind: FrameKind,
+    },
     /// Block until all pending commands are processed (test sync).
     Flush { done: Sender<()> },
     /// Inject dummy frames into outboxes (test helper).
@@ -454,10 +453,7 @@ enum WriterFeedback {
 }
 
 /// The writer thread function — owns all client write halves.
-fn writer_thread(
-    cmd_rx: Receiver<WriterCommand>,
-    feedback_tx: Sender<WriterFeedback>,
-) {
+fn writer_thread(cmd_rx: Receiver<WriterCommand>, feedback_tx: Sender<WriterFeedback>) {
     let mut writers: HashMap<ClientId, ClientWriter> = HashMap::new();
 
     loop {
@@ -470,10 +466,13 @@ fn writer_thread(
                     got_command = true;
                     match cmd {
                         WriterCommand::AddClient { client_id, stream } => {
-                            writers.insert(client_id, ClientWriter {
-                                stream,
-                                outbox: VecDeque::new(),
-                            });
+                            writers.insert(
+                                client_id,
+                                ClientWriter {
+                                    stream,
+                                    outbox: VecDeque::new(),
+                                },
+                            );
                         }
                         WriterCommand::RemoveClient { client_id } => {
                             writers.remove(&client_id);
@@ -482,9 +481,7 @@ fn writer_thread(
                             let mut stalled = Vec::new();
                             for (&id, writer) in &mut writers {
                                 // Try to drain any pending outbox first
-                                if !writer.outbox.is_empty()
-                                    && writer.flush_outbox().is_err()
-                                {
+                                if !writer.outbox.is_empty() && writer.flush_outbox().is_err() {
                                     stalled.push(id);
                                     continue;
                                 }
@@ -500,14 +497,20 @@ fn writer_thread(
                             }
                             for id in stalled {
                                 writers.remove(&id);
-                                let _ = feedback_tx.send(WriterFeedback::ClientStalled { client_id: id });
+                                let _ = feedback_tx
+                                    .send(WriterFeedback::ClientStalled { client_id: id });
                             }
                         }
-                        WriterCommand::SendTo { client_id, frame, kind } => {
+                        WriterCommand::SendTo {
+                            client_id,
+                            frame,
+                            kind,
+                        } => {
                             if let Some(writer) = writers.get_mut(&client_id) {
                                 if writer.send_frame(&frame, kind).is_err() {
                                     writers.remove(&client_id);
-                                    let _ = feedback_tx.send(WriterFeedback::ClientStalled { client_id });
+                                    let _ = feedback_tx
+                                        .send(WriterFeedback::ClientStalled { client_id });
                                 }
                             }
                         }
@@ -691,7 +694,10 @@ impl NetServer {
                     // Store as pending (will become full client on Hello)
                     self.pending.insert(client_id, PendingConnection { stream });
 
-                    info!("Client {:?} TCP connected from {}, awaiting Hello", client_id, addr);
+                    info!(
+                        "Client {:?} TCP connected from {}, awaiting Hello",
+                        client_id, addr
+                    );
                 }
                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
                     // No pending connections
@@ -750,11 +756,18 @@ impl NetServer {
                                 let session_token = SessionToken::new();
                                 let msg = ServerMessage::ReconnectSuccessful {
                                     client_id,
-                                    restored_instruments: suspended.owned_instruments.iter().copied().collect(),
+                                    restored_instruments: suspended
+                                        .owned_instruments
+                                        .iter()
+                                        .copied()
+                                        .collect(),
                                     privilege,
                                 };
                                 if let Err(e) = write_message(&mut pending.stream, &msg) {
-                                    error!("Failed to send reconnect success to {:?}: {}", client_id, e);
+                                    error!(
+                                        "Failed to send reconnect success to {:?}: {}",
+                                        client_id, e
+                                    );
                                     continue;
                                 }
 
@@ -767,7 +780,10 @@ impl NetServer {
                                 };
                                 let state_msg = ServerMessage::StateUpdate { state: net_state };
                                 if let Err(e) = write_message(&mut pending.stream, &state_msg) {
-                                    error!("Failed to send state to reconnecting {:?}: {}", client_id, e);
+                                    error!(
+                                        "Failed to send state to reconnecting {:?}: {}",
+                                        client_id, e
+                                    );
                                     continue;
                                 }
 
@@ -777,12 +793,15 @@ impl NetServer {
                                     stream: pending.stream,
                                 });
 
-                                self.clients.insert(client_id, ClientInfo {
-                                    name: suspended.client_name,
-                                    owned_instruments: suspended.owned_instruments,
-                                    session_token,
-                                    last_seen: Instant::now(),
-                                });
+                                self.clients.insert(
+                                    client_id,
+                                    ClientInfo {
+                                        name: suspended.client_name,
+                                        owned_instruments: suspended.owned_instruments,
+                                        session_token,
+                                        last_seen: Instant::now(),
+                                    },
+                                );
 
                                 info!("Client {:?} reconnected successfully", client_id);
                                 continue;
@@ -857,12 +876,15 @@ impl NetServer {
                         });
 
                         // Promote to full client (metadata only)
-                        self.clients.insert(client_id, ClientInfo {
-                            name: client_name.clone(),
-                            owned_instruments: granted.iter().copied().collect(),
-                            session_token,
-                            last_seen: Instant::now(),
-                        });
+                        self.clients.insert(
+                            client_id,
+                            ClientInfo {
+                                name: client_name.clone(),
+                                owned_instruments: granted.iter().copied().collect(),
+                                session_token,
+                                last_seen: Instant::now(),
+                            },
+                        );
 
                         info!(
                             "Client {:?} '{}' completed handshake, granted {} instruments, privilege={:?}",
@@ -880,7 +902,12 @@ impl NetServer {
                 ClientMessage::Action(action) => {
                     // Validate ownership before accepting action
                     if let Err(reason) = self.validate_action(client_id, &action) {
-                        self.send_to_client(client_id, &ServerMessage::ActionRejected { reason: reason.clone() });
+                        self.send_to_client(
+                            client_id,
+                            &ServerMessage::ActionRejected {
+                                reason: reason.clone(),
+                            },
+                        );
                         warn!("Action from {:?} rejected: {}", client_id, reason);
                         continue;
                     }
@@ -920,7 +947,9 @@ impl NetServer {
             }
 
             // Revoke from current holder
-            let current_name = self.clients.get(&current)
+            let current_name = self
+                .clients
+                .get(&current)
                 .map(|c| c.name.clone())
                 .unwrap_or_else(|| "unknown".into());
 
@@ -954,15 +983,20 @@ impl NetServer {
             }
 
             // Tell the writer thread to drop this client's write half
-            let _ = self.writer_tx.send(WriterCommand::RemoveClient { client_id });
+            let _ = self
+                .writer_tx
+                .send(WriterCommand::RemoveClient { client_id });
 
             // Create suspended session
-            self.suspended_sessions.insert(client.session_token.clone(), SuspendedSession {
-                client_name: client.name.clone(),
-                owned_instruments: client.owned_instruments.clone(),
-                was_privileged,
-                disconnected_at: Instant::now(),
-            });
+            self.suspended_sessions.insert(
+                client.session_token.clone(),
+                SuspendedSession {
+                    client_name: client.name.clone(),
+                    owned_instruments: client.owned_instruments.clone(),
+                    was_privileged,
+                    disconnected_at: Instant::now(),
+                },
+            );
 
             // Keep ownership reserved in the ownership map
             // (don't release it, so others can't claim it during reconnect window)
@@ -986,14 +1020,18 @@ impl NetServer {
             self.last_heartbeat = now;
 
             // Collect dead clients (no response for 15s = 3 missed beats)
-            let dead: Vec<ClientId> = self.clients
+            let dead: Vec<ClientId> = self
+                .clients
                 .iter()
                 .filter(|(_, c)| now.duration_since(c.last_seen).as_secs() > 15)
                 .map(|(&id, _)| id)
                 .collect();
 
             for id in dead {
-                warn!("Client {:?} timed out (no heartbeat response), suspending", id);
+                warn!(
+                    "Client {:?} timed out (no heartbeat response), suspending",
+                    id
+                );
                 self.suspend_client(id);
             }
 
@@ -1008,9 +1046,12 @@ impl NetServer {
     /// Clean up expired suspended sessions.
     fn cleanup_expired_sessions(&mut self) {
         let now = Instant::now();
-        let expired: Vec<SessionToken> = self.suspended_sessions
+        let expired: Vec<SessionToken> = self
+            .suspended_sessions
             .iter()
-            .filter(|(_, s)| now.duration_since(s.disconnected_at).as_secs() > RECONNECT_WINDOW_SECS)
+            .filter(|(_, s)| {
+                now.duration_since(s.disconnected_at).as_secs() > RECONNECT_WINDOW_SECS
+            })
             .map(|(t, _)| t.clone())
             .collect();
 
@@ -1037,11 +1078,16 @@ impl NetServer {
 
         // Remove from clients and release ownership
         if let Some(client) = self.clients.remove(&client_id) {
-            let _ = self.writer_tx.send(WriterCommand::RemoveClient { client_id });
+            let _ = self
+                .writer_tx
+                .send(WriterCommand::RemoveClient { client_id });
             for id in client.owned_instruments {
                 self.ownership.remove(&id);
             }
-            info!("Client {:?} '{}' removed, ownership released", client_id, client.name);
+            info!(
+                "Client {:?} '{}' removed, ownership released",
+                client_id, client.name
+            );
         }
     }
 
@@ -1072,12 +1118,16 @@ impl NetServer {
             // Privileged actions — require privilege
             NetworkAction::Server(_) => {
                 if !self.is_privileged(client_id) {
-                    return Err("Transport controls require privilege (use 'Request Privilege')".into());
+                    return Err(
+                        "Transport controls require privilege (use 'Request Privilege')".into(),
+                    );
                 }
             }
             NetworkAction::Session(_) => {
                 if !self.is_privileged(client_id) {
-                    return Err("Session controls require privilege (use 'Request Privilege')".into());
+                    return Err(
+                        "Session controls require privilege (use 'Request Privilege')".into(),
+                    );
                 }
             }
             NetworkAction::Bus(_) | NetworkAction::LayerGroup(_) => {
@@ -1138,9 +1188,7 @@ impl NetServer {
 
         // Rate limit: skip if last broadcast was too recent (dirty flags persist)
         let now = Instant::now();
-        if now.duration_since(self.last_patch_broadcast).as_millis()
-            < PATCH_BROADCAST_INTERVAL_MS
-        {
+        if now.duration_since(self.last_patch_broadcast).as_millis() < PATCH_BROADCAST_INTERVAL_MS {
             return;
         }
 
@@ -1157,130 +1205,150 @@ impl NetServer {
             None
         };
 
-        let instrument_patches = if !use_full_instruments
-            && !self.dirty.dirty_instruments.is_empty()
-        {
-            let mut patches = HashMap::new();
-            for &id in &self.dirty.dirty_instruments {
-                if let Some(inst) = state.instruments.instrument(id) {
-                    patches.insert(id, inst.clone());
+        let instrument_patches =
+            if !use_full_instruments && !self.dirty.dirty_instruments.is_empty() {
+                let mut patches = HashMap::new();
+                for &id in &self.dirty.dirty_instruments {
+                    if let Some(inst) = state.instruments.instrument(id) {
+                        patches.insert(id, inst.clone());
+                    }
                 }
-            }
-            if patches.is_empty() {
-                None
+                if patches.is_empty() {
+                    None
+                } else {
+                    Some(patches)
+                }
             } else {
-                Some(patches)
-            }
-        } else {
-            None
-        };
+                None
+            };
 
         // If dirty.session is set, send full SessionState (includes all subsystems).
         // Otherwise, send only the specific subsystems that changed.
         let (
-            session, piano_roll, piano_roll_track_patches, arrangement,
-            automation, automation_lane_patches, mixer, mixer_bus_patches,
+            session,
+            piano_roll,
+            piano_roll_track_patches,
+            arrangement,
+            automation,
+            automation_lane_patches,
+            mixer,
+            mixer_bus_patches,
         ) = if self.dirty.session {
-                (Some(state.session.clone()), None, None, None, None, None, None, None)
+            (
+                Some(state.session.clone()),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+        } else {
+            // Piano roll: threshold coalescing (same pattern as instruments)
+            let pr_total = state.session.piano_roll.tracks.len();
+            let use_full_pr = self.dirty.piano_roll_structural
+                || (pr_total > 0 && self.dirty.dirty_piano_roll_tracks.len() > pr_total / 2);
+
+            let pr_full = if use_full_pr
+                && (self.dirty.piano_roll_structural
+                    || !self.dirty.dirty_piano_roll_tracks.is_empty())
+            {
+                Some(state.session.piano_roll.clone())
             } else {
-                // Piano roll: threshold coalescing (same pattern as instruments)
-                let pr_total = state.session.piano_roll.tracks.len();
-                let use_full_pr = self.dirty.piano_roll_structural
-                    || (pr_total > 0
-                        && self.dirty.dirty_piano_roll_tracks.len() > pr_total / 2);
-
-                let pr_full = if use_full_pr
-                    && (self.dirty.piano_roll_structural
-                        || !self.dirty.dirty_piano_roll_tracks.is_empty())
-                {
-                    Some(state.session.piano_roll.clone())
-                } else {
-                    None
-                };
-
-                let pr_patches = if !use_full_pr
-                    && !self.dirty.dirty_piano_roll_tracks.is_empty()
-                {
-                    let mut patches = HashMap::new();
-                    for &id in &self.dirty.dirty_piano_roll_tracks {
-                        if let Some(track) = state.session.piano_roll.tracks.get(&id) {
-                            patches.insert(id, track.clone());
-                        }
-                    }
-                    if patches.is_empty() { None } else { Some(patches) }
-                } else {
-                    None
-                };
-
-                // Automation: threshold coalescing (same pattern as instruments)
-                let auto_total = state.session.automation.lanes.len();
-                let use_full_auto = self.dirty.automation_structural
-                    || (auto_total > 0
-                        && self.dirty.dirty_automation_lanes.len() > auto_total / 2);
-
-                let auto_full = if use_full_auto
-                    && (self.dirty.automation_structural
-                        || !self.dirty.dirty_automation_lanes.is_empty())
-                {
-                    Some(state.session.automation.clone())
-                } else {
-                    None
-                };
-
-                let auto_patches = if !use_full_auto
-                    && !self.dirty.dirty_automation_lanes.is_empty()
-                {
-                    let mut patches = HashMap::new();
-                    for &id in &self.dirty.dirty_automation_lanes {
-                        if let Some(lane) = state.session.automation.lane(id) {
-                            patches.insert(id, lane.clone());
-                        }
-                    }
-                    if patches.is_empty() { None } else { Some(patches) }
-                } else {
-                    None
-                };
-
-                // Mixer: threshold coalescing (same pattern as instruments)
-                let mixer_total = state.session.mixer.buses.len();
-                let use_full_mixer = self.dirty.mixer_structural
-                    || (mixer_total > 0
-                        && self.dirty.dirty_mixer_buses.len() > mixer_total / 2);
-
-                let mixer_full = if use_full_mixer
-                    && (self.dirty.mixer_structural
-                        || !self.dirty.dirty_mixer_buses.is_empty())
-                {
-                    Some(state.session.mixer.clone())
-                } else {
-                    None
-                };
-
-                let mixer_patches = if !use_full_mixer
-                    && !self.dirty.dirty_mixer_buses.is_empty()
-                {
-                    let mut patches = HashMap::new();
-                    for &id in &self.dirty.dirty_mixer_buses {
-                        if let Some(bus) = state.session.mixer.bus(id) {
-                            patches.insert(id, bus.clone());
-                        }
-                    }
-                    if patches.is_empty() { None } else { Some(patches) }
-                } else {
-                    None
-                };
-
-                (
-                    None,
-                    pr_full,
-                    pr_patches,
-                    if self.dirty.arrangement { Some(state.session.arrangement.clone()) } else { None },
-                    auto_full,
-                    auto_patches,
-                    mixer_full,
-                    mixer_patches,
-                )
+                None
             };
+
+            let pr_patches = if !use_full_pr && !self.dirty.dirty_piano_roll_tracks.is_empty() {
+                let mut patches = HashMap::new();
+                for &id in &self.dirty.dirty_piano_roll_tracks {
+                    if let Some(track) = state.session.piano_roll.tracks.get(&id) {
+                        patches.insert(id, track.clone());
+                    }
+                }
+                if patches.is_empty() {
+                    None
+                } else {
+                    Some(patches)
+                }
+            } else {
+                None
+            };
+
+            // Automation: threshold coalescing (same pattern as instruments)
+            let auto_total = state.session.automation.lanes.len();
+            let use_full_auto = self.dirty.automation_structural
+                || (auto_total > 0 && self.dirty.dirty_automation_lanes.len() > auto_total / 2);
+
+            let auto_full = if use_full_auto
+                && (self.dirty.automation_structural
+                    || !self.dirty.dirty_automation_lanes.is_empty())
+            {
+                Some(state.session.automation.clone())
+            } else {
+                None
+            };
+
+            let auto_patches = if !use_full_auto && !self.dirty.dirty_automation_lanes.is_empty() {
+                let mut patches = HashMap::new();
+                for &id in &self.dirty.dirty_automation_lanes {
+                    if let Some(lane) = state.session.automation.lane(id) {
+                        patches.insert(id, lane.clone());
+                    }
+                }
+                if patches.is_empty() {
+                    None
+                } else {
+                    Some(patches)
+                }
+            } else {
+                None
+            };
+
+            // Mixer: threshold coalescing (same pattern as instruments)
+            let mixer_total = state.session.mixer.buses.len();
+            let use_full_mixer = self.dirty.mixer_structural
+                || (mixer_total > 0 && self.dirty.dirty_mixer_buses.len() > mixer_total / 2);
+
+            let mixer_full = if use_full_mixer
+                && (self.dirty.mixer_structural || !self.dirty.dirty_mixer_buses.is_empty())
+            {
+                Some(state.session.mixer.clone())
+            } else {
+                None
+            };
+
+            let mixer_patches = if !use_full_mixer && !self.dirty.dirty_mixer_buses.is_empty() {
+                let mut patches = HashMap::new();
+                for &id in &self.dirty.dirty_mixer_buses {
+                    if let Some(bus) = state.session.mixer.bus(id) {
+                        patches.insert(id, bus.clone());
+                    }
+                }
+                if patches.is_empty() {
+                    None
+                } else {
+                    Some(patches)
+                }
+            } else {
+                None
+            };
+
+            (
+                None,
+                pr_full,
+                pr_patches,
+                if self.dirty.arrangement {
+                    Some(state.session.arrangement.clone())
+                } else {
+                    None
+                },
+                auto_full,
+                auto_patches,
+                mixer_full,
+                mixer_patches,
+            )
+        };
 
         let patch = StatePatch {
             session,
@@ -1332,8 +1400,7 @@ impl NetServer {
 
     /// Check if a full sync should be sent (every 30s or on request).
     pub fn needs_full_sync(&self) -> bool {
-        self.force_full_sync
-            || Instant::now().duration_since(self.last_full_sync).as_secs() >= 30
+        self.force_full_sync || Instant::now().duration_since(self.last_full_sync).as_secs() >= 30
     }
 
     /// Broadcast a state update to all connected clients (legacy full broadcast).
@@ -1380,10 +1447,13 @@ impl NetServer {
             .iter()
             .filter_map(|(&inst_id, &client_id)| {
                 self.clients.get(&client_id).map(|client| {
-                    (inst_id, OwnerInfo {
-                        client_id,
-                        client_name: client.name.clone(),
-                    })
+                    (
+                        inst_id,
+                        OwnerInfo {
+                            client_id,
+                            client_name: client.name.clone(),
+                        },
+                    )
                 })
             })
             .collect()
@@ -1391,9 +1461,8 @@ impl NetServer {
 
     /// Get the privileged client info (if any).
     pub fn privileged_client_info(&self) -> Option<(ClientId, String)> {
-        self.privileged_client.and_then(|id| {
-            self.clients.get(&id).map(|c| (id, c.name.clone()))
-        })
+        self.privileged_client
+            .and_then(|id| self.clients.get(&id).map(|c| (id, c.name.clone())))
     }
 
     /// Reset the rate limiter so the next `broadcast_state_patch` is not throttled.
@@ -1416,7 +1485,10 @@ impl NetServer {
         while let Ok(feedback) = self.writer_feedback_rx.try_recv() {
             match feedback {
                 WriterFeedback::ClientStalled { client_id } => {
-                    warn!("Writer thread reports client {:?} stalled, suspending", client_id);
+                    warn!(
+                        "Writer thread reports client {:?} stalled, suspending",
+                        client_id
+                    );
                     self.suspend_client(client_id);
                 }
             }
@@ -1462,7 +1534,9 @@ impl NetServer {
             }
         };
 
-        let _ = self.writer_tx.send(WriterCommand::Broadcast { frame, kind });
+        let _ = self
+            .writer_tx
+            .send(WriterCommand::Broadcast { frame, kind });
     }
 }
 
@@ -1516,8 +1590,8 @@ mod tests {
     use imbolc_types::{
         ArrangementAction, AutomationAction, AutomationTarget, BusAction, ChopperAction,
         InstrumentAction, InstrumentParameter, MidiAction, MixerAction, ParameterTarget,
-        PianoRollAction, SequencerAction, ServerAction, SessionAction, SourceType,
-        VstParamAction, VstTarget,
+        PianoRollAction, SequencerAction, ServerAction, SessionAction, SourceType, VstParamAction,
+        VstTarget,
     };
 
     /// Helper: check that dirty flags indicate instruments are dirty in some way
@@ -1538,7 +1612,11 @@ mod tests {
         for action in &cases {
             let mut d = DirtyFlags::default();
             d.mark_from_action(action, None);
-            assert!(d.instruments_structural, "instruments_structural for {:?}", action);
+            assert!(
+                d.instruments_structural,
+                "instruments_structural for {:?}",
+                action
+            );
             assert!(!d.session, "session clean for {:?}", action);
         }
     }
@@ -1547,17 +1625,30 @@ mod tests {
     fn dirty_instrument_targeted_actions() {
         // VstParam and targeted InstrumentAction go into dirty_instruments
         let cases: Vec<NetworkAction> = vec![
-            NetworkAction::VstParam(VstParamAction::SetParam(InstrumentId::new(0), VstTarget::Source, 0, 0.5)),
-            NetworkAction::Instrument(InstrumentAction::AdjustFilterCutoff(InstrumentId::new(5), 0.1)),
+            NetworkAction::VstParam(VstParamAction::SetParam(
+                InstrumentId::new(0),
+                VstTarget::Source,
+                0,
+                0.5,
+            )),
+            NetworkAction::Instrument(InstrumentAction::AdjustFilterCutoff(
+                InstrumentId::new(5),
+                0.1,
+            )),
         ];
         for action in &cases {
             let mut d = DirtyFlags::default();
             d.mark_from_action(action, None);
             assert!(
                 !d.dirty_instruments.is_empty(),
-                "dirty_instruments should be non-empty for {:?}", action
+                "dirty_instruments should be non-empty for {:?}",
+                action
             );
-            assert!(!d.instruments_structural, "instruments_structural false for {:?}", action);
+            assert!(
+                !d.instruments_structural,
+                "instruments_structural false for {:?}",
+                action
+            );
             assert!(!d.session, "session clean for {:?}", action);
         }
     }
@@ -1583,7 +1674,10 @@ mod tests {
         // PianoRoll metadata → piano_roll_structural (without session, falls back to structural)
         let mut d = DirtyFlags::default();
         d.mark_from_action(&NetworkAction::PianoRoll(PianoRollAction::ToggleLoop), None);
-        assert!(d.piano_roll_structural, "piano_roll_structural dirty for ToggleLoop");
+        assert!(
+            d.piano_roll_structural,
+            "piano_roll_structural dirty for ToggleLoop"
+        );
         assert!(!d.session, "session clean for PianoRoll");
 
         // PianoRoll audio-only → no flags
@@ -1593,15 +1687,22 @@ mod tests {
 
         // Arrangement → arrangement flag
         let mut d = DirtyFlags::default();
-        d.mark_from_action(&NetworkAction::Arrangement(ArrangementAction::TogglePlayMode), None);
+        d.mark_from_action(
+            &NetworkAction::Arrangement(ArrangementAction::TogglePlayMode),
+            None,
+        );
         assert!(d.arrangement, "arrangement dirty");
         assert!(!d.session, "session clean for Arrangement");
 
         // Automation (structural) → automation_structural flag
         let mut d = DirtyFlags::default();
-        d.mark_from_action(&NetworkAction::Automation(AutomationAction::AddLane(
-            AutomationTarget::Instrument(InstrumentId::new(0), InstrumentParameter::Standard(ParameterTarget::Level)),
-        )), None);
+        d.mark_from_action(
+            &NetworkAction::Automation(AutomationAction::AddLane(AutomationTarget::Instrument(
+                InstrumentId::new(0),
+                InstrumentParameter::Standard(ParameterTarget::Level),
+            ))),
+            None,
+        );
         assert!(d.automation_structural, "automation_structural dirty");
         assert!(!d.session, "session clean for Automation");
 
@@ -1635,7 +1736,11 @@ mod tests {
             let mut d = DirtyFlags::default();
             d.mark_from_action(action, None);
             assert!(d.session, "session dirty for {:?}", action);
-            assert!(d.instruments_structural, "instruments_structural for {:?}", action);
+            assert!(
+                d.instruments_structural,
+                "instruments_structural for {:?}",
+                action
+            );
         }
     }
 
@@ -1653,9 +1758,13 @@ mod tests {
     #[test]
     fn dirty_instrument_targeted_vs_structural() {
         let mut d = DirtyFlags::default();
-        d.mark_from_action(&NetworkAction::Instrument(
-            InstrumentAction::AdjustFilterCutoff(InstrumentId::new(5), 0.1),
-        ), None);
+        d.mark_from_action(
+            &NetworkAction::Instrument(InstrumentAction::AdjustFilterCutoff(
+                InstrumentId::new(5),
+                0.1,
+            )),
+            None,
+        );
         assert_eq!(d.dirty_instruments, HashSet::from([InstrumentId::new(5)]));
         assert!(!d.instruments_structural);
     }
@@ -1663,28 +1772,44 @@ mod tests {
     #[test]
     fn dirty_instrument_delete_is_structural() {
         let mut d = DirtyFlags::default();
-        d.mark_from_action(&NetworkAction::Instrument(InstrumentAction::Delete(InstrumentId::new(5))), None);
+        d.mark_from_action(
+            &NetworkAction::Instrument(InstrumentAction::Delete(InstrumentId::new(5))),
+            None,
+        );
         assert!(d.instruments_structural);
-        assert!(d.piano_roll_structural, "instrument delete should also mark piano_roll_structural");
+        assert!(
+            d.piano_roll_structural,
+            "instrument delete should also mark piano_roll_structural"
+        );
     }
 
     #[test]
     fn dirty_instrument_add_is_structural() {
         let mut d = DirtyFlags::default();
-        d.mark_from_action(&NetworkAction::Instrument(
-            InstrumentAction::Add(SourceType::Saw),
-        ), None);
+        d.mark_from_action(
+            &NetworkAction::Instrument(InstrumentAction::Add(SourceType::Saw)),
+            None,
+        );
         assert!(d.instruments_structural);
         assert!(d.dirty_instruments.is_empty());
-        assert!(d.piano_roll_structural, "instrument add should also mark piano_roll_structural");
+        assert!(
+            d.piano_roll_structural,
+            "instrument add should also mark piano_roll_structural"
+        );
     }
 
     #[test]
     fn dirty_vst_param_is_targeted() {
         let mut d = DirtyFlags::default();
-        d.mark_from_action(&NetworkAction::VstParam(
-            VstParamAction::SetParam(InstrumentId::new(3), VstTarget::Source, 0, 0.5),
-        ), None);
+        d.mark_from_action(
+            &NetworkAction::VstParam(VstParamAction::SetParam(
+                InstrumentId::new(3),
+                VstTarget::Source,
+                0,
+                0.5,
+            )),
+            None,
+        );
         assert_eq!(d.dirty_instruments, HashSet::from([InstrumentId::new(3)]));
         assert!(!d.instruments_structural);
     }
@@ -1699,13 +1824,24 @@ mod tests {
     #[test]
     fn dirty_accumulated_instruments() {
         let mut d = DirtyFlags::default();
-        d.mark_from_action(&NetworkAction::Instrument(
-            InstrumentAction::AdjustFilterCutoff(InstrumentId::new(2), 0.1),
-        ), None);
-        d.mark_from_action(&NetworkAction::Instrument(
-            InstrumentAction::AdjustFilterCutoff(InstrumentId::new(7), 0.2),
-        ), None);
-        assert_eq!(d.dirty_instruments, HashSet::from([InstrumentId::new(2), InstrumentId::new(7)]));
+        d.mark_from_action(
+            &NetworkAction::Instrument(InstrumentAction::AdjustFilterCutoff(
+                InstrumentId::new(2),
+                0.1,
+            )),
+            None,
+        );
+        d.mark_from_action(
+            &NetworkAction::Instrument(InstrumentAction::AdjustFilterCutoff(
+                InstrumentId::new(7),
+                0.2,
+            )),
+            None,
+        );
+        assert_eq!(
+            d.dirty_instruments,
+            HashSet::from([InstrumentId::new(2), InstrumentId::new(7)])
+        );
         assert!(!d.instruments_structural);
     }
 
@@ -1719,15 +1855,23 @@ mod tests {
     #[test]
     fn any_true_for_each_flag() {
         for setter in [
-            (|d: &mut DirtyFlags| { d.dirty_piano_roll_tracks.insert(InstrumentId::new(0)); }) as fn(&mut DirtyFlags),
+            (|d: &mut DirtyFlags| {
+                d.dirty_piano_roll_tracks.insert(InstrumentId::new(0));
+            }) as fn(&mut DirtyFlags),
             |d: &mut DirtyFlags| d.piano_roll_structural = true,
             |d: &mut DirtyFlags| d.arrangement = true,
-            |d: &mut DirtyFlags| { d.dirty_automation_lanes.insert(0); },
+            |d: &mut DirtyFlags| {
+                d.dirty_automation_lanes.insert(0);
+            },
             |d: &mut DirtyFlags| d.automation_structural = true,
-            |d: &mut DirtyFlags| { d.dirty_mixer_buses.insert(BusId::new(1)); },
+            |d: &mut DirtyFlags| {
+                d.dirty_mixer_buses.insert(BusId::new(1));
+            },
             |d: &mut DirtyFlags| d.mixer_structural = true,
             |d: &mut DirtyFlags| d.session = true,
-            |d: &mut DirtyFlags| { d.dirty_instruments.insert(InstrumentId::new(0)); },
+            |d: &mut DirtyFlags| {
+                d.dirty_instruments.insert(InstrumentId::new(0));
+            },
             |d: &mut DirtyFlags| d.instruments_structural = true,
             |d: &mut DirtyFlags| d.ownership = true,
             |d: &mut DirtyFlags| d.privileged_client = true,
@@ -1749,7 +1893,11 @@ mod tests {
             dirty_mixer_buses: HashSet::from([BusId::new(1), BusId::new(2)]),
             mixer_structural: true,
             session: true,
-            dirty_instruments: HashSet::from([InstrumentId::new(0), InstrumentId::new(1), InstrumentId::new(2)]),
+            dirty_instruments: HashSet::from([
+                InstrumentId::new(0),
+                InstrumentId::new(1),
+                InstrumentId::new(2),
+            ]),
             instruments_structural: true,
             ownership: true,
             privileged_client: true,
@@ -1780,7 +1928,10 @@ mod tests {
         assert!(d.session);
         assert!(!instruments_dirty(&d));
         // Second: instruments (structural) — session stays dirty
-        d.mark_from_action(&NetworkAction::Instrument(InstrumentAction::Add(SourceType::Saw)), None);
+        d.mark_from_action(
+            &NetworkAction::Instrument(InstrumentAction::Add(SourceType::Saw)),
+            None,
+        );
         assert!(d.session);
         assert!(d.instruments_structural);
     }
@@ -1808,17 +1959,22 @@ mod tests {
     fn dirty_automation_targeted_vs_structural() {
         // AddPoint → per-lane
         let mut d = DirtyFlags::default();
-        d.mark_from_action(&NetworkAction::Automation(
-            AutomationAction::AddPoint(42, 100, 0.5),
-        ), None);
+        d.mark_from_action(
+            &NetworkAction::Automation(AutomationAction::AddPoint(42, 100, 0.5)),
+            None,
+        );
         assert!(d.dirty_automation_lanes.contains(&42));
         assert!(!d.automation_structural);
 
         // AddLane → structural
         let mut d = DirtyFlags::default();
-        d.mark_from_action(&NetworkAction::Automation(AutomationAction::AddLane(
-            AutomationTarget::Instrument(InstrumentId::new(0), InstrumentParameter::Standard(ParameterTarget::Level)),
-        )), None);
+        d.mark_from_action(
+            &NetworkAction::Automation(AutomationAction::AddLane(AutomationTarget::Instrument(
+                InstrumentId::new(0),
+                InstrumentParameter::Standard(ParameterTarget::Level),
+            ))),
+            None,
+        );
         assert!(d.dirty_automation_lanes.is_empty());
         assert!(d.automation_structural);
     }
@@ -1826,9 +1982,10 @@ mod tests {
     #[test]
     fn dirty_automation_copypoints_is_noop() {
         let mut d = DirtyFlags::default();
-        d.mark_from_action(&NetworkAction::Automation(
-            AutomationAction::CopyPoints(1, 0, 100),
-        ), None);
+        d.mark_from_action(
+            &NetworkAction::Automation(AutomationAction::CopyPoints(1, 0, 100)),
+            None,
+        );
         assert!(!d.any(), "CopyPoints should not dirty anything");
     }
 
@@ -1836,9 +1993,10 @@ mod tests {
     fn dirty_mixer_bus_targeted_vs_structural() {
         // Rename → per-bus
         let mut d = DirtyFlags::default();
-        d.mark_from_action(&NetworkAction::Bus(
-            BusAction::Rename(BusId::new(3), "FX".into()),
-        ), None);
+        d.mark_from_action(
+            &NetworkAction::Bus(BusAction::Rename(BusId::new(3), "FX".into())),
+            None,
+        );
         assert!(d.dirty_mixer_buses.contains(&BusId::new(3)));
         assert!(!d.mixer_structural);
 
@@ -1858,9 +2016,13 @@ mod tests {
     #[test]
     fn dirty_layer_group_is_mixer_structural() {
         let mut d = DirtyFlags::default();
-        d.mark_from_action(&NetworkAction::LayerGroup(
-            imbolc_types::LayerGroupAction::AddEffect(0, imbolc_types::EffectType::Delay),
-        ), None);
+        d.mark_from_action(
+            &NetworkAction::LayerGroup(imbolc_types::LayerGroupAction::AddEffect(
+                0,
+                imbolc_types::EffectType::Delay,
+            )),
+            None,
+        );
         assert!(d.mixer_structural);
         assert!(d.dirty_mixer_buses.is_empty());
     }
@@ -1883,10 +2045,7 @@ mod tests {
         let addr = listener.local_addr().unwrap();
         let stream = TcpStream::connect(addr).unwrap();
         let _ = listener.accept().unwrap();
-        ClientWriter {
-            stream,
-            outbox,
-        }
+        ClientWriter { stream, outbox }
     }
 
     #[test]
@@ -1898,7 +2057,11 @@ mod tests {
         let mut client = make_test_writer(outbox);
         // Queue a new metering frame — should drop the 3 pending ones
         client.queue_frame(vec![0u8; 50], FrameKind::Metering);
-        assert_eq!(client.outbox.len(), 1, "only the new metering frame should remain");
+        assert_eq!(
+            client.outbox.len(),
+            1,
+            "only the new metering frame should remain"
+        );
         assert_eq!(client.outbox[0].data.len(), 50, "should be the new frame");
     }
 

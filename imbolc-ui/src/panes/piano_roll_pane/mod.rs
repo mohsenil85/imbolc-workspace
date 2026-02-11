@@ -5,32 +5,35 @@ use std::any::Any;
 use std::time::Instant;
 
 use crate::state::AppState;
-use crate::ui::layout_helpers::center_rect;
-use crate::ui::{Rect, RenderBuf, Action, InputEvent, Keymap, MouseEvent, Pane, PianoKeyboard, PianoRollAction, ToggleResult};
 use crate::ui::action_id::ActionId;
+use crate::ui::layout_helpers::center_rect;
+use crate::ui::{
+    Action, InputEvent, Keymap, MouseEvent, Pane, PianoKeyboard, PianoRollAction, Rect, RenderBuf,
+    ToggleResult,
+};
 use imbolc_types::InstrumentId;
 
 pub struct PianoRollPane {
     keymap: Keymap,
     // Cursor state
-    pub(crate) cursor_pitch: u8,   // MIDI note 0-127
-    pub(crate) cursor_tick: u32,   // Position in ticks
+    pub(crate) cursor_pitch: u8, // MIDI note 0-127
+    pub(crate) cursor_tick: u32, // Position in ticks
     // View state
     pub(crate) current_track: usize,
-    pub(super) view_bottom_pitch: u8,  // Lowest visible pitch
-    pub(super) view_start_tick: u32,   // Leftmost visible tick
-    pub(super) zoom_level: u8,         // 1=finest, higher=wider beats. Ticks per cell.
+    pub(super) view_bottom_pitch: u8, // Lowest visible pitch
+    pub(super) view_start_tick: u32,  // Leftmost visible tick
+    pub(super) zoom_level: u8,        // 1=finest, higher=wider beats. Ticks per cell.
     // Note placement defaults
     pub(super) default_duration: u32,
     pub(super) default_velocity: u8,
     // Piano keyboard mode
     pub(super) piano: PianoKeyboard,
-    pub(super) recording: bool,            // True when recording notes from piano keyboard
+    pub(super) recording: bool, // True when recording notes from piano keyboard
     // Automation overlay
     pub(super) automation_overlay_visible: bool,
     pub(super) automation_overlay_lane_idx: Option<usize>, // index into automation.lanes for overlay display
     /// Selection anchor — set when Shift+Arrow begins. None = no active selection.
-    pub(crate) selection_anchor: Option<(u32, u8)>,  // (tick, pitch)
+    pub(crate) selection_anchor: Option<(u32, u8)>, // (tick, pitch)
 }
 
 impl PianoRollPane {
@@ -42,7 +45,7 @@ impl PianoRollPane {
             current_track: 0,
             view_bottom_pitch: 48, // C3
             view_start_tick: 0,
-            zoom_level: 3, // Each cell = 120 ticks (1/4 beat at 480 tpb)
+            zoom_level: 3,         // Each cell = 120 ticks (1/4 beat at 480 tpb)
             default_duration: 480, // One beat
             default_velocity: 100,
             piano: PianoKeyboard::new(),
@@ -55,7 +58,9 @@ impl PianoRollPane {
 
     /// Set current track index directly (for external syncing from global instrument selection)
     #[allow(dead_code)]
-    pub fn current_track(&self) -> usize { self.current_track }
+    pub fn current_track(&self) -> usize {
+        self.current_track
+    }
 
     pub fn set_enhanced_keyboard(&mut self, enabled: bool) {
         self.piano.set_enhanced_keyboard(enabled);
@@ -73,7 +78,9 @@ impl PianoRollPane {
 
     #[allow(dead_code)]
     pub fn change_track(&mut self, delta: i8, track_count: usize) {
-        if track_count == 0 { return; }
+        if track_count == 0 {
+            return;
+        }
         let new_idx = (self.current_track as i32 + delta as i32).clamp(0, track_count as i32 - 1);
         self.current_track = new_idx as usize;
     }
@@ -94,14 +101,22 @@ impl PianoRollPane {
     pub(crate) fn selection_region(&self) -> (usize, u32, u32, u8, u8) {
         if let Some((anchor_tick, anchor_pitch)) = self.selection_anchor {
             let (t0, t1, p0, p1) = crate::state::grid::normalize_2d_region(
-                anchor_tick, anchor_pitch,
-                self.cursor_tick, self.cursor_pitch,
+                anchor_tick,
+                anchor_pitch,
+                self.cursor_tick,
+                self.cursor_pitch,
                 self.ticks_per_cell(),
             );
             (self.current_track, t0, t1, p0, p1)
         } else {
             // No selection: single cell at cursor
-            (self.current_track, self.cursor_tick, self.cursor_tick + 1, self.cursor_pitch, self.cursor_pitch)
+            (
+                self.current_track,
+                self.cursor_tick,
+                self.cursor_tick + 1,
+                self.cursor_pitch,
+                self.cursor_pitch,
+            )
         }
     }
 
@@ -131,7 +146,10 @@ impl PianoRollPane {
         if self.cursor_tick < self.view_start_tick {
             self.view_start_tick = self.snap_tick(self.cursor_tick);
         } else if self.cursor_tick >= self.view_start_tick + visible_ticks {
-            self.view_start_tick = self.snap_tick(self.cursor_tick.saturating_sub(visible_ticks - self.ticks_per_cell()));
+            self.view_start_tick = self.snap_tick(
+                self.cursor_tick
+                    .saturating_sub(visible_ticks - self.ticks_per_cell()),
+            );
         }
     }
 
@@ -164,7 +182,11 @@ impl Pane for PianoRollPane {
         // Sync current_track to the globally selected instrument
         if let Some(selected_idx) = state.instruments.selected {
             if let Some(inst) = state.instruments.instruments.get(selected_idx) {
-                if let Some(track_idx) = state.session.piano_roll.track_order.iter()
+                if let Some(track_idx) = state
+                    .session
+                    .piano_roll
+                    .track_order
+                    .iter()
                     .position(|&id| id == inst.id)
                 {
                     self.current_track = track_idx;
@@ -182,12 +204,16 @@ impl Pane for PianoRollPane {
         if released.is_empty() {
             return vec![];
         }
-        let instrument_id = state.session.piano_roll.track_order
+        let instrument_id = state
+            .session
+            .piano_roll
+            .track_order
             .get(self.current_track)
             .copied()
             .unwrap_or(InstrumentId::new(0));
         // Flatten all released pitches (handles chords)
-        released.into_iter()
+        released
+            .into_iter()
             .map(|(_, pitches)| {
                 if pitches.len() == 1 {
                     Action::PianoRoll(PianoRollAction::ReleaseNote {
@@ -223,7 +249,9 @@ impl Pane for PianoRollPane {
             let footer_height: u16 = 2;
             let grid_x = rect.x + key_col_width;
             let grid_width = rect.width.saturating_sub(key_col_width + 1);
-            let grid_height = rect.height.saturating_sub(header_height + footer_height + 1);
+            let grid_height = rect
+                .height
+                .saturating_sub(header_height + footer_height + 1);
 
             // Overlay occupies the bottom 4 rows of the grid area
             let overlay_rows = 4u16.min(grid_height / 2);
@@ -253,7 +281,9 @@ impl Pane for PianoRollPane {
     }
 
     fn activate_piano(&mut self) {
-        if !self.piano.is_active() { self.piano.activate(); }
+        if !self.piano.is_active() {
+            self.piano.activate();
+        }
     }
 
     fn deactivate_performance(&mut self) {
@@ -261,7 +291,9 @@ impl Pane for PianoRollPane {
         self.piano.deactivate();
     }
 
-    fn supports_performance_mode(&self) -> bool { true }
+    fn supports_performance_mode(&self) -> bool {
+        true
+    }
 
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
@@ -272,8 +304,8 @@ impl Pane for PianoRollPane {
 mod tests {
     use super::*;
     use crate::state::AppState;
-    use crate::ui::{InputEvent, KeyCode, Modifiers, PianoRollAction};
     use crate::ui::action_id::PianoRollActionId;
+    use crate::ui::{InputEvent, KeyCode, Modifiers, PianoRollAction};
 
     fn dummy_event() -> InputEvent {
         InputEvent::new(KeyCode::Char('x'), Modifiers::default())
@@ -285,17 +317,33 @@ mod tests {
         let state = AppState::new();
 
         let start_pitch = pane.cursor_pitch;
-        pane.handle_action(ActionId::PianoRoll(PianoRollActionId::Up), &dummy_event(), &state);
+        pane.handle_action(
+            ActionId::PianoRoll(PianoRollActionId::Up),
+            &dummy_event(),
+            &state,
+        );
         assert_eq!(pane.cursor_pitch, start_pitch + 1);
 
-        pane.handle_action(ActionId::PianoRoll(PianoRollActionId::Down), &dummy_event(), &state);
+        pane.handle_action(
+            ActionId::PianoRoll(PianoRollActionId::Down),
+            &dummy_event(),
+            &state,
+        );
         assert_eq!(pane.cursor_pitch, start_pitch);
 
         let start_tick = pane.cursor_tick;
-        pane.handle_action(ActionId::PianoRoll(PianoRollActionId::Right), &dummy_event(), &state);
+        pane.handle_action(
+            ActionId::PianoRoll(PianoRollActionId::Right),
+            &dummy_event(),
+            &state,
+        );
         assert!(pane.cursor_tick > start_tick);
 
-        pane.handle_action(ActionId::PianoRoll(PianoRollActionId::Left), &dummy_event(), &state);
+        pane.handle_action(
+            ActionId::PianoRoll(PianoRollActionId::Left),
+            &dummy_event(),
+            &state,
+        );
         assert_eq!(pane.cursor_tick, start_tick);
     }
 
@@ -305,10 +353,18 @@ mod tests {
         let state = AppState::new();
 
         pane.zoom_level = 1;
-        pane.handle_action(ActionId::PianoRoll(PianoRollActionId::ZoomIn), &dummy_event(), &state);
+        pane.handle_action(
+            ActionId::PianoRoll(PianoRollActionId::ZoomIn),
+            &dummy_event(),
+            &state,
+        );
         assert_eq!(pane.zoom_level, 1);
 
-        pane.handle_action(ActionId::PianoRoll(PianoRollActionId::ZoomOut), &dummy_event(), &state);
+        pane.handle_action(
+            ActionId::PianoRoll(PianoRollActionId::ZoomOut),
+            &dummy_event(),
+            &state,
+        );
         assert_eq!(pane.zoom_level, 2);
     }
 
@@ -319,7 +375,11 @@ mod tests {
 
         pane.cursor_tick = 960;
         pane.view_start_tick = 480;
-        pane.handle_action(ActionId::PianoRoll(PianoRollActionId::Home), &dummy_event(), &state);
+        pane.handle_action(
+            ActionId::PianoRoll(PianoRollActionId::Home),
+            &dummy_event(),
+            &state,
+        );
         assert_eq!(pane.cursor_tick, 0);
         assert_eq!(pane.view_start_tick, 0);
     }
@@ -329,7 +389,14 @@ mod tests {
         let mut pane = PianoRollPane::new(Keymap::new());
         let state = AppState::new();
 
-        let action = pane.handle_action(ActionId::PianoRoll(PianoRollActionId::ToggleNote), &dummy_event(), &state);
-        assert!(matches!(action, Action::PianoRoll(PianoRollAction::ToggleNote { .. })));
+        let action = pane.handle_action(
+            ActionId::PianoRoll(PianoRollActionId::ToggleNote),
+            &dummy_event(),
+            &state,
+        );
+        assert!(matches!(
+            action,
+            Action::PianoRoll(PianoRollAction::ToggleNote { .. })
+        ));
     }
 }

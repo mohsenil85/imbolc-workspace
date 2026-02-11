@@ -4,7 +4,9 @@ use crate::state::AppState;
 use crate::ui::action_id::{ActionId, ModeActionId};
 use crate::ui::filterable_list::{FilterableItem, FilterableList};
 use crate::ui::layout_helpers::center_rect;
-use crate::ui::{Rect, RenderBuf, Action, Color, InputEvent, KeyCode, Keymap, NavAction, Pane, PaneId, Style};
+use crate::ui::{
+    Action, Color, InputEvent, KeyCode, Keymap, NavAction, Pane, PaneId, Rect, RenderBuf, Style,
+};
 
 struct PaneEntry {
     id: PaneId,
@@ -13,9 +15,15 @@ struct PaneEntry {
 }
 
 impl FilterableItem for PaneEntry {
-    fn primary_text(&self) -> &str { self.id.as_str() }
-    fn secondary_text(&self) -> &str { self.name }
-    fn completion_text(&self) -> String { self.name.to_lowercase() }
+    fn primary_text(&self) -> &str {
+        self.id.as_str()
+    }
+    fn secondary_text(&self) -> &str {
+        self.name
+    }
+    fn completion_text(&self) -> String {
+        self.name.to_lowercase()
+    }
 }
 
 /// Available panes for the switcher
@@ -79,7 +87,12 @@ impl Pane for PaneSwitcherPane {
         "pane_switcher"
     }
 
-    fn handle_action(&mut self, action: ActionId, _event: &InputEvent, _state: &AppState) -> Action {
+    fn handle_action(
+        &mut self,
+        action: ActionId,
+        _event: &InputEvent,
+        _state: &AppState,
+    ) -> Action {
         match action {
             ActionId::Mode(ModeActionId::PaletteConfirm) => {
                 if let Some(entry) = self.list.selected_item() {
@@ -129,14 +142,25 @@ impl Pane for PaneSwitcherPane {
 
         // Prompt line: render "; " prefix then TextInput
         let prompt_y = inner.y;
-        buf.draw_line(Rect::new(inner.x, prompt_y, 2, 1), &[("; ", Style::new().fg(Color::MAGENTA).bold())]);
-        self.list.text_input.render_buf(buf.raw_buf(), inner.x + 2, prompt_y, inner.width.saturating_sub(2));
+        buf.draw_line(
+            Rect::new(inner.x, prompt_y, 2, 1),
+            &[("; ", Style::new().fg(Color::MAGENTA).bold())],
+        );
+        self.list.text_input.render_buf(
+            buf.raw_buf(),
+            inner.x + 2,
+            prompt_y,
+            inner.width.saturating_sub(2),
+        );
 
         // Divider
         if inner.height > 1 {
             let div_y = inner.y + 1;
             let divider = "\u{2500}".repeat(inner.width as usize);
-            buf.draw_line(Rect::new(inner.x, div_y, inner.width, 1), &[(&divider, Style::new().fg(Color::DARK_GRAY))]);
+            buf.draw_line(
+                Rect::new(inner.x, div_y, inner.width, 1),
+                &[(&divider, Style::new().fg(Color::DARK_GRAY))],
+            );
         }
 
         // Filtered list
@@ -145,8 +169,12 @@ impl Pane for PaneSwitcherPane {
 
         if self.list.filtered().is_empty() {
             if available_rows > 0 {
-                let no_match_area = Rect::new(inner.x + 1, list_start_y, inner.width.saturating_sub(2), 1);
-                buf.draw_line(no_match_area, &[("No matches", Style::new().fg(Color::DARK_GRAY))]);
+                let no_match_area =
+                    Rect::new(inner.x + 1, list_start_y, inner.width.saturating_sub(2), 1);
+                buf.draw_line(
+                    no_match_area,
+                    &[("No matches", Style::new().fg(Color::DARK_GRAY))],
+                );
             }
             return;
         }
@@ -202,11 +230,14 @@ impl Pane for PaneSwitcherPane {
             let pad_len = w.saturating_sub(name_len + shortcut_len);
 
             let padding = " ".repeat(pad_len);
-            buf.draw_line(row_area, &[
-                (&name_display[..name_len], name_style),
-                (&padding, name_style),
-                (&shortcut_display, shortcut_style),
-            ]);
+            buf.draw_line(
+                row_area,
+                &[
+                    (&name_display[..name_len], name_style),
+                    (&padding, name_style),
+                    (&shortcut_display, shortcut_style),
+                ],
+            );
         }
     }
 

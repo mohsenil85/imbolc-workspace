@@ -22,13 +22,20 @@ pub mod theme;
 pub mod widgets;
 
 pub use frame::{Frame, ViewState};
-pub use input::{AppEvent, InputEvent, InputSource, KeyCode, Modifiers, MouseEvent, MouseEventKind, MouseButton};
+pub use input::{
+    AppEvent, InputEvent, InputSource, KeyCode, Modifiers, MouseButton, MouseEvent, MouseEventKind,
+};
 pub use keymap::Keymap;
 pub use layer::{LayerResult, LayerStack};
 pub use list_selector::ListSelector;
 pub use pad_keyboard::PadKeyboard;
-pub use pane::{Action, ArrangementAction, AutomationAction, BusAction, ChopperAction, DispatchResult, FileSelectAction, InstrumentAction, InstrumentUpdate, LayerGroupAction, MixerAction, NavAction, NavIntent, Pane, PaneId, PaneManager, PianoRollAction, SequencerAction, ServerAction, SessionAction, StatusEvent, ToggleResult, VstParamAction};
-pub use piano_keyboard::{PianoKeyboard, translate_key};
+pub use pane::{
+    Action, ArrangementAction, AutomationAction, BusAction, ChopperAction, DispatchResult,
+    FileSelectAction, InstrumentAction, InstrumentUpdate, LayerGroupAction, MixerAction, NavAction,
+    NavIntent, Pane, PaneId, PaneManager, PianoRollAction, SequencerAction, ServerAction,
+    SessionAction, StatusEvent, ToggleResult, VstParamAction,
+};
+pub use piano_keyboard::{translate_key, PianoKeyboard};
 pub use ratatui_impl::RatatuiBackend;
 pub use render::{Rect, RenderBuf};
 pub use style::{Color, Style};

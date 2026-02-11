@@ -77,7 +77,8 @@ pub(super) fn reduce(action: &AutomationAction, session: &mut SessionState) -> b
         }
         AutomationAction::DeletePointsInRange(lane_id, start_tick, end_tick) => {
             if let Some(lane) = session.automation.lane_mut(*lane_id) {
-                lane.points.retain(|p| p.tick < *start_tick || p.tick >= *end_tick);
+                lane.points
+                    .retain(|p| p.tick < *start_tick || p.tick >= *end_tick);
             }
             true
         }

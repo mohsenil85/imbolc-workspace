@@ -10,9 +10,13 @@ impl AudioEngine {
         let backend = self.backend.as_ref().ok_or("Not connected")?;
         log::debug!(target: "audio::samples", "Backend available");
 
-        let abs_dir = dir.canonicalize().map_err(|e| format!("Cannot resolve synthdef dir {:?}: {}", dir, e))?;
+        let abs_dir = dir
+            .canonicalize()
+            .map_err(|e| format!("Cannot resolve synthdef dir {:?}: {}", dir, e))?;
         log::debug!(target: "audio::samples", "Canonicalized to: {:?}", abs_dir);
-        let dir_str = abs_dir.to_str().ok_or_else(|| "Synthdef dir path is not valid UTF-8".to_string())?;
+        let dir_str = abs_dir
+            .to_str()
+            .ok_or_else(|| "Synthdef dir path is not valid UTF-8".to_string())?;
 
         backend
             .send_raw("/d_loadDir", vec![RawArg::Str(dir_str.to_string())])
@@ -24,8 +28,12 @@ impl AudioEngine {
     pub fn load_synthdef_file(&self, path: &Path) -> Result<(), String> {
         let backend = self.backend.as_ref().ok_or("Not connected")?;
 
-        let abs_path = path.canonicalize().map_err(|e| format!("Cannot resolve synthdef file {:?}: {}", path, e))?;
-        let path_str = abs_path.to_str().ok_or_else(|| "Synthdef file path is not valid UTF-8".to_string())?;
+        let abs_path = path
+            .canonicalize()
+            .map_err(|e| format!("Cannot resolve synthdef file {:?}: {}", path, e))?;
+        let path_str = abs_path
+            .to_str()
+            .ok_or_else(|| "Synthdef file path is not valid UTF-8".to_string())?;
 
         backend
             .send_raw("/d_load", vec![RawArg::Str(path_str.to_string())])
@@ -61,10 +69,12 @@ impl AudioEngine {
             // 105: Saw-ish (1/n series, 16 harmonics)
             (1..=16).map(|n| 1.0 / n as f32).collect(),
             // 106: Bright (emphasised upper harmonics)
-            (1..=16).map(|n| {
-                let x = n as f32 / 16.0;
-                (1.0 - x) * 0.3 + x * 1.0
-            }).collect(),
+            (1..=16)
+                .map(|n| {
+                    let x = n as f32 / 16.0;
+                    (1.0 - x) * 0.3 + x * 1.0
+                })
+                .collect(),
             // 107: Full (32 harmonics, gradual decrease)
             (1..=32).map(|n| 1.0 / (n as f32).sqrt()).collect(),
         ];
@@ -76,11 +86,7 @@ impl AudioEngine {
             backend
                 .send_raw(
                     "/b_alloc",
-                    vec![
-                        RawArg::Int(bufnum),
-                        RawArg::Int(2048),
-                        RawArg::Int(1),
-                    ],
+                    vec![RawArg::Int(bufnum), RawArg::Int(2048), RawArg::Int(1)],
                 )
                 .map_err(|e| format!("b_alloc buf {}: {}", bufnum, e))?;
 
@@ -121,7 +127,9 @@ impl AudioEngine {
         let bufnum = self.next_bufnum;
         self.next_bufnum += 1;
 
-        backend.load_buffer(bufnum, Path::new(path)).map_err(|e| e.to_string())?;
+        backend
+            .load_buffer(bufnum, Path::new(path))
+            .map_err(|e| e.to_string())?;
 
         self.buffer_map.insert(buffer_id, bufnum);
         Ok(bufnum)

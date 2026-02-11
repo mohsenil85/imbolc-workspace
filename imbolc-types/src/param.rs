@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Param {
@@ -20,7 +20,13 @@ impl ParamValue {
         match self {
             ParamValue::Float(v) => *v,
             ParamValue::Int(v) => *v as f32,
-            ParamValue::Bool(v) => if *v { 1.0 } else { 0.0 },
+            ParamValue::Bool(v) => {
+                if *v {
+                    1.0
+                } else {
+                    0.0
+                }
+            }
         }
     }
 }
@@ -30,13 +36,20 @@ impl ParamValue {
 /// Check if a parameter name represents a frequency-type parameter
 pub fn is_freq_param(name: &str) -> bool {
     let lower = name.to_lowercase();
-    lower.contains("freq") || lower.contains("cutoff") || lower.contains("formant") || lower.contains("bw")
+    lower.contains("freq")
+        || lower.contains("cutoff")
+        || lower.contains("formant")
+        || lower.contains("bw")
 }
 
 /// Move a frequency value by one semitone up or down
 pub fn adjust_freq_semitone(value: f32, increase: bool, tuning_a4: f32, min: f32, max: f32) -> f32 {
     let midi = 69.0 + 12.0 * (value / tuning_a4).ln() / 2.0_f32.ln();
-    let new_midi = if increase { midi.round() + 1.0 } else { midi.round() - 1.0 };
+    let new_midi = if increase {
+        midi.round() + 1.0
+    } else {
+        midi.round() - 1.0
+    };
     (tuning_a4 * 2.0_f32.powf((new_midi - 69.0) / 12.0)).clamp(min, max)
 }
 
@@ -53,7 +66,11 @@ pub fn adjust_musical_step(value: f32, increase: bool, min: f32, max: f32) -> f3
         10.0
     };
     let snapped = (value / step).round() * step;
-    let new_val = if increase { snapped + step } else { snapped - step };
+    let new_val = if increase {
+        snapped + step
+    } else {
+        snapped - step
+    };
     new_val.clamp(min, max)
 }
 
@@ -64,15 +81,23 @@ impl Param {
         match &mut self.value {
             ParamValue::Float(ref mut v) => {
                 let delta = range * fraction;
-                if increase { *v = (*v + delta).min(self.max); }
-                else { *v = (*v - delta).max(self.min); }
+                if increase {
+                    *v = (*v + delta).min(self.max);
+                } else {
+                    *v = (*v - delta).max(self.min);
+                }
             }
             ParamValue::Int(ref mut v) => {
                 let delta = ((range * fraction) as i32).max(1);
-                if increase { *v = (*v + delta).min(self.max as i32); }
-                else { *v = (*v - delta).max(self.min as i32); }
+                if increase {
+                    *v = (*v + delta).min(self.max as i32);
+                } else {
+                    *v = (*v - delta).max(self.min as i32);
+                }
             }
-            ParamValue::Bool(ref mut v) => { *v = !*v; }
+            ParamValue::Bool(ref mut v) => {
+                *v = !*v;
+            }
         }
     }
 
@@ -88,11 +113,22 @@ impl Param {
             }
             ParamValue::Int(ref mut v) => {
                 let range = self.max - self.min;
-                let step = if range <= 10.0 { 1 } else if range <= 100.0 { 5 } else { 10 };
-                if increase { *v = (*v + step).min(self.max as i32); }
-                else { *v = (*v - step).max(self.min as i32); }
+                let step = if range <= 10.0 {
+                    1
+                } else if range <= 100.0 {
+                    5
+                } else {
+                    10
+                };
+                if increase {
+                    *v = (*v + step).min(self.max as i32);
+                } else {
+                    *v = (*v - step).max(self.min as i32);
+                }
             }
-            ParamValue::Bool(ref mut v) => { *v = !*v; }
+            ParamValue::Bool(ref mut v) => {
+                *v = !*v;
+            }
         }
     }
 
@@ -124,13 +160,17 @@ impl Param {
                     false
                 }
             }
-            ParamValue::Bool(ref mut v) => {
-                match text.to_lowercase().as_str() {
-                    "true" | "1" | "yes" | "on" => { *v = true; true }
-                    "false" | "0" | "no" | "off" => { *v = false; true }
-                    _ => false,
+            ParamValue::Bool(ref mut v) => match text.to_lowercase().as_str() {
+                "true" | "1" | "yes" | "on" => {
+                    *v = true;
+                    true
                 }
-            }
+                "false" | "0" | "no" | "off" => {
+                    *v = false;
+                    true
+                }
+                _ => false,
+            },
         }
     }
 
@@ -168,15 +208,30 @@ mod tests {
     use super::*;
 
     fn float_param(name: &str, value: f32, min: f32, max: f32) -> Param {
-        Param { name: name.to_string(), value: ParamValue::Float(value), min, max }
+        Param {
+            name: name.to_string(),
+            value: ParamValue::Float(value),
+            min,
+            max,
+        }
     }
 
     fn int_param(name: &str, value: i32, min: f32, max: f32) -> Param {
-        Param { name: name.to_string(), value: ParamValue::Int(value), min, max }
+        Param {
+            name: name.to_string(),
+            value: ParamValue::Int(value),
+            min,
+            max,
+        }
     }
 
     fn bool_param(name: &str, value: bool) -> Param {
-        Param { name: name.to_string(), value: ParamValue::Bool(value), min: 0.0, max: 1.0 }
+        Param {
+            name: name.to_string(),
+            value: ParamValue::Bool(value),
+            min: 0.0,
+            max: 1.0,
+        }
     }
 
     #[test]

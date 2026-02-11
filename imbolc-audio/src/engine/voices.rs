@@ -2,7 +2,9 @@ use std::time::Instant;
 
 use super::backend::{AudioBackend, BackendMessage, RawArg};
 use super::{AudioEngine, VoiceChain, GROUP_SOURCES};
-use imbolc_types::{BufferId, InstrumentId, InstrumentState, ParameterTarget, ParamValue, SessionState};
+use imbolc_types::{
+    BufferId, InstrumentId, InstrumentState, ParamValue, ParameterTarget, SessionState,
+};
 
 /// Anti-click fade time for voice stealing/freeing.
 /// Must exceed the midi control node's gate release (10ms) plus margin
@@ -25,7 +27,8 @@ impl AudioEngine {
         state: &InstrumentState,
         session: &SessionState,
     ) -> Result<(), String> {
-        let instrument = state.instrument(instrument_id)
+        let instrument = state
+            .instrument(instrument_id)
             .ok_or_else(|| format!("No instrument with id {}", instrument_id))?;
 
         // AudioIn, BusIn, and VSTi instruments don't use voice spawning - they have persistent synths
@@ -40,7 +43,14 @@ impl AudioEngine {
 
         // Sampler and TimeStretch instruments need special handling
         if instrument.source.is_sample() || instrument.source.is_time_stretch() {
-            return self.spawn_sampler_voice(instrument_id, pitch, velocity, offset_secs, state, session);
+            return self.spawn_sampler_voice(
+                instrument_id,
+                pitch,
+                velocity,
+                offset_secs,
+                state,
+                session,
+            );
         }
 
         // Smart voice stealing — timed to align with new voice onset
@@ -51,14 +61,18 @@ impl AudioEngine {
         }
 
         // Get the audio bus where voices should write their output
-        let source_out_bus = self.bus_allocator.get_audio_bus(instrument_id, "source_out").unwrap_or(16);
+        let source_out_bus = self
+            .bus_allocator
+            .get_audio_bus(instrument_id, "source_out")
+            .unwrap_or(16);
 
         // Create a group for this voice chain
         let group_id = self.next_node_id;
         self.next_node_id += 1;
 
         // Allocate per-voice control buses (with pooling)
-        let (voice_freq_bus, voice_gate_bus, voice_vel_bus) = self.voice_allocator.alloc_control_buses();
+        let (voice_freq_bus, voice_gate_bus, voice_vel_bus) =
+            self.voice_allocator.alloc_control_buses();
 
         let tuning = session.tuning_a4 as f64;
         let freq = tuning * (2.0_f64).powf((pitch as f64 - 69.0) / 12.0);
@@ -110,7 +124,11 @@ impl AudioEngine {
         let is_mono = instrument.mixer.channel_config.is_mono();
         {
             let mut args: Vec<RawArg> = vec![
-                RawArg::Str(Self::source_synth_def(instrument.source, &session.custom_synthdefs, is_mono)),
+                RawArg::Str(Self::source_synth_def(
+                    instrument.source,
+                    &session.custom_synthdefs,
+                    is_mono,
+                )),
                 RawArg::Int(source_node_id),
                 RawArg::Int(1),
                 RawArg::Int(group_id),
@@ -127,20 +145,33 @@ impl AudioEngine {
             args.push(RawArg::Float(voice_gate_bus as f32));
             // Amp envelope (ADSR) — enforce minimum onset/offset time
             args.push(RawArg::Str("attack".to_string()));
-            args.push(RawArg::Float(instrument.modulation.amp_envelope.attack.max(MIN_ONSET_SECS)));
+            args.push(RawArg::Float(
+                instrument
+                    .modulation
+                    .amp_envelope
+                    .attack
+                    .max(MIN_ONSET_SECS),
+            ));
             args.push(RawArg::Str("decay".to_string()));
             args.push(RawArg::Float(instrument.modulation.amp_envelope.decay));
             args.push(RawArg::Str("sustain".to_string()));
             args.push(RawArg::Float(instrument.modulation.amp_envelope.sustain));
             args.push(RawArg::Str("release".to_string()));
-            args.push(RawArg::Float(instrument.modulation.amp_envelope.release.max(MIN_ONSET_SECS)));
+            args.push(RawArg::Float(
+                instrument
+                    .modulation
+                    .amp_envelope
+                    .release
+                    .max(MIN_ONSET_SECS),
+            ));
             // Output to source_out_bus
             args.push(RawArg::Str("out".to_string()));
             args.push(RawArg::Float(source_out_bus as f32));
 
             // Wire LFO mod inputs based on target
             if instrument.modulation.lfo.enabled {
-                if let Some(lfo_bus) = self.bus_allocator.get_control_bus(instrument_id, "lfo_out") {
+                if let Some(lfo_bus) = self.bus_allocator.get_control_bus(instrument_id, "lfo_out")
+                {
                     match instrument.modulation.lfo.target {
                         ParameterTarget::Level => {
                             args.push(RawArg::Str("amp_mod_in".to_string()));
@@ -253,7 +284,11 @@ impl AudioEngine {
             midi_node_id,
             source_node: source_node_id,
             spawn_time: Instant::now(),
-            release_secs: instrument.modulation.amp_envelope.release.max(MIN_ONSET_SECS),
+            release_secs: instrument
+                .modulation
+                .amp_envelope
+                .release
+                .max(MIN_ONSET_SECS),
             release_state: None,
             control_buses: (voice_freq_bus, voice_gate_bus, voice_vel_bus),
         });
@@ -271,21 +306,27 @@ impl AudioEngine {
         state: &InstrumentState,
         session: &SessionState,
     ) -> Result<(), String> {
-        let instrument = state.instrument(instrument_id)
+        let instrument = state
+            .instrument(instrument_id)
             .ok_or_else(|| format!("No instrument with id {}", instrument_id))?;
 
-        let sampler_config = instrument.sampler_config()
+        let sampler_config = instrument
+            .sampler_config()
             .ok_or("Sampler instrument has no sampler config")?;
 
-        let buffer_id = sampler_config.buffer_id
+        let buffer_id = sampler_config
+            .buffer_id
             .ok_or("Sampler has no buffer loaded")?;
 
-        let bufnum = self.buffer_map.get(&buffer_id)
+        let bufnum = self
+            .buffer_map
+            .get(&buffer_id)
             .copied()
             .ok_or("Buffer not loaded in audio engine")?;
 
         // Get slice for this note (or current selected slice)
-        let (slice_start, slice_end) = sampler_config.slice_for_note(pitch)
+        let (slice_start, slice_end) = sampler_config
+            .slice_for_note(pitch)
             .map(|s| (s.start, s.end))
             .unwrap_or((0.0, 1.0));
 
@@ -297,14 +338,18 @@ impl AudioEngine {
         }
 
         // Get the audio bus where voices should write their output
-        let source_out_bus = self.bus_allocator.get_audio_bus(instrument_id, "source_out").unwrap_or(16);
+        let source_out_bus = self
+            .bus_allocator
+            .get_audio_bus(instrument_id, "source_out")
+            .unwrap_or(16);
 
         // Create a group for this voice chain
         let group_id = self.next_node_id;
         self.next_node_id += 1;
 
         // Allocate per-voice control buses (with pooling)
-        let (voice_freq_bus, voice_gate_bus, voice_vel_bus) = self.voice_allocator.alloc_control_buses();
+        let (voice_freq_bus, voice_gate_bus, voice_vel_bus) =
+            self.voice_allocator.alloc_control_buses();
 
         let tuning = session.tuning_a4 as f64;
         let freq = tuning * (2.0_f64).powf((pitch as f64 - 69.0) / 12.0);
@@ -370,7 +415,9 @@ impl AudioEngine {
 
             // Helper to get float param
             let get_param = |name: &str, default: f32| -> f32 {
-                instrument.source_params.iter()
+                instrument
+                    .source_params
+                    .iter()
                     .find(|p| p.name == name)
                     .map(|p| match p.value {
                         ParamValue::Float(v) => v,
@@ -429,13 +476,25 @@ impl AudioEngine {
 
             // Amp envelope (ADSR) — enforce minimum onset/offset time
             args.push(RawArg::Str("attack".to_string()));
-            args.push(RawArg::Float(instrument.modulation.amp_envelope.attack.max(MIN_ONSET_SECS)));
+            args.push(RawArg::Float(
+                instrument
+                    .modulation
+                    .amp_envelope
+                    .attack
+                    .max(MIN_ONSET_SECS),
+            ));
             args.push(RawArg::Str("decay".to_string()));
             args.push(RawArg::Float(instrument.modulation.amp_envelope.decay));
             args.push(RawArg::Str("sustain".to_string()));
             args.push(RawArg::Float(instrument.modulation.amp_envelope.sustain));
             args.push(RawArg::Str("release".to_string()));
-            args.push(RawArg::Float(instrument.modulation.amp_envelope.release.max(MIN_ONSET_SECS)));
+            args.push(RawArg::Float(
+                instrument
+                    .modulation
+                    .amp_envelope
+                    .release
+                    .max(MIN_ONSET_SECS),
+            ));
 
             // Output to source_out_bus
             args.push(RawArg::Str("out".to_string()));
@@ -443,7 +502,8 @@ impl AudioEngine {
 
             // Wire LFO mod inputs for sampler/timestretch voice
             if instrument.modulation.lfo.enabled {
-                if let Some(lfo_bus) = self.bus_allocator.get_control_bus(instrument_id, "lfo_out") {
+                if let Some(lfo_bus) = self.bus_allocator.get_control_bus(instrument_id, "lfo_out")
+                {
                     match instrument.modulation.lfo.target {
                         ParameterTarget::Level => {
                             args.push(RawArg::Str("amp_mod_in".to_string()));
@@ -508,7 +568,11 @@ impl AudioEngine {
             midi_node_id,
             source_node: sampler_node_id,
             spawn_time: Instant::now(),
-            release_secs: instrument.modulation.amp_envelope.release.max(MIN_ONSET_SECS),
+            release_secs: instrument
+                .modulation
+                .amp_envelope
+                .release
+                .max(MIN_ONSET_SECS),
             release_state: None,
             control_buses: (voice_freq_bus, voice_gate_bus, voice_vel_bus),
         });
@@ -538,11 +602,15 @@ impl AudioEngine {
         }
 
         // Find and mark an active voice as released via the allocator
-        let release_time = state.instrument(instrument_id)
+        let release_time = state
+            .instrument(instrument_id)
             .map(|s| s.modulation.amp_envelope.release)
             .unwrap_or(1.0);
 
-        if let Some(pos) = self.voice_allocator.mark_released(instrument_id, pitch, release_time) {
+        if let Some(pos) = self
+            .voice_allocator
+            .mark_released(instrument_id, pitch, release_time)
+        {
             let voice = &self.voice_allocator.chains()[pos];
             let gate_bus = voice.control_buses.1;
 
@@ -620,7 +688,8 @@ impl AudioEngine {
             self.node_registry.unregister(voice.midi_node_id);
             self.node_registry.unregister(voice.source_node);
             // Buses for stolen voices must be returned only after /n_end confirms free.
-            self.oneshot_buses.insert(voice.group_id, voice.control_buses);
+            self.oneshot_buses
+                .insert(voice.group_id, voice.control_buses);
             Self::anti_click_free_at(backend.as_ref(), voice, offset_secs)?;
         }
 
@@ -630,10 +699,7 @@ impl AudioEngine {
     /// Free a voice with a brief anti-click fade by forcing gate bus to 0,
     /// then /n_free after fade. For already-released voices, skip gate forcing
     /// (already fading) but still delay the free.
-    fn anti_click_free(
-        backend: &dyn AudioBackend,
-        voice: &VoiceChain,
-    ) -> Result<(), String> {
+    fn anti_click_free(backend: &dyn AudioBackend, voice: &VoiceChain) -> Result<(), String> {
         Self::anti_click_free_at(backend, voice, 0.0)
     }
 
@@ -788,17 +854,24 @@ impl AudioEngine {
         state: &InstrumentState,
         session: &SessionState,
     ) -> Result<(), String> {
-        let instrument = state.instrument(target_instrument_id)
+        let instrument = state
+            .instrument(target_instrument_id)
             .ok_or_else(|| format!("No instrument with id {}", target_instrument_id))?;
 
         // Skip unsupported instrument types
-        if instrument.source.is_audio_input() || instrument.source.is_bus_in() || instrument.source.is_vst() {
+        if instrument.source.is_audio_input()
+            || instrument.source.is_bus_in()
+            || instrument.source.is_vst()
+        {
             return Ok(());
         }
 
         // Sampler instruments need buffer - skip if none
         if (instrument.source.is_sample() || instrument.source.is_time_stretch())
-            && instrument.sampler_config().and_then(|c| c.buffer_id).is_none()
+            && instrument
+                .sampler_config()
+                .and_then(|c| c.buffer_id)
+                .is_none()
         {
             return Ok(());
         }
@@ -808,14 +881,18 @@ impl AudioEngine {
         }
 
         // Get the audio bus where voices should write their output
-        let source_out_bus = self.bus_allocator.get_audio_bus(target_instrument_id, "source_out").unwrap_or(16);
+        let source_out_bus = self
+            .bus_allocator
+            .get_audio_bus(target_instrument_id, "source_out")
+            .unwrap_or(16);
 
         // Create a group for this one-shot voice chain
         let group_id = self.next_node_id;
         self.next_node_id += 1;
 
         // Allocate per-voice control buses
-        let (voice_freq_bus, voice_gate_bus, voice_vel_bus) = self.voice_allocator.alloc_control_buses();
+        let (voice_freq_bus, voice_gate_bus, voice_vel_bus) =
+            self.voice_allocator.alloc_control_buses();
 
         let mut messages: Vec<BackendMessage> = Vec::new();
 
@@ -869,7 +946,11 @@ impl AudioEngine {
         let is_mono = instrument.mixer.channel_config.is_mono();
         {
             let mut args: Vec<RawArg> = vec![
-                RawArg::Str(Self::source_synth_def(instrument.source, &session.custom_synthdefs, is_mono)),
+                RawArg::Str(Self::source_synth_def(
+                    instrument.source,
+                    &session.custom_synthdefs,
+                    is_mono,
+                )),
                 RawArg::Int(source_node_id),
                 RawArg::Int(1),
                 RawArg::Int(group_id),
@@ -886,20 +967,35 @@ impl AudioEngine {
             args.push(RawArg::Float(voice_gate_bus as f32));
             // Amp envelope (ADSR) — enforce minimum onset/offset time
             args.push(RawArg::Str("attack".to_string()));
-            args.push(RawArg::Float(instrument.modulation.amp_envelope.attack.max(MIN_ONSET_SECS)));
+            args.push(RawArg::Float(
+                instrument
+                    .modulation
+                    .amp_envelope
+                    .attack
+                    .max(MIN_ONSET_SECS),
+            ));
             args.push(RawArg::Str("decay".to_string()));
             args.push(RawArg::Float(instrument.modulation.amp_envelope.decay));
             args.push(RawArg::Str("sustain".to_string()));
             args.push(RawArg::Float(instrument.modulation.amp_envelope.sustain));
             args.push(RawArg::Str("release".to_string()));
-            args.push(RawArg::Float(instrument.modulation.amp_envelope.release.max(MIN_ONSET_SECS)));
+            args.push(RawArg::Float(
+                instrument
+                    .modulation
+                    .amp_envelope
+                    .release
+                    .max(MIN_ONSET_SECS),
+            ));
             // Output to source_out_bus
             args.push(RawArg::Str("out".to_string()));
             args.push(RawArg::Float(source_out_bus as f32));
 
             // Wire LFO mod inputs if enabled
             if instrument.modulation.lfo.enabled {
-                if let Some(lfo_bus) = self.bus_allocator.get_control_bus(target_instrument_id, "lfo_out") {
+                if let Some(lfo_bus) = self
+                    .bus_allocator
+                    .get_control_bus(target_instrument_id, "lfo_out")
+                {
                     match instrument.modulation.lfo.target {
                         ParameterTarget::Level => {
                             args.push(RawArg::Str("amp_mod_in".to_string()));
@@ -951,7 +1047,8 @@ impl AudioEngine {
         )?;
 
         // Track control buses for return when /n_end arrives
-        self.oneshot_buses.insert(group_id, (voice_freq_bus, voice_gate_bus, voice_vel_bus));
+        self.oneshot_buses
+            .insert(group_id, (voice_freq_bus, voice_gate_bus, voice_vel_bus));
 
         // Register nodes for the node registry
         self.node_registry.register(group_id);
@@ -973,7 +1070,8 @@ impl AudioEngine {
                 self.node_registry.unregister(voice.source_node);
             } else if let Some(buses) = self.oneshot_buses.remove(&node_id) {
                 // One-shot voice freed — return buses manually
-                self.voice_allocator.return_control_buses(buses.0, buses.1, buses.2);
+                self.voice_allocator
+                    .return_control_buses(buses.0, buses.1, buses.2);
                 self.node_registry.unregister(node_id);
             } else {
                 // Unknown node (routing synth, meter, etc.) — just unregister

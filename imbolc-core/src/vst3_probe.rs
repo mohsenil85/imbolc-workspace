@@ -7,15 +7,13 @@ use std::path::Path;
 
 use libloading::{Library, Symbol};
 use vst3::ComPtr;
-use vst3::Steinberg::{
-    kResultOk, IPluginFactory, IPluginFactoryTrait, IPluginBaseTrait,
-    PClassInfo,
-};
-use vst3::Steinberg::Vst::{
-    IComponent, IComponentTrait, IEditController, IEditControllerTrait,
-    ParameterInfo,
-};
 use vst3::Interface;
+use vst3::Steinberg::Vst::{
+    IComponent, IComponentTrait, IEditController, IEditControllerTrait, ParameterInfo,
+};
+use vst3::Steinberg::{
+    kResultOk, IPluginBaseTrait, IPluginFactory, IPluginFactoryTrait, PClassInfo,
+};
 
 /// Discovered parameter metadata from a VST3 plugin
 #[derive(Debug, Clone)]
@@ -78,7 +76,10 @@ fn resolve_vst3_binary(bundle_path: &Path) -> Result<std::path::PathBuf, String>
 fn resolve_vst3_binary_macos(bundle_path: &Path) -> Result<std::path::PathBuf, String> {
     let macos_dir = bundle_path.join("Contents").join("MacOS");
     if !macos_dir.is_dir() {
-        return Err(format!("No Contents/MacOS directory in {}", bundle_path.display()));
+        return Err(format!(
+            "No Contents/MacOS directory in {}",
+            bundle_path.display()
+        ));
     }
 
     // Try the stem name first (most common convention)
@@ -158,8 +159,8 @@ fn resolve_vst3_binary_windows(bundle_path: &Path) -> Result<std::path::PathBuf,
 /// Find the first file in a directory (helper for bundle resolution)
 #[cfg(target_os = "macos")]
 fn find_first_file_in_dir(dir: &Path) -> Result<std::path::PathBuf, String> {
-    let entries = std::fs::read_dir(dir)
-        .map_err(|e| format!("Cannot read {}: {}", dir.display(), e))?;
+    let entries =
+        std::fs::read_dir(dir).map_err(|e| format!("Cannot read {}: {}", dir.display(), e))?;
     for entry in entries.flatten() {
         let path = entry.path();
         if path.is_file() {
@@ -240,7 +241,9 @@ impl Drop for CfBundleGuard {
             extern "C" {
                 fn CFRelease(cf: *const c_void);
             }
-            unsafe { CFRelease(self.0 as *const _); }
+            unsafe {
+                CFRelease(self.0 as *const _);
+            }
         }
     }
 }
@@ -270,10 +273,7 @@ fn probe_vst3_params_inner(bundle_path: &Path) -> Result<Vec<Vst3ParamInfo>, Str
                 buf_len: isize,
                 is_directory: u8,
             ) -> *mut c_void;
-            fn CFBundleCreate(
-                allocator: *const c_void,
-                bundle_url: *const c_void,
-            ) -> *mut c_void;
+            fn CFBundleCreate(allocator: *const c_void, bundle_url: *const c_void) -> *mut c_void;
             fn CFRelease(cf: *const c_void);
         }
 
@@ -288,7 +288,9 @@ fn probe_vst3_params_inner(bundle_path: &Path) -> Result<Vec<Vst3ParamInfo>, Str
         };
         let cf_bundle = if !url.is_null() {
             let b = unsafe { CFBundleCreate(std::ptr::null(), url) };
-            unsafe { CFRelease(url as *const _); }
+            unsafe {
+                CFRelease(url as *const _);
+            }
             b
         } else {
             std::ptr::null_mut()
@@ -296,7 +298,9 @@ fn probe_vst3_params_inner(bundle_path: &Path) -> Result<Vec<Vst3ParamInfo>, Str
 
         type BundleEntryFn = unsafe extern "C" fn(bundle: *mut c_void) -> bool;
         if let Ok(bundle_entry) = unsafe { lib.get::<BundleEntryFn>(b"bundleEntry") } {
-            unsafe { bundle_entry(cf_bundle); }
+            unsafe {
+                bundle_entry(cf_bundle);
+            }
         }
 
         CfBundleGuard(cf_bundle)
@@ -412,11 +416,10 @@ fn probe_vst3_params_inner(bundle_path: &Path) -> Result<Vec<Vst3ParamInfo>, Str
             return Err("Failed to create IEditController instance".into());
         }
         let ctrl: ComPtr<IEditController> =
-            unsafe { ComPtr::from_raw(ctrl_raw as *mut IEditController) }
-                .ok_or_else(|| {
-                    let _ = unsafe { component.terminate() };
-                    "Failed to wrap controller pointer".to_string()
-                })?;
+            unsafe { ComPtr::from_raw(ctrl_raw as *mut IEditController) }.ok_or_else(|| {
+                let _ = unsafe { component.terminate() };
+                "Failed to wrap controller pointer".to_string()
+            })?;
         // Initialize the controller
         let _ = unsafe { ctrl.initialize(std::ptr::null_mut()) };
         ctrl
@@ -461,7 +464,9 @@ fn cleanup_bundle_exit(_lib: &Library) {
     {
         type BundleExitFn = unsafe extern "system" fn() -> bool;
         if let Ok(bundle_exit) = unsafe { _lib.get::<BundleExitFn>(b"bundleExit") } {
-            unsafe { bundle_exit(); }
+            unsafe {
+                bundle_exit();
+            }
         }
     }
 
@@ -469,7 +474,9 @@ fn cleanup_bundle_exit(_lib: &Library) {
     {
         type ModuleExitFn = unsafe extern "C" fn() -> bool;
         if let Ok(module_exit) = unsafe { _lib.get::<ModuleExitFn>(b"ModuleExit") } {
-            unsafe { module_exit(); }
+            unsafe {
+                module_exit();
+            }
         }
     }
 }

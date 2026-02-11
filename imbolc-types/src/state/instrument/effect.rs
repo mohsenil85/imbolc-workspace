@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
-use crate::{Param, ParamValue, VstPluginId, EffectId};
+use crate::{EffectId, Param, ParamValue, VstPluginId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EffectType {
@@ -236,22 +236,45 @@ impl EffectType {
     #[allow(dead_code)]
     pub fn all() -> Vec<EffectType> {
         vec![
-            EffectType::Delay, EffectType::Reverb, EffectType::Gate,
-            EffectType::TapeComp, EffectType::SidechainComp,
-            EffectType::Chorus, EffectType::Flanger, EffectType::Phaser, EffectType::Tremolo,
-            EffectType::Distortion, EffectType::Bitcrusher, EffectType::Wavefolder, EffectType::Saturator,
+            EffectType::Delay,
+            EffectType::Reverb,
+            EffectType::Gate,
+            EffectType::TapeComp,
+            EffectType::SidechainComp,
+            EffectType::Chorus,
+            EffectType::Flanger,
+            EffectType::Phaser,
+            EffectType::Tremolo,
+            EffectType::Distortion,
+            EffectType::Bitcrusher,
+            EffectType::Wavefolder,
+            EffectType::Saturator,
             EffectType::TiltEq,
-            EffectType::StereoWidener, EffectType::FreqShifter,
-            EffectType::Limiter, EffectType::PitchShifter,
-            EffectType::Vinyl, EffectType::Cabinet,
-            EffectType::GranularDelay, EffectType::GranularFreeze,
+            EffectType::StereoWidener,
+            EffectType::FreqShifter,
+            EffectType::Limiter,
+            EffectType::PitchShifter,
+            EffectType::Vinyl,
+            EffectType::Cabinet,
+            EffectType::GranularDelay,
+            EffectType::GranularFreeze,
             EffectType::ConvolutionReverb,
-            EffectType::Vocoder, EffectType::RingMod, EffectType::Autopan,
-            EffectType::Resonator, EffectType::MultibandComp, EffectType::ParaEq,
-            EffectType::SpectralFreeze, EffectType::Glitch, EffectType::Leslie,
-            EffectType::SpringReverb, EffectType::EnvFollower, EffectType::MidSide,
-            EffectType::Crossfader, EffectType::Denoise,
-            EffectType::Autotune, EffectType::WahPedal,
+            EffectType::Vocoder,
+            EffectType::RingMod,
+            EffectType::Autopan,
+            EffectType::Resonator,
+            EffectType::MultibandComp,
+            EffectType::ParaEq,
+            EffectType::SpectralFreeze,
+            EffectType::Glitch,
+            EffectType::Leslie,
+            EffectType::SpringReverb,
+            EffectType::EnvFollower,
+            EffectType::MidSide,
+            EffectType::Crossfader,
+            EffectType::Denoise,
+            EffectType::Autotune,
+            EffectType::WahPedal,
         ]
     }
 }
@@ -262,219 +285,904 @@ impl EffectType {
     pub fn default_params(&self) -> Vec<Param> {
         match self {
             EffectType::Delay => vec![
-                Param { name: "time".to_string(), value: ParamValue::Float(0.3), min: 0.0, max: 2.0 },
-                Param { name: "feedback".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 1.0 },
-                Param { name: "mix".to_string(), value: ParamValue::Float(0.3), min: 0.0, max: 1.0 },
+                Param {
+                    name: "time".to_string(),
+                    value: ParamValue::Float(0.3),
+                    min: 0.0,
+                    max: 2.0,
+                },
+                Param {
+                    name: "feedback".to_string(),
+                    value: ParamValue::Float(0.5),
+                    min: 0.0,
+                    max: 1.0,
+                },
+                Param {
+                    name: "mix".to_string(),
+                    value: ParamValue::Float(0.3),
+                    min: 0.0,
+                    max: 1.0,
+                },
             ],
             EffectType::Reverb => vec![
-                Param { name: "room".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 1.0 },
-                Param { name: "damp".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 1.0 },
-                Param { name: "mix".to_string(), value: ParamValue::Float(0.3), min: 0.0, max: 1.0 },
+                Param {
+                    name: "room".to_string(),
+                    value: ParamValue::Float(0.5),
+                    min: 0.0,
+                    max: 1.0,
+                },
+                Param {
+                    name: "damp".to_string(),
+                    value: ParamValue::Float(0.5),
+                    min: 0.0,
+                    max: 1.0,
+                },
+                Param {
+                    name: "mix".to_string(),
+                    value: ParamValue::Float(0.3),
+                    min: 0.0,
+                    max: 1.0,
+                },
             ],
             EffectType::Gate => vec![
-                Param { name: "rate".to_string(), value: ParamValue::Float(4.0), min: 0.1, max: 32.0 },
-                Param { name: "depth".to_string(), value: ParamValue::Float(1.0), min: 0.0, max: 1.0 },
-                Param { name: "shape".to_string(), value: ParamValue::Int(1), min: 0.0, max: 2.0 },
+                Param {
+                    name: "rate".to_string(),
+                    value: ParamValue::Float(4.0),
+                    min: 0.1,
+                    max: 32.0,
+                },
+                Param {
+                    name: "depth".to_string(),
+                    value: ParamValue::Float(1.0),
+                    min: 0.0,
+                    max: 1.0,
+                },
+                Param {
+                    name: "shape".to_string(),
+                    value: ParamValue::Int(1),
+                    min: 0.0,
+                    max: 2.0,
+                },
             ],
             EffectType::TapeComp => vec![
-                Param { name: "drive".to_string(), value: ParamValue::Float(1.5), min: 1.0, max: 8.0 },
-                Param { name: "threshold".to_string(), value: ParamValue::Float(0.5), min: 0.01, max: 1.0 },
-                Param { name: "ratio".to_string(), value: ParamValue::Float(3.0), min: 1.0, max: 20.0 },
-                Param { name: "makeup".to_string(), value: ParamValue::Float(1.0), min: 0.0, max: 4.0 },
-                Param { name: "mix".to_string(), value: ParamValue::Float(1.0), min: 0.0, max: 1.0 },
+                Param {
+                    name: "drive".to_string(),
+                    value: ParamValue::Float(1.5),
+                    min: 1.0,
+                    max: 8.0,
+                },
+                Param {
+                    name: "threshold".to_string(),
+                    value: ParamValue::Float(0.5),
+                    min: 0.01,
+                    max: 1.0,
+                },
+                Param {
+                    name: "ratio".to_string(),
+                    value: ParamValue::Float(3.0),
+                    min: 1.0,
+                    max: 20.0,
+                },
+                Param {
+                    name: "makeup".to_string(),
+                    value: ParamValue::Float(1.0),
+                    min: 0.0,
+                    max: 4.0,
+                },
+                Param {
+                    name: "mix".to_string(),
+                    value: ParamValue::Float(1.0),
+                    min: 0.0,
+                    max: 1.0,
+                },
             ],
             EffectType::SidechainComp => vec![
-                Param { name: "sc_bus".to_string(), value: ParamValue::Int(0), min: 0.0, max: 8.0 },
-                Param { name: "threshold".to_string(), value: ParamValue::Float(0.3), min: 0.01, max: 1.0 },
-                Param { name: "ratio".to_string(), value: ParamValue::Float(4.0), min: 1.0, max: 20.0 },
-                Param { name: "attack".to_string(), value: ParamValue::Float(0.01), min: 0.001, max: 0.5 },
-                Param { name: "release".to_string(), value: ParamValue::Float(0.1), min: 0.01, max: 2.0 },
-                Param { name: "mix".to_string(), value: ParamValue::Float(1.0), min: 0.0, max: 1.0 },
+                Param {
+                    name: "sc_bus".to_string(),
+                    value: ParamValue::Int(0),
+                    min: 0.0,
+                    max: 8.0,
+                },
+                Param {
+                    name: "threshold".to_string(),
+                    value: ParamValue::Float(0.3),
+                    min: 0.01,
+                    max: 1.0,
+                },
+                Param {
+                    name: "ratio".to_string(),
+                    value: ParamValue::Float(4.0),
+                    min: 1.0,
+                    max: 20.0,
+                },
+                Param {
+                    name: "attack".to_string(),
+                    value: ParamValue::Float(0.01),
+                    min: 0.001,
+                    max: 0.5,
+                },
+                Param {
+                    name: "release".to_string(),
+                    value: ParamValue::Float(0.1),
+                    min: 0.01,
+                    max: 2.0,
+                },
+                Param {
+                    name: "mix".to_string(),
+                    value: ParamValue::Float(1.0),
+                    min: 0.0,
+                    max: 1.0,
+                },
             ],
             EffectType::Chorus => vec![
-                Param { name: "rate".to_string(), value: ParamValue::Float(0.5), min: 0.1, max: 10.0 },
-                Param { name: "depth".to_string(), value: ParamValue::Float(0.005), min: 0.001, max: 0.05 },
-                Param { name: "mix".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 1.0 },
+                Param {
+                    name: "rate".to_string(),
+                    value: ParamValue::Float(0.5),
+                    min: 0.1,
+                    max: 10.0,
+                },
+                Param {
+                    name: "depth".to_string(),
+                    value: ParamValue::Float(0.005),
+                    min: 0.001,
+                    max: 0.05,
+                },
+                Param {
+                    name: "mix".to_string(),
+                    value: ParamValue::Float(0.5),
+                    min: 0.0,
+                    max: 1.0,
+                },
             ],
             EffectType::Flanger => vec![
-                Param { name: "rate".to_string(), value: ParamValue::Float(0.3), min: 0.05, max: 10.0 },
-                Param { name: "depth".to_string(), value: ParamValue::Float(0.003), min: 0.0005, max: 0.01 },
-                Param { name: "feedback".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 0.99 },
-                Param { name: "mix".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 1.0 },
+                Param {
+                    name: "rate".to_string(),
+                    value: ParamValue::Float(0.3),
+                    min: 0.05,
+                    max: 10.0,
+                },
+                Param {
+                    name: "depth".to_string(),
+                    value: ParamValue::Float(0.003),
+                    min: 0.0005,
+                    max: 0.01,
+                },
+                Param {
+                    name: "feedback".to_string(),
+                    value: ParamValue::Float(0.5),
+                    min: 0.0,
+                    max: 0.99,
+                },
+                Param {
+                    name: "mix".to_string(),
+                    value: ParamValue::Float(0.5),
+                    min: 0.0,
+                    max: 1.0,
+                },
             ],
             EffectType::Phaser => vec![
-                Param { name: "rate".to_string(), value: ParamValue::Float(0.5), min: 0.05, max: 10.0 },
-                Param { name: "depth".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 1.0 },
-                Param { name: "stages".to_string(), value: ParamValue::Int(4), min: 2.0, max: 12.0 },
-                Param { name: "feedback".to_string(), value: ParamValue::Float(0.3), min: 0.0, max: 0.9 },
-                Param { name: "mix".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 1.0 },
+                Param {
+                    name: "rate".to_string(),
+                    value: ParamValue::Float(0.5),
+                    min: 0.05,
+                    max: 10.0,
+                },
+                Param {
+                    name: "depth".to_string(),
+                    value: ParamValue::Float(0.5),
+                    min: 0.0,
+                    max: 1.0,
+                },
+                Param {
+                    name: "stages".to_string(),
+                    value: ParamValue::Int(4),
+                    min: 2.0,
+                    max: 12.0,
+                },
+                Param {
+                    name: "feedback".to_string(),
+                    value: ParamValue::Float(0.3),
+                    min: 0.0,
+                    max: 0.9,
+                },
+                Param {
+                    name: "mix".to_string(),
+                    value: ParamValue::Float(0.5),
+                    min: 0.0,
+                    max: 1.0,
+                },
             ],
             EffectType::Tremolo => vec![
-                Param { name: "rate".to_string(), value: ParamValue::Float(4.0), min: 0.1, max: 32.0 },
-                Param { name: "depth".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 1.0 },
-                Param { name: "shape".to_string(), value: ParamValue::Int(0), min: 0.0, max: 2.0 },
-                Param { name: "mix".to_string(), value: ParamValue::Float(1.0), min: 0.0, max: 1.0 },
+                Param {
+                    name: "rate".to_string(),
+                    value: ParamValue::Float(4.0),
+                    min: 0.1,
+                    max: 32.0,
+                },
+                Param {
+                    name: "depth".to_string(),
+                    value: ParamValue::Float(0.5),
+                    min: 0.0,
+                    max: 1.0,
+                },
+                Param {
+                    name: "shape".to_string(),
+                    value: ParamValue::Int(0),
+                    min: 0.0,
+                    max: 2.0,
+                },
+                Param {
+                    name: "mix".to_string(),
+                    value: ParamValue::Float(1.0),
+                    min: 0.0,
+                    max: 1.0,
+                },
             ],
             EffectType::Distortion => vec![
-                Param { name: "drive".to_string(), value: ParamValue::Float(2.0), min: 1.0, max: 20.0 },
-                Param { name: "mode".to_string(), value: ParamValue::Int(0), min: 0.0, max: 2.0 },
-                Param { name: "tone".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 1.0 },
-                Param { name: "mix".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 1.0 },
+                Param {
+                    name: "drive".to_string(),
+                    value: ParamValue::Float(2.0),
+                    min: 1.0,
+                    max: 20.0,
+                },
+                Param {
+                    name: "mode".to_string(),
+                    value: ParamValue::Int(0),
+                    min: 0.0,
+                    max: 2.0,
+                },
+                Param {
+                    name: "tone".to_string(),
+                    value: ParamValue::Float(0.5),
+                    min: 0.0,
+                    max: 1.0,
+                },
+                Param {
+                    name: "mix".to_string(),
+                    value: ParamValue::Float(0.5),
+                    min: 0.0,
+                    max: 1.0,
+                },
             ],
             EffectType::Bitcrusher => vec![
-                Param { name: "rate".to_string(), value: ParamValue::Float(8000.0), min: 100.0, max: 44100.0 },
-                Param { name: "bits".to_string(), value: ParamValue::Int(8), min: 1.0, max: 16.0 },
-                Param { name: "mix".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 1.0 },
+                Param {
+                    name: "rate".to_string(),
+                    value: ParamValue::Float(8000.0),
+                    min: 100.0,
+                    max: 44100.0,
+                },
+                Param {
+                    name: "bits".to_string(),
+                    value: ParamValue::Int(8),
+                    min: 1.0,
+                    max: 16.0,
+                },
+                Param {
+                    name: "mix".to_string(),
+                    value: ParamValue::Float(0.5),
+                    min: 0.0,
+                    max: 1.0,
+                },
             ],
             EffectType::Wavefolder => vec![
-                Param { name: "drive".to_string(), value: ParamValue::Float(1.0), min: 0.1, max: 10.0 },
-                Param { name: "symmetry".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 1.0 },
-                Param { name: "mix".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 1.0 },
+                Param {
+                    name: "drive".to_string(),
+                    value: ParamValue::Float(1.0),
+                    min: 0.1,
+                    max: 10.0,
+                },
+                Param {
+                    name: "symmetry".to_string(),
+                    value: ParamValue::Float(0.5),
+                    min: 0.0,
+                    max: 1.0,
+                },
+                Param {
+                    name: "mix".to_string(),
+                    value: ParamValue::Float(0.5),
+                    min: 0.0,
+                    max: 1.0,
+                },
             ],
             EffectType::Saturator => vec![
-                Param { name: "drive".to_string(), value: ParamValue::Float(1.5), min: 1.0, max: 8.0 },
-                Param { name: "color".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 1.0 },
-                Param { name: "mix".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 1.0 },
+                Param {
+                    name: "drive".to_string(),
+                    value: ParamValue::Float(1.5),
+                    min: 1.0,
+                    max: 8.0,
+                },
+                Param {
+                    name: "color".to_string(),
+                    value: ParamValue::Float(0.5),
+                    min: 0.0,
+                    max: 1.0,
+                },
+                Param {
+                    name: "mix".to_string(),
+                    value: ParamValue::Float(0.5),
+                    min: 0.0,
+                    max: 1.0,
+                },
             ],
             EffectType::TiltEq => vec![
-                Param { name: "tilt".to_string(), value: ParamValue::Float(0.0), min: -1.0, max: 1.0 },
-                Param { name: "frequency".to_string(), value: ParamValue::Float(1000.0), min: 100.0, max: 10000.0 },
+                Param {
+                    name: "tilt".to_string(),
+                    value: ParamValue::Float(0.0),
+                    min: -1.0,
+                    max: 1.0,
+                },
+                Param {
+                    name: "frequency".to_string(),
+                    value: ParamValue::Float(1000.0),
+                    min: 100.0,
+                    max: 10000.0,
+                },
             ],
             EffectType::StereoWidener => vec![
-                Param { name: "width".to_string(), value: ParamValue::Float(1.0), min: 0.0, max: 2.0 },
-                Param { name: "mix".to_string(), value: ParamValue::Float(1.0), min: 0.0, max: 1.0 },
+                Param {
+                    name: "width".to_string(),
+                    value: ParamValue::Float(1.0),
+                    min: 0.0,
+                    max: 2.0,
+                },
+                Param {
+                    name: "mix".to_string(),
+                    value: ParamValue::Float(1.0),
+                    min: 0.0,
+                    max: 1.0,
+                },
             ],
             EffectType::FreqShifter => vec![
-                Param { name: "shift_hz".to_string(), value: ParamValue::Float(0.0), min: -2000.0, max: 2000.0 },
-                Param { name: "mix".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 1.0 },
+                Param {
+                    name: "shift_hz".to_string(),
+                    value: ParamValue::Float(0.0),
+                    min: -2000.0,
+                    max: 2000.0,
+                },
+                Param {
+                    name: "mix".to_string(),
+                    value: ParamValue::Float(0.5),
+                    min: 0.0,
+                    max: 1.0,
+                },
             ],
             EffectType::Limiter => vec![
-                Param { name: "threshold".to_string(), value: ParamValue::Float(0.9), min: 0.1, max: 1.0 },
-                Param { name: "release".to_string(), value: ParamValue::Float(0.01), min: 0.001, max: 1.0 },
-                Param { name: "ceiling".to_string(), value: ParamValue::Float(1.0), min: 0.1, max: 1.0 },
+                Param {
+                    name: "threshold".to_string(),
+                    value: ParamValue::Float(0.9),
+                    min: 0.1,
+                    max: 1.0,
+                },
+                Param {
+                    name: "release".to_string(),
+                    value: ParamValue::Float(0.01),
+                    min: 0.001,
+                    max: 1.0,
+                },
+                Param {
+                    name: "ceiling".to_string(),
+                    value: ParamValue::Float(1.0),
+                    min: 0.1,
+                    max: 1.0,
+                },
             ],
             EffectType::PitchShifter => vec![
-                Param { name: "shift".to_string(), value: ParamValue::Float(0.0), min: -12.0, max: 12.0 },
-                Param { name: "window".to_string(), value: ParamValue::Float(0.2), min: 0.01, max: 1.0 },
-                Param { name: "mix".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 1.0 },
+                Param {
+                    name: "shift".to_string(),
+                    value: ParamValue::Float(0.0),
+                    min: -12.0,
+                    max: 12.0,
+                },
+                Param {
+                    name: "window".to_string(),
+                    value: ParamValue::Float(0.2),
+                    min: 0.01,
+                    max: 1.0,
+                },
+                Param {
+                    name: "mix".to_string(),
+                    value: ParamValue::Float(0.5),
+                    min: 0.0,
+                    max: 1.0,
+                },
             ],
             EffectType::Vinyl => vec![
-                Param { name: "wow".to_string(), value: ParamValue::Float(0.3), min: 0.0, max: 1.0 },
-                Param { name: "flutter".to_string(), value: ParamValue::Float(0.3), min: 0.0, max: 1.0 },
-                Param { name: "noise".to_string(), value: ParamValue::Float(0.1), min: 0.0, max: 1.0 },
-                Param { name: "hiss".to_string(), value: ParamValue::Float(0.05), min: 0.0, max: 1.0 },
-                Param { name: "mix".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 1.0 },
+                Param {
+                    name: "wow".to_string(),
+                    value: ParamValue::Float(0.3),
+                    min: 0.0,
+                    max: 1.0,
+                },
+                Param {
+                    name: "flutter".to_string(),
+                    value: ParamValue::Float(0.3),
+                    min: 0.0,
+                    max: 1.0,
+                },
+                Param {
+                    name: "noise".to_string(),
+                    value: ParamValue::Float(0.1),
+                    min: 0.0,
+                    max: 1.0,
+                },
+                Param {
+                    name: "hiss".to_string(),
+                    value: ParamValue::Float(0.05),
+                    min: 0.0,
+                    max: 1.0,
+                },
+                Param {
+                    name: "mix".to_string(),
+                    value: ParamValue::Float(0.5),
+                    min: 0.0,
+                    max: 1.0,
+                },
             ],
             EffectType::Cabinet => vec![
-                Param { name: "type".to_string(), value: ParamValue::Int(0), min: 0.0, max: 3.0 },
-                Param { name: "tone".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 1.0 },
-                Param { name: "mix".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 1.0 },
+                Param {
+                    name: "type".to_string(),
+                    value: ParamValue::Int(0),
+                    min: 0.0,
+                    max: 3.0,
+                },
+                Param {
+                    name: "tone".to_string(),
+                    value: ParamValue::Float(0.5),
+                    min: 0.0,
+                    max: 1.0,
+                },
+                Param {
+                    name: "mix".to_string(),
+                    value: ParamValue::Float(0.5),
+                    min: 0.0,
+                    max: 1.0,
+                },
             ],
             EffectType::GranularDelay => vec![
-                Param { name: "time".to_string(), value: ParamValue::Float(0.3), min: 0.01, max: 2.0 },
-                Param { name: "grain_size".to_string(), value: ParamValue::Float(0.1), min: 0.01, max: 0.5 },
-                Param { name: "density".to_string(), value: ParamValue::Float(10.0), min: 1.0, max: 40.0 },
-                Param { name: "pitch".to_string(), value: ParamValue::Float(0.0), min: -12.0, max: 12.0 },
-                Param { name: "mix".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 1.0 },
+                Param {
+                    name: "time".to_string(),
+                    value: ParamValue::Float(0.3),
+                    min: 0.01,
+                    max: 2.0,
+                },
+                Param {
+                    name: "grain_size".to_string(),
+                    value: ParamValue::Float(0.1),
+                    min: 0.01,
+                    max: 0.5,
+                },
+                Param {
+                    name: "density".to_string(),
+                    value: ParamValue::Float(10.0),
+                    min: 1.0,
+                    max: 40.0,
+                },
+                Param {
+                    name: "pitch".to_string(),
+                    value: ParamValue::Float(0.0),
+                    min: -12.0,
+                    max: 12.0,
+                },
+                Param {
+                    name: "mix".to_string(),
+                    value: ParamValue::Float(0.5),
+                    min: 0.0,
+                    max: 1.0,
+                },
             ],
             EffectType::GranularFreeze => vec![
-                Param { name: "grain_size".to_string(), value: ParamValue::Float(0.1), min: 0.01, max: 0.5 },
-                Param { name: "density".to_string(), value: ParamValue::Float(10.0), min: 1.0, max: 40.0 },
-                Param { name: "pitch".to_string(), value: ParamValue::Float(0.0), min: -12.0, max: 12.0 },
-                Param { name: "spread".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 1.0 },
-                Param { name: "mix".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 1.0 },
+                Param {
+                    name: "grain_size".to_string(),
+                    value: ParamValue::Float(0.1),
+                    min: 0.01,
+                    max: 0.5,
+                },
+                Param {
+                    name: "density".to_string(),
+                    value: ParamValue::Float(10.0),
+                    min: 1.0,
+                    max: 40.0,
+                },
+                Param {
+                    name: "pitch".to_string(),
+                    value: ParamValue::Float(0.0),
+                    min: -12.0,
+                    max: 12.0,
+                },
+                Param {
+                    name: "spread".to_string(),
+                    value: ParamValue::Float(0.5),
+                    min: 0.0,
+                    max: 1.0,
+                },
+                Param {
+                    name: "mix".to_string(),
+                    value: ParamValue::Float(0.5),
+                    min: 0.0,
+                    max: 1.0,
+                },
             ],
             EffectType::ConvolutionReverb => vec![
-                Param { name: "ir_buffer".to_string(), value: ParamValue::Int(-1), min: -1.0, max: 65536.0 },
-                Param { name: "mix".to_string(), value: ParamValue::Float(0.3), min: 0.0, max: 1.0 },
-                Param { name: "predelay".to_string(), value: ParamValue::Float(0.0), min: 0.0, max: 0.5 },
+                Param {
+                    name: "ir_buffer".to_string(),
+                    value: ParamValue::Int(-1),
+                    min: -1.0,
+                    max: 65536.0,
+                },
+                Param {
+                    name: "mix".to_string(),
+                    value: ParamValue::Float(0.3),
+                    min: 0.0,
+                    max: 1.0,
+                },
+                Param {
+                    name: "predelay".to_string(),
+                    value: ParamValue::Float(0.0),
+                    min: 0.0,
+                    max: 0.5,
+                },
             ],
             EffectType::Vocoder => vec![
-                Param { name: "bands".to_string(), value: ParamValue::Int(16), min: 4.0, max: 32.0 },
-                Param { name: "mix".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 1.0 },
+                Param {
+                    name: "bands".to_string(),
+                    value: ParamValue::Int(16),
+                    min: 4.0,
+                    max: 32.0,
+                },
+                Param {
+                    name: "mix".to_string(),
+                    value: ParamValue::Float(0.5),
+                    min: 0.0,
+                    max: 1.0,
+                },
             ],
             EffectType::RingMod => vec![
-                Param { name: "freq".to_string(), value: ParamValue::Float(440.0), min: 20.0, max: 5000.0 },
-                Param { name: "depth".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 1.0 },
-                Param { name: "mix".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 1.0 },
+                Param {
+                    name: "freq".to_string(),
+                    value: ParamValue::Float(440.0),
+                    min: 20.0,
+                    max: 5000.0,
+                },
+                Param {
+                    name: "depth".to_string(),
+                    value: ParamValue::Float(0.5),
+                    min: 0.0,
+                    max: 1.0,
+                },
+                Param {
+                    name: "mix".to_string(),
+                    value: ParamValue::Float(0.5),
+                    min: 0.0,
+                    max: 1.0,
+                },
             ],
             EffectType::Autopan => vec![
-                Param { name: "rate".to_string(), value: ParamValue::Float(2.0), min: 0.1, max: 20.0 },
-                Param { name: "depth".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 1.0 },
-                Param { name: "shape".to_string(), value: ParamValue::Int(0), min: 0.0, max: 2.0 },
-                Param { name: "mix".to_string(), value: ParamValue::Float(1.0), min: 0.0, max: 1.0 },
+                Param {
+                    name: "rate".to_string(),
+                    value: ParamValue::Float(2.0),
+                    min: 0.1,
+                    max: 20.0,
+                },
+                Param {
+                    name: "depth".to_string(),
+                    value: ParamValue::Float(0.5),
+                    min: 0.0,
+                    max: 1.0,
+                },
+                Param {
+                    name: "shape".to_string(),
+                    value: ParamValue::Int(0),
+                    min: 0.0,
+                    max: 2.0,
+                },
+                Param {
+                    name: "mix".to_string(),
+                    value: ParamValue::Float(1.0),
+                    min: 0.0,
+                    max: 1.0,
+                },
             ],
             EffectType::Resonator => vec![
-                Param { name: "freq".to_string(), value: ParamValue::Float(440.0), min: 20.0, max: 5000.0 },
-                Param { name: "decay".to_string(), value: ParamValue::Float(1.0), min: 0.01, max: 5.0 },
-                Param { name: "mix".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 1.0 },
+                Param {
+                    name: "freq".to_string(),
+                    value: ParamValue::Float(440.0),
+                    min: 20.0,
+                    max: 5000.0,
+                },
+                Param {
+                    name: "decay".to_string(),
+                    value: ParamValue::Float(1.0),
+                    min: 0.01,
+                    max: 5.0,
+                },
+                Param {
+                    name: "mix".to_string(),
+                    value: ParamValue::Float(0.5),
+                    min: 0.0,
+                    max: 1.0,
+                },
             ],
             EffectType::MultibandComp => vec![
-                Param { name: "low_thresh".to_string(), value: ParamValue::Float(0.3), min: 0.0, max: 1.0 },
-                Param { name: "mid_thresh".to_string(), value: ParamValue::Float(0.3), min: 0.0, max: 1.0 },
-                Param { name: "hi_thresh".to_string(), value: ParamValue::Float(0.3), min: 0.0, max: 1.0 },
-                Param { name: "mix".to_string(), value: ParamValue::Float(1.0), min: 0.0, max: 1.0 },
+                Param {
+                    name: "low_thresh".to_string(),
+                    value: ParamValue::Float(0.3),
+                    min: 0.0,
+                    max: 1.0,
+                },
+                Param {
+                    name: "mid_thresh".to_string(),
+                    value: ParamValue::Float(0.3),
+                    min: 0.0,
+                    max: 1.0,
+                },
+                Param {
+                    name: "hi_thresh".to_string(),
+                    value: ParamValue::Float(0.3),
+                    min: 0.0,
+                    max: 1.0,
+                },
+                Param {
+                    name: "mix".to_string(),
+                    value: ParamValue::Float(1.0),
+                    min: 0.0,
+                    max: 1.0,
+                },
             ],
             EffectType::ParaEq => vec![
-                Param { name: "lo_freq".to_string(), value: ParamValue::Float(200.0), min: 20.0, max: 20000.0 },
-                Param { name: "lo_gain".to_string(), value: ParamValue::Float(0.0), min: -12.0, max: 12.0 },
-                Param { name: "mid_freq".to_string(), value: ParamValue::Float(1000.0), min: 20.0, max: 20000.0 },
-                Param { name: "mid_gain".to_string(), value: ParamValue::Float(0.0), min: -12.0, max: 12.0 },
-                Param { name: "hi_freq".to_string(), value: ParamValue::Float(5000.0), min: 20.0, max: 20000.0 },
-                Param { name: "hi_gain".to_string(), value: ParamValue::Float(0.0), min: -12.0, max: 12.0 },
+                Param {
+                    name: "lo_freq".to_string(),
+                    value: ParamValue::Float(200.0),
+                    min: 20.0,
+                    max: 20000.0,
+                },
+                Param {
+                    name: "lo_gain".to_string(),
+                    value: ParamValue::Float(0.0),
+                    min: -12.0,
+                    max: 12.0,
+                },
+                Param {
+                    name: "mid_freq".to_string(),
+                    value: ParamValue::Float(1000.0),
+                    min: 20.0,
+                    max: 20000.0,
+                },
+                Param {
+                    name: "mid_gain".to_string(),
+                    value: ParamValue::Float(0.0),
+                    min: -12.0,
+                    max: 12.0,
+                },
+                Param {
+                    name: "hi_freq".to_string(),
+                    value: ParamValue::Float(5000.0),
+                    min: 20.0,
+                    max: 20000.0,
+                },
+                Param {
+                    name: "hi_gain".to_string(),
+                    value: ParamValue::Float(0.0),
+                    min: -12.0,
+                    max: 12.0,
+                },
             ],
             EffectType::SpectralFreeze => vec![
-                Param { name: "freeze".to_string(), value: ParamValue::Float(0.0), min: 0.0, max: 1.0 },
-                Param { name: "blur".to_string(), value: ParamValue::Float(0.0), min: 0.0, max: 1.0 },
-                Param { name: "mix".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 1.0 },
+                Param {
+                    name: "freeze".to_string(),
+                    value: ParamValue::Float(0.0),
+                    min: 0.0,
+                    max: 1.0,
+                },
+                Param {
+                    name: "blur".to_string(),
+                    value: ParamValue::Float(0.0),
+                    min: 0.0,
+                    max: 1.0,
+                },
+                Param {
+                    name: "mix".to_string(),
+                    value: ParamValue::Float(0.5),
+                    min: 0.0,
+                    max: 1.0,
+                },
             ],
             EffectType::Glitch => vec![
-                Param { name: "rate".to_string(), value: ParamValue::Float(4.0), min: 0.5, max: 32.0 },
-                Param { name: "size".to_string(), value: ParamValue::Float(0.1), min: 0.01, max: 0.5 },
-                Param { name: "mix".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 1.0 },
+                Param {
+                    name: "rate".to_string(),
+                    value: ParamValue::Float(4.0),
+                    min: 0.5,
+                    max: 32.0,
+                },
+                Param {
+                    name: "size".to_string(),
+                    value: ParamValue::Float(0.1),
+                    min: 0.01,
+                    max: 0.5,
+                },
+                Param {
+                    name: "mix".to_string(),
+                    value: ParamValue::Float(0.5),
+                    min: 0.0,
+                    max: 1.0,
+                },
             ],
             EffectType::Leslie => vec![
-                Param { name: "speed".to_string(), value: ParamValue::Float(1.0), min: 0.0, max: 2.0 },
-                Param { name: "horn_depth".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 1.0 },
-                Param { name: "mix".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 1.0 },
+                Param {
+                    name: "speed".to_string(),
+                    value: ParamValue::Float(1.0),
+                    min: 0.0,
+                    max: 2.0,
+                },
+                Param {
+                    name: "horn_depth".to_string(),
+                    value: ParamValue::Float(0.5),
+                    min: 0.0,
+                    max: 1.0,
+                },
+                Param {
+                    name: "mix".to_string(),
+                    value: ParamValue::Float(0.5),
+                    min: 0.0,
+                    max: 1.0,
+                },
             ],
             EffectType::SpringReverb => vec![
-                Param { name: "decay".to_string(), value: ParamValue::Float(2.0), min: 0.1, max: 6.0 },
-                Param { name: "tone".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 1.0 },
-                Param { name: "mix".to_string(), value: ParamValue::Float(0.3), min: 0.0, max: 1.0 },
+                Param {
+                    name: "decay".to_string(),
+                    value: ParamValue::Float(2.0),
+                    min: 0.1,
+                    max: 6.0,
+                },
+                Param {
+                    name: "tone".to_string(),
+                    value: ParamValue::Float(0.5),
+                    min: 0.0,
+                    max: 1.0,
+                },
+                Param {
+                    name: "mix".to_string(),
+                    value: ParamValue::Float(0.3),
+                    min: 0.0,
+                    max: 1.0,
+                },
             ],
             EffectType::EnvFollower => vec![
-                Param { name: "attack".to_string(), value: ParamValue::Float(0.01), min: 0.001, max: 0.5 },
-                Param { name: "release".to_string(), value: ParamValue::Float(0.1), min: 0.01, max: 1.0 },
-                Param { name: "depth".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 1.0 },
-                Param { name: "mix".to_string(), value: ParamValue::Float(1.0), min: 0.0, max: 1.0 },
+                Param {
+                    name: "attack".to_string(),
+                    value: ParamValue::Float(0.01),
+                    min: 0.001,
+                    max: 0.5,
+                },
+                Param {
+                    name: "release".to_string(),
+                    value: ParamValue::Float(0.1),
+                    min: 0.01,
+                    max: 1.0,
+                },
+                Param {
+                    name: "depth".to_string(),
+                    value: ParamValue::Float(0.5),
+                    min: 0.0,
+                    max: 1.0,
+                },
+                Param {
+                    name: "mix".to_string(),
+                    value: ParamValue::Float(1.0),
+                    min: 0.0,
+                    max: 1.0,
+                },
             ],
             EffectType::MidSide => vec![
-                Param { name: "width".to_string(), value: ParamValue::Float(1.0), min: 0.0, max: 3.0 },
-                Param { name: "mid_gain".to_string(), value: ParamValue::Float(0.0), min: -12.0, max: 12.0 },
-                Param { name: "side_gain".to_string(), value: ParamValue::Float(0.0), min: -12.0, max: 12.0 },
+                Param {
+                    name: "width".to_string(),
+                    value: ParamValue::Float(1.0),
+                    min: 0.0,
+                    max: 3.0,
+                },
+                Param {
+                    name: "mid_gain".to_string(),
+                    value: ParamValue::Float(0.0),
+                    min: -12.0,
+                    max: 12.0,
+                },
+                Param {
+                    name: "side_gain".to_string(),
+                    value: ParamValue::Float(0.0),
+                    min: -12.0,
+                    max: 12.0,
+                },
             ],
             EffectType::Crossfader => vec![
-                Param { name: "crossfade".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 1.0 },
-                Param { name: "bus_b".to_string(), value: ParamValue::Int(0), min: 0.0, max: 8.0 },
+                Param {
+                    name: "crossfade".to_string(),
+                    value: ParamValue::Float(0.5),
+                    min: 0.0,
+                    max: 1.0,
+                },
+                Param {
+                    name: "bus_b".to_string(),
+                    value: ParamValue::Int(0),
+                    min: 0.0,
+                    max: 8.0,
+                },
             ],
             EffectType::Denoise => vec![
-                Param { name: "threshold".to_string(), value: ParamValue::Float(0.3), min: 0.0, max: 1.0 },
-                Param { name: "hp_freq".to_string(), value: ParamValue::Float(80.0), min: 20.0, max: 500.0 },
-                Param { name: "smoothing".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 1.0 },
-                Param { name: "mix".to_string(), value: ParamValue::Float(1.0), min: 0.0, max: 1.0 },
+                Param {
+                    name: "threshold".to_string(),
+                    value: ParamValue::Float(0.3),
+                    min: 0.0,
+                    max: 1.0,
+                },
+                Param {
+                    name: "hp_freq".to_string(),
+                    value: ParamValue::Float(80.0),
+                    min: 20.0,
+                    max: 500.0,
+                },
+                Param {
+                    name: "smoothing".to_string(),
+                    value: ParamValue::Float(0.5),
+                    min: 0.0,
+                    max: 1.0,
+                },
+                Param {
+                    name: "mix".to_string(),
+                    value: ParamValue::Float(1.0),
+                    min: 0.0,
+                    max: 1.0,
+                },
             ],
             EffectType::Autotune => vec![
-                Param { name: "speed".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 1.0 },
-                Param { name: "shift".to_string(), value: ParamValue::Float(0.0), min: -12.0, max: 12.0 },
-                Param { name: "mix".to_string(), value: ParamValue::Float(1.0), min: 0.0, max: 1.0 },
+                Param {
+                    name: "speed".to_string(),
+                    value: ParamValue::Float(0.5),
+                    min: 0.0,
+                    max: 1.0,
+                },
+                Param {
+                    name: "shift".to_string(),
+                    value: ParamValue::Float(0.0),
+                    min: -12.0,
+                    max: 12.0,
+                },
+                Param {
+                    name: "mix".to_string(),
+                    value: ParamValue::Float(1.0),
+                    min: 0.0,
+                    max: 1.0,
+                },
             ],
             EffectType::WahPedal => vec![
-                Param { name: "position".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 1.0 },
-                Param { name: "resonance".to_string(), value: ParamValue::Float(3.0), min: 0.5, max: 10.0 },
-                Param { name: "mode".to_string(), value: ParamValue::Int(0), min: 0.0, max: 1.0 },
-                Param { name: "sensitivity".to_string(), value: ParamValue::Float(0.5), min: 0.0, max: 1.0 },
-                Param { name: "mix".to_string(), value: ParamValue::Float(1.0), min: 0.0, max: 1.0 },
+                Param {
+                    name: "position".to_string(),
+                    value: ParamValue::Float(0.5),
+                    min: 0.0,
+                    max: 1.0,
+                },
+                Param {
+                    name: "resonance".to_string(),
+                    value: ParamValue::Float(3.0),
+                    min: 0.5,
+                    max: 10.0,
+                },
+                Param {
+                    name: "mode".to_string(),
+                    value: ParamValue::Int(0),
+                    min: 0.0,
+                    max: 1.0,
+                },
+                Param {
+                    name: "sensitivity".to_string(),
+                    value: ParamValue::Float(0.5),
+                    min: 0.0,
+                    max: 1.0,
+                },
+                Param {
+                    name: "mix".to_string(),
+                    value: ParamValue::Float(1.0),
+                    min: 0.0,
+                    max: 1.0,
+                },
             ],
             EffectType::Vst(_) => vec![],
         }
@@ -641,7 +1349,10 @@ mod tests {
 
     #[test]
     fn effect_type_vst_id() {
-        assert_eq!(EffectType::Vst(VstPluginId::new(42)).vst_id(), Some(VstPluginId::new(42)));
+        assert_eq!(
+            EffectType::Vst(VstPluginId::new(42)).vst_id(),
+            Some(VstPluginId::new(42))
+        );
         assert_eq!(EffectType::Delay.vst_id(), None);
     }
 
@@ -653,7 +1364,9 @@ mod tests {
 
     #[test]
     fn effect_type_default_params_vst_empty() {
-        assert!(EffectType::Vst(VstPluginId::new(0)).default_params().is_empty());
+        assert!(EffectType::Vst(VstPluginId::new(0))
+            .default_params()
+            .is_empty());
     }
 
     #[test]
@@ -700,7 +1413,10 @@ mod tests {
         let mut chain = EffectChain::default();
         let id = chain.add_effect(EffectType::Reverb);
         assert!(chain.effect_by_id(id).is_some());
-        assert_eq!(chain.effect_by_id(id).unwrap().effect_type, EffectType::Reverb);
+        assert_eq!(
+            chain.effect_by_id(id).unwrap().effect_type,
+            EffectType::Reverb
+        );
         assert!(chain.effect_by_id(EffectId::new(999)).is_none());
     }
 
@@ -736,7 +1452,10 @@ mod tests {
 
     #[test]
     fn effect_chain_recalculate_empty() {
-        let mut chain = EffectChain { next_effect_id: EffectId::new(5), ..Default::default() };
+        let mut chain = EffectChain {
+            next_effect_id: EffectId::new(5),
+            ..Default::default()
+        };
         chain.recalculate_next_effect_id();
         assert_eq!(chain.next_effect_id, EffectId::new(0));
     }

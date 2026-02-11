@@ -1,9 +1,9 @@
 use super::InstrumentEditPane;
-use imbolc_types::ProcessingStage;
 use crate::state::{AppState, Param, ParamValue};
 use crate::ui::layout_helpers::center_rect;
 use crate::ui::widgets::TextInput;
-use crate::ui::{Rect, RenderBuf, Color, Style};
+use crate::ui::{Color, Rect, RenderBuf, Style};
+use imbolc_types::ProcessingStage;
 
 impl InstrumentEditPane {
     pub(super) fn render_impl(&mut self, area: Rect, buf: &mut RenderBuf, _state: &AppState) {
@@ -21,7 +21,8 @@ impl InstrumentEditPane {
         let visual_overhead = self.visual_overhead();
         let effective_visible = raw_visible_height.saturating_sub(visual_overhead);
         let total_rows = self.total_rows();
-        self.scroll_offset = Self::calc_scroll_offset(self.selected_row, total_rows, effective_visible);
+        self.scroll_offset =
+            Self::calc_scroll_offset(self.selected_row, total_rows, effective_visible);
 
         // Max Y we can render to (leave room for help text)
         let max_y = inner.y + inner.height.saturating_sub(2);
@@ -31,34 +32,64 @@ impl InstrumentEditPane {
 
         // Mode indicators in header
         let mode_x = rect.x + rect.width - 18;
-        let poly_style = Style::new().fg(if self.polyphonic { Color::LIME } else { Color::DARK_GRAY });
+        let poly_style = Style::new().fg(if self.polyphonic {
+            Color::LIME
+        } else {
+            Color::DARK_GRAY
+        });
         let poly_str = if self.polyphonic { " POLY " } else { " MONO " };
         buf.draw_line(Rect::new(mode_x, rect.y, 6, 1), &[(poly_str, poly_style)]);
 
         // Channel config indicator (STEREO/MONO)
-        let channel_style = Style::new().fg(if self.channel_config.is_stereo() { Color::CYAN } else { Color::YELLOW });
-        let channel_str = if self.channel_config.is_stereo() { " ST " } else { " M " };
-        buf.draw_line(Rect::new(mode_x + 6, rect.y, channel_str.len() as u16, 1), &[(channel_str, channel_style)]);
+        let channel_style = Style::new().fg(if self.channel_config.is_stereo() {
+            Color::CYAN
+        } else {
+            Color::YELLOW
+        });
+        let channel_str = if self.channel_config.is_stereo() {
+            " ST "
+        } else {
+            " M "
+        };
+        buf.draw_line(
+            Rect::new(mode_x + 6, rect.y, channel_str.len() as u16, 1),
+            &[(channel_str, channel_style)],
+        );
 
         // Active/Inactive indicator for AudioIn instruments
         if self.source.is_audio_input() {
-            let active_style = Style::new().fg(
-                if self.active { Color::LIME } else { Color::new(220, 40, 40) }
-            );
-            let active_str = if self.active { " ACTIVE " } else { " INACTIVE " };
+            let active_style = Style::new().fg(if self.active {
+                Color::LIME
+            } else {
+                Color::new(220, 40, 40)
+            });
+            let active_str = if self.active {
+                " ACTIVE "
+            } else {
+                " INACTIVE "
+            };
             let active_x = mode_x.saturating_sub(active_str.len() as u16 + 1);
-            buf.draw_line(Rect::new(active_x, rect.y, active_str.len() as u16, 1), &[(active_str, active_style)]);
+            buf.draw_line(
+                Rect::new(active_x, rect.y, active_str.len() as u16, 1),
+                &[(active_str, active_style)],
+            );
         }
 
         // Piano/Pad mode indicator
         if self.perf.pad.is_active() {
             let pad_str = self.perf.pad.status_label();
             let pad_style = Style::new().fg(Color::BLACK).bg(Color::KIT_COLOR);
-            buf.draw_line(Rect::new(rect.x + 1, rect.y, pad_str.len() as u16, 1), &[(&pad_str, pad_style)]);
+            buf.draw_line(
+                Rect::new(rect.x + 1, rect.y, pad_str.len() as u16, 1),
+                &[(&pad_str, pad_style)],
+            );
         } else if self.perf.piano.is_active() {
             let piano_str = self.perf.piano.status_label();
             let piano_style = Style::new().fg(Color::BLACK).bg(Color::PINK);
-            buf.draw_line(Rect::new(rect.x + 1, rect.y, piano_str.len() as u16, 1), &[(&piano_str, piano_style)]);
+            buf.draw_line(
+                Rect::new(rect.x + 1, rect.y, piano_str.len() as u16, 1),
+                &[(&piano_str, piano_style)],
+            );
         }
 
         let mut global_row = 0;
@@ -70,7 +101,11 @@ impl InstrumentEditPane {
 
         // === SOURCE SECTION ===
         let source_row_count = if self.source.is_sample() { 1 } else { 0 }
-            + if self.source_params.is_empty() { 1 } else { self.source_params.len() };
+            + if self.source_params.is_empty() {
+                1
+            } else {
+                self.source_params.len()
+            };
         let source_start = global_row;
         let source_end = source_start + source_row_count;
 
@@ -81,8 +116,10 @@ impl InstrumentEditPane {
             } else {
                 format!("SOURCE: {}", self.source.name())
             };
-            buf.draw_line(Rect::new(content_x, visual_y, inner.width.saturating_sub(2), 1),
-                &[(&source_header, Style::new().fg(Color::CYAN).bold())]);
+            buf.draw_line(
+                Rect::new(content_x, visual_y, inner.width.saturating_sub(2), 1),
+                &[(&source_header, Style::new().fg(Color::CYAN).bold())],
+            );
             visual_y += 1;
         }
 
@@ -91,7 +128,15 @@ impl InstrumentEditPane {
             if is_visible(global_row) && visual_y < max_y {
                 let is_sel = self.selected_row == global_row;
                 let display_name = self.sample_name.as_deref().unwrap_or("(no sample)");
-                render_label_value_row_buf(buf, content_x, visual_y, "Sample", display_name, Color::CYAN, is_sel);
+                render_label_value_row_buf(
+                    buf,
+                    content_x,
+                    visual_y,
+                    "Sample",
+                    display_name,
+                    Color::CYAN,
+                    is_sel,
+                );
                 visual_y += 1;
             }
             global_row += 1;
@@ -105,7 +150,10 @@ impl InstrumentEditPane {
                 } else {
                     Style::new().fg(Color::DARK_GRAY)
                 };
-                buf.draw_line(Rect::new(content_x + 2, visual_y, inner.width.saturating_sub(4), 1), &[("(no parameters)", style)]);
+                buf.draw_line(
+                    Rect::new(content_x + 2, visual_y, inner.width.saturating_sub(4), 1),
+                    &[("(no parameters)", style)],
+                );
                 visual_y += 1;
             }
             global_row += 1;
@@ -113,7 +161,15 @@ impl InstrumentEditPane {
             for param in &self.source_params {
                 if is_visible(global_row) && visual_y < max_y {
                     let is_sel = self.selected_row == global_row;
-                    render_param_row_buf(buf, content_x, visual_y, param, is_sel, self.editing && is_sel, &mut self.edit_input);
+                    render_param_row_buf(
+                        buf,
+                        content_x,
+                        visual_y,
+                        param,
+                        is_sel,
+                        self.editing && is_sel,
+                        &mut self.edit_input,
+                    );
                     visual_y += 1;
                 }
                 global_row += 1;
@@ -135,7 +191,10 @@ impl InstrumentEditPane {
                 } else {
                     Style::new().fg(Color::DARK_GRAY)
                 };
-                buf.draw_line(Rect::new(content_x + 2, visual_y, inner.width.saturating_sub(4), 1), &[("(no processing)", style)]);
+                buf.draw_line(
+                    Rect::new(content_x + 2, visual_y, inner.width.saturating_sub(4), 1),
+                    &[("(no processing)", style)],
+                );
                 visual_y += 1;
             }
             global_row += 1;
@@ -149,16 +208,27 @@ impl InstrumentEditPane {
 
                         // Filter header (non-selectable)
                         if (stage_start..stage_end).any(&is_visible) && visual_y < max_y {
-                            let filter_label = format!("FILTER: {}  (f: off, t: cycle)", f.filter_type.name());
-                            buf.draw_line(Rect::new(content_x, visual_y, inner.width.saturating_sub(2), 1),
-                                &[(&filter_label, Style::new().fg(Color::FILTER_COLOR).bold())]);
+                            let filter_label =
+                                format!("FILTER: {}  (f: off, t: cycle)", f.filter_type.name());
+                            buf.draw_line(
+                                Rect::new(content_x, visual_y, inner.width.saturating_sub(2), 1),
+                                &[(&filter_label, Style::new().fg(Color::FILTER_COLOR).bold())],
+                            );
                             visual_y += 1;
                         }
 
                         // Type row
                         if is_visible(global_row) && visual_y < max_y {
                             let is_sel = self.selected_row == global_row;
-                            render_label_value_row_buf(buf, content_x, visual_y, "Type", f.filter_type.name(), Color::FILTER_COLOR, is_sel);
+                            render_label_value_row_buf(
+                                buf,
+                                content_x,
+                                visual_y,
+                                "Type",
+                                f.filter_type.name(),
+                                Color::FILTER_COLOR,
+                                is_sel,
+                            );
                             visual_y += 1;
                         }
                         global_row += 1;
@@ -166,7 +236,18 @@ impl InstrumentEditPane {
                         // Cutoff row
                         if is_visible(global_row) && visual_y < max_y {
                             let is_sel = self.selected_row == global_row;
-                            render_value_row_buf(buf, content_x, visual_y, "Cutoff", f.cutoff.value, f.cutoff.min, f.cutoff.max, is_sel, self.editing && is_sel, &mut self.edit_input);
+                            render_value_row_buf(
+                                buf,
+                                content_x,
+                                visual_y,
+                                "Cutoff",
+                                f.cutoff.value,
+                                f.cutoff.min,
+                                f.cutoff.max,
+                                is_sel,
+                                self.editing && is_sel,
+                                &mut self.edit_input,
+                            );
                             visual_y += 1;
                         }
                         global_row += 1;
@@ -174,7 +255,18 @@ impl InstrumentEditPane {
                         // Resonance row
                         if is_visible(global_row) && visual_y < max_y {
                             let is_sel = self.selected_row == global_row;
-                            render_value_row_buf(buf, content_x, visual_y, "Resonance", f.resonance.value, f.resonance.min, f.resonance.max, is_sel, self.editing && is_sel, &mut self.edit_input);
+                            render_value_row_buf(
+                                buf,
+                                content_x,
+                                visual_y,
+                                "Resonance",
+                                f.resonance.value,
+                                f.resonance.min,
+                                f.resonance.max,
+                                is_sel,
+                                self.editing && is_sel,
+                                &mut self.edit_input,
+                            );
                             visual_y += 1;
                         }
                         global_row += 1;
@@ -183,7 +275,15 @@ impl InstrumentEditPane {
                         for param in &f.extra_params {
                             if is_visible(global_row) && visual_y < max_y {
                                 let is_sel = self.selected_row == global_row;
-                                render_param_row_buf(buf, content_x, visual_y, param, is_sel, self.editing && is_sel, &mut self.edit_input);
+                                render_param_row_buf(
+                                    buf,
+                                    content_x,
+                                    visual_y,
+                                    param,
+                                    is_sel,
+                                    self.editing && is_sel,
+                                    &mut self.edit_input,
+                                );
                                 visual_y += 1;
                             }
                             global_row += 1;
@@ -194,7 +294,15 @@ impl InstrumentEditPane {
                         if is_visible(global_row) && visual_y < max_y {
                             let is_sel = self.selected_row == global_row;
                             let eq_text = "EQ [ON]  (e: toggle)";
-                            render_label_value_row_buf(buf, content_x, visual_y, "EQ", "ON", Color::FILTER_COLOR, is_sel);
+                            render_label_value_row_buf(
+                                buf,
+                                content_x,
+                                visual_y,
+                                "EQ",
+                                "ON",
+                                Color::FILTER_COLOR,
+                                is_sel,
+                            );
                             let _ = eq_text; // suppress unused
                             visual_y += 1;
                         }
@@ -205,17 +313,26 @@ impl InstrumentEditPane {
                         if is_visible(global_row) && visual_y < max_y {
                             let is_sel = self.selected_row == global_row;
                             if is_sel {
-                                buf.set_cell(content_x, visual_y, '>', Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG).bold());
+                                buf.set_cell(
+                                    content_x,
+                                    visual_y,
+                                    '>',
+                                    Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG).bold(),
+                                );
                             }
 
                             let enabled_str = if effect.enabled { "ON " } else { "OFF" };
-                            let effect_text = format!("{:10} [{}]", effect.effect_type.name(), enabled_str);
+                            let effect_text =
+                                format!("{:10} [{}]", effect.effect_type.name(), enabled_str);
                             let effect_style = if is_sel {
                                 Style::new().fg(Color::FX_COLOR).bg(Color::SELECTION_BG)
                             } else {
                                 Style::new().fg(Color::FX_COLOR)
                             };
-                            buf.draw_line(Rect::new(content_x + 2, visual_y, 18, 1), &[(&effect_text, effect_style)]);
+                            buf.draw_line(
+                                Rect::new(content_x + 2, visual_y, 18, 1),
+                                &[(&effect_text, effect_style)],
+                            );
                             visual_y += 1;
                         }
                         global_row += 1;
@@ -224,7 +341,15 @@ impl InstrumentEditPane {
                         for param in &effect.params {
                             if is_visible(global_row) && visual_y < max_y {
                                 let is_sel = self.selected_row == global_row;
-                                render_param_row_buf(buf, content_x, visual_y, param, is_sel, self.editing && is_sel, &mut self.edit_input);
+                                render_param_row_buf(
+                                    buf,
+                                    content_x,
+                                    visual_y,
+                                    param,
+                                    is_sel,
+                                    self.editing && is_sel,
+                                    &mut self.edit_input,
+                                );
                                 visual_y += 1;
                             }
                             global_row += 1;
@@ -247,8 +372,10 @@ impl InstrumentEditPane {
         if (lfo_start..lfo_end).any(&is_visible) && visual_y < max_y {
             let lfo_status = if self.lfo.enabled { "ON" } else { "OFF" };
             let lfo_header = format!("LFO [{}]  (l: toggle, s: shape, m: target)", lfo_status);
-            buf.draw_line(Rect::new(content_x, visual_y, inner.width.saturating_sub(2), 1),
-                &[(&lfo_header, Style::new().fg(Color::PINK).bold())]);
+            buf.draw_line(
+                Rect::new(content_x, visual_y, inner.width.saturating_sub(2), 1),
+                &[(&lfo_header, Style::new().fg(Color::PINK).bold())],
+            );
             visual_y += 1;
         }
 
@@ -256,7 +383,15 @@ impl InstrumentEditPane {
         if is_visible(global_row) && visual_y < max_y {
             let is_sel = self.selected_row == global_row;
             let enabled_val = if self.lfo.enabled { "ON" } else { "OFF" };
-            render_label_value_row_buf(buf, content_x, visual_y, "Enabled", enabled_val, Color::PINK, is_sel);
+            render_label_value_row_buf(
+                buf,
+                content_x,
+                visual_y,
+                "Enabled",
+                enabled_val,
+                Color::PINK,
+                is_sel,
+            );
             visual_y += 1;
         }
         global_row += 1;
@@ -264,7 +399,18 @@ impl InstrumentEditPane {
         // Row 1: Rate
         if is_visible(global_row) && visual_y < max_y {
             let is_sel = self.selected_row == global_row;
-            render_value_row_buf(buf, content_x, visual_y, "Rate", self.lfo.rate, 0.1, 32.0, is_sel, self.editing && is_sel, &mut self.edit_input);
+            render_value_row_buf(
+                buf,
+                content_x,
+                visual_y,
+                "Rate",
+                self.lfo.rate,
+                0.1,
+                32.0,
+                is_sel,
+                self.editing && is_sel,
+                &mut self.edit_input,
+            );
             // Hz label
             let hz_style = if is_sel {
                 Style::new().fg(Color::DARK_GRAY).bg(Color::SELECTION_BG)
@@ -281,7 +427,18 @@ impl InstrumentEditPane {
         // Row 2: Depth
         if is_visible(global_row) && visual_y < max_y {
             let is_sel = self.selected_row == global_row;
-            render_value_row_buf(buf, content_x, visual_y, "Depth", self.lfo.depth, 0.0, 1.0, is_sel, self.editing && is_sel, &mut self.edit_input);
+            render_value_row_buf(
+                buf,
+                content_x,
+                visual_y,
+                "Depth",
+                self.lfo.depth,
+                0.0,
+                1.0,
+                is_sel,
+                self.editing && is_sel,
+                &mut self.edit_input,
+            );
             visual_y += 1;
         }
         global_row += 1;
@@ -290,7 +447,15 @@ impl InstrumentEditPane {
         if is_visible(global_row) && visual_y < max_y {
             let is_sel = self.selected_row == global_row;
             let shape_val = format!("{} → {}", self.lfo.shape.name(), self.lfo.target.name());
-            render_label_value_row_buf(buf, content_x, visual_y, "Shape/Dest", &shape_val, Color::PINK, is_sel);
+            render_label_value_row_buf(
+                buf,
+                content_x,
+                visual_y,
+                "Shape/Dest",
+                &shape_val,
+                Color::PINK,
+                is_sel,
+            );
             visual_y += 1;
         }
         global_row += 1;
@@ -307,8 +472,13 @@ impl InstrumentEditPane {
             let env_end = env_start + env_row_count;
 
             if (env_start..env_end).any(&is_visible) && visual_y < max_y {
-                buf.draw_line(Rect::new(content_x, visual_y, inner.width.saturating_sub(2), 1),
-                    &[("ENVELOPE (ADSR)  (p: poly, r: track)", Style::new().fg(Color::ENV_COLOR).bold())]);
+                buf.draw_line(
+                    Rect::new(content_x, visual_y, inner.width.saturating_sub(2), 1),
+                    &[(
+                        "ENVELOPE (ADSR)  (p: poly, r: track)",
+                        Style::new().fg(Color::ENV_COLOR).bold(),
+                    )],
+                );
                 visual_y += 1;
             }
 
@@ -330,10 +500,26 @@ impl InstrumentEditPane {
             ];
             let env_maxes = [5.0, 5.0, 1.0, 5.0];
 
-            for ((label, val), (default, max)) in env_labels.iter().zip(env_values.iter()).zip(env_defaults.iter().zip(env_maxes.iter())) {
+            for ((label, val), (default, max)) in env_labels
+                .iter()
+                .zip(env_values.iter())
+                .zip(env_defaults.iter().zip(env_maxes.iter()))
+            {
                 if is_visible(global_row) && visual_y < max_y {
                     let is_sel = self.selected_row == global_row;
-                    render_value_row_with_default_buf(buf, content_x, visual_y, label, *val, 0.0, *max, Some(*default), is_sel, self.editing && is_sel, &mut self.edit_input);
+                    render_value_row_with_default_buf(
+                        buf,
+                        content_x,
+                        visual_y,
+                        label,
+                        *val,
+                        0.0,
+                        *max,
+                        Some(*default),
+                        is_sel,
+                        self.editing && is_sel,
+                        &mut self.edit_input,
+                    );
                     visual_y += 1;
                 }
                 global_row += 1;
@@ -343,20 +529,27 @@ impl InstrumentEditPane {
         // Suppress unused variable warning
         let _ = global_row;
         let _ = visual_y;
-
     }
 }
 
-fn render_slider_with_default(value: f32, min: f32, max: f32, width: usize, default: Option<f32>) -> String {
+fn render_slider_with_default(
+    value: f32,
+    min: f32,
+    max: f32,
+    width: usize,
+    default: Option<f32>,
+) -> String {
     let normalized = (value - min) / (max - min);
     let pos = (normalized * width as f32) as usize;
     let pos = pos.min(width);
 
     // Calculate default marker position if provided
-    let default_pos = default.map(|d| {
-        let d_norm = (d - min) / (max - min);
-        (d_norm * width as f32) as usize
-    }).map(|p| p.min(width));
+    let default_pos = default
+        .map(|d| {
+            let d_norm = (d - min) / (max - min);
+            (d_norm * width as f32) as usize
+        })
+        .map(|p| p.min(width));
 
     let mut s = String::with_capacity(width + 2);
     s.push('[');
@@ -382,7 +575,8 @@ fn render_slider(value: f32, min: f32, max: f32, width: usize) -> String {
 
 fn render_param_row_buf(
     buf: &mut RenderBuf,
-    x: u16, y: u16,
+    x: u16,
+    y: u16,
     param: &Param,
     is_selected: bool,
     is_editing: bool,
@@ -390,7 +584,12 @@ fn render_param_row_buf(
 ) {
     // Selection indicator
     if is_selected {
-        buf.set_cell(x, y, '>', Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG).bold());
+        buf.set_cell(
+            x,
+            y,
+            '>',
+            Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG).bold(),
+        );
     }
 
     // Param name
@@ -444,23 +643,41 @@ fn render_param_row_buf(
 #[allow(clippy::too_many_arguments)]
 fn render_value_row_buf(
     buf: &mut RenderBuf,
-    x: u16, y: u16,
+    x: u16,
+    y: u16,
     name: &str,
-    value: f32, min: f32, max: f32,
+    value: f32,
+    min: f32,
+    max: f32,
     is_selected: bool,
     is_editing: bool,
     edit_input: &mut TextInput,
 ) {
-    render_value_row_with_default_buf(buf, x, y, name, value, min, max, None, is_selected, is_editing, edit_input);
+    render_value_row_with_default_buf(
+        buf,
+        x,
+        y,
+        name,
+        value,
+        min,
+        max,
+        None,
+        is_selected,
+        is_editing,
+        edit_input,
+    );
 }
 
 /// Render a value row with an optional default marker
 #[allow(clippy::too_many_arguments)]
 fn render_value_row_with_default_buf(
     buf: &mut RenderBuf,
-    x: u16, y: u16,
+    x: u16,
+    y: u16,
     name: &str,
-    value: f32, min: f32, max: f32,
+    value: f32,
+    min: f32,
+    max: f32,
     default: Option<f32>,
     is_selected: bool,
     is_editing: bool,
@@ -468,7 +685,12 @@ fn render_value_row_with_default_buf(
 ) {
     // Selection indicator
     if is_selected {
-        buf.set_cell(x, y, '>', Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG).bold());
+        buf.set_cell(
+            x,
+            y,
+            '>',
+            Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG).bold(),
+        );
     }
 
     // Label with optional default annotation
@@ -525,7 +747,8 @@ fn render_value_row_with_default_buf(
 /// Render a label-value row (no slider, for type/enabled/shape rows)
 fn render_label_value_row_buf(
     buf: &mut RenderBuf,
-    x: u16, y: u16,
+    x: u16,
+    y: u16,
     label: &str,
     value: &str,
     color: Color,
@@ -533,7 +756,12 @@ fn render_label_value_row_buf(
 ) {
     // Selection indicator
     if is_selected {
-        buf.set_cell(x, y, '>', Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG).bold());
+        buf.set_cell(
+            x,
+            y,
+            '>',
+            Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG).bold(),
+        );
     }
 
     let text = format!("{:12}  {}", label, value);

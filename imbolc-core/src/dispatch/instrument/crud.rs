@@ -1,10 +1,10 @@
-use imbolc_audio::AudioHandle;
-use imbolc_types::{DomainAction, InstrumentAction};
-use crate::state::AppState;
-use crate::state::automation::AutomationTarget;
-use crate::state::BufferId;
 use crate::action::{AudioEffect, DispatchResult, NavIntent, PaneId};
 use crate::dispatch::automation::record_automation_point;
+use crate::state::automation::AutomationTarget;
+use crate::state::AppState;
+use crate::state::BufferId;
+use imbolc_audio::AudioHandle;
+use imbolc_types::{DomainAction, InstrumentAction};
 
 fn reduce(state: &mut AppState, action: &InstrumentAction) {
     imbolc_types::reduce::reduce_action(
@@ -23,7 +23,9 @@ pub(super) fn handle_add(
     let mut result = DispatchResult::with_nav(NavIntent::SwitchTo(PaneId::InstrumentEdit));
     result.audio_effects.push(AudioEffect::RebuildInstruments);
     result.audio_effects.push(AudioEffect::UpdatePianoRoll);
-    result.audio_effects.push(AudioEffect::AddInstrumentRouting(next_id));
+    result
+        .audio_effects
+        .push(AudioEffect::AddInstrumentRouting(next_id));
     result
 }
 
@@ -66,14 +68,13 @@ pub(super) fn handle_delete(
     result.audio_effects.push(AudioEffect::RebuildInstruments);
     result.audio_effects.push(AudioEffect::UpdatePianoRoll);
     result.audio_effects.push(AudioEffect::UpdateAutomation);
-    result.audio_effects.push(AudioEffect::DeleteInstrumentRouting(inst_id));
+    result
+        .audio_effects
+        .push(AudioEffect::DeleteInstrumentRouting(inst_id));
     result
 }
 
-pub(super) fn handle_edit(
-    state: &mut AppState,
-    id: crate::state::InstrumentId,
-) -> DispatchResult {
+pub(super) fn handle_edit(state: &mut AppState, id: crate::state::InstrumentId) -> DispatchResult {
     reduce(state, &InstrumentAction::Edit(id));
     DispatchResult::with_nav(NavIntent::SwitchTo(PaneId::InstrumentEdit))
 }
@@ -85,9 +86,14 @@ pub(super) fn handle_update(
     // Capture old values for automation recording before applying
     let old_values = if state.recording.automation_recording && state.audio.playing {
         state.instruments.instrument(update.id).map(|inst| {
-            (inst.modulation.lfo.rate, inst.modulation.lfo.depth,
-             inst.modulation.amp_envelope.attack, inst.modulation.amp_envelope.decay,
-             inst.modulation.amp_envelope.sustain, inst.modulation.amp_envelope.release)
+            (
+                inst.modulation.lfo.rate,
+                inst.modulation.lfo.depth,
+                inst.modulation.amp_envelope.attack,
+                inst.modulation.amp_envelope.decay,
+                inst.modulation.amp_envelope.sustain,
+                inst.modulation.amp_envelope.release,
+            )
         })
     } else {
         None
@@ -96,7 +102,9 @@ pub(super) fn handle_update(
     reduce(state, &InstrumentAction::Update(Box::new(update.clone())));
 
     // Record automation for changed LFO/envelope params
-    if let Some((old_lfo_rate, old_lfo_depth, old_attack, old_decay, old_sustain, old_release)) = old_values {
+    if let Some((old_lfo_rate, old_lfo_depth, old_attack, old_decay, old_sustain, old_release)) =
+        old_values
+    {
         let id = update.id;
         let threshold = 0.001;
 
@@ -109,7 +117,8 @@ pub(super) fn handle_update(
             record_automation_point(state, AutomationTarget::lfo_depth(id), normalized);
         }
         if (update.amp_envelope.attack - old_attack).abs() > threshold {
-            let normalized = AutomationTarget::attack(id).normalize_value(update.amp_envelope.attack);
+            let normalized =
+                AutomationTarget::attack(id).normalize_value(update.amp_envelope.attack);
             record_automation_point(state, AutomationTarget::attack(id), normalized);
         }
         if (update.amp_envelope.decay - old_decay).abs() > threshold {
@@ -117,18 +126,22 @@ pub(super) fn handle_update(
             record_automation_point(state, AutomationTarget::decay(id), normalized);
         }
         if (update.amp_envelope.sustain - old_sustain).abs() > threshold {
-            let normalized = AutomationTarget::sustain(id).normalize_value(update.amp_envelope.sustain);
+            let normalized =
+                AutomationTarget::sustain(id).normalize_value(update.amp_envelope.sustain);
             record_automation_point(state, AutomationTarget::sustain(id), normalized);
         }
         if (update.amp_envelope.release - old_release).abs() > threshold {
-            let normalized = AutomationTarget::release(id).normalize_value(update.amp_envelope.release);
+            let normalized =
+                AutomationTarget::release(id).normalize_value(update.amp_envelope.release);
             record_automation_point(state, AutomationTarget::release(id), normalized);
         }
     }
 
     let mut result = DispatchResult::none();
     result.audio_effects.push(AudioEffect::RebuildInstruments);
-    result.audio_effects.push(AudioEffect::RebuildRoutingForInstrument(update.id));
+    result
+        .audio_effects
+        .push(AudioEffect::RebuildRoutingForInstrument(update.id));
     result
 }
 
@@ -198,16 +211,28 @@ mod tests {
         state.audio.playhead = 200;
 
         let mut update = default_update(&state, id);
-        update.amp_envelope.attack = 0.5;  // changed from default
+        update.amp_envelope.attack = 0.5; // changed from default
         update.amp_envelope.release = 1.0; // changed from default
         handle_update(&mut state, &update);
 
-        let attack_lane = state.session.automation.lane_for_target(&AutomationTarget::attack(id));
-        assert!(attack_lane.is_some(), "EnvelopeAttack lane should be created");
+        let attack_lane = state
+            .session
+            .automation
+            .lane_for_target(&AutomationTarget::attack(id));
+        assert!(
+            attack_lane.is_some(),
+            "EnvelopeAttack lane should be created"
+        );
         assert_eq!(attack_lane.unwrap().points.len(), 1);
 
-        let release_lane = state.session.automation.lane_for_target(&AutomationTarget::release(id));
-        assert!(release_lane.is_some(), "EnvelopeRelease lane should be created");
+        let release_lane = state
+            .session
+            .automation
+            .lane_for_target(&AutomationTarget::release(id));
+        assert!(
+            release_lane.is_some(),
+            "EnvelopeRelease lane should be created"
+        );
         assert_eq!(release_lane.unwrap().points.len(), 1);
     }
 
@@ -229,8 +254,16 @@ mod tests {
         assert!((inst.modulation.amp_envelope.attack - 0.5).abs() < f32::EPSILON);
 
         // But no automation lanes created
-        assert!(state.session.automation.lane_for_target(&AutomationTarget::lfo_rate(id)).is_none());
-        assert!(state.session.automation.lane_for_target(&AutomationTarget::attack(id)).is_none());
+        assert!(state
+            .session
+            .automation
+            .lane_for_target(&AutomationTarget::lfo_rate(id))
+            .is_none());
+        assert!(state
+            .session
+            .automation
+            .lane_for_target(&AutomationTarget::attack(id))
+            .is_none());
     }
 
     #[test]

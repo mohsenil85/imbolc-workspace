@@ -9,7 +9,7 @@ use crate::audio::devices::{self, AudioDevice, BufferSize};
 use crate::audio::ServerStatus;
 use crate::state::AppState;
 use crate::ui::action_id::ActionId;
-use crate::ui::{Rect, RenderBuf, Action, InputEvent, Keymap, Pane};
+use crate::ui::{Action, InputEvent, Keymap, Pane, Rect, RenderBuf};
 
 pub(super) struct DiagnosticCheck {
     pub label: String,
@@ -22,6 +22,7 @@ enum ServerPaneFocus {
     OutputDevice,
     InputDevice,
     BufferSize,
+    ScsynthArgs,
 }
 
 pub struct ServerPane {
@@ -35,6 +36,9 @@ pub struct ServerPane {
     selected_buffer_size: usize, // index into BufferSize::ALL
     sample_rate: u32,
     focus: ServerPaneFocus,
+    scsynth_args: String,
+    editing_scsynth_args: bool,
+    scsynth_args_edit: String,
     device_config_dirty: bool,
     log_lines: Vec<String>,
     log_path: PathBuf,
@@ -48,10 +52,13 @@ impl ServerPane {
 
         let selected_output = match &config.output_device {
             Some(name) => {
-                let outputs: Vec<_> = devices.iter()
+                let outputs: Vec<_> = devices
+                    .iter()
                     .filter(|d| d.output_channels.is_some_and(|c| c > 0))
                     .collect();
-                outputs.iter().position(|d| d.name == *name)
+                outputs
+                    .iter()
+                    .position(|d| d.name == *name)
                     .map(|i| i + 1)
                     .unwrap_or(0)
             }
@@ -59,10 +66,13 @@ impl ServerPane {
         };
         let selected_input = match &config.input_device {
             Some(name) => {
-                let inputs: Vec<_> = devices.iter()
+                let inputs: Vec<_> = devices
+                    .iter()
                     .filter(|d| d.input_channels.is_some_and(|c| c > 0))
                     .collect();
-                inputs.iter().position(|d| d.name == *name)
+                inputs
+                    .iter()
+                    .position(|d| d.name == *name)
                     .map(|i| i + 1)
                     .unwrap_or(0)
             }
@@ -91,6 +101,9 @@ impl ServerPane {
             selected_buffer_size,
             sample_rate: config.sample_rate,
             focus: ServerPaneFocus::Controls,
+            scsynth_args: config.scsynth_args,
+            editing_scsynth_args: false,
+            scsynth_args_edit: String::new(),
             device_config_dirty: false,
             log_lines: Vec::new(),
             log_path,
@@ -134,18 +147,23 @@ impl ServerPane {
         if self.selected_output == 0 {
             return None;
         }
-        self.output_devices().get(self.selected_output - 1).map(|d| d.name.clone())
+        self.output_devices()
+            .get(self.selected_output - 1)
+            .map(|d| d.name.clone())
     }
 
     pub fn selected_input_device(&self) -> Option<String> {
         if self.selected_input == 0 {
             return None;
         }
-        self.input_devices().get(self.selected_input - 1).map(|d| d.name.clone())
+        self.input_devices()
+            .get(self.selected_input - 1)
+            .map(|d| d.name.clone())
     }
 
     pub fn selected_buffer_size(&self) -> BufferSize {
-        BufferSize::ALL.get(self.selected_buffer_size)
+        BufferSize::ALL
+            .get(self.selected_buffer_size)
             .copied()
             .unwrap_or_default()
     }
@@ -154,14 +172,24 @@ impl ServerPane {
         self.sample_rate
     }
 
+    pub fn scsynth_args(&self) -> String {
+        self.scsynth_args.clone()
+    }
+
+    pub fn is_editing_scsynth_args(&self) -> bool {
+        self.editing_scsynth_args
+    }
+
     fn output_devices(&self) -> Vec<&AudioDevice> {
-        self.devices.iter()
+        self.devices
+            .iter()
             .filter(|d| d.output_channels.is_some_and(|c| c > 0))
             .collect()
     }
 
     fn input_devices(&self) -> Vec<&AudioDevice> {
-        self.devices.iter()
+        self.devices
+            .iter()
             .filter(|d| d.input_channels.is_some_and(|c| c > 0))
             .collect()
     }
@@ -173,14 +201,18 @@ impl ServerPane {
         self.devices = devices::enumerate_devices();
 
         self.selected_output = match &old_output {
-            Some(name) => self.output_devices().iter()
+            Some(name) => self
+                .output_devices()
+                .iter()
                 .position(|d| d.name == *name)
                 .map(|i| i + 1)
                 .unwrap_or(0),
             None => 0,
         };
         self.selected_input = match &old_input {
-            Some(name) => self.input_devices().iter()
+            Some(name) => self
+                .input_devices()
+                .iter()
                 .position(|d| d.name == *name)
                 .map(|i| i + 1)
                 .unwrap_or(0),
@@ -237,7 +269,10 @@ impl ServerPane {
         let custom_count = Self::count_scsyndef_files(&custom_dir);
         let total = builtin_count + custom_count;
         self.diagnostics.push(DiagnosticCheck {
-            label: format!("Synthdefs ({} built-in, {} custom)", builtin_count, custom_count),
+            label: format!(
+                "Synthdefs ({} built-in, {} custom)",
+                builtin_count, custom_count
+            ),
             passed: total > 0,
         });
 
@@ -285,11 +320,7 @@ impl ServerPane {
             .map(|entries| {
                 entries
                     .filter_map(|e| e.ok())
-                    .filter(|e| {
-                        e.path()
-                            .extension()
-                            .is_some_and(|ext| ext == "scsyndef")
-                    })
+                    .filter(|e| e.path().extension().is_some_and(|ext| ext == "scsyndef"))
                     .count()
             })
             .unwrap_or(0)
@@ -300,7 +331,8 @@ impl ServerPane {
             ServerPaneFocus::Controls => ServerPaneFocus::OutputDevice,
             ServerPaneFocus::OutputDevice => ServerPaneFocus::InputDevice,
             ServerPaneFocus::InputDevice => ServerPaneFocus::BufferSize,
-            ServerPaneFocus::BufferSize => ServerPaneFocus::Controls,
+            ServerPaneFocus::BufferSize => ServerPaneFocus::ScsynthArgs,
+            ServerPaneFocus::ScsynthArgs => ServerPaneFocus::Controls,
         };
     }
 
@@ -310,6 +342,7 @@ impl ServerPane {
             output_device: self.selected_output_device(),
             buffer_size: self.selected_buffer_size(),
             sample_rate: self.sample_rate,
+            scsynth_args: self.scsynth_args.clone(),
         };
         devices::save_device_config(&config);
     }

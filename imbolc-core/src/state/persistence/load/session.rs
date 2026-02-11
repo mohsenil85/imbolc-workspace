@@ -1,12 +1,16 @@
 use std::path::PathBuf;
 
-use rusqlite::{params, Connection, Result as SqlResult, OptionalExtension};
+use rusqlite::{params, Connection, OptionalExtension, Result as SqlResult};
 
+use super::decoders::*;
 use crate::state::instrument_state::InstrumentState;
 use crate::state::session::SessionState;
-use super::decoders::*;
 
-pub(super) fn load_session(conn: &Connection, session: &mut SessionState, instruments: &mut InstrumentState) -> SqlResult<()> {
+pub(super) fn load_session(
+    conn: &Connection,
+    session: &mut SessionState,
+    instruments: &mut InstrumentState,
+) -> SqlResult<()> {
     let row = conn.query_row(
         "SELECT bpm, time_sig_num, time_sig_denom, key, scale, tuning_a4, snap,
                 next_instrument_id, next_sampler_buffer_id, selected_instrument, next_layer_group_id,
@@ -58,11 +62,9 @@ pub(super) fn load_session(conn: &Connection, session: &mut SessionState, instru
 pub(super) fn load_theme(conn: &Connection, session: &mut SessionState) -> SqlResult<()> {
     use imbolc_types::state::ThemeColor;
 
-    let result: Option<String> = conn.query_row(
-        "SELECT name FROM theme WHERE id = 1",
-        [],
-        |row| row.get(0),
-    ).optional()?;
+    let result: Option<String> = conn
+        .query_row("SELECT name FROM theme WHERE id = 1", [], |row| row.get(0))
+        .optional()?;
 
     if result.is_none() {
         return Ok(()); // No theme row, use default
@@ -110,7 +112,11 @@ pub(super) fn load_theme(conn: &Connection, session: &mut SessionState) -> SqlRe
     )?;
 
     let (name, v) = row;
-    let c = |i: usize| ThemeColor { r: v[i], g: v[i + 1], b: v[i + 2] };
+    let c = |i: usize| ThemeColor {
+        r: v[i],
+        g: v[i + 1],
+        b: v[i + 2],
+    };
 
     session.theme.name = name;
     session.theme.background = c(0);
@@ -141,7 +147,10 @@ pub(super) fn load_theme(conn: &Connection, session: &mut SessionState) -> SqlRe
     Ok(())
 }
 
-pub(super) fn load_musical_settings(conn: &Connection, session: &mut SessionState) -> SqlResult<()> {
+pub(super) fn load_musical_settings(
+    conn: &Connection,
+    session: &mut SessionState,
+) -> SqlResult<()> {
     let result = conn.query_row(
         "SELECT bpm, time_sig_num, time_sig_denom, ticks_per_beat, loop_start, loop_end, looping, swing_amount
          FROM musical_settings WHERE id = 1",
@@ -181,12 +190,16 @@ pub(super) fn load_piano_roll(conn: &Connection, session: &mut SessionState) -> 
     session.piano_roll.track_order.clear();
 
     // Load tracks ordered by position
-    let mut track_stmt = conn.prepare(
-        "SELECT instrument_id, polyphonic FROM piano_roll_tracks ORDER BY position"
-    )?;
-    let tracks: Vec<(imbolc_types::InstrumentId, bool)> = track_stmt.query_map([], |row| {
-        Ok((imbolc_types::InstrumentId::new(row.get::<_, u32>(0)?), row.get::<_, i32>(1)? != 0))
-    })?.collect::<SqlResult<_>>()?;
+    let mut track_stmt =
+        conn.prepare("SELECT instrument_id, polyphonic FROM piano_roll_tracks ORDER BY position")?;
+    let tracks: Vec<(imbolc_types::InstrumentId, bool)> = track_stmt
+        .query_map([], |row| {
+            Ok((
+                imbolc_types::InstrumentId::new(row.get::<_, u32>(0)?),
+                row.get::<_, i32>(1)? != 0,
+            ))
+        })?
+        .collect::<SqlResult<_>>()?;
 
     for (inst_id, polyphonic) in &tracks {
         session.piano_roll.add_track(*inst_id);
@@ -198,20 +211,22 @@ pub(super) fn load_piano_roll(conn: &Connection, session: &mut SessionState) -> 
     // Load notes
     let mut note_stmt = conn.prepare(
         "SELECT track_instrument_id, tick, duration, pitch, velocity, probability
-         FROM piano_roll_notes ORDER BY track_instrument_id, tick"
+         FROM piano_roll_notes ORDER BY track_instrument_id, tick",
     )?;
-    let notes: Vec<(imbolc_types::InstrumentId, Note)> = note_stmt.query_map([], |row| {
-        Ok((
-            imbolc_types::InstrumentId::new(row.get::<_, u32>(0)?),
-            Note {
-                tick: row.get::<_, u32>(1)?,
-                duration: row.get::<_, u32>(2)?,
-                pitch: row.get::<_, i32>(3)? as u8,
-                velocity: row.get::<_, i32>(4)? as u8,
-                probability: row.get::<_, f32>(5)?,
-            },
-        ))
-    })?.collect::<SqlResult<_>>()?;
+    let notes: Vec<(imbolc_types::InstrumentId, Note)> = note_stmt
+        .query_map([], |row| {
+            Ok((
+                imbolc_types::InstrumentId::new(row.get::<_, u32>(0)?),
+                Note {
+                    tick: row.get::<_, u32>(1)?,
+                    duration: row.get::<_, u32>(2)?,
+                    pitch: row.get::<_, i32>(3)? as u8,
+                    velocity: row.get::<_, i32>(4)? as u8,
+                    probability: row.get::<_, f32>(5)?,
+                },
+            ))
+        })?
+        .collect::<SqlResult<_>>()?;
 
     for (inst_id, note) in notes {
         if let Some(track) = session.piano_roll.tracks.get_mut(&inst_id) {
@@ -222,28 +237,36 @@ pub(super) fn load_piano_roll(conn: &Connection, session: &mut SessionState) -> 
     Ok(())
 }
 
-pub(super) fn load_custom_synthdefs(conn: &Connection, session: &mut SessionState) -> SqlResult<()> {
+pub(super) fn load_custom_synthdefs(
+    conn: &Connection,
+    session: &mut SessionState,
+) -> SqlResult<()> {
     use crate::state::custom_synthdef::{CustomSynthDef, CustomSynthDefRegistry, ParamSpec};
 
     let mut registry = CustomSynthDefRegistry::new();
 
-    let mut stmt = conn.prepare("SELECT id, name, synthdef_name, source_path FROM custom_synthdefs ORDER BY id")?;
-    let synthdefs: Vec<(u32, String, String, String)> = stmt.query_map([], |row| {
-        Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
-    })?.collect::<SqlResult<_>>()?;
+    let mut stmt = conn
+        .prepare("SELECT id, name, synthdef_name, source_path FROM custom_synthdefs ORDER BY id")?;
+    let synthdefs: Vec<(u32, String, String, String)> = stmt
+        .query_map([], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+        })?
+        .collect::<SqlResult<_>>()?;
 
     for (id, name, synthdef_name, source_path) in synthdefs {
         let mut param_stmt = conn.prepare(
             "SELECT name, default_val, min_val, max_val FROM custom_synthdef_params WHERE synthdef_id = ?1 ORDER BY position"
         )?;
-        let params: Vec<ParamSpec> = param_stmt.query_map(params![id], |row| {
-            Ok(ParamSpec {
-                name: row.get(0)?,
-                default: row.get(1)?,
-                min: row.get(2)?,
-                max: row.get(3)?,
-            })
-        })?.collect::<SqlResult<_>>()?;
+        let params: Vec<ParamSpec> = param_stmt
+            .query_map(params![id], |row| {
+                Ok(ParamSpec {
+                    name: row.get(0)?,
+                    default: row.get(1)?,
+                    min: row.get(2)?,
+                    max: row.get(3)?,
+                })
+            })?
+            .collect::<SqlResult<_>>()?;
 
         registry.add(CustomSynthDef {
             id: imbolc_types::CustomSynthDefId::new(id),
@@ -259,14 +282,17 @@ pub(super) fn load_custom_synthdefs(conn: &Connection, session: &mut SessionStat
 }
 
 pub(super) fn load_vst_plugins(conn: &Connection, session: &mut SessionState) -> SqlResult<()> {
-    use crate::state::vst_plugin::{VstPlugin, VstParamSpec, VstPluginKind, VstPluginRegistry};
+    use crate::state::vst_plugin::{VstParamSpec, VstPlugin, VstPluginKind, VstPluginRegistry};
 
     let mut registry = VstPluginRegistry::new();
 
-    let mut stmt = conn.prepare("SELECT id, name, plugin_path, kind FROM vst_plugins ORDER BY id")?;
-    let plugins: Vec<(u32, String, String, String)> = stmt.query_map([], |row| {
-        Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
-    })?.collect::<SqlResult<_>>()?;
+    let mut stmt =
+        conn.prepare("SELECT id, name, plugin_path, kind FROM vst_plugins ORDER BY id")?;
+    let plugins: Vec<(u32, String, String, String)> = stmt
+        .query_map([], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+        })?
+        .collect::<SqlResult<_>>()?;
 
     for (id, name, plugin_path, kind_str) in plugins {
         let kind = match kind_str.as_str() {
@@ -277,14 +303,16 @@ pub(super) fn load_vst_plugins(conn: &Connection, session: &mut SessionState) ->
         let mut param_stmt = conn.prepare(
             "SELECT param_index, name, default_val, label FROM vst_plugin_params WHERE plugin_id = ?1 ORDER BY position"
         )?;
-        let params: Vec<VstParamSpec> = param_stmt.query_map(params![id], |row| {
-            Ok(VstParamSpec {
-                index: row.get(0)?,
-                name: row.get(1)?,
-                default: row.get(2)?,
-                label: row.get(3)?,
-            })
-        })?.collect::<SqlResult<_>>()?;
+        let params: Vec<VstParamSpec> = param_stmt
+            .query_map(params![id], |row| {
+                Ok(VstParamSpec {
+                    index: row.get(0)?,
+                    name: row.get(1)?,
+                    default: row.get(2)?,
+                    label: row.get(3)?,
+                })
+            })?
+            .collect::<SqlResult<_>>()?;
 
         registry.add(VstPlugin {
             id: imbolc_types::VstPluginId::new(id),

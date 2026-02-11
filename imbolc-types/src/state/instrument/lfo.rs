@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use crate::ParameterTarget;
 
@@ -31,7 +31,12 @@ impl LfoShape {
 
     #[allow(dead_code)]
     pub fn all() -> Vec<LfoShape> {
-        vec![LfoShape::Sine, LfoShape::Square, LfoShape::Saw, LfoShape::Triangle]
+        vec![
+            LfoShape::Sine,
+            LfoShape::Square,
+            LfoShape::Saw,
+            LfoShape::Triangle,
+        ]
     }
 
     pub fn next(&self) -> LfoShape {

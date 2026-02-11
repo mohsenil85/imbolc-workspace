@@ -13,17 +13,17 @@
 
 mod instrument;
 pub use instrument::initialize_instrument_from_registries;
-mod mixer;
-mod piano_roll;
 mod automation;
 mod bus;
+mod click;
+mod mixer;
+mod piano_roll;
 mod session;
 mod vst_param;
-mod click;
 
 use crate::{
-    DomainAction, InstrumentState, SessionState,
-    AutomationAction, PianoRollAction, SessionAction, VstParamAction,
+    AutomationAction, DomainAction, InstrumentState, PianoRollAction, SessionAction, SessionState,
+    VstParamAction,
 };
 
 /// Check whether an action can be incrementally reduced on the audio thread.
@@ -32,8 +32,7 @@ use crate::{
 /// state not available on the audio thread).
 pub fn is_reducible(action: &DomainAction) -> bool {
     match action {
-        DomainAction::Midi(_)
-        | DomainAction::Tuner(_) | DomainAction::AudioFeedback(_) => true,
+        DomainAction::Midi(_) | DomainAction::Tuner(_) | DomainAction::AudioFeedback(_) => true,
 
         DomainAction::Undo | DomainAction::Redo => false,
 
@@ -43,27 +42,29 @@ pub fn is_reducible(action: &DomainAction) -> bool {
         DomainAction::LayerGroup(_) => true,
         DomainAction::Click(_) => true,
 
-        DomainAction::PianoRoll(a) => !matches!(a,
+        DomainAction::PianoRoll(a) => !matches!(
+            a,
             PianoRollAction::RenderToWav(_)
-            | PianoRollAction::BounceToWav
-            | PianoRollAction::ExportStems
-            | PianoRollAction::CancelExport
+                | PianoRollAction::BounceToWav
+                | PianoRollAction::ExportStems
+                | PianoRollAction::CancelExport
         ),
         DomainAction::Automation(a) => !matches!(a, AutomationAction::ToggleRecording),
-        DomainAction::VstParam(a) => !matches!(a,
-            VstParamAction::DiscoverParams(_, _)
-            | VstParamAction::SaveState(_, _)
+        DomainAction::VstParam(a) => !matches!(
+            a,
+            VstParamAction::DiscoverParams(_, _) | VstParamAction::SaveState(_, _)
         ),
-        DomainAction::Session(a) => !matches!(a,
+        DomainAction::Session(a) => !matches!(
+            a,
             SessionAction::NewProject
-            | SessionAction::Save
-            | SessionAction::SaveAs(_)
-            | SessionAction::Load
-            | SessionAction::LoadFrom(_)
-            | SessionAction::ImportCustomSynthDef(_)
-            | SessionAction::CreateCheckpoint(_)
-            | SessionAction::RestoreCheckpoint(_)
-            | SessionAction::DeleteCheckpoint(_)
+                | SessionAction::Save
+                | SessionAction::SaveAs(_)
+                | SessionAction::Load
+                | SessionAction::LoadFrom(_)
+                | SessionAction::ImportCustomSynthDef(_)
+                | SessionAction::CreateCheckpoint(_)
+                | SessionAction::RestoreCheckpoint(_)
+                | SessionAction::DeleteCheckpoint(_)
         ),
 
         DomainAction::Arrangement(_) => false,
@@ -83,8 +84,7 @@ pub fn reduce_action(
 ) -> bool {
     match action {
         // Actions that don't affect audio-thread state (no-op, handled)
-        DomainAction::Midi(_)
-        | DomainAction::Tuner(_) | DomainAction::AudioFeedback(_) => true,
+        DomainAction::Midi(_) | DomainAction::Tuner(_) | DomainAction::AudioFeedback(_) => true,
 
         // Undo/Redo: not reducible (wholesale state replacement)
         DomainAction::Undo | DomainAction::Redo => false,
@@ -97,7 +97,10 @@ pub fn reduce_action(
         DomainAction::LayerGroup(a) => bus::reduce_layer_group(a, session),
         DomainAction::VstParam(a) => vst_param::reduce(a, instruments, session),
         DomainAction::Session(a) => session::reduce(a, session, instruments),
-        DomainAction::Click(a) => { click::reduce(a, session); true }
+        DomainAction::Click(a) => {
+            click::reduce(a, session);
+            true
+        }
 
         DomainAction::Arrangement(_) => false,
         DomainAction::Sequencer(_) => false,

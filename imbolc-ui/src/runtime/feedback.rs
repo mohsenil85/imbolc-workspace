@@ -86,10 +86,8 @@ impl AppRuntime {
                                         }
                                     }
                                     for effect in inst.effects() {
-                                        if let (
-                                            state::EffectType::Vst(_),
-                                            Some(ref path),
-                                        ) = (&effect.effect_type, &effect.vst_state_path)
+                                        if let (state::EffectType::Vst(_), Some(ref path)) =
+                                            (&effect.effect_type, &effect.vst_state_path)
                                         {
                                             restores.push((
                                                 inst.id,
@@ -113,18 +111,14 @@ impl AppRuntime {
                             self.app_frame
                                 .status_bar
                                 .push("Project loaded", StatusLevel::Info);
-                            if let Some(server) =
-                                self.panes.get_pane_mut::<ServerPane>("server")
-                            {
+                            if let Some(server) = self.panes.get_pane_mut::<ServerPane>("server") {
                                 server.set_status(self.audio.status(), "Project loaded");
                             }
                         }
                         Err(e) => {
                             let msg = format!("Load failed: {}", e);
                             self.app_frame.status_bar.push(&msg, StatusLevel::Error);
-                            if let Some(server) =
-                                self.panes.get_pane_mut::<ServerPane>("server")
-                            {
+                            if let Some(server) = self.panes.get_pane_mut::<ServerPane>("server") {
                                 server.set_status(self.audio.status(), &msg);
                             }
                         }
@@ -142,8 +136,7 @@ impl AppRuntime {
                                 .session
                                 .custom_synthdefs
                                 .add(custom);
-                            self.pending_audio_effects
-                                .push(AudioEffect::RebuildSession);
+                            self.pending_audio_effects.push(AudioEffect::RebuildSession);
                             self.needs_full_sync = true;
 
                             if self.audio.is_running() {
@@ -152,24 +145,16 @@ impl AppRuntime {
                                 {
                                     server.set_status(
                                         self.audio.status(),
-                                        &format!(
-                                            "Loading custom synthdef: {}",
-                                            synthdef_name
-                                        ),
+                                        &format!("Loading custom synthdef: {}", synthdef_name),
                                     );
                                 }
-                                if let Err(e) =
-                                    self.audio.load_synthdef_file(&scsyndef_path)
-                                {
+                                if let Err(e) = self.audio.load_synthdef_file(&scsyndef_path) {
                                     if let Some(server) =
                                         self.panes.get_pane_mut::<ServerPane>("server")
                                     {
                                         server.set_status(
                                             self.audio.status(),
-                                            &format!(
-                                                "Failed to load synthdef: {}",
-                                                e
-                                            ),
+                                            &format!("Failed to load synthdef: {}", e),
                                         );
                                     }
                                 }
@@ -178,17 +163,12 @@ impl AppRuntime {
                             {
                                 server.set_status(
                                     self.audio.status(),
-                                    &format!(
-                                        "Imported custom synthdef: {}",
-                                        synthdef_name
-                                    ),
+                                    &format!("Imported custom synthdef: {}", synthdef_name),
                                 );
                             }
                         }
                         Err(e) => {
-                            if let Some(server) =
-                                self.panes.get_pane_mut::<ServerPane>("server")
-                            {
+                            if let Some(server) = self.panes.get_pane_mut::<ServerPane>("server") {
                                 server.set_status(
                                     self.audio.status(),
                                     &format!("Import error: {}", e),

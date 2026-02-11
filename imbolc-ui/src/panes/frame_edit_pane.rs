@@ -4,8 +4,8 @@ use crate::state::music::{Key, Scale};
 use crate::state::{AppState, MusicalSettings};
 use crate::ui::action_id::{ActionId, FrameEditActionId, ModeActionId};
 use crate::ui::layout_helpers::center_rect;
-use crate::ui::{Rect, RenderBuf, Action, Color, InputEvent, Keymap, Pane, SessionAction, Style};
 use crate::ui::widgets::TextInput;
+use crate::ui::{Action, Color, InputEvent, Keymap, Pane, Rect, RenderBuf, SessionAction, Style};
 
 /// Fields editable in the frame editor
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -18,7 +18,14 @@ enum Field {
     Snap,
 }
 
-const FIELDS: [Field; 6] = [Field::Bpm, Field::TimeSig, Field::Tuning, Field::Key, Field::Scale, Field::Snap];
+const FIELDS: [Field; 6] = [
+    Field::Bpm,
+    Field::TimeSig,
+    Field::Tuning,
+    Field::Key,
+    Field::Scale,
+    Field::Snap,
+];
 
 pub struct FrameEditPane {
     keymap: Keymap,
@@ -55,7 +62,10 @@ impl FrameEditPane {
     }
 
     fn cycle_key(&mut self, forward: bool) {
-        let idx = Key::ALL.iter().position(|k| *k == self.settings.key).unwrap_or(0);
+        let idx = Key::ALL
+            .iter()
+            .position(|k| *k == self.settings.key)
+            .unwrap_or(0);
         self.settings.key = if forward {
             Key::ALL[(idx + 1) % 12]
         } else {
@@ -64,7 +74,10 @@ impl FrameEditPane {
     }
 
     fn cycle_scale(&mut self, forward: bool) {
-        let idx = Scale::ALL.iter().position(|s| *s == self.settings.scale).unwrap_or(0);
+        let idx = Scale::ALL
+            .iter()
+            .position(|s| *s == self.settings.scale)
+            .unwrap_or(0);
         let len = Scale::ALL.len();
         self.settings.scale = if forward {
             Scale::ALL[(idx + 1) % len]
@@ -76,7 +89,10 @@ impl FrameEditPane {
     const TIME_SIGS: [(u8, u8); 5] = [(4, 4), (3, 4), (6, 8), (5, 4), (7, 8)];
 
     fn cycle_time_sig(&mut self, forward: bool) {
-        let idx = Self::TIME_SIGS.iter().position(|ts| *ts == self.settings.time_signature).unwrap_or(0);
+        let idx = Self::TIME_SIGS
+            .iter()
+            .position(|ts| *ts == self.settings.time_signature)
+            .unwrap_or(0);
         let len = Self::TIME_SIGS.len();
         self.settings.time_signature = if forward {
             Self::TIME_SIGS[(idx + 1) % len]
@@ -116,11 +132,20 @@ impl FrameEditPane {
     fn field_value(&self, field: Field) -> String {
         match field {
             Field::Bpm => format!("{}", self.settings.bpm),
-            Field::TimeSig => format!("{}/{}", self.settings.time_signature.0, self.settings.time_signature.1),
+            Field::TimeSig => format!(
+                "{}/{}",
+                self.settings.time_signature.0, self.settings.time_signature.1
+            ),
             Field::Tuning => format!("{:.1} Hz", self.settings.tuning_a4),
             Field::Key => self.settings.key.name().to_string(),
             Field::Scale => self.settings.scale.name().to_string(),
-            Field::Snap => if self.settings.snap { "ON".into() } else { "OFF".into() },
+            Field::Snap => {
+                if self.settings.snap {
+                    "ON".into()
+                } else {
+                    "OFF".into()
+                }
+            }
         }
     }
 
@@ -140,44 +165,49 @@ impl Pane for FrameEditPane {
         "frame_edit"
     }
 
-    fn handle_action(&mut self, action: ActionId, _event: &InputEvent, _state: &AppState) -> Action {
+    fn handle_action(
+        &mut self,
+        action: ActionId,
+        _event: &InputEvent,
+        _state: &AppState,
+    ) -> Action {
         if let ActionId::Mode(mode_action) = action {
             return match mode_action {
-            // Text edit layer actions
-            ModeActionId::TextConfirm => {
-                let text = self.edit_input.value().to_string();
-                match self.current_field() {
-                    Field::Bpm => {
-                        if let Ok(v) = text.parse::<u16>() {
-                            self.settings.bpm = v.clamp(20, 300);
+                // Text edit layer actions
+                ModeActionId::TextConfirm => {
+                    let text = self.edit_input.value().to_string();
+                    match self.current_field() {
+                        Field::Bpm => {
+                            if let Ok(v) = text.parse::<u16>() {
+                                self.settings.bpm = v.clamp(20, 300);
+                            }
                         }
-                    }
-                    Field::Tuning => {
-                        if let Ok(v) = text.parse::<f32>() {
-                            self.settings.tuning_a4 = v.clamp(400.0, 480.0);
+                        Field::Tuning => {
+                            if let Ok(v) = text.parse::<f32>() {
+                                self.settings.tuning_a4 = v.clamp(400.0, 480.0);
+                            }
                         }
+                        _ => {}
                     }
-                    _ => {}
+                    self.editing = false;
+                    self.edit_input.set_focused(false);
+                    Action::Session(SessionAction::UpdateSession(self.settings.clone()))
                 }
-                self.editing = false;
-                self.edit_input.set_focused(false);
-                Action::Session(SessionAction::UpdateSession(self.settings.clone()))
-            }
-            ModeActionId::TextCancel => {
-                self.editing = false;
-                self.edit_input.set_focused(false);
-                self.settings = self.original_settings.clone();
-                Action::Session(SessionAction::UpdateSession(self.original_settings.clone()))
-            }
-            ModeActionId::PianoEscape
-            | ModeActionId::PianoOctaveDown
-            | ModeActionId::PianoOctaveUp
-            | ModeActionId::PianoSpace
-            | ModeActionId::PianoKey
-            | ModeActionId::PadEscape
-            | ModeActionId::PadKey
-            | ModeActionId::PaletteConfirm
-            | ModeActionId::PaletteCancel => Action::None,
+                ModeActionId::TextCancel => {
+                    self.editing = false;
+                    self.edit_input.set_focused(false);
+                    self.settings = self.original_settings.clone();
+                    Action::Session(SessionAction::UpdateSession(self.original_settings.clone()))
+                }
+                ModeActionId::PianoEscape
+                | ModeActionId::PianoOctaveDown
+                | ModeActionId::PianoOctaveUp
+                | ModeActionId::PianoSpace
+                | ModeActionId::PianoKey
+                | ModeActionId::PadEscape
+                | ModeActionId::PadKey
+                | ModeActionId::PaletteConfirm
+                | ModeActionId::PaletteCancel => Action::None,
             };
         }
 
@@ -256,7 +286,12 @@ impl Pane for FrameEditPane {
 
             // Indicator
             if is_selected {
-                buf.set_cell(label_col, y, '>', Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG).bold());
+                buf.set_cell(
+                    label_col,
+                    y,
+                    '>',
+                    Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG).bold(),
+                );
             }
 
             // Label
@@ -271,7 +306,12 @@ impl Pane for FrameEditPane {
             // Value
             if is_selected && self.editing {
                 // Render TextInput inline
-                self.edit_input.render_buf(buf.raw_buf(), value_col, y, inner.width.saturating_sub(18));
+                self.edit_input.render_buf(
+                    buf.raw_buf(),
+                    value_col,
+                    y,
+                    inner.width.saturating_sub(18),
+                );
             } else {
                 let val_style = if is_selected {
                     Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG)
@@ -279,7 +319,10 @@ impl Pane for FrameEditPane {
                     Style::new().fg(Color::WHITE)
                 };
                 let val = self.field_value(*field);
-                buf.draw_line(Rect::new(value_col, y, inner.width.saturating_sub(18), 1), &[(&val, val_style)]);
+                buf.draw_line(
+                    Rect::new(value_col, y, inner.width.saturating_sub(18), 1),
+                    &[(&val, val_style)],
+                );
 
                 // Fill rest of line with selection bg
                 if is_selected {
@@ -291,7 +334,6 @@ impl Pane for FrameEditPane {
                 }
             }
         }
-
     }
 
     fn keymap(&self) -> &Keymap {
@@ -301,7 +343,6 @@ impl Pane for FrameEditPane {
     fn on_enter(&mut self, state: &AppState) {
         self.set_settings(state.session.musical_settings());
     }
-
 
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
@@ -327,10 +368,18 @@ mod tests {
         pane.set_settings(settings);
 
         for _ in 0..3 {
-            pane.handle_action(ActionId::FrameEdit(FrameEditActionId::Next), &dummy_event(), &state);
+            pane.handle_action(
+                ActionId::FrameEdit(FrameEditActionId::Next),
+                &dummy_event(),
+                &state,
+            );
         }
 
-        let action = pane.handle_action(ActionId::FrameEdit(FrameEditActionId::Confirm), &dummy_event(), &state);
+        let action = pane.handle_action(
+            ActionId::FrameEdit(FrameEditActionId::Confirm),
+            &dummy_event(),
+            &state,
+        );
         match action {
             Action::Session(SessionAction::UpdateSession(updated)) => {
                 assert_eq!(updated.key, pane.settings.key);
@@ -348,7 +397,11 @@ mod tests {
         pane.set_settings(settings);
         pane.edit_input.set_value("180");
 
-        let action = pane.handle_action(ActionId::Mode(ModeActionId::TextConfirm), &dummy_event(), &state);
+        let action = pane.handle_action(
+            ActionId::Mode(ModeActionId::TextConfirm),
+            &dummy_event(),
+            &state,
+        );
         match action {
             Action::Session(SessionAction::UpdateSession(updated)) => {
                 assert_eq!(updated.bpm, 180);
@@ -363,12 +416,19 @@ mod tests {
         use crate::ui::action_id::{ActionId, FrameEditActionId};
         let mut pane = FrameEditPane::new(Keymap::new());
         let state = AppState::new();
-        let settings = MusicalSettings { bpm: 140, ..Default::default() };
+        let settings = MusicalSettings {
+            bpm: 140,
+            ..Default::default()
+        };
         pane.set_settings(settings.clone());
 
         pane.settings.bpm = 200;
 
-        let action = pane.handle_action(ActionId::FrameEdit(FrameEditActionId::Cancel), &dummy_event(), &state);
+        let action = pane.handle_action(
+            ActionId::FrameEdit(FrameEditActionId::Cancel),
+            &dummy_event(),
+            &state,
+        );
         match action {
             Action::Session(SessionAction::UpdateSession(updated)) => {
                 assert_eq!(updated, settings);
@@ -383,13 +443,20 @@ mod tests {
         use crate::ui::action_id::{ActionId, ModeActionId};
         let mut pane = FrameEditPane::new(Keymap::new());
         let state = AppState::new();
-        let settings = MusicalSettings { tuning_a4: 432.0, ..Default::default() };
+        let settings = MusicalSettings {
+            tuning_a4: 432.0,
+            ..Default::default()
+        };
         pane.set_settings(settings.clone());
 
         pane.settings.tuning_a4 = 450.0;
         pane.editing = true;
 
-        let action = pane.handle_action(ActionId::Mode(ModeActionId::TextCancel), &dummy_event(), &state);
+        let action = pane.handle_action(
+            ActionId::Mode(ModeActionId::TextCancel),
+            &dummy_event(),
+            &state,
+        );
         match action {
             Action::Session(SessionAction::UpdateSession(updated)) => {
                 assert_eq!(updated, settings);

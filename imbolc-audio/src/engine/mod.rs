@@ -14,8 +14,8 @@ use std::process::Child;
 use std::sync::mpsc::Receiver;
 use std::time::Instant;
 
-use backend::AudioBackend;
 use super::bus_allocator::BusAllocator;
+use backend::AudioBackend;
 use imbolc_types::{BufferId, BusId, EffectId, InstrumentId};
 use node_registry::NodeRegistry;
 use voice_allocator::VoiceAllocator;
@@ -100,10 +100,18 @@ pub struct InstrumentNodes {
 impl InstrumentNodes {
     pub fn all_node_ids(&self) -> Vec<i32> {
         let mut ids = Vec::new();
-        if let Some(id) = self.source { ids.push(id); }
-        if let Some(id) = self.lfo { ids.push(id); }
-        if let Some(id) = self.filter { ids.push(id); }
-        if let Some(id) = self.eq { ids.push(id); }
+        if let Some(id) = self.source {
+            ids.push(id);
+        }
+        if let Some(id) = self.lfo {
+            ids.push(id);
+        }
+        if let Some(id) = self.filter {
+            ids.push(id);
+        }
+        if let Some(id) = self.eq {
+            ids.push(id);
+        }
         for eid in &self.effect_order {
             if let Some(&nid) = self.effects.get(eid) {
                 ids.push(nid);
@@ -238,7 +246,9 @@ impl AudioEngine {
             return; // Already running
         }
         if let Some(ref backend) = self.backend {
-            if let (Some(socket), Some(addr)) = (backend.try_clone_socket(), backend.server_socket_addr()) {
+            if let (Some(socket), Some(addr)) =
+                (backend.try_clone_socket(), backend.server_socket_addr())
+            {
                 let (tx, depth, handle) = super::osc_sender::spawn_osc_sender(socket, addr);
                 self.osc_send_tx = Some(tx);
                 self.osc_queue_depth = Some(depth);
@@ -262,7 +272,11 @@ impl AudioEngine {
     /// Encodes BackendMessages into an OSC bundle with the given offset, then
     /// pushes to the sender thread. Falls back to direct backend send if no
     /// sender thread is running or the queue is full.
-    pub fn queue_timed_bundle(&self, messages: Vec<backend::BackendMessage>, offset_secs: f64) -> Result<(), String> {
+    pub fn queue_timed_bundle(
+        &self,
+        messages: Vec<backend::BackendMessage>,
+        offset_secs: f64,
+    ) -> Result<(), String> {
         if messages.is_empty() {
             return Ok(());
         }
@@ -275,10 +289,18 @@ impl AudioEngine {
                 .iter()
                 .map(|m| rosc::OscMessage {
                     addr: m.addr.clone(),
-                    args: m.args.iter().cloned().map(backend::raw_to_osc_pub).collect(),
+                    args: m
+                        .args
+                        .iter()
+                        .cloned()
+                        .map(backend::raw_to_osc_pub)
+                        .collect(),
                 })
                 .collect();
-            let content = osc_messages.into_iter().map(rosc::OscPacket::Message).collect();
+            let content = osc_messages
+                .into_iter()
+                .map(rosc::OscPacket::Message)
+                .collect();
             let bundle = rosc::OscPacket::Bundle(rosc::OscBundle {
                 timetag: time,
                 content,
@@ -298,7 +320,9 @@ impl AudioEngine {
 
         // Fallback: direct send via backend (tests, NullBackend, or queue full)
         let backend = self.backend.as_ref().ok_or("Not connected")?;
-        backend.send_bundle(messages, offset_secs).map_err(|e| e.to_string())
+        backend
+            .send_bundle(messages, offset_secs)
+            .map_err(|e| e.to_string())
     }
 
     /// Get current OSC send queue depth for telemetry.
@@ -368,12 +392,12 @@ impl Default for AudioEngine {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::voice_allocator::MAX_VOICES_PER_INSTRUMENT;
+    use super::*;
     use crate::engine::backend::NullBackend;
+    use imbolc_types::state::mixer::DEFAULT_BUS_COUNT;
     use imbolc_types::{AutomationTarget, BusId, ParamIndex, ParamValue};
     use imbolc_types::{EffectType, FilterType, SourceType};
-    use imbolc_types::state::mixer::DEFAULT_BUS_COUNT;
 
     /// Test-only stand-in for AppState (which lives in imbolc-core).
     struct AppState {
@@ -392,7 +416,10 @@ mod tests {
             }
         }
 
-        fn add_instrument(&mut self, source: imbolc_types::SourceType) -> imbolc_types::InstrumentId {
+        fn add_instrument(
+            &mut self,
+            source: imbolc_types::SourceType,
+        ) -> imbolc_types::InstrumentId {
             let id = self.instruments.add_instrument(source);
             self.session.piano_roll.add_track(id);
             id
@@ -417,7 +444,15 @@ mod tests {
             inst.set_filter(Some(FilterType::Lpf));
             inst.modulation.lfo.enabled = true;
             inst.add_effect(EffectType::Delay);
-            inst.mixer.sends.insert(BusId::new(1), imbolc_types::MixerSend { bus_id: BusId::new(1), level: 0.5, enabled: true, tap_point: imbolc_types::SendTapPoint::default() });
+            inst.mixer.sends.insert(
+                BusId::new(1),
+                imbolc_types::MixerSend {
+                    bus_id: BusId::new(1),
+                    level: 0.5,
+                    enabled: true,
+                    tap_point: imbolc_types::SendTapPoint::default(),
+                },
+            );
         }
 
         engine
@@ -580,7 +615,12 @@ mod tests {
             .unwrap();
 
         // Verify envelope state was mutated
-        let env = &state.instruments.instrument(inst_id).unwrap().modulation.amp_envelope;
+        let env = &state
+            .instruments
+            .instrument(inst_id)
+            .unwrap()
+            .modulation
+            .amp_envelope;
         assert!((env.attack - 0.05).abs() < f32::EPSILON);
         assert!((env.decay - 0.2).abs() < f32::EPSILON);
         assert!((env.sustain - 0.7).abs() < f32::EPSILON);
@@ -662,7 +702,9 @@ mod tests {
         let inst_id = InstrumentId::new(1);
 
         // Add a voice at pitch 60
-        engine.voice_allocator.add(make_voice(inst_id, 60, 0.8, 100));
+        engine
+            .voice_allocator
+            .add(make_voice(inst_id, 60, 0.8, 100));
 
         // Steal for a new note at the same pitch
         engine
@@ -671,7 +713,11 @@ mod tests {
 
         // The old voice should be removed
         assert!(
-            engine.voice_allocator.chains().iter().all(|v| !(v.instrument_id == inst_id && v.pitch == 60)),
+            engine
+                .voice_allocator
+                .chains()
+                .iter()
+                .all(|v| !(v.instrument_id == inst_id && v.pitch == 60)),
             "same-pitch voice should have been stolen"
         );
     }
@@ -683,11 +729,15 @@ mod tests {
 
         // Fill to limit with active voices (pitches 40..40+N, all unique)
         for i in 0..MAX_VOICES_PER_INSTRUMENT {
-            engine.voice_allocator.add(make_voice(inst_id, 40 + i as u8, 0.8, 100));
+            engine
+                .voice_allocator
+                .add(make_voice(inst_id, 40 + i as u8, 0.8, 100));
         }
         // Add an extra released voice with a pitch outside the active range
         let released_pitch = 30;
-        engine.voice_allocator.add(make_released_voice(inst_id, released_pitch, 0.8, 500, 1.0));
+        engine
+            .voice_allocator
+            .add(make_released_voice(inst_id, released_pitch, 0.8, 500, 1.0));
 
         // Trigger steal with a pitch outside both ranges (no same-pitch retrigger)
         let new_pitch = 31;
@@ -697,12 +747,21 @@ mod tests {
 
         // The released voice should be gone, not any active voice
         assert!(
-            !engine.voice_allocator.chains().iter().any(|v| v.pitch == released_pitch && v.instrument_id == inst_id),
+            !engine
+                .voice_allocator
+                .chains()
+                .iter()
+                .any(|v| v.pitch == released_pitch && v.instrument_id == inst_id),
             "released voice should be stolen before active voices"
         );
         // All original active voices should still be present
         assert_eq!(
-            engine.voice_allocator.chains().iter().filter(|v| v.instrument_id == inst_id).count(),
+            engine
+                .voice_allocator
+                .chains()
+                .iter()
+                .filter(|v| v.instrument_id == inst_id)
+                .count(),
             MAX_VOICES_PER_INSTRUMENT,
         );
     }
@@ -715,7 +774,9 @@ mod tests {
         // Fill to limit — all same age, varying velocity (pitches 40..40+N)
         for i in 0..MAX_VOICES_PER_INSTRUMENT {
             let vel = 0.2 + (i as f32 * 0.01); // 0.2, 0.21, 0.22, ...
-            engine.voice_allocator.add(make_voice(inst_id, 40 + i as u8, vel, 100));
+            engine
+                .voice_allocator
+                .add(make_voice(inst_id, 40 + i as u8, vel, 100));
         }
         let quietest_pitch = engine.voice_allocator.chains()[0].pitch; // velocity 0.2
 
@@ -726,7 +787,11 @@ mod tests {
             .expect("steal");
 
         assert!(
-            !engine.voice_allocator.chains().iter().any(|v| v.pitch == quietest_pitch && v.instrument_id == inst_id),
+            !engine
+                .voice_allocator
+                .chains()
+                .iter()
+                .any(|v| v.pitch == quietest_pitch && v.instrument_id == inst_id),
             "lowest velocity voice should be stolen"
         );
     }
@@ -739,7 +804,9 @@ mod tests {
         // Fill to limit — all same velocity, varying age (pitches 40..40+N)
         for i in 0..MAX_VOICES_PER_INSTRUMENT {
             let age = 5000 - (i as u64 * 10); // oldest first: 5000, 4990, 4980, ...
-            engine.voice_allocator.add(make_voice(inst_id, 40 + i as u8, 0.5, age));
+            engine
+                .voice_allocator
+                .add(make_voice(inst_id, 40 + i as u8, 0.5, age));
         }
         let oldest_pitch = engine.voice_allocator.chains()[0].pitch; // age 5000ms
 
@@ -750,7 +817,11 @@ mod tests {
             .expect("steal");
 
         assert!(
-            !engine.voice_allocator.chains().iter().any(|v| v.pitch == oldest_pitch && v.instrument_id == inst_id),
+            !engine
+                .voice_allocator
+                .chains()
+                .iter()
+                .any(|v| v.pitch == oldest_pitch && v.instrument_id == inst_id),
             "oldest voice should be stolen as tiebreaker"
         );
     }
@@ -761,18 +832,36 @@ mod tests {
         let inst_id = InstrumentId::new(1);
 
         // Add a voice released long ago (should be cleaned up)
-        engine.voice_allocator.add(make_released_voice(inst_id, 60, 0.5, 5000, 0.5));
+        engine
+            .voice_allocator
+            .add(make_released_voice(inst_id, 60, 0.5, 5000, 0.5));
         // Add a voice released recently (should be kept)
-        engine.voice_allocator.add(make_released_voice(inst_id, 72, 0.5, 100, 1.0));
+        engine
+            .voice_allocator
+            .add(make_released_voice(inst_id, 72, 0.5, 100, 1.0));
         // Add an active voice (should be kept)
-        engine.voice_allocator.add(make_voice(inst_id, 48, 0.8, 200));
+        engine
+            .voice_allocator
+            .add(make_voice(inst_id, 48, 0.8, 200));
 
         engine.cleanup_expired_voices();
 
         assert_eq!(engine.voice_allocator.chains().len(), 2);
-        assert!(engine.voice_allocator.chains().iter().any(|v| v.pitch == 72));
-        assert!(engine.voice_allocator.chains().iter().any(|v| v.pitch == 48));
-        assert!(!engine.voice_allocator.chains().iter().any(|v| v.pitch == 60));
+        assert!(engine
+            .voice_allocator
+            .chains()
+            .iter()
+            .any(|v| v.pitch == 72));
+        assert!(engine
+            .voice_allocator
+            .chains()
+            .iter()
+            .any(|v| v.pitch == 48));
+        assert!(!engine
+            .voice_allocator
+            .chains()
+            .iter()
+            .any(|v| v.pitch == 60));
     }
 
     #[test]
@@ -845,7 +934,7 @@ mod tests {
 
     mod backend_routing_tests {
         use super::*;
-        use crate::engine::backend::{RawArg, TestBackend, TestOp, SharedTestBackend};
+        use crate::engine::backend::{RawArg, SharedTestBackend, TestBackend, TestOp};
         use imbolc_types::OutputTarget;
         use imbolc_types::SendTapPoint;
         use std::sync::Arc;
@@ -898,7 +987,10 @@ mod tests {
                         && messages.contains(&("/c_set".to_string(), vec![RawArg::Int(gate_bus), RawArg::Float(0.0)]))
                 )
             });
-            assert!(immediate.is_some(), "release should free midi helper and force gate bus to 0");
+            assert!(
+                immediate.is_some(),
+                "release should free midi helper and force gate bus to 0"
+            );
 
             let release_secs = state
                 .instruments
@@ -916,7 +1008,10 @@ mod tests {
                         && messages == &vec![("/n_free".to_string(), vec![RawArg::Int(group_id)])]
                 )
             });
-            assert!(cleanup.is_some(), "group free should be scheduled after release tail");
+            assert!(
+                cleanup.is_some(),
+                "group free should be scheduled after release tail"
+            );
         }
 
         #[test]
@@ -957,7 +1052,10 @@ mod tests {
                         && messages.contains(&("/c_set".to_string(), vec![RawArg::Int(gate_bus), RawArg::Float(0.0)]))
                 )
             });
-            assert!(steal_bundle.is_some(), "steal path should force gate bus to 0 at onset");
+            assert!(
+                steal_bundle.is_some(),
+                "steal path should force gate bus to 0 at onset"
+            );
 
             // Control buses for stolen voice should be returned on /n_end, not immediately.
             assert_eq!(engine.voice_allocator.control_bus_pool_size(), 0);
@@ -973,16 +1071,28 @@ mod tests {
             let (mut engine, backend) = engine_with_test_backend();
             let mut state = AppState::new();
             let inst_id = state.add_instrument(SourceType::Saw);
-            engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild routing");
+            engine
+                .rebuild_instrument_routing(&state.instruments, &state.session)
+                .expect("rebuild routing");
             let nodes = engine.node_map.get(&inst_id).expect("nodes must exist");
-            assert!(nodes.source.is_none(), "oscillator instruments have no persistent source");
+            assert!(
+                nodes.source.is_none(),
+                "oscillator instruments have no persistent source"
+            );
             assert!(nodes.lfo.is_none(), "LFO disabled by default");
             assert!(nodes.filter.is_none(), "no filter by default");
             let synths = backend.synths_created();
             let output_synth = synths.iter().find(|op| matches!(op, TestOp::CreateSynth { def_name, group_id, .. } if def_name == "imbolc_output" && *group_id == GROUP_OUTPUT));
-            assert!(output_synth.is_some(), "output synth must be created in GROUP_OUTPUT");
+            assert!(
+                output_synth.is_some(),
+                "output synth must be created in GROUP_OUTPUT"
+            );
             let bus_out_count = backend.count(|op| matches!(op, TestOp::CreateSynth { def_name, .. } if def_name == "imbolc_bus_out"));
-            assert_eq!(bus_out_count, state.session.mixer.buses.len(), "one bus output synth per mixer bus");
+            assert_eq!(
+                bus_out_count,
+                state.session.mixer.buses.len(),
+                "one bus output synth per mixer bus"
+            );
         }
 
         #[test]
@@ -995,14 +1105,18 @@ mod tests {
                 inst.add_effect(EffectType::Delay);
                 inst.add_effect(EffectType::Reverb);
             }
-            engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild routing");
+            engine
+                .rebuild_instrument_routing(&state.instruments, &state.session)
+                .expect("rebuild routing");
             let nodes = engine.node_map.get(&inst_id).expect("nodes");
             assert!(nodes.source.is_some(), "AudioIn has a persistent source");
             assert!(nodes.filter.is_some(), "filter was added");
             assert_eq!(nodes.effects.len(), 2, "two effects were added");
             let synths = backend.synths_created();
             assert!(synths.iter().any(|op| matches!(op, TestOp::CreateSynth { def_name, .. } if def_name == "imbolc_audio_in")));
-            assert!(synths.iter().any(|op| matches!(op, TestOp::CreateSynth { def_name, .. } if def_name == "imbolc_lpf")));
+            assert!(synths.iter().any(
+                |op| matches!(op, TestOp::CreateSynth { def_name, .. } if def_name == "imbolc_lpf")
+            ));
             assert!(synths.iter().any(|op| matches!(op, TestOp::CreateSynth { def_name, .. } if def_name == "imbolc_delay")));
             assert!(synths.iter().any(|op| matches!(op, TestOp::CreateSynth { def_name, .. } if def_name == "imbolc_reverb")));
             assert!(synths.iter().any(|op| matches!(op, TestOp::CreateSynth { def_name, .. } if def_name == "imbolc_output")));
@@ -1014,12 +1128,25 @@ mod tests {
             let mut state = AppState::new();
             let inst_id = state.add_instrument(SourceType::AudioIn);
             if let Some(inst) = state.instruments.instrument_mut(inst_id) {
-                inst.mixer.sends.insert(BusId::new(1), imbolc_types::MixerSend { bus_id: BusId::new(1), level: 0.5, enabled: true, tap_point: imbolc_types::SendTapPoint::default() });
+                inst.mixer.sends.insert(
+                    BusId::new(1),
+                    imbolc_types::MixerSend {
+                        bus_id: BusId::new(1),
+                        level: 0.5,
+                        enabled: true,
+                        tap_point: imbolc_types::SendTapPoint::default(),
+                    },
+                );
             }
-            engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild routing");
+            engine
+                .rebuild_instrument_routing(&state.instruments, &state.session)
+                .expect("rebuild routing");
             let send_count = backend.count(|op| matches!(op, TestOp::CreateSynth { def_name, .. } if def_name == "imbolc_send"));
             assert_eq!(send_count, 1, "one send synth for the enabled send");
-            assert!(engine.send_node_map.contains_key(&(inst_id, BusId::new(1))), "send node registered for bus 1");
+            assert!(
+                engine.send_node_map.contains_key(&(inst_id, BusId::new(1))),
+                "send node registered for bus 1"
+            );
         }
 
         #[test]
@@ -1031,17 +1158,124 @@ mod tests {
                 inst.set_filter(Some(FilterType::Hpf));
                 inst.add_effect(EffectType::Delay);
             }
-            engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild routing");
+            engine
+                .rebuild_instrument_routing(&state.instruments, &state.session)
+                .expect("rebuild routing");
             let synths = backend.synths_created();
-            let source_out = synths.iter().find_map(|op| if let TestOp::CreateSynth { def_name, params, .. } = op { if def_name == "imbolc_audio_in" { params.iter().find(|(k, _)| k == "out").map(|(_, v)| *v) } else { None } } else { None }).expect("source out bus");
-            let filter_in = synths.iter().find_map(|op| if let TestOp::CreateSynth { def_name, params, .. } = op { if def_name == "imbolc_hpf" { params.iter().find(|(k, _)| k == "in").map(|(_, v)| *v) } else { None } } else { None }).expect("filter in bus");
-            assert_eq!(source_out, filter_in, "filter input bus must match source output bus");
-            let filter_out = synths.iter().find_map(|op| if let TestOp::CreateSynth { def_name, params, .. } = op { if def_name == "imbolc_hpf" { params.iter().find(|(k, _)| k == "out").map(|(_, v)| *v) } else { None } } else { None }).expect("filter out bus");
-            let delay_in = synths.iter().find_map(|op| if let TestOp::CreateSynth { def_name, params, .. } = op { if def_name == "imbolc_delay" { params.iter().find(|(k, _)| k == "in").map(|(_, v)| *v) } else { None } } else { None }).expect("delay in bus");
-            assert_eq!(filter_out, delay_in, "delay input bus must match filter output bus");
-            let delay_out = synths.iter().find_map(|op| if let TestOp::CreateSynth { def_name, params, .. } = op { if def_name == "imbolc_delay" { params.iter().find(|(k, _)| k == "out").map(|(_, v)| *v) } else { None } } else { None }).expect("delay out bus");
-            let output_in = synths.iter().find_map(|op| if let TestOp::CreateSynth { def_name, params, .. } = op { if def_name == "imbolc_output" { params.iter().find(|(k, _)| k == "in").map(|(_, v)| *v) } else { None } } else { None }).expect("output in bus");
-            assert_eq!(delay_out, output_in, "output input bus must match delay output bus");
+            let source_out = synths
+                .iter()
+                .find_map(|op| {
+                    if let TestOp::CreateSynth {
+                        def_name, params, ..
+                    } = op
+                    {
+                        if def_name == "imbolc_audio_in" {
+                            params.iter().find(|(k, _)| k == "out").map(|(_, v)| *v)
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                })
+                .expect("source out bus");
+            let filter_in = synths
+                .iter()
+                .find_map(|op| {
+                    if let TestOp::CreateSynth {
+                        def_name, params, ..
+                    } = op
+                    {
+                        if def_name == "imbolc_hpf" {
+                            params.iter().find(|(k, _)| k == "in").map(|(_, v)| *v)
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                })
+                .expect("filter in bus");
+            assert_eq!(
+                source_out, filter_in,
+                "filter input bus must match source output bus"
+            );
+            let filter_out = synths
+                .iter()
+                .find_map(|op| {
+                    if let TestOp::CreateSynth {
+                        def_name, params, ..
+                    } = op
+                    {
+                        if def_name == "imbolc_hpf" {
+                            params.iter().find(|(k, _)| k == "out").map(|(_, v)| *v)
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                })
+                .expect("filter out bus");
+            let delay_in = synths
+                .iter()
+                .find_map(|op| {
+                    if let TestOp::CreateSynth {
+                        def_name, params, ..
+                    } = op
+                    {
+                        if def_name == "imbolc_delay" {
+                            params.iter().find(|(k, _)| k == "in").map(|(_, v)| *v)
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                })
+                .expect("delay in bus");
+            assert_eq!(
+                filter_out, delay_in,
+                "delay input bus must match filter output bus"
+            );
+            let delay_out = synths
+                .iter()
+                .find_map(|op| {
+                    if let TestOp::CreateSynth {
+                        def_name, params, ..
+                    } = op
+                    {
+                        if def_name == "imbolc_delay" {
+                            params.iter().find(|(k, _)| k == "out").map(|(_, v)| *v)
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                })
+                .expect("delay out bus");
+            let output_in = synths
+                .iter()
+                .find_map(|op| {
+                    if let TestOp::CreateSynth {
+                        def_name, params, ..
+                    } = op
+                    {
+                        if def_name == "imbolc_output" {
+                            params.iter().find(|(k, _)| k == "in").map(|(_, v)| *v)
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                })
+                .expect("output in bus");
+            assert_eq!(
+                delay_out, output_in,
+                "output input bus must match delay output bus"
+            );
         }
 
         #[test]
@@ -1049,14 +1283,24 @@ mod tests {
             let (mut engine, backend) = engine_with_test_backend();
             let mut state = AppState::new();
             let inst_id = state.add_instrument(SourceType::AudioIn);
-            engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("first build");
+            engine
+                .rebuild_instrument_routing(&state.instruments, &state.session)
+                .expect("first build");
             let first_output_node = engine.node_map.get(&inst_id).unwrap().output;
             backend.clear();
-            engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("second build");
+            engine
+                .rebuild_instrument_routing(&state.instruments, &state.session)
+                .expect("second build");
             let freed = backend.nodes_freed();
-            assert!(freed.contains(&first_output_node), "old output node should be freed on rebuild");
+            assert!(
+                freed.contains(&first_output_node),
+                "old output node should be freed on rebuild"
+            );
             let new_output_node = engine.node_map.get(&inst_id).unwrap().output;
-            assert_ne!(first_output_node, new_output_node, "new output node should be a different ID");
+            assert_ne!(
+                first_output_node, new_output_node,
+                "new output node should be a different ID"
+            );
         }
 
         #[test]
@@ -1066,10 +1310,14 @@ mod tests {
             let inst_id = state.add_instrument(SourceType::Saw);
             if let Some(inst) = state.instruments.instrument_mut(inst_id) {
                 let eid = inst.add_effect(EffectType::Delay);
-                if let Some(effect) = inst.effect_by_id_mut(eid) { effect.enabled = false; }
+                if let Some(effect) = inst.effect_by_id_mut(eid) {
+                    effect.enabled = false;
+                }
                 inst.add_effect(EffectType::Reverb);
             }
-            engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild routing");
+            engine
+                .rebuild_instrument_routing(&state.instruments, &state.session)
+                .expect("rebuild routing");
             let nodes = engine.node_map.get(&inst_id).expect("nodes");
             assert_eq!(nodes.effects.len(), 1, "only enabled effects get nodes");
             assert_eq!(backend.count(|op| matches!(op, TestOp::CreateSynth { def_name, .. } if def_name == "imbolc_delay")), 0);
@@ -1081,10 +1329,17 @@ mod tests {
             let (mut engine, backend) = engine_with_test_backend();
             let mut state = AppState::new();
             let inst_id = state.add_instrument(SourceType::AudioIn);
-            engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild routing");
-            engine.set_source_param(inst_id, "gain", 0.75).expect("set_source_param");
+            engine
+                .rebuild_instrument_routing(&state.instruments, &state.session)
+                .expect("rebuild routing");
+            engine
+                .set_source_param(inst_id, "gain", 0.75)
+                .expect("set_source_param");
             let set_ops = backend.find(|op| matches!(op, TestOp::SetParam { param, value, .. } if param == "gain" && (*value - 0.75).abs() < 0.001));
-            assert!(set_ops.is_some(), "set_param for gain=0.75 should be recorded");
+            assert!(
+                set_ops.is_some(),
+                "set_param for gain=0.75 should be recorded"
+            );
         }
 
         #[test]
@@ -1092,7 +1347,9 @@ mod tests {
             let (mut engine, backend) = engine_with_test_backend();
             let mut state = AppState::new();
             state.add_instrument(SourceType::Saw);
-            engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild routing");
+            engine
+                .rebuild_instrument_routing(&state.instruments, &state.session)
+                .expect("rebuild routing");
             let group_count = backend.count(|op| matches!(op, TestOp::CreateGroup { .. }));
             assert_eq!(group_count, 6, "six execution groups");
             assert!(backend.find(|op| matches!(op, TestOp::CreateGroup { group_id, .. } if *group_id == GROUP_SOURCES)).is_some());
@@ -1108,13 +1365,20 @@ mod tests {
             let (mut engine, backend) = engine_with_test_backend();
             let mut state = AppState::new();
             let inst_id = state.add_instrument(SourceType::Saw);
-            if let Some(inst) = state.instruments.instrument_mut(inst_id) { inst.mixer.mute = true; }
-            engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild routing");
+            if let Some(inst) = state.instruments.instrument_mut(inst_id) {
+                inst.mixer.mute = true;
+            }
+            engine
+                .rebuild_instrument_routing(&state.instruments, &state.session)
+                .expect("rebuild routing");
             let synths = backend.synths_created();
             let output = synths.iter().find(|op| matches!(op, TestOp::CreateSynth { def_name, .. } if def_name == "imbolc_output"));
             assert!(output.is_some(), "output synth created");
             if let Some(TestOp::CreateSynth { params, .. }) = output {
-                assert_eq!(params.iter().find(|(k, _)| k == "mute").map(|(_, v)| *v), Some(1.0));
+                assert_eq!(
+                    params.iter().find(|(k, _)| k == "mute").map(|(_, v)| *v),
+                    Some(1.0)
+                );
             }
         }
 
@@ -1129,15 +1393,25 @@ mod tests {
                 inst.modulation.lfo.rate = 2.0;
                 inst.modulation.lfo.depth = 0.5;
             }
-            engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild routing");
+            engine
+                .rebuild_instrument_routing(&state.instruments, &state.session)
+                .expect("rebuild routing");
             let nodes = engine.node_map.get(&inst_id).expect("nodes");
             assert!(nodes.lfo.is_some(), "LFO node should exist");
             let synths = backend.synths_created();
-            let lfo_synth = synths.iter().find(|op| matches!(op, TestOp::CreateSynth { def_name, .. } if def_name == "imbolc_lfo"));
+            let lfo_synth = synths.iter().find(
+                |op| matches!(op, TestOp::CreateSynth { def_name, .. } if def_name == "imbolc_lfo"),
+            );
             assert!(lfo_synth.is_some(), "LFO synth created");
             if let Some(TestOp::CreateSynth { params, .. }) = lfo_synth {
-                assert_eq!(params.iter().find(|(k, _)| k == "rate").map(|(_, v)| *v), Some(2.0));
-                assert_eq!(params.iter().find(|(k, _)| k == "depth").map(|(_, v)| *v), Some(0.5));
+                assert_eq!(
+                    params.iter().find(|(k, _)| k == "rate").map(|(_, v)| *v),
+                    Some(2.0)
+                );
+                assert_eq!(
+                    params.iter().find(|(k, _)| k == "depth").map(|(_, v)| *v),
+                    Some(0.5)
+                );
             }
         }
 
@@ -1149,18 +1423,32 @@ mod tests {
             if let Some(inst) = state.instruments.instrument_mut(inst_id) {
                 inst.mixer.output_target = OutputTarget::Bus(BusId::new(1));
             }
-            engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild routing");
+            engine
+                .rebuild_instrument_routing(&state.instruments, &state.session)
+                .expect("rebuild routing");
             let synths = backend.synths_created();
-            let output_out = synths.iter().find_map(|op| {
-                if let TestOp::CreateSynth { def_name, params, .. } = op {
-                    if def_name == "imbolc_output" {
-                        return params.iter().find(|(k, _)| k == "out").map(|(_, v)| *v);
+            let output_out = synths
+                .iter()
+                .find_map(|op| {
+                    if let TestOp::CreateSynth {
+                        def_name, params, ..
+                    } = op
+                    {
+                        if def_name == "imbolc_output" {
+                            return params.iter().find(|(k, _)| k == "out").map(|(_, v)| *v);
+                        }
                     }
-                }
-                None
-            }).expect("output synth out param");
-            let expected_bus = *engine.bus_audio_buses.get(&BusId::new(1)).expect("bus 1 audio bus must exist");
-            assert_eq!(output_out, expected_bus as f32, "output should route to bus 1 audio bus");
+                    None
+                })
+                .expect("output synth out param");
+            let expected_bus = *engine
+                .bus_audio_buses
+                .get(&BusId::new(1))
+                .expect("bus 1 audio bus must exist");
+            assert_eq!(
+                output_out, expected_bus as f32,
+                "output should route to bus 1 audio bus"
+            );
             assert_ne!(output_out, 0.0, "output should NOT route to hardware bus 0");
         }
 
@@ -1170,18 +1458,37 @@ mod tests {
             let mut state = AppState::new();
             let inst_id = state.add_instrument(SourceType::Saw);
             // output_target defaults to Master, no change needed
-            assert_eq!(state.instruments.instrument(inst_id).unwrap().mixer.output_target, OutputTarget::Master);
-            engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild routing");
+            assert_eq!(
+                state
+                    .instruments
+                    .instrument(inst_id)
+                    .unwrap()
+                    .mixer
+                    .output_target,
+                OutputTarget::Master
+            );
+            engine
+                .rebuild_instrument_routing(&state.instruments, &state.session)
+                .expect("rebuild routing");
             let synths = backend.synths_created();
-            let output_out = synths.iter().find_map(|op| {
-                if let TestOp::CreateSynth { def_name, params, .. } = op {
-                    if def_name == "imbolc_output" {
-                        return params.iter().find(|(k, _)| k == "out").map(|(_, v)| *v);
+            let output_out = synths
+                .iter()
+                .find_map(|op| {
+                    if let TestOp::CreateSynth {
+                        def_name, params, ..
+                    } = op
+                    {
+                        if def_name == "imbolc_output" {
+                            return params.iter().find(|(k, _)| k == "out").map(|(_, v)| *v);
+                        }
                     }
-                }
-                None
-            }).expect("output synth out param");
-            assert_eq!(output_out, 0.0, "Master output target should route to hardware bus 0");
+                    None
+                })
+                .expect("output synth out param");
+            assert_eq!(
+                output_out, 0.0,
+                "Master output target should route to hardware bus 0"
+            );
         }
 
         #[test]
@@ -1192,29 +1499,54 @@ mod tests {
             if let Some(inst) = state.instruments.instrument_mut(inst_id) {
                 inst.set_filter(Some(FilterType::Lpf));
                 inst.add_effect(EffectType::Delay);
-                inst.mixer.sends.insert(BusId::new(1), imbolc_types::MixerSend { bus_id: BusId::new(1), level: 0.5, enabled: true, tap_point: SendTapPoint::PostInsert });
+                inst.mixer.sends.insert(
+                    BusId::new(1),
+                    imbolc_types::MixerSend {
+                        bus_id: BusId::new(1),
+                        level: 0.5,
+                        enabled: true,
+                        tap_point: SendTapPoint::PostInsert,
+                    },
+                );
             }
-            engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild routing");
+            engine
+                .rebuild_instrument_routing(&state.instruments, &state.session)
+                .expect("rebuild routing");
             let synths = backend.synths_created();
             // Get the send synth's `in` param
-            let send_in = synths.iter().find_map(|op| {
-                if let TestOp::CreateSynth { def_name, params, .. } = op {
-                    if def_name == "imbolc_send" {
-                        return params.iter().find(|(k, _)| k == "in").map(|(_, v)| *v);
+            let send_in = synths
+                .iter()
+                .find_map(|op| {
+                    if let TestOp::CreateSynth {
+                        def_name, params, ..
+                    } = op
+                    {
+                        if def_name == "imbolc_send" {
+                            return params.iter().find(|(k, _)| k == "in").map(|(_, v)| *v);
+                        }
                     }
-                }
-                None
-            }).expect("send synth in param");
+                    None
+                })
+                .expect("send synth in param");
             // Get the delay (last effect) synth's `out` param — this is the final bus
-            let delay_out = synths.iter().find_map(|op| {
-                if let TestOp::CreateSynth { def_name, params, .. } = op {
-                    if def_name == "imbolc_delay" {
-                        return params.iter().find(|(k, _)| k == "out").map(|(_, v)| *v);
+            let delay_out = synths
+                .iter()
+                .find_map(|op| {
+                    if let TestOp::CreateSynth {
+                        def_name, params, ..
+                    } = op
+                    {
+                        if def_name == "imbolc_delay" {
+                            return params.iter().find(|(k, _)| k == "out").map(|(_, v)| *v);
+                        }
                     }
-                }
-                None
-            }).expect("delay synth out param");
-            assert_eq!(send_in, delay_out, "PostInsert send should tap from instrument final bus (after effects)");
+                    None
+                })
+                .expect("delay synth out param");
+            assert_eq!(
+                send_in, delay_out,
+                "PostInsert send should tap from instrument final bus (after effects)"
+            );
         }
 
         #[test]
@@ -1227,16 +1559,34 @@ mod tests {
             assert_eq!(bus.id, BusId::new(1));
             let reverb_id = bus.effect_chain.add_effect(EffectType::Reverb);
             let delay_id = bus.effect_chain.add_effect(EffectType::Delay);
-            engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild");
+            engine
+                .rebuild_instrument_routing(&state.instruments, &state.session)
+                .expect("rebuild");
             // Verify synths created in GROUP_BUS_PROCESSING
             let synths = backend.synths_created();
             let reverb_synth = synths.iter().find(|op| matches!(op, TestOp::CreateSynth { def_name, group_id, .. } if def_name == "imbolc_reverb" && *group_id == GROUP_BUS_PROCESSING));
-            assert!(reverb_synth.is_some(), "bus reverb must be created in GROUP_BUS_PROCESSING");
+            assert!(
+                reverb_synth.is_some(),
+                "bus reverb must be created in GROUP_BUS_PROCESSING"
+            );
             let delay_synth = synths.iter().find(|op| matches!(op, TestOp::CreateSynth { def_name, group_id, .. } if def_name == "imbolc_delay" && *group_id == GROUP_BUS_PROCESSING));
-            assert!(delay_synth.is_some(), "bus delay must be created in GROUP_BUS_PROCESSING");
+            assert!(
+                delay_synth.is_some(),
+                "bus delay must be created in GROUP_BUS_PROCESSING"
+            );
             // Verify tracked in bus_effect_node_map
-            assert!(engine.bus_effect_node_map.contains_key(&(BusId::new(1), reverb_id)), "reverb tracked in bus_effect_node_map");
-            assert!(engine.bus_effect_node_map.contains_key(&(BusId::new(1), delay_id)), "delay tracked in bus_effect_node_map");
+            assert!(
+                engine
+                    .bus_effect_node_map
+                    .contains_key(&(BusId::new(1), reverb_id)),
+                "reverb tracked in bus_effect_node_map"
+            );
+            assert!(
+                engine
+                    .bus_effect_node_map
+                    .contains_key(&(BusId::new(1), delay_id)),
+                "delay tracked in bus_effect_node_map"
+            );
         }
 
         #[test]
@@ -1246,38 +1596,76 @@ mod tests {
             state.add_instrument(SourceType::Saw);
             let bus = &mut state.session.mixer.buses[0];
             bus.effect_chain.add_effect(EffectType::Reverb);
-            engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild");
+            engine
+                .rebuild_instrument_routing(&state.instruments, &state.session)
+                .expect("rebuild");
             let synths = backend.synths_created();
             // Reverb should read from bus_audio
-            let bus_audio = *engine.bus_audio_buses.get(&BusId::new(1)).expect("bus 1 audio bus");
-            let reverb_in = synths.iter().find_map(|op| {
-                if let TestOp::CreateSynth { def_name, params, group_id, .. } = op {
-                    if def_name == "imbolc_reverb" && *group_id == GROUP_BUS_PROCESSING {
-                        return params.iter().find(|(k, _)| k == "in").map(|(_, v)| *v);
+            let bus_audio = *engine
+                .bus_audio_buses
+                .get(&BusId::new(1))
+                .expect("bus 1 audio bus");
+            let reverb_in = synths
+                .iter()
+                .find_map(|op| {
+                    if let TestOp::CreateSynth {
+                        def_name,
+                        params,
+                        group_id,
+                        ..
+                    } = op
+                    {
+                        if def_name == "imbolc_reverb" && *group_id == GROUP_BUS_PROCESSING {
+                            return params.iter().find(|(k, _)| k == "in").map(|(_, v)| *v);
+                        }
                     }
-                }
-                None
-            }).expect("reverb in param");
-            assert_eq!(reverb_in, bus_audio as f32, "reverb should read from bus_audio");
+                    None
+                })
+                .expect("reverb in param");
+            assert_eq!(
+                reverb_in, bus_audio as f32,
+                "reverb should read from bus_audio"
+            );
             // Bus out should read from reverb's out (the post-effect bus)
-            let reverb_out = synths.iter().find_map(|op| {
-                if let TestOp::CreateSynth { def_name, params, group_id, .. } = op {
-                    if def_name == "imbolc_reverb" && *group_id == GROUP_BUS_PROCESSING {
-                        return params.iter().find(|(k, _)| k == "out").map(|(_, v)| *v);
+            let reverb_out = synths
+                .iter()
+                .find_map(|op| {
+                    if let TestOp::CreateSynth {
+                        def_name,
+                        params,
+                        group_id,
+                        ..
+                    } = op
+                    {
+                        if def_name == "imbolc_reverb" && *group_id == GROUP_BUS_PROCESSING {
+                            return params.iter().find(|(k, _)| k == "out").map(|(_, v)| *v);
+                        }
                     }
-                }
-                None
-            }).expect("reverb out param");
+                    None
+                })
+                .expect("reverb out param");
             // Find the bus_out synth for bus 1 (in GROUP_BUS_PROCESSING)
-            let bus_out_in = synths.iter().find_map(|op| {
-                if let TestOp::CreateSynth { def_name, params, group_id, .. } = op {
-                    if def_name == "imbolc_bus_out" && *group_id == GROUP_BUS_PROCESSING {
-                        return params.iter().find(|(k, _)| k == "in").map(|(_, v)| *v);
+            let bus_out_in = synths
+                .iter()
+                .find_map(|op| {
+                    if let TestOp::CreateSynth {
+                        def_name,
+                        params,
+                        group_id,
+                        ..
+                    } = op
+                    {
+                        if def_name == "imbolc_bus_out" && *group_id == GROUP_BUS_PROCESSING {
+                            return params.iter().find(|(k, _)| k == "in").map(|(_, v)| *v);
+                        }
                     }
-                }
-                None
-            }).expect("bus_out in param");
-            assert_eq!(bus_out_in, reverb_out, "bus_out should read from reverb's output bus");
+                    None
+                })
+                .expect("bus_out in param");
+            assert_eq!(
+                bus_out_in, reverb_out,
+                "bus_out should read from reverb's output bus"
+            );
         }
 
         #[test]
@@ -1286,19 +1674,36 @@ mod tests {
             let mut state = AppState::new();
             state.add_instrument(SourceType::Saw);
             // No effects on bus 1
-            engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild");
+            engine
+                .rebuild_instrument_routing(&state.instruments, &state.session)
+                .expect("rebuild");
             let synths = backend.synths_created();
-            let bus_audio = *engine.bus_audio_buses.get(&BusId::new(1)).expect("bus 1 audio bus");
+            let bus_audio = *engine
+                .bus_audio_buses
+                .get(&BusId::new(1))
+                .expect("bus 1 audio bus");
             // bus_out should read directly from bus_audio when no effects
-            let bus_out_in = synths.iter().find_map(|op| {
-                if let TestOp::CreateSynth { def_name, params, group_id, .. } = op {
-                    if def_name == "imbolc_bus_out" && *group_id == GROUP_BUS_PROCESSING {
-                        return params.iter().find(|(k, _)| k == "in").map(|(_, v)| *v);
+            let bus_out_in = synths
+                .iter()
+                .find_map(|op| {
+                    if let TestOp::CreateSynth {
+                        def_name,
+                        params,
+                        group_id,
+                        ..
+                    } = op
+                    {
+                        if def_name == "imbolc_bus_out" && *group_id == GROUP_BUS_PROCESSING {
+                            return params.iter().find(|(k, _)| k == "in").map(|(_, v)| *v);
+                        }
                     }
-                }
-                None
-            }).expect("bus_out in param");
-            assert_eq!(bus_out_in, bus_audio as f32, "bus_out reads directly from bus_audio when no effects");
+                    None
+                })
+                .expect("bus_out in param");
+            assert_eq!(
+                bus_out_in, bus_audio as f32,
+                "bus_out reads directly from bus_audio when no effects"
+            );
         }
 
         #[test]
@@ -1311,14 +1716,27 @@ mod tests {
                 inst.layer.group = Some(1);
             }
             // Create a layer group mixer and add a reverb effect
-            state.session.mixer.add_layer_group_mixer(1, &[BusId::new(1)]);
+            state
+                .session
+                .mixer
+                .add_layer_group_mixer(1, &[BusId::new(1)]);
             let gm = state.session.mixer.layer_group_mixer_mut(1).unwrap();
             let effect_id = gm.effect_chain.add_effect(EffectType::Reverb);
-            engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild");
+            engine
+                .rebuild_instrument_routing(&state.instruments, &state.session)
+                .expect("rebuild");
             let synths = backend.synths_created();
             let group_reverb = synths.iter().find(|op| matches!(op, TestOp::CreateSynth { def_name, group_id, .. } if def_name == "imbolc_reverb" && *group_id == GROUP_BUS_PROCESSING));
-            assert!(group_reverb.is_some(), "layer group reverb must be in GROUP_BUS_PROCESSING");
-            assert!(engine.layer_group_effect_node_map.contains_key(&(1, effect_id)), "tracked in layer_group_effect_node_map");
+            assert!(
+                group_reverb.is_some(),
+                "layer group reverb must be in GROUP_BUS_PROCESSING"
+            );
+            assert!(
+                engine
+                    .layer_group_effect_node_map
+                    .contains_key(&(1, effect_id)),
+                "tracked in layer_group_effect_node_map"
+            );
         }
 
         #[test]
@@ -1328,11 +1746,18 @@ mod tests {
             state.add_instrument(SourceType::Saw);
             let bus = &mut state.session.mixer.buses[0];
             let effect_id = bus.effect_chain.add_effect(EffectType::Reverb);
-            engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild");
+            engine
+                .rebuild_instrument_routing(&state.instruments, &state.session)
+                .expect("rebuild");
             backend.clear();
-            engine.set_bus_effect_param(BusId::new(1), effect_id, "mix", 0.6).expect("set param");
+            engine
+                .set_bus_effect_param(BusId::new(1), effect_id, "mix", 0.6)
+                .expect("set param");
             let set_op = backend.find(|op| matches!(op, TestOp::SetParam { param, value, .. } if param == "mix" && (*value - 0.6).abs() < 0.001));
-            assert!(set_op.is_some(), "set_bus_effect_param should record SetParam");
+            assert!(
+                set_op.is_some(),
+                "set_bus_effect_param should record SetParam"
+            );
         }
 
         #[test]
@@ -1343,14 +1768,24 @@ mod tests {
             if let Some(inst) = state.instruments.instrument_mut(inst_id) {
                 inst.layer.group = Some(1);
             }
-            state.session.mixer.add_layer_group_mixer(1, &[BusId::new(1)]);
+            state
+                .session
+                .mixer
+                .add_layer_group_mixer(1, &[BusId::new(1)]);
             let gm = state.session.mixer.layer_group_mixer_mut(1).unwrap();
             let effect_id = gm.effect_chain.add_effect(EffectType::Delay);
-            engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild");
+            engine
+                .rebuild_instrument_routing(&state.instruments, &state.session)
+                .expect("rebuild");
             backend.clear();
-            engine.set_layer_group_effect_param(1, effect_id, "time", 0.4).expect("set param");
+            engine
+                .set_layer_group_effect_param(1, effect_id, "time", 0.4)
+                .expect("set param");
             let set_op = backend.find(|op| matches!(op, TestOp::SetParam { param, value, .. } if param == "time" && (*value - 0.4).abs() < 0.001));
-            assert!(set_op.is_some(), "set_layer_group_effect_param should record SetParam");
+            assert!(
+                set_op.is_some(),
+                "set_layer_group_effect_param should record SetParam"
+            );
         }
 
         #[test]
@@ -1360,14 +1795,32 @@ mod tests {
             state.add_instrument(SourceType::Saw);
             let bus = &mut state.session.mixer.buses[0];
             bus.effect_chain.add_effect(EffectType::Reverb);
-            engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("first build");
-            let first_node = *engine.bus_effect_node_map.values().next().expect("has bus effect node");
+            engine
+                .rebuild_instrument_routing(&state.instruments, &state.session)
+                .expect("first build");
+            let first_node = *engine
+                .bus_effect_node_map
+                .values()
+                .next()
+                .expect("has bus effect node");
             backend.clear();
-            engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("second build");
+            engine
+                .rebuild_instrument_routing(&state.instruments, &state.session)
+                .expect("second build");
             let freed = backend.nodes_freed();
-            assert!(freed.contains(&first_node), "old bus effect node should be freed on rebuild");
-            let new_node = *engine.bus_effect_node_map.values().next().expect("has new bus effect node");
-            assert_ne!(first_node, new_node, "new bus effect node should be a different ID");
+            assert!(
+                freed.contains(&first_node),
+                "old bus effect node should be freed on rebuild"
+            );
+            let new_node = *engine
+                .bus_effect_node_map
+                .values()
+                .next()
+                .expect("has new bus effect node");
+            assert_ne!(
+                first_node, new_node,
+                "new bus effect node should be a different ID"
+            );
         }
 
         #[test]
@@ -1377,15 +1830,24 @@ mod tests {
             state.add_instrument(SourceType::Saw);
             let bus = &mut state.session.mixer.buses[0];
             let delay_id = bus.effect_chain.add_effect(EffectType::Delay);
-            if let Some(effect) = bus.effect_chain.effect_by_id_mut(delay_id) { effect.enabled = false; }
+            if let Some(effect) = bus.effect_chain.effect_by_id_mut(delay_id) {
+                effect.enabled = false;
+            }
             bus.effect_chain.add_effect(EffectType::Reverb);
-            engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild");
+            engine
+                .rebuild_instrument_routing(&state.instruments, &state.session)
+                .expect("rebuild");
             // Count effect synths in GROUP_BUS_PROCESSING (exclude bus_out synths)
             let delay_count = backend.count(|op| matches!(op, TestOp::CreateSynth { def_name, group_id, .. } if def_name == "imbolc_delay" && *group_id == GROUP_BUS_PROCESSING));
             let reverb_count = backend.count(|op| matches!(op, TestOp::CreateSynth { def_name, group_id, .. } if def_name == "imbolc_reverb" && *group_id == GROUP_BUS_PROCESSING));
             assert_eq!(delay_count, 0, "disabled delay should not be created");
             assert_eq!(reverb_count, 1, "enabled reverb should be created");
-            assert!(!engine.bus_effect_node_map.contains_key(&(BusId::new(1), delay_id)), "disabled effect not in node map");
+            assert!(
+                !engine
+                    .bus_effect_node_map
+                    .contains_key(&(BusId::new(1), delay_id)),
+                "disabled effect not in node map"
+            );
         }
 
         #[test]
@@ -1396,44 +1858,80 @@ mod tests {
             if let Some(inst) = state.instruments.instrument_mut(inst_id) {
                 inst.set_filter(Some(FilterType::Lpf));
                 inst.add_effect(EffectType::Delay);
-                inst.mixer.sends.insert(BusId::new(1), imbolc_types::MixerSend { bus_id: BusId::new(1), level: 0.5, enabled: true, tap_point: SendTapPoint::PreInsert });
+                inst.mixer.sends.insert(
+                    BusId::new(1),
+                    imbolc_types::MixerSend {
+                        bus_id: BusId::new(1),
+                        level: 0.5,
+                        enabled: true,
+                        tap_point: SendTapPoint::PreInsert,
+                    },
+                );
             }
-            engine.rebuild_instrument_routing(&state.instruments, &state.session).expect("rebuild routing");
+            engine
+                .rebuild_instrument_routing(&state.instruments, &state.session)
+                .expect("rebuild routing");
             let synths = backend.synths_created();
             // Get the send synth's `in` param
-            let send_in = synths.iter().find_map(|op| {
-                if let TestOp::CreateSynth { def_name, params, .. } = op {
-                    if def_name == "imbolc_send" {
-                        return params.iter().find(|(k, _)| k == "in").map(|(_, v)| *v);
+            let send_in = synths
+                .iter()
+                .find_map(|op| {
+                    if let TestOp::CreateSynth {
+                        def_name, params, ..
+                    } = op
+                    {
+                        if def_name == "imbolc_send" {
+                            return params.iter().find(|(k, _)| k == "in").map(|(_, v)| *v);
+                        }
                     }
-                }
-                None
-            }).expect("send synth in param");
+                    None
+                })
+                .expect("send synth in param");
             // Get the audio_in source synth's `out` param — this is the source_out bus
-            let source_out = synths.iter().find_map(|op| {
-                if let TestOp::CreateSynth { def_name, params, .. } = op {
-                    if def_name == "imbolc_audio_in" {
-                        return params.iter().find(|(k, _)| k == "out").map(|(_, v)| *v);
+            let source_out = synths
+                .iter()
+                .find_map(|op| {
+                    if let TestOp::CreateSynth {
+                        def_name, params, ..
+                    } = op
+                    {
+                        if def_name == "imbolc_audio_in" {
+                            return params.iter().find(|(k, _)| k == "out").map(|(_, v)| *v);
+                        }
                     }
-                }
-                None
-            }).expect("audio_in synth out param");
-            assert_eq!(send_in, source_out, "PreInsert send should tap from source_out bus (before filter/effects)");
+                    None
+                })
+                .expect("audio_in synth out param");
+            assert_eq!(
+                send_in, source_out,
+                "PreInsert send should tap from source_out bus (before filter/effects)"
+            );
             // Also verify it differs from the final bus (which goes through filter + delay)
-            let delay_out = synths.iter().find_map(|op| {
-                if let TestOp::CreateSynth { def_name, params, .. } = op {
-                    if def_name == "imbolc_delay" {
-                        return params.iter().find(|(k, _)| k == "out").map(|(_, v)| *v);
+            let delay_out = synths
+                .iter()
+                .find_map(|op| {
+                    if let TestOp::CreateSynth {
+                        def_name, params, ..
+                    } = op
+                    {
+                        if def_name == "imbolc_delay" {
+                            return params.iter().find(|(k, _)| k == "out").map(|(_, v)| *v);
+                        }
                     }
-                }
-                None
-            }).expect("delay synth out param");
-            assert_ne!(send_in, delay_out, "PreInsert tap should differ from post-effects final bus");
+                    None
+                })
+                .expect("delay synth out param");
+            assert_ne!(
+                send_in, delay_out,
+                "PreInsert tap should differ from post-effects final bus"
+            );
         }
     }
 
     mod lookahead_tests {
-        use super::super::{compute_lookahead, MIN_LOOKAHEAD_SECS, JITTER_MARGIN_SECS, DEFAULT_LOOKAHEAD_SECS};
+        use super::super::{
+            compute_lookahead, DEFAULT_LOOKAHEAD_SECS, JITTER_MARGIN_SECS, MIN_LOOKAHEAD_SECS,
+        };
 
         #[test]
         fn compute_lookahead_64_at_44100() {

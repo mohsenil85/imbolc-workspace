@@ -63,7 +63,7 @@ pub struct ClipPlacement {
     pub id: PlacementId,
     pub clip_id: ClipId,
     pub instrument_id: InstrumentId,
-    pub start_tick: u32,          // Absolute position on timeline
+    pub start_tick: u32,              // Absolute position on timeline
     pub length_override: Option<u32>, // Trim shorter than clip, None = use clip.length_ticks
 }
 
@@ -570,7 +570,10 @@ mod tests {
 
         let flat = arr.flatten_automation();
         assert_eq!(flat.len(), 1);
-        assert_eq!(flat[0].target, AutomationTarget::level(InstrumentId::new(1)));
+        assert_eq!(
+            flat[0].target,
+            AutomationTarget::level(InstrumentId::new(1))
+        );
         assert_eq!(flat[0].points.len(), 2);
         assert_eq!(flat[0].points[0].tick, 100);
         assert_eq!(flat[0].points[1].tick, 292);
@@ -582,7 +585,8 @@ mod tests {
         let cid = arr.add_clip("Test".to_string(), InstrumentId::new(1), 200);
 
         if let Some(clip) = arr.clip_mut(cid) {
-            let mut lane = AutomationLane::new(0, AutomationTarget::filter_cutoff(InstrumentId::new(1)));
+            let mut lane =
+                AutomationLane::new(0, AutomationTarget::filter_cutoff(InstrumentId::new(1)));
             lane.points.push(AutomationPoint::new(0, 0.5));
             lane.points.push(AutomationPoint::new(100, 1.0));
             clip.automation_lanes.push(lane);

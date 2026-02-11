@@ -7,7 +7,8 @@ use crate::components::effect_slot::{AddEffectButton, EffectSlotComponent};
 use crate::dispatch::{use_dispatch, DispatchExt};
 use crate::state::SharedState;
 use imbolc_types::{
-    Action, EffectId, FilterType, InstrumentAction, LfoShape, ParameterTarget, MixerAction, SourceType,
+    Action, EffectId, FilterType, InstrumentAction, LfoShape, MixerAction, ParameterTarget,
+    SourceType,
 };
 
 /// Instrument editor showing source, filter, effects, LFO, envelope, and parameters.
@@ -27,7 +28,13 @@ pub fn InstrumentEditor() -> Element {
 
             // Gather effects info (effect_id, chain_index, name, enabled, params)
             #[allow(clippy::type_complexity)]
-            let effects_info: Vec<(EffectId, usize, String, bool, Vec<(String, f32, f32, f32)>)> = i
+            let effects_info: Vec<(
+                EffectId,
+                usize,
+                String,
+                bool,
+                Vec<(String, f32, f32, f32)>,
+            )> = i
                 .effects()
                 .map(|e| {
                     let chain_idx = i.effect_chain_index(e.id).unwrap_or(0);
@@ -36,7 +43,13 @@ pub fn InstrumentEditor() -> Element {
                         .iter()
                         .map(|p| (p.name.clone(), p.value.to_f32(), p.min, p.max))
                         .collect();
-                    (e.id, chain_idx, e.effect_type.name().to_string(), e.enabled, params)
+                    (
+                        e.id,
+                        chain_idx,
+                        e.effect_type.name().to_string(),
+                        e.enabled,
+                        params,
+                    )
                 })
                 .collect();
 

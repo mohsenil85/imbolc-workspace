@@ -3,7 +3,7 @@ use std::any::Any;
 use crate::action::{Action, MidiAction};
 use crate::state::AppState;
 use crate::ui::action_id::{ActionId, MidiSettingsActionId};
-use crate::ui::{Rect, RenderBuf, Color, InputEvent, Keymap, Pane, Style};
+use crate::ui::{Color, InputEvent, Keymap, Pane, Rect, RenderBuf, Style};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Section {
@@ -64,7 +64,12 @@ impl Pane for MidiSettingsPane {
                         self.port_cursor = (self.port_cursor + 1).min(max);
                     }
                     Section::CcMappings => {
-                        let max = state.session.midi_recording.cc_mappings.len().saturating_sub(1);
+                        let max = state
+                            .session
+                            .midi_recording
+                            .cc_mappings
+                            .len()
+                            .saturating_sub(1);
                         self.mapping_cursor = (self.mapping_cursor + 1).min(max);
                     }
                     Section::Settings => {}
@@ -141,10 +146,13 @@ impl Pane for MidiSettingsPane {
         } else {
             "  [Not connected]".to_string()
         };
-        buf.draw_line(Rect::new(x, y, w, 1), &[
-            (" Ports ", section_style(Section::Ports)),
-            (&conn_text, dim),
-        ]);
+        buf.draw_line(
+            Rect::new(x, y, w, 1),
+            &[
+                (" Ports ", section_style(Section::Ports)),
+                (&conn_text, dim),
+            ],
+        );
         y += 1;
 
         if self.section == Section::Ports {
@@ -153,11 +161,17 @@ impl Pane for MidiSettingsPane {
                 y += 1;
             } else {
                 for (i, name) in state.midi.port_names.iter().enumerate() {
-                    if y >= inner.y + inner.height { break; }
+                    if y >= inner.y + inner.height {
+                        break;
+                    }
                     let is_connected = state.midi.connected_port.as_deref() == Some(name);
                     let prefix = if is_connected { " * " } else { "   " };
                     let text = format!("{}{}", prefix, name);
-                    let style = if i == self.port_cursor { highlight } else { normal };
+                    let style = if i == self.port_cursor {
+                        highlight
+                    } else {
+                        normal
+                    };
                     buf.draw_line(Rect::new(x, y, w, 1), &[(&text, style)]);
                     y += 1;
                 }
@@ -166,9 +180,17 @@ impl Pane for MidiSettingsPane {
         y += 1;
 
         // Section: CC Mappings
-        if y >= inner.y + inner.height { return; }
-        let mapping_title = format!(" CC Mappings ({})", state.session.midi_recording.cc_mappings.len());
-        buf.draw_line(Rect::new(x, y, w, 1), &[(&mapping_title, section_style(Section::CcMappings))]);
+        if y >= inner.y + inner.height {
+            return;
+        }
+        let mapping_title = format!(
+            " CC Mappings ({})",
+            state.session.midi_recording.cc_mappings.len()
+        );
+        buf.draw_line(
+            Rect::new(x, y, w, 1),
+            &[(&mapping_title, section_style(Section::CcMappings))],
+        );
         y += 1;
 
         if self.section == Section::CcMappings {
@@ -179,16 +201,24 @@ impl Pane for MidiSettingsPane {
                 }
             } else {
                 for (i, mapping) in state.session.midi_recording.cc_mappings.iter().enumerate() {
-                    if y >= inner.y + inner.height { break; }
+                    if y >= inner.y + inner.height {
+                        break;
+                    }
                     let ch_str = match mapping.channel {
                         Some(ch) => format!("ch{}", ch + 1),
                         None => "any".to_string(),
                     };
                     let text = format!(
                         "  CC{:<3} {} -> {}",
-                        mapping.cc_number, ch_str, mapping.target.name()
+                        mapping.cc_number,
+                        ch_str,
+                        mapping.target.name()
                     );
-                    let style = if i == self.mapping_cursor { highlight } else { normal };
+                    let style = if i == self.mapping_cursor {
+                        highlight
+                    } else {
+                        normal
+                    };
                     buf.draw_line(Rect::new(x, y, w, 1), &[(&text, style)]);
                     y += 1;
                 }
@@ -197,30 +227,53 @@ impl Pane for MidiSettingsPane {
         y += 1;
 
         // Section: Settings
-        if y >= inner.y + inner.height { return; }
-        buf.draw_line(Rect::new(x, y, w, 1), &[(" Settings", section_style(Section::Settings))]);
+        if y >= inner.y + inner.height {
+            return;
+        }
+        buf.draw_line(
+            Rect::new(x, y, w, 1),
+            &[(" Settings", section_style(Section::Settings))],
+        );
         y += 1;
 
         if self.section == Section::Settings {
             let settings = [
-                format!("  Note passthrough: {}", if state.session.midi_recording.note_passthrough { "ON" } else { "OFF" }),
-                format!("  Channel filter: {}", match state.session.midi_recording.channel_filter {
-                    Some(ch) => format!("Ch {}", ch + 1),
-                    None => "All".to_string(),
-                }),
-                format!("  Live input instrument: {}", match state.session.midi_recording.live_input_instrument {
-                    Some(id) => {
-                        state.instruments.instruments.iter()
-                            .find(|i| i.id == id)
-                            .map(|i| i.name.clone())
-                            .unwrap_or_else(|| format!("#{}", id))
+                format!(
+                    "  Note passthrough: {}",
+                    if state.session.midi_recording.note_passthrough {
+                        "ON"
+                    } else {
+                        "OFF"
                     }
-                    None => "(selected)".to_string(),
-                }),
+                ),
+                format!(
+                    "  Channel filter: {}",
+                    match state.session.midi_recording.channel_filter {
+                        Some(ch) => format!("Ch {}", ch + 1),
+                        None => "All".to_string(),
+                    }
+                ),
+                format!(
+                    "  Live input instrument: {}",
+                    match state.session.midi_recording.live_input_instrument {
+                        Some(id) => {
+                            state
+                                .instruments
+                                .instruments
+                                .iter()
+                                .find(|i| i.id == id)
+                                .map(|i| i.name.clone())
+                                .unwrap_or_else(|| format!("#{}", id))
+                        }
+                        None => "(selected)".to_string(),
+                    }
+                ),
             ];
 
             for line in &settings {
-                if y >= inner.y + inner.height { break; }
+                if y >= inner.y + inner.height {
+                    break;
+                }
                 buf.draw_line(Rect::new(x, y, w, 1), &[(line.as_str(), normal)]);
                 y += 1;
             }

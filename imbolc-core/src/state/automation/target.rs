@@ -11,15 +11,25 @@ pub trait AutomationTargetExt {
     /// Get context-aware automation targets for an instrument.
     /// Includes the static 10 targets plus context-dependent ones based on
     /// the instrument's effects, source type, VST plugins, and EQ.
-    fn targets_for_instrument_context(inst: &Instrument, vst_registry: &VstPluginRegistry) -> Vec<AutomationTarget>;
+    fn targets_for_instrument_context(
+        inst: &Instrument,
+        vst_registry: &VstPluginRegistry,
+    ) -> Vec<AutomationTarget>;
 
     /// Get a context-aware display name using instrument data for richer labels.
     /// Falls back to `name()` for targets that don't benefit from context.
-    fn name_with_context(&self, inst: Option<&Instrument>, vst_registry: &VstPluginRegistry) -> String;
+    fn name_with_context(
+        &self,
+        inst: Option<&Instrument>,
+        vst_registry: &VstPluginRegistry,
+    ) -> String;
 }
 
 impl AutomationTargetExt for AutomationTarget {
-    fn targets_for_instrument_context(inst: &Instrument, vst_registry: &VstPluginRegistry) -> Vec<AutomationTarget> {
+    fn targets_for_instrument_context(
+        inst: &Instrument,
+        vst_registry: &VstPluginRegistry,
+    ) -> Vec<AutomationTarget> {
         let id = inst.id;
         let mut targets = AutomationTarget::targets_for_instrument(id);
 
@@ -29,7 +39,11 @@ impl AutomationTargetExt for AutomationTarget {
                 continue;
             }
             for (param_idx, _param) in effect.params.iter().enumerate() {
-                targets.push(AutomationTarget::effect_param(id, effect.id, ParamIndex::new(param_idx)));
+                targets.push(AutomationTarget::effect_param(
+                    id,
+                    effect.id,
+                    ParamIndex::new(param_idx),
+                ));
             }
             // Effect bypass
             targets.push(AutomationTarget::effect_bypass(id, effect.id));
@@ -62,7 +76,11 @@ impl AutomationTargetExt for AutomationTarget {
         targets
     }
 
-    fn name_with_context(&self, inst: Option<&Instrument>, vst_registry: &VstPluginRegistry) -> String {
+    fn name_with_context(
+        &self,
+        inst: Option<&Instrument>,
+        vst_registry: &VstPluginRegistry,
+    ) -> String {
         match self.parameter_target() {
             Some(ParameterTarget::EffectParam(effect_id, param_idx)) => {
                 if let Some(inst) = inst {
@@ -79,7 +97,9 @@ impl AutomationTargetExt for AutomationTarget {
                 if let Some(inst) = inst {
                     if let SourceType::Vst(vst_id) = inst.source {
                         if let Some(plugin) = vst_registry.get(vst_id) {
-                            if let Some(param) = plugin.params.iter().find(|p| p.index == *param_index) {
+                            if let Some(param) =
+                                plugin.params.iter().find(|p| p.index == *param_index)
+                            {
                                 return format!("VST: {}", param.name);
                             }
                         }

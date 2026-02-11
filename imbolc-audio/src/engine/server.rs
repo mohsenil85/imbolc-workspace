@@ -7,7 +7,10 @@ use std::thread;
 use std::time::Duration;
 
 use super::backend::{AudioBackend, RawArg, ScBackend};
-use super::{AudioEngine, ServerStatus, GROUP_SOURCES, GROUP_PROCESSING, GROUP_OUTPUT, GROUP_BUS_PROCESSING, GROUP_RECORD, GROUP_SAFETY};
+use super::{
+    AudioEngine, ServerStatus, GROUP_BUS_PROCESSING, GROUP_OUTPUT, GROUP_PROCESSING, GROUP_RECORD,
+    GROUP_SAFETY, GROUP_SOURCES,
+};
 use crate::osc_client::{AudioMonitor, OscClient};
 use regex::Regex;
 
@@ -24,6 +27,7 @@ fn spawn_scsynth(
     input_device: Option<String>,
     output_device: Option<String>,
     buffer_size: u32,
+    scsynth_args: String,
 ) -> Result<ServerSpawnResult, String> {
     let scsynth_paths = [
         "scsynth",
@@ -34,8 +38,10 @@ fn spawn_scsynth(
 
     // Build args: base port + buffer size + optional device flags
     let mut args: Vec<String> = vec![
-        "-u".to_string(), "57110".to_string(),
-        "-Z".to_string(), buffer_size.to_string(),
+        "-u".to_string(),
+        "57110".to_string(),
+        "-Z".to_string(),
+        buffer_size.to_string(),
     ];
 
     // Resolve "System Default" to actual device names so we always
@@ -61,6 +67,12 @@ fn spawn_scsynth(
             args.push(dev.to_string());
         }
         (None, None) => {}
+    }
+
+    // Append optional user-provided extra args (split on whitespace).
+    // Examples: "-n 65536 -a 32768 -m 131072"
+    if !scsynth_args.trim().is_empty() {
+        args.extend(scsynth_args.split_whitespace().map(|s| s.to_string()));
     }
 
     // Redirect scsynth output to a log file for crash diagnostics
@@ -94,14 +106,20 @@ fn spawn_scsynth(
         };
         match cmd
             .args(&arg_refs)
-            .stdout(stdout_file.as_ref()
-                .and_then(|f| f.try_clone().ok())
-                .map(Stdio::from)
-                .unwrap_or_else(Stdio::null))
-            .stderr(stderr_file.as_ref()
-                .and_then(|f| f.try_clone().ok())
-                .map(Stdio::from)
-                .unwrap_or_else(Stdio::null))
+            .stdout(
+                stdout_file
+                    .as_ref()
+                    .and_then(|f| f.try_clone().ok())
+                    .map(Stdio::from)
+                    .unwrap_or_else(Stdio::null),
+            )
+            .stderr(
+                stderr_file
+                    .as_ref()
+                    .and_then(|f| f.try_clone().ok())
+                    .map(Stdio::from)
+                    .unwrap_or_else(Stdio::null),
+            )
             .spawn()
         {
             Ok(child) => {
@@ -117,7 +135,7 @@ fn spawn_scsynth(
 impl AudioEngine {
     #[allow(dead_code)]
     pub fn start_server(&mut self) -> Result<(), String> {
-        self.start_server_with_devices(None, None, 512, 44100)
+        self.start_server_with_devices(None, None, 512, 44100, "")
     }
 
     /// Synchronous server start — used by the `StartServer` command which has a reply channel.
@@ -127,6 +145,7 @@ impl AudioEngine {
         output_device: Option<&str>,
         buffer_size: u32,
         sample_rate: u32,
+        scsynth_args: &str,
     ) -> Result<(), String> {
         if self.scsynth_process.is_some() {
             return Err("Server already running".to_string());
@@ -139,6 +158,7 @@ impl AudioEngine {
             input_device.map(|s| s.to_string()),
             output_device.map(|s| s.to_string()),
             buffer_size,
+            scsynth_args.to_string(),
         )?;
 
         self.scsynth_process = Some(result.child);
@@ -159,6 +179,7 @@ impl AudioEngine {
         input_device: Option<String>,
         output_device: Option<String>,
         buffer_size: u32,
+        scsynth_args: String,
     ) -> Result<mpsc::Receiver<Result<ServerSpawnResult, String>>, String> {
         if self.scsynth_process.is_some() {
             return Err("Server already running".to_string());
@@ -168,7 +189,7 @@ impl AudioEngine {
 
         let (tx, rx) = mpsc::channel();
         thread::spawn(move || {
-            let result = spawn_scsynth(input_device, output_device, buffer_size);
+            let result = spawn_scsynth(input_device, output_device, buffer_size, scsynth_args);
             let _ = tx.send(result);
         });
 
@@ -396,7 +417,8 @@ impl AudioEngine {
     pub fn connect(&mut self, server_addr: &str) -> std::io::Result<()> {
         let client = OscClient::new(server_addr)?;
         let backend = ScBackend::new(client);
-        backend.send_raw("/notify", vec![RawArg::Int(1)])
+        backend
+            .send_raw("/notify", vec![RawArg::Int(1)])
             .map_err(|e| std::io::Error::other(e.to_string()))?;
         self.backend = Some(Box::new(backend));
         self.is_running = true;
@@ -405,10 +427,15 @@ impl AudioEngine {
         Ok(())
     }
 
-    pub fn connect_with_monitor(&mut self, server_addr: &str, monitor: AudioMonitor) -> std::io::Result<()> {
+    pub fn connect_with_monitor(
+        &mut self,
+        server_addr: &str,
+        monitor: AudioMonitor,
+    ) -> std::io::Result<()> {
         let client = OscClient::new_with_monitor(server_addr, monitor)?;
         let backend = ScBackend::new(client);
-        backend.send_raw("/notify", vec![RawArg::Int(1)])
+        backend
+            .send_raw("/notify", vec![RawArg::Int(1)])
             .map_err(|e| std::io::Error::other(e.to_string()))?;
         self.backend = Some(Box::new(backend));
         self.is_running = true;
@@ -429,7 +456,8 @@ impl AudioEngine {
                 let client = OscClient::new_with_monitor(&server_addr, monitor)
                     .map_err(|e| e.to_string())?;
                 let backend = ScBackend::new(client);
-                backend.send_raw("/notify", vec![RawArg::Int(1)])
+                backend
+                    .send_raw("/notify", vec![RawArg::Int(1)])
                     .map_err(|e| e.to_string())?;
                 Ok(Box::new(backend) as Box<dyn AudioBackend + Send>)
             })();
@@ -545,7 +573,8 @@ impl AudioEngine {
         let _ = self.voice_allocator.drain_all();
         // Return oneshot buses to the pool before clearing
         for (_, buses) in self.oneshot_buses.drain() {
-            self.voice_allocator.return_control_buses(buses.0, buses.1, buses.2);
+            self.voice_allocator
+                .return_control_buses(buses.0, buses.1, buses.2);
         }
         self.analysis_node_ids.clear();
         self.buffer_map.clear();
@@ -567,12 +596,24 @@ impl AudioEngine {
             return Ok(());
         }
         let backend = self.backend.as_ref().ok_or("Not connected")?;
-        backend.create_group(GROUP_SOURCES, 1, 0).map_err(|e| e.to_string())?;
-        backend.create_group(GROUP_PROCESSING, 1, 0).map_err(|e| e.to_string())?;
-        backend.create_group(GROUP_OUTPUT, 1, 0).map_err(|e| e.to_string())?;
-        backend.create_group(GROUP_BUS_PROCESSING, 1, 0).map_err(|e| e.to_string())?;
-        backend.create_group(GROUP_RECORD, 1, 0).map_err(|e| e.to_string())?;
-        backend.create_group(GROUP_SAFETY, 1, 0).map_err(|e| e.to_string())?;
+        backend
+            .create_group(GROUP_SOURCES, 1, 0)
+            .map_err(|e| e.to_string())?;
+        backend
+            .create_group(GROUP_PROCESSING, 1, 0)
+            .map_err(|e| e.to_string())?;
+        backend
+            .create_group(GROUP_OUTPUT, 1, 0)
+            .map_err(|e| e.to_string())?;
+        backend
+            .create_group(GROUP_BUS_PROCESSING, 1, 0)
+            .map_err(|e| e.to_string())?;
+        backend
+            .create_group(GROUP_RECORD, 1, 0)
+            .map_err(|e| e.to_string())?;
+        backend
+            .create_group(GROUP_SAFETY, 1, 0)
+            .map_err(|e| e.to_string())?;
         self.groups_created = true;
         Ok(())
     }

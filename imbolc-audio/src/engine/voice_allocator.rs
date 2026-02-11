@@ -64,17 +64,15 @@ impl VoiceAllocator {
     /// Handles:
     /// 1. Same-pitch retrigger (always steal matching pitch)
     /// 2. Over-limit stealing (steal lowest-scored candidate)
-    pub fn steal_voices(
-        &mut self,
-        instrument_id: InstrumentId,
-        pitch: u8,
-    ) -> Vec<VoiceChain> {
+    pub fn steal_voices(&mut self, instrument_id: InstrumentId, pitch: u8) -> Vec<VoiceChain> {
         let mut stolen = Vec::new();
 
         // 1. Same-pitch retrigger: steal any voice (active or released) with the same pitch
-        if let Some(pos) = self.chains.iter().position(|v| {
-            v.instrument_id == instrument_id && v.pitch == pitch
-        }) {
+        if let Some(pos) = self
+            .chains
+            .iter()
+            .position(|v| v.instrument_id == instrument_id && v.pitch == pitch)
+        {
             let voice = self.chains.remove(pos);
             stolen.push(voice);
         }
@@ -108,7 +106,9 @@ impl VoiceAllocator {
             .min_by(|(_, a), (_, b)| {
                 let score_a = Self::steal_score(a, now);
                 let score_b = Self::steal_score(b, now);
-                score_a.partial_cmp(&score_b).unwrap_or(std::cmp::Ordering::Equal)
+                score_a
+                    .partial_cmp(&score_b)
+                    .unwrap_or(std::cmp::Ordering::Equal)
             })
             .map(|(i, _)| i)
     }
@@ -142,15 +142,9 @@ impl VoiceAllocator {
         pitch: u8,
         release_time: f32,
     ) -> Option<usize> {
-        if let Some(pos) = self
-            .chains
-            .iter()
-            .position(|v| {
-                v.instrument_id == instrument_id
-                    && v.pitch == pitch
-                    && v.release_state.is_none()
-            })
-        {
+        if let Some(pos) = self.chains.iter().position(|v| {
+            v.instrument_id == instrument_id && v.pitch == pitch && v.release_state.is_none()
+        }) {
             self.chains[pos].release_state = Some((Instant::now(), release_time));
             Some(pos)
         } else {
@@ -193,7 +187,8 @@ impl VoiceAllocator {
         let mut expired = Vec::new();
         let mut i = 0;
         while i < self.chains.len() {
-            let is_expired = if let Some((released_at, release_dur)) = self.chains[i].release_state {
+            let is_expired = if let Some((released_at, release_dur)) = self.chains[i].release_state
+            {
                 now.duration_since(released_at).as_secs_f32() >= release_dur + 1.5
             } else {
                 false
@@ -222,8 +217,13 @@ impl VoiceAllocator {
     }
 
     /// Iterate over all voices for a given instrument.
-    pub fn voices_for_instrument(&self, instrument_id: InstrumentId) -> impl Iterator<Item = &VoiceChain> {
-        self.chains.iter().filter(move |v| v.instrument_id == instrument_id)
+    pub fn voices_for_instrument(
+        &self,
+        instrument_id: InstrumentId,
+    ) -> impl Iterator<Item = &VoiceChain> {
+        self.chains
+            .iter()
+            .filter(move |v| v.instrument_id == instrument_id)
     }
 
     /// Access all voice chains (read-only).
@@ -255,7 +255,12 @@ mod tests {
         InstrumentId::new(n)
     }
 
-    fn make_voice(inst_id: InstrumentId, pitch: u8, group_id: i32, buses: (i32, i32, i32)) -> VoiceChain {
+    fn make_voice(
+        inst_id: InstrumentId,
+        pitch: u8,
+        group_id: i32,
+        buses: (i32, i32, i32),
+    ) -> VoiceChain {
         VoiceChain {
             instrument_id: inst_id,
             pitch,
@@ -270,7 +275,12 @@ mod tests {
         }
     }
 
-    fn make_expired_voice(inst_id: InstrumentId, pitch: u8, group_id: i32, buses: (i32, i32, i32)) -> VoiceChain {
+    fn make_expired_voice(
+        inst_id: InstrumentId,
+        pitch: u8,
+        group_id: i32,
+        buses: (i32, i32, i32),
+    ) -> VoiceChain {
         VoiceChain {
             instrument_id: inst_id,
             pitch,

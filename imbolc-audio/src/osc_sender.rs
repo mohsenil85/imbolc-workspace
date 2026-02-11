@@ -25,7 +25,11 @@ const SEND_QUEUE_CAPACITY: usize = 512;
 pub fn spawn_osc_sender(
     socket: UdpSocket,
     server_addr: SocketAddr,
-) -> (Sender<OscSendEntry>, std::sync::Arc<std::sync::atomic::AtomicUsize>, JoinHandle<()>) {
+) -> (
+    Sender<OscSendEntry>,
+    std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    JoinHandle<()>,
+) {
     let (tx, rx) = crossbeam_channel::bounded::<OscSendEntry>(SEND_QUEUE_CAPACITY);
     let queue_depth = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let depth_clone = queue_depth.clone();

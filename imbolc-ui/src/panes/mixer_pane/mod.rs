@@ -16,7 +16,9 @@ const NUM_VISIBLE_GROUPS: usize = 2;
 const NUM_VISIBLE_BUSES: usize = 2;
 
 /// Block characters for vertical meter
-const BLOCK_CHARS: [char; 8] = ['\u{2581}', '\u{2582}', '\u{2583}', '\u{2584}', '\u{2585}', '\u{2586}', '\u{2587}', '\u{2588}'];
+const BLOCK_CHARS: [char; 8] = [
+    '\u{2581}', '\u{2582}', '\u{2583}', '\u{2584}', '\u{2585}', '\u{2586}', '\u{2587}', '\u{2588}',
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DetailTarget {
@@ -156,11 +158,16 @@ impl MixerPane {
     }
 
     /// Get the instrument index and ID for the current detail mode target (instrument only)
-    fn detail_instrument<'a>(&self, state: &'a AppState) -> Option<(usize, &'a crate::state::Instrument)> {
+    fn detail_instrument<'a>(
+        &self,
+        state: &'a AppState,
+    ) -> Option<(usize, &'a crate::state::Instrument)> {
         match self.detail_mode? {
-            DetailTarget::Instrument(idx) => {
-                state.instruments.instruments.get(idx).map(|inst| (idx, inst))
-            }
+            DetailTarget::Instrument(idx) => state
+                .instruments
+                .instruments
+                .get(idx)
+                .map(|inst| (idx, inst)),
             DetailTarget::LayerGroup(_) | DetailTarget::Bus(_) => None,
         }
     }
@@ -186,11 +193,14 @@ impl MixerPane {
 
     /// Max cursor position for current section
     fn max_cursor(&self, state: &AppState) -> usize {
-        let Some((_, inst)) = self.detail_instrument(state) else { return 0 };
+        let Some((_, inst)) = self.detail_instrument(state) else {
+            return 0;
+        };
         match self.detail_section {
             MixerSection::Effects => {
-                if inst.effects().next().is_none() { 0 }
-                else {
+                if inst.effects().next().is_none() {
+                    0
+                } else {
                     let mut count: usize = 0;
                     for effect in inst.effects() {
                         count += 1 + effect.params.len();
@@ -200,7 +210,11 @@ impl MixerPane {
             }
             MixerSection::Sends => inst.mixer.sends.len().saturating_sub(1),
             MixerSection::Filter => {
-                if inst.filter().is_some() { 2 } else { 0 }
+                if inst.filter().is_some() {
+                    2
+                } else {
+                    0
+                }
             }
             MixerSection::Lfo => 2,
             MixerSection::Output => 2,
@@ -208,41 +222,62 @@ impl MixerPane {
     }
 
     /// Decode effect cursor into (effect_id, param_index_within_effect) where None = header
-    fn decode_effect_cursor(&self, state: &AppState) -> Option<(crate::state::EffectId, Option<imbolc_types::ParamIndex>)> {
+    fn decode_effect_cursor(
+        &self,
+        state: &AppState,
+    ) -> Option<(crate::state::EffectId, Option<imbolc_types::ParamIndex>)> {
         let (_, inst) = self.detail_instrument(state)?;
         inst.decode_effect_cursor(self.detail_cursor)
     }
 
     /// Max cursor for bus detail section
     fn bus_max_cursor(&self, state: &AppState) -> usize {
-        let Some(bus_id) = self.detail_bus_id() else { return 0 };
-        let Some(bus) = state.session.bus(bus_id) else { return 0 };
+        let Some(bus_id) = self.detail_bus_id() else {
+            return 0;
+        };
+        let Some(bus) = state.session.bus(bus_id) else {
+            return 0;
+        };
         match self.bus_detail_section {
-            BusDetailSection::Effects => crate::state::effects_max_cursor(&bus.effect_chain.effects),
+            BusDetailSection::Effects => {
+                crate::state::effects_max_cursor(&bus.effect_chain.effects)
+            }
             BusDetailSection::Output => 1, // pan, level
         }
     }
 
     /// Max cursor for group detail section
     fn group_max_cursor(&self, state: &AppState) -> usize {
-        let Some(gid) = self.detail_group_id() else { return 0 };
-        let Some(gm) = state.session.mixer.layer_group_mixer(gid) else { return 0 };
+        let Some(gid) = self.detail_group_id() else {
+            return 0;
+        };
+        let Some(gm) = state.session.mixer.layer_group_mixer(gid) else {
+            return 0;
+        };
         match self.group_detail_section {
-            GroupDetailSection::Effects => crate::state::effects_max_cursor(&gm.effect_chain.effects),
+            GroupDetailSection::Effects => {
+                crate::state::effects_max_cursor(&gm.effect_chain.effects)
+            }
             GroupDetailSection::Sends => gm.sends.len().saturating_sub(1),
             GroupDetailSection::Output => 1, // pan, level
         }
     }
 
     /// Decode bus effect cursor into (effect_id, param_index) where None = header
-    fn decode_bus_effect_cursor(&self, state: &AppState) -> Option<(crate::state::EffectId, Option<imbolc_types::ParamIndex>)> {
+    fn decode_bus_effect_cursor(
+        &self,
+        state: &AppState,
+    ) -> Option<(crate::state::EffectId, Option<imbolc_types::ParamIndex>)> {
         let bus_id = self.detail_bus_id()?;
         let bus = state.session.bus(bus_id)?;
         crate::state::decode_effect_cursor_from_slice(&bus.effect_chain.effects, self.detail_cursor)
     }
 
     /// Decode group effect cursor into (effect_id, param_index) where None = header
-    fn decode_group_effect_cursor(&self, state: &AppState) -> Option<(crate::state::EffectId, Option<imbolc_types::ParamIndex>)> {
+    fn decode_group_effect_cursor(
+        &self,
+        state: &AppState,
+    ) -> Option<(crate::state::EffectId, Option<imbolc_types::ParamIndex>)> {
         let gid = self.detail_group_id()?;
         let gm = state.session.mixer.layer_group_mixer(gid)?;
         crate::state::decode_effect_cursor_from_slice(&gm.effect_chain.effects, self.detail_cursor)
@@ -309,8 +344,10 @@ impl Pane for MixerPane {
 mod tests {
     use super::*;
     use crate::state::{AppState, MixerSelection};
-    use crate::ui::{BusAction, InputEvent, KeyCode, LayerGroupAction, MixerAction, Modifiers, NavAction};
     use crate::ui::action_id::MixerActionId;
+    use crate::ui::{
+        BusAction, InputEvent, KeyCode, LayerGroupAction, MixerAction, Modifiers, NavAction,
+    };
     use imbolc_types::BusId;
 
     fn dummy_event() -> InputEvent {
@@ -322,11 +359,19 @@ mod tests {
         let mut pane = MixerPane::new(Keymap::new());
         let state = AppState::new();
 
-        let action = pane.handle_action(ActionId::Mixer(MixerActionId::SendNext), &dummy_event(), &state);
+        let action = pane.handle_action(
+            ActionId::Mixer(MixerActionId::SendNext),
+            &dummy_event(),
+            &state,
+        );
         assert!(matches!(action, Action::None));
         assert_eq!(pane.send_target, Some(BusId::new(1)));
 
-        let action = pane.handle_action(ActionId::Mixer(MixerActionId::LevelUp), &dummy_event(), &state);
+        let action = pane.handle_action(
+            ActionId::Mixer(MixerActionId::LevelUp),
+            &dummy_event(),
+            &state,
+        );
         match action {
             Action::Mixer(MixerAction::AdjustSend(bus_id, delta)) => {
                 assert_eq!(bus_id, BusId::new(1));
@@ -335,7 +380,11 @@ mod tests {
             _ => panic!("Expected AdjustSend when send_target is set"),
         }
 
-        let action = pane.handle_action(ActionId::Mixer(MixerActionId::ClearSend), &dummy_event(), &state);
+        let action = pane.handle_action(
+            ActionId::Mixer(MixerActionId::ClearSend),
+            &dummy_event(),
+            &state,
+        );
         assert!(matches!(action, Action::None));
         assert_eq!(pane.send_target, None);
     }
@@ -346,12 +395,14 @@ mod tests {
         let state = AppState::new();
 
         pane.send_target = Some(BusId::new(3));
-        let action = pane.handle_action(ActionId::Mixer(MixerActionId::Prev), &dummy_event(), &state);
+        let action =
+            pane.handle_action(ActionId::Mixer(MixerActionId::Prev), &dummy_event(), &state);
         assert!(matches!(action, Action::Mixer(MixerAction::Move(-1))));
         assert_eq!(pane.send_target, None);
 
         pane.send_target = Some(BusId::new(2));
-        let action = pane.handle_action(ActionId::Mixer(MixerActionId::Next), &dummy_event(), &state);
+        let action =
+            pane.handle_action(ActionId::Mixer(MixerActionId::Next), &dummy_event(), &state);
         assert!(matches!(action, Action::Mixer(MixerAction::Move(1))));
         assert_eq!(pane.send_target, None);
     }
@@ -363,14 +414,22 @@ mod tests {
         state.session.mixer.selection = MixerSelection::Bus(BusId::new(1));
 
         // Enter bus detail
-        let action = pane.handle_action(ActionId::Mixer(MixerActionId::EnterDetail), &dummy_event(), &state);
+        let action = pane.handle_action(
+            ActionId::Mixer(MixerActionId::EnterDetail),
+            &dummy_event(),
+            &state,
+        );
         assert!(matches!(action, Action::None));
         assert_eq!(pane.detail_mode, Some(DetailTarget::Bus(BusId::new(1))));
         assert_eq!(pane.bus_detail_section, BusDetailSection::Effects);
         assert_eq!(pane.detail_cursor, 0);
 
         // Escape back to overview
-        let action = pane.handle_action(ActionId::Mixer(MixerActionId::Escape), &dummy_event(), &state);
+        let action = pane.handle_action(
+            ActionId::Mixer(MixerActionId::Escape),
+            &dummy_event(),
+            &state,
+        );
         assert!(matches!(action, Action::None));
         assert_eq!(pane.detail_mode, None);
     }
@@ -382,7 +441,11 @@ mod tests {
         state.session.mixer.add_layer_group_mixer(1, &[]);
         state.session.mixer.selection = MixerSelection::LayerGroup(1);
 
-        let action = pane.handle_action(ActionId::Mixer(MixerActionId::EnterDetail), &dummy_event(), &state);
+        let action = pane.handle_action(
+            ActionId::Mixer(MixerActionId::EnterDetail),
+            &dummy_event(),
+            &state,
+        );
         assert!(matches!(action, Action::None));
         assert_eq!(pane.detail_mode, Some(DetailTarget::LayerGroup(1)));
         assert_eq!(pane.group_detail_section, GroupDetailSection::Effects);
@@ -395,16 +458,28 @@ mod tests {
         state.session.mixer.selection = MixerSelection::Bus(BusId::new(1));
 
         // Enter bus detail
-        pane.handle_action(ActionId::Mixer(MixerActionId::EnterDetail), &dummy_event(), &state);
+        pane.handle_action(
+            ActionId::Mixer(MixerActionId::EnterDetail),
+            &dummy_event(),
+            &state,
+        );
         assert_eq!(pane.bus_detail_section, BusDetailSection::Effects);
 
         // Cycle to Output
-        pane.handle_action(ActionId::Mixer(MixerActionId::Section), &dummy_event(), &state);
+        pane.handle_action(
+            ActionId::Mixer(MixerActionId::Section),
+            &dummy_event(),
+            &state,
+        );
         assert_eq!(pane.bus_detail_section, BusDetailSection::Output);
         assert_eq!(pane.detail_cursor, 0);
 
         // Cycle back to Effects
-        pane.handle_action(ActionId::Mixer(MixerActionId::Section), &dummy_event(), &state);
+        pane.handle_action(
+            ActionId::Mixer(MixerActionId::Section),
+            &dummy_event(),
+            &state,
+        );
         assert_eq!(pane.bus_detail_section, BusDetailSection::Effects);
     }
 
@@ -414,23 +489,55 @@ mod tests {
         let mut state = AppState::new();
         state.session.mixer.selection = MixerSelection::Bus(BusId::new(1));
 
-        pane.handle_action(ActionId::Mixer(MixerActionId::EnterDetail), &dummy_event(), &state);
-        let action = pane.handle_action(ActionId::Mixer(MixerActionId::AddEffect), &dummy_event(), &state);
-        assert!(matches!(action, Action::Nav(NavAction::PushPane(crate::ui::PaneId::AddEffect))));
+        pane.handle_action(
+            ActionId::Mixer(MixerActionId::EnterDetail),
+            &dummy_event(),
+            &state,
+        );
+        let action = pane.handle_action(
+            ActionId::Mixer(MixerActionId::AddEffect),
+            &dummy_event(),
+            &state,
+        );
+        assert!(matches!(
+            action,
+            Action::Nav(NavAction::PushPane(crate::ui::PaneId::AddEffect))
+        ));
     }
 
     #[test]
     fn bus_detail_remove_effect() {
         let mut pane = MixerPane::new(Keymap::new());
         let mut state = AppState::new();
-        state.session.bus_mut(BusId::new(1)).unwrap().effect_chain.add_effect(crate::state::EffectType::Reverb);
-        let effect_id = state.session.bus(BusId::new(1)).unwrap().effect_chain.effects[0].id;
+        state
+            .session
+            .bus_mut(BusId::new(1))
+            .unwrap()
+            .effect_chain
+            .add_effect(crate::state::EffectType::Reverb);
+        let effect_id = state
+            .session
+            .bus(BusId::new(1))
+            .unwrap()
+            .effect_chain
+            .effects[0]
+            .id;
 
         state.session.mixer.selection = MixerSelection::Bus(BusId::new(1));
-        pane.handle_action(ActionId::Mixer(MixerActionId::EnterDetail), &dummy_event(), &state);
+        pane.handle_action(
+            ActionId::Mixer(MixerActionId::EnterDetail),
+            &dummy_event(),
+            &state,
+        );
 
-        let action = pane.handle_action(ActionId::Mixer(MixerActionId::RemoveEffect), &dummy_event(), &state);
-        assert!(matches!(action, Action::Bus(BusAction::RemoveEffect(id, eid)) if id == BusId::new(1) && eid == effect_id));
+        let action = pane.handle_action(
+            ActionId::Mixer(MixerActionId::RemoveEffect),
+            &dummy_event(),
+            &state,
+        );
+        assert!(
+            matches!(action, Action::Bus(BusAction::RemoveEffect(id, eid)) if id == BusId::new(1) && eid == effect_id)
+        );
     }
 
     #[test]
@@ -440,16 +547,32 @@ mod tests {
         state.session.mixer.add_layer_group_mixer(1, &[]);
         state.session.mixer.selection = MixerSelection::LayerGroup(1);
 
-        pane.handle_action(ActionId::Mixer(MixerActionId::EnterDetail), &dummy_event(), &state);
+        pane.handle_action(
+            ActionId::Mixer(MixerActionId::EnterDetail),
+            &dummy_event(),
+            &state,
+        );
         assert_eq!(pane.group_detail_section, GroupDetailSection::Effects);
 
-        pane.handle_action(ActionId::Mixer(MixerActionId::Section), &dummy_event(), &state);
+        pane.handle_action(
+            ActionId::Mixer(MixerActionId::Section),
+            &dummy_event(),
+            &state,
+        );
         assert_eq!(pane.group_detail_section, GroupDetailSection::Sends);
 
-        pane.handle_action(ActionId::Mixer(MixerActionId::Section), &dummy_event(), &state);
+        pane.handle_action(
+            ActionId::Mixer(MixerActionId::Section),
+            &dummy_event(),
+            &state,
+        );
         assert_eq!(pane.group_detail_section, GroupDetailSection::Output);
 
-        pane.handle_action(ActionId::Mixer(MixerActionId::Section), &dummy_event(), &state);
+        pane.handle_action(
+            ActionId::Mixer(MixerActionId::Section),
+            &dummy_event(),
+            &state,
+        );
         assert_eq!(pane.group_detail_section, GroupDetailSection::Effects);
     }
 
@@ -458,14 +581,37 @@ mod tests {
         let mut pane = MixerPane::new(Keymap::new());
         let mut state = AppState::new();
         state.session.mixer.add_layer_group_mixer(1, &[]);
-        state.session.mixer.layer_group_mixer_mut(1).unwrap().effect_chain.add_effect(crate::state::EffectType::Delay);
-        let effect_id = state.session.mixer.layer_group_mixer(1).unwrap().effect_chain.effects[0].id;
+        state
+            .session
+            .mixer
+            .layer_group_mixer_mut(1)
+            .unwrap()
+            .effect_chain
+            .add_effect(crate::state::EffectType::Delay);
+        let effect_id = state
+            .session
+            .mixer
+            .layer_group_mixer(1)
+            .unwrap()
+            .effect_chain
+            .effects[0]
+            .id;
 
         state.session.mixer.selection = MixerSelection::LayerGroup(1);
-        pane.handle_action(ActionId::Mixer(MixerActionId::EnterDetail), &dummy_event(), &state);
+        pane.handle_action(
+            ActionId::Mixer(MixerActionId::EnterDetail),
+            &dummy_event(),
+            &state,
+        );
 
-        let action = pane.handle_action(ActionId::Mixer(MixerActionId::RemoveEffect), &dummy_event(), &state);
-        assert!(matches!(action, Action::LayerGroup(LayerGroupAction::RemoveEffect(1, id)) if id == effect_id));
+        let action = pane.handle_action(
+            ActionId::Mixer(MixerActionId::RemoveEffect),
+            &dummy_event(),
+            &state,
+        );
+        assert!(
+            matches!(action, Action::LayerGroup(LayerGroupAction::RemoveEffect(1, id)) if id == effect_id)
+        );
     }
 
     #[test]

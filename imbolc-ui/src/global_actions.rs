@@ -1,6 +1,6 @@
 use crate::action::{
-    AudioEffect, AutomationAction, ClickAction, DomainAction, MixerAction, PianoRollAction,
-    PaneId as NavPaneId, SequencerAction,
+    AudioEffect, AutomationAction, ClickAction, DomainAction, MixerAction, PaneId as NavPaneId,
+    PianoRollAction, SequencerAction,
 };
 use crate::audio::AudioHandle;
 use crate::dispatch::LocalDispatcher;
@@ -186,10 +186,7 @@ pub(crate) fn process_layer_actions(
 }
 
 /// Auto-pop text_edit layer when pane is no longer editing.
-pub(crate) fn process_text_edit_auto_pop(
-    panes: &mut PaneManager,
-    layer_stack: &mut LayerStack,
-) {
+pub(crate) fn process_text_edit_auto_pop(panes: &mut PaneManager, layer_stack: &mut LayerStack) {
     if layer_stack.has_layer("text_edit") {
         let still_editing = match panes.active().id() {
             "instrument_edit" => panes
@@ -198,6 +195,9 @@ pub(crate) fn process_text_edit_auto_pop(
             "frame_edit" => panes
                 .get_pane_mut::<FrameEditPane>("frame_edit")
                 .is_some_and(|p| p.is_editing()),
+            "server" => panes
+                .get_pane_mut::<ServerPane>("server")
+                .is_some_and(|p| p.is_editing_scsynth_args()),
             _ => false,
         };
         if !still_editing {
@@ -370,7 +370,8 @@ pub(crate) fn handle_global_action(
                     panes.push_to(NavPaneId::SaveAs, dispatcher.state());
                     sync_pane_layer(panes, layer_stack);
                 } else {
-                    let mut r = dispatcher.dispatch_domain(&DomainAction::Session(SessionAction::Save), audio);
+                    let mut r = dispatcher
+                        .dispatch_domain(&DomainAction::Session(SessionAction::Save), audio);
                     if r.needs_full_sync {
                         *needs_full_sync = true;
                     }
@@ -389,7 +390,8 @@ pub(crate) fn handle_global_action(
                     panes.push_to(NavPaneId::Confirm, dispatcher.state());
                     sync_pane_layer(panes, layer_stack);
                 } else {
-                    let mut r = dispatcher.dispatch_domain(&DomainAction::Session(SessionAction::Load), audio);
+                    let mut r = dispatcher
+                        .dispatch_domain(&DomainAction::Session(SessionAction::Load), audio);
                     if r.needs_full_sync {
                         *needs_full_sync = true;
                     }
@@ -418,17 +420,22 @@ pub(crate) fn handle_global_action(
                 sync_pane_layer(panes, layer_stack);
             }
             GlobalActionId::MasterMute => {
-                let mut r = dispatcher.dispatch_domain(&DomainAction::Session(SessionAction::ToggleMasterMute), audio);
+                let mut r = dispatcher.dispatch_domain(
+                    &DomainAction::Session(SessionAction::ToggleMasterMute),
+                    audio,
+                );
                 pending_audio_effects.extend(std::mem::take(&mut r.audio_effects));
                 apply_dispatch_result(r, dispatcher, panes, app_frame, audio);
             }
             GlobalActionId::ClickTrackToggle => {
-                let mut r = dispatcher.dispatch_domain(&DomainAction::Click(ClickAction::Toggle), audio);
+                let mut r =
+                    dispatcher.dispatch_domain(&DomainAction::Click(ClickAction::Toggle), audio);
                 pending_audio_effects.extend(std::mem::take(&mut r.audio_effects));
                 apply_dispatch_result(r, dispatcher, panes, app_frame, audio);
             }
             GlobalActionId::RecordMaster => {
-                let mut r = dispatcher.dispatch_domain(&DomainAction::Server(ui::ServerAction::RecordMaster), audio);
+                let mut r = dispatcher
+                    .dispatch_domain(&DomainAction::Server(ui::ServerAction::RecordMaster), audio);
                 if r.needs_full_sync {
                     *needs_full_sync = true;
                 }
@@ -497,13 +504,34 @@ pub(crate) fn handle_global_action(
                 switch_to_pane(target, panes, dispatcher, audio, app_frame, layer_stack);
             }
             GlobalActionId::SwitchPane(ShortcutPaneId::Track) => {
-                switch_to_pane(NavPaneId::Track, panes, dispatcher, audio, app_frame, layer_stack);
+                switch_to_pane(
+                    NavPaneId::Track,
+                    panes,
+                    dispatcher,
+                    audio,
+                    app_frame,
+                    layer_stack,
+                );
             }
             GlobalActionId::SwitchPane(ShortcutPaneId::Mixer) => {
-                switch_to_pane(NavPaneId::Mixer, panes, dispatcher, audio, app_frame, layer_stack);
+                switch_to_pane(
+                    NavPaneId::Mixer,
+                    panes,
+                    dispatcher,
+                    audio,
+                    app_frame,
+                    layer_stack,
+                );
             }
             GlobalActionId::SwitchPane(ShortcutPaneId::Server) => {
-                switch_to_pane(NavPaneId::Server, panes, dispatcher, audio, app_frame, layer_stack);
+                switch_to_pane(
+                    NavPaneId::Server,
+                    panes,
+                    dispatcher,
+                    audio,
+                    app_frame,
+                    layer_stack,
+                );
             }
             GlobalActionId::SwitchPane(ShortcutPaneId::Automation) => {
                 switch_to_pane(
@@ -516,7 +544,14 @@ pub(crate) fn handle_global_action(
                 );
             }
             GlobalActionId::SwitchPane(ShortcutPaneId::Eq) => {
-                switch_to_pane(NavPaneId::Eq, panes, dispatcher, audio, app_frame, layer_stack);
+                switch_to_pane(
+                    NavPaneId::Eq,
+                    panes,
+                    dispatcher,
+                    audio,
+                    app_frame,
+                    layer_stack,
+                );
             }
             GlobalActionId::SwitchPane(ShortcutPaneId::MidiSettings) => {
                 switch_to_pane(
@@ -529,10 +564,24 @@ pub(crate) fn handle_global_action(
                 );
             }
             GlobalActionId::SwitchPane(ShortcutPaneId::Groove) => {
-                switch_to_pane(NavPaneId::Groove, panes, dispatcher, audio, app_frame, layer_stack);
+                switch_to_pane(
+                    NavPaneId::Groove,
+                    panes,
+                    dispatcher,
+                    audio,
+                    app_frame,
+                    layer_stack,
+                );
             }
             GlobalActionId::SwitchPane(ShortcutPaneId::Tuner) => {
-                switch_to_pane(NavPaneId::Tuner, panes, dispatcher, audio, app_frame, layer_stack);
+                switch_to_pane(
+                    NavPaneId::Tuner,
+                    panes,
+                    dispatcher,
+                    audio,
+                    app_frame,
+                    layer_stack,
+                );
             }
             GlobalActionId::SwitchPane(ShortcutPaneId::FrameEdit) => {
                 if panes.active().id() == "frame_edit" {
@@ -677,7 +726,14 @@ pub(crate) fn handle_global_action(
                 }
             }
             GlobalActionId::AddInstrument => {
-                switch_to_pane(NavPaneId::Add, panes, dispatcher, audio, app_frame, layer_stack);
+                switch_to_pane(
+                    NavPaneId::Add,
+                    panes,
+                    dispatcher,
+                    audio,
+                    app_frame,
+                    layer_stack,
+                );
             }
             GlobalActionId::DeleteInstrument => {
                 if let Some(instrument) = dispatcher.state().instruments.selected_instrument() {
@@ -750,7 +806,8 @@ pub(crate) fn handle_global_action(
                 return GlobalResult::RefreshScreen;
             }
             GlobalActionId::CycleTheme => {
-                let mut r = dispatcher.dispatch_domain(&DomainAction::Session(SessionAction::CycleTheme), audio);
+                let mut r = dispatcher
+                    .dispatch_domain(&DomainAction::Session(SessionAction::CycleTheme), audio);
                 pending_audio_effects.extend(std::mem::take(&mut r.audio_effects));
                 apply_dispatch_result(r, dispatcher, panes, app_frame, audio);
             }
@@ -796,10 +853,7 @@ pub(crate) fn handle_save_and_quit(
     quit_after_save: &mut bool,
 ) {
     if dispatcher.state().project.path.is_some() {
-        let mut r = dispatcher.dispatch_domain(
-            &DomainAction::Session(SessionAction::Save),
-            audio,
-        );
+        let mut r = dispatcher.dispatch_domain(&DomainAction::Session(SessionAction::Save), audio);
         if r.needs_full_sync {
             *needs_full_sync = true;
         }
@@ -967,13 +1021,15 @@ fn cut_from_active_pane(
                     // Clear selection after cut
                     pane.selection_anchor = None;
 
-                    return Some(DomainAction::PianoRoll(PianoRollAction::DeleteNotesInRegion {
-                        track: pane.current_track,
-                        start_tick: tick_start,
-                        end_tick: tick_end,
-                        start_pitch: pitch_start,
-                        end_pitch: pitch_end,
-                    }));
+                    return Some(DomainAction::PianoRoll(
+                        PianoRollAction::DeleteNotesInRegion {
+                            track: pane.current_track,
+                            start_tick: tick_start,
+                            end_tick: tick_end,
+                            start_pitch: pitch_start,
+                            end_pitch: pitch_end,
+                        },
+                    ));
                 }
             }
         }
@@ -992,12 +1048,14 @@ fn cut_from_active_pane(
                     };
                     pane.selection_anchor = None;
 
-                    return Some(DomainAction::Sequencer(SequencerAction::DeleteStepsInRegion {
-                        start_pad: pad_start,
-                        end_pad: pad_end,
-                        start_step: step_start,
-                        end_step: step_end,
-                    }));
+                    return Some(DomainAction::Sequencer(
+                        SequencerAction::DeleteStepsInRegion {
+                            start_pad: pad_start,
+                            end_pad: pad_end,
+                            start_step: step_start,
+                            end_step: step_end,
+                        },
+                    ));
                 }
             }
         }
@@ -1011,9 +1069,9 @@ fn cut_from_active_pane(
                     };
                     if let Some(lane_id) = pane.selected_lane_id(dispatcher.state()) {
                         pane.selection_anchor_tick = None;
-                        return Some(DomainAction::Automation(AutomationAction::DeletePointsInRange(
-                            lane_id, tick_start, tick_end,
-                        )));
+                        return Some(DomainAction::Automation(
+                            AutomationAction::DeletePointsInRange(lane_id, tick_start, tick_end),
+                        ));
                     }
                 }
             }

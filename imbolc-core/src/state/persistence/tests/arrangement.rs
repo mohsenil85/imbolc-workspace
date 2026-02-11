@@ -1,8 +1,8 @@
-use crate::state::AutomationTarget;
+use super::{load_project, save_project, temp_db_path};
 use crate::state::instrument::SourceType;
 use crate::state::instrument_state::InstrumentState;
 use crate::state::session::SessionState;
-use super::{save_project, load_project, temp_db_path};
+use crate::state::AutomationTarget;
 
 #[test]
 fn save_and_load_round_trip_arrangement() {
@@ -14,15 +14,37 @@ fn save_and_load_round_trip_arrangement() {
     let inst_id = instruments.add_instrument(SourceType::Saw);
 
     // Create clips with notes
-    let clip_id = session.arrangement.add_clip("Melody".to_string(), inst_id, 480);
+    let clip_id = session
+        .arrangement
+        .add_clip("Melody".to_string(), inst_id, 480);
     if let Some(clip) = session.arrangement.clip_mut(clip_id) {
-        clip.notes.push(Note { tick: 0, pitch: 60, velocity: 100, duration: 120, probability: 1.0 });
-        clip.notes.push(Note { tick: 120, pitch: 64, velocity: 80, duration: 120, probability: 0.8 });
+        clip.notes.push(Note {
+            tick: 0,
+            pitch: 60,
+            velocity: 100,
+            duration: 120,
+            probability: 1.0,
+        });
+        clip.notes.push(Note {
+            tick: 120,
+            pitch: 64,
+            velocity: 80,
+            duration: 120,
+            probability: 0.8,
+        });
     }
 
-    let clip_id2 = session.arrangement.add_clip("Bass".to_string(), inst_id, 960);
+    let clip_id2 = session
+        .arrangement
+        .add_clip("Bass".to_string(), inst_id, 960);
     if let Some(clip) = session.arrangement.clip_mut(clip_id2) {
-        clip.notes.push(Note { tick: 0, pitch: 36, velocity: 127, duration: 480, probability: 1.0 });
+        clip.notes.push(Note {
+            tick: 0,
+            pitch: 36,
+            velocity: 127,
+            duration: 480,
+            probability: 1.0,
+        });
     }
 
     // Place clips on timeline
@@ -68,15 +90,27 @@ fn save_and_load_round_trip_arrangement() {
 
     // Placements
     assert_eq!(arr.placements.len(), 3);
-    let lp1 = arr.placements.iter().find(|p| p.id == pid1).expect("placement 1");
+    let lp1 = arr
+        .placements
+        .iter()
+        .find(|p| p.id == pid1)
+        .expect("placement 1");
     assert_eq!(lp1.start_tick, 0);
     assert_eq!(lp1.length_override, None);
 
-    let lp2 = arr.placements.iter().find(|p| p.id == pid2).expect("placement 2");
+    let lp2 = arr
+        .placements
+        .iter()
+        .find(|p| p.id == pid2)
+        .expect("placement 2");
     assert_eq!(lp2.start_tick, 480);
     assert_eq!(lp2.length_override, Some(240));
 
-    let lp3 = arr.placements.iter().find(|p| p.id == pid3).expect("placement 3");
+    let lp3 = arr
+        .placements
+        .iter()
+        .find(|p| p.id == pid3)
+        .expect("placement 3");
     assert_eq!(lp3.clip_id, clip_id2);
     assert_eq!(lp3.start_tick, 960);
 
@@ -101,10 +135,24 @@ fn round_trip_arrangement_clips() {
     let inst_id = instruments.add_instrument(SourceType::Saw);
     session.piano_roll.add_track(inst_id);
 
-    let clip_id = session.arrangement.add_clip("Loop".to_string(), inst_id, 960);
+    let clip_id = session
+        .arrangement
+        .add_clip("Loop".to_string(), inst_id, 960);
     if let Some(clip) = session.arrangement.clip_mut(clip_id) {
-        clip.notes.push(Note { tick: 0, pitch: 48, velocity: 100, duration: 240, probability: 1.0 });
-        clip.notes.push(Note { tick: 480, pitch: 52, velocity: 80, duration: 240, probability: 0.5 });
+        clip.notes.push(Note {
+            tick: 0,
+            pitch: 48,
+            velocity: 100,
+            duration: 240,
+            probability: 1.0,
+        });
+        clip.notes.push(Note {
+            tick: 480,
+            pitch: 52,
+            velocity: 80,
+            duration: 240,
+            probability: 0.5,
+        });
     }
 
     let _pid = session.arrangement.add_placement(clip_id, inst_id, 0);
@@ -151,8 +199,14 @@ fn round_trip_automation_with_curves() {
 
     let loaded_lane = loaded.automation.lane(lane_id).expect("lane missing");
     assert_eq!(loaded_lane.points.len(), 3);
-    assert_eq!(loaded_lane.points[0].curve, crate::state::automation::CurveType::Exponential);
-    assert_eq!(loaded_lane.points[1].curve, crate::state::automation::CurveType::SCurve);
+    assert_eq!(
+        loaded_lane.points[0].curve,
+        crate::state::automation::CurveType::Exponential
+    );
+    assert_eq!(
+        loaded_lane.points[1].curve,
+        crate::state::automation::CurveType::SCurve
+    );
 
     // Verify interpolation still works after reload
     let val = loaded_lane.value_at(240);

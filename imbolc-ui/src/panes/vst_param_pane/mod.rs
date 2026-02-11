@@ -3,11 +3,10 @@ mod rendering;
 
 use std::any::Any;
 
-
 use crate::action::VstTarget;
 use crate::state::{AppState, InstrumentId};
 use crate::ui::action_id::ActionId;
-use crate::ui::{Rect, RenderBuf, Action, InputEvent, Keymap, Pane};
+use crate::ui::{Action, InputEvent, Keymap, Pane, Rect, RenderBuf};
 
 pub struct VstParamPane {
     keymap: Keymap,
@@ -46,7 +45,9 @@ impl VstParamPane {
 
     /// Get the VstPluginId for the current target
     fn get_plugin_id(&self, state: &AppState) -> Option<crate::state::vst_plugin::VstPluginId> {
-        let inst = self.instrument_id.and_then(|id| state.instruments.instrument(id))?;
+        let inst = self
+            .instrument_id
+            .and_then(|id| state.instruments.instrument(id))?;
         match self.target {
             VstTarget::Source => {
                 if let crate::state::SourceType::Vst(id) = inst.source {
@@ -55,15 +56,13 @@ impl VstParamPane {
                     None
                 }
             }
-            VstTarget::Effect(effect_id) => {
-                inst.effect_by_id(effect_id).and_then(|e| {
-                    if let crate::state::EffectType::Vst(id) = e.effect_type {
-                        Some(id)
-                    } else {
-                        None
-                    }
-                })
-            }
+            VstTarget::Effect(effect_id) => inst.effect_by_id(effect_id).and_then(|e| {
+                if let crate::state::EffectType::Vst(id) = e.effect_type {
+                    Some(id)
+                } else {
+                    None
+                }
+            }),
         }
     }
 
@@ -86,7 +85,9 @@ impl VstParamPane {
             self.filtered_indices = (0..plugin.params.len()).collect();
         } else {
             let query = self.search_text.to_lowercase();
-            self.filtered_indices = plugin.params.iter()
+            self.filtered_indices = plugin
+                .params
+                .iter()
                 .enumerate()
                 .filter(|(_, p)| p.name.to_lowercase().contains(&query))
                 .map(|(i, _)| i)

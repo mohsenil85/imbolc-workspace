@@ -4,16 +4,15 @@ mod rendering;
 
 use std::any::Any;
 
-use imbolc_types::{ChannelConfig, ProcessingStage};
 use crate::state::{
-    AppState, EnvConfig, InstrumentId,
-    InstrumentSection, LfoConfig, Param, SourceType,
-    instrument::{instrument_row_count, instrument_section_for_row, instrument_row_info},
+    instrument::{instrument_row_count, instrument_row_info, instrument_section_for_row},
+    AppState, EnvConfig, InstrumentId, InstrumentSection, LfoConfig, Param, SourceType,
 };
-use crate::ui::widgets::TextInput;
-use crate::ui::{Rect, RenderBuf, Action, InputEvent, Keymap, MouseEvent, Pane, ToggleResult};
-use crate::ui::performance::PerformanceController;
 use crate::ui::action_id::ActionId;
+use crate::ui::performance::PerformanceController;
+use crate::ui::widgets::TextInput;
+use crate::ui::{Action, InputEvent, Keymap, MouseEvent, Pane, Rect, RenderBuf, ToggleResult};
+use imbolc_types::{ChannelConfig, ProcessingStage};
 
 pub struct InstrumentEditPane {
     keymap: Keymap,
@@ -69,7 +68,9 @@ impl InstrumentEditPane {
         self.instrument_name = instrument.name.clone();
         self.source = instrument.source;
         self.source_params = instrument.source_params.clone();
-        self.sample_name = instrument.sampler_config().and_then(|c| c.sample_name.clone());
+        self.sample_name = instrument
+            .sampler_config()
+            .and_then(|c| c.sample_name.clone());
         self.processing_chain = instrument.processing_chain.clone();
         self.lfo = instrument.modulation.lfo.clone();
         self.amp_envelope = instrument.modulation.amp_envelope.clone();
@@ -88,7 +89,9 @@ impl InstrumentEditPane {
         self.instrument_name = instrument.name.clone();
         self.source = instrument.source;
         self.source_params = instrument.source_params.clone();
-        self.sample_name = instrument.sampler_config().and_then(|c| c.sample_name.clone());
+        self.sample_name = instrument
+            .sampler_config()
+            .and_then(|c| c.sample_name.clone());
         self.processing_chain = instrument.processing_chain.clone();
         self.lfo = instrument.modulation.lfo.clone();
         self.amp_envelope = instrument.modulation.amp_envelope.clone();
@@ -158,7 +161,11 @@ impl InstrumentEditPane {
     /// Calculate non-selectable visual lines (headers + separators)
     fn visual_overhead(&self) -> usize {
         // Headers: 1 (source) + one per filter in chain + 1 (LFO) + (1 if !VST for envelope)
-        let filter_count = self.processing_chain.iter().filter(|s| s.is_filter()).count();
+        let filter_count = self
+            .processing_chain
+            .iter()
+            .filter(|s| s.is_filter())
+            .count();
         let headers = 1 + filter_count + 1 + if self.source.is_vst() { 0 } else { 1 };
         // Separators: 1 (after source) + 1 (after chain) + (1 after LFO if !VST)
         let separators = 1 + 1 + if self.source.is_vst() { 0 } else { 1 };
@@ -178,12 +185,22 @@ impl InstrumentEditPane {
 
     /// Which section does a given row belong to?
     fn section_for_row(&self, row: usize) -> InstrumentSection {
-        instrument_section_for_row(row, self.source, &self.source_params, &self.processing_chain)
+        instrument_section_for_row(
+            row,
+            self.source,
+            &self.source_params,
+            &self.processing_chain,
+        )
     }
 
     /// Get section and local index for a row
     fn row_info(&self, row: usize) -> (InstrumentSection, usize) {
-        instrument_row_info(row, self.source, &self.source_params, &self.processing_chain)
+        instrument_row_info(
+            row,
+            self.source,
+            &self.source_params,
+            &self.processing_chain,
+        )
     }
 
     fn current_section(&self) -> InstrumentSection {
@@ -193,10 +210,15 @@ impl InstrumentEditPane {
     /// Find the first row belonging to a given processing stage chain index,
     /// offset by local_idx within that stage. Used for cursor stability after MoveStage.
     fn row_for_processing_stage(&self, chain_idx: usize, local_idx: usize) -> usize {
-        let source_rows = (if self.source.is_sample() || self.source.is_time_stretch() { 1 } else { 0 })
-            + self.source_params.len().max(1);
+        let source_rows = (if self.source.is_sample() || self.source.is_time_stretch() {
+            1
+        } else {
+            0
+        }) + self.source_params.len().max(1);
         let chain_rows_before: usize = self.processing_chain[..chain_idx]
-            .iter().map(|s| s.row_count()).sum();
+            .iter()
+            .map(|s| s.row_count())
+            .sum();
         source_rows + chain_rows_before + local_idx
     }
 
@@ -232,7 +254,9 @@ impl Pane for InstrumentEditPane {
     }
 
     fn tick(&mut self, state: &AppState) -> Vec<Action> {
-        let instrument_id = state.instruments.selected_instrument()
+        let instrument_id = state
+            .instruments
+            .selected_instrument()
             .map(|inst| inst.id)
             .unwrap_or(InstrumentId::new(0));
         self.perf.tick_releases(instrument_id)
@@ -249,7 +273,9 @@ impl Pane for InstrumentEditPane {
     }
 
     fn toggle_performance_mode(&mut self, state: &AppState) -> ToggleResult {
-        let is_kit = state.instruments.selected_instrument()
+        let is_kit = state
+            .instruments
+            .selected_instrument()
             .is_some_and(|s| s.source.is_kit());
         self.perf.toggle(is_kit)
     }
@@ -266,7 +292,9 @@ impl Pane for InstrumentEditPane {
         self.perf.deactivate();
     }
 
-    fn supports_performance_mode(&self) -> bool { true }
+    fn supports_performance_mode(&self) -> bool {
+        true
+    }
 
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
@@ -282,7 +310,7 @@ impl Default for InstrumentEditPane {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::state::{FilterConfig, FilterType, EffectSlot, EffectType};
+    use crate::state::{EffectSlot, EffectType, FilterConfig, FilterType};
     use crate::ui::action_id::{ActionId, InstrumentEditActionId};
     use crate::ui::input::{InputEvent, KeyCode, Modifiers};
     use imbolc_types::{EffectId, InstrumentId};
@@ -321,7 +349,10 @@ mod tests {
         // Effect header + params, then filter starts at Processing(1)
         let effect_rows = 1 + EffectType::Delay.default_params().len();
         let filter_row = source_rows + effect_rows;
-        assert_eq!(pane.section_for_row(filter_row), InstrumentSection::Processing(1));
+        assert_eq!(
+            pane.section_for_row(filter_row),
+            InstrumentSection::Processing(1)
+        );
     }
 
     #[test]
@@ -340,23 +371,43 @@ mod tests {
         assert_eq!(pane.current_section(), InstrumentSection::Source);
 
         // Tab → Processing(0)
-        pane.handle_action_impl(ActionId::InstrumentEdit(InstrumentEditActionId::NextSection), &event, &state);
+        pane.handle_action_impl(
+            ActionId::InstrumentEdit(InstrumentEditActionId::NextSection),
+            &event,
+            &state,
+        );
         assert_eq!(pane.current_section(), InstrumentSection::Processing(0));
 
         // Tab → Processing(1)
-        pane.handle_action_impl(ActionId::InstrumentEdit(InstrumentEditActionId::NextSection), &event, &state);
+        pane.handle_action_impl(
+            ActionId::InstrumentEdit(InstrumentEditActionId::NextSection),
+            &event,
+            &state,
+        );
         assert_eq!(pane.current_section(), InstrumentSection::Processing(1));
 
         // Tab → Lfo
-        pane.handle_action_impl(ActionId::InstrumentEdit(InstrumentEditActionId::NextSection), &event, &state);
+        pane.handle_action_impl(
+            ActionId::InstrumentEdit(InstrumentEditActionId::NextSection),
+            &event,
+            &state,
+        );
         assert_eq!(pane.current_section(), InstrumentSection::Lfo);
 
         // Tab → Envelope
-        pane.handle_action_impl(ActionId::InstrumentEdit(InstrumentEditActionId::NextSection), &event, &state);
+        pane.handle_action_impl(
+            ActionId::InstrumentEdit(InstrumentEditActionId::NextSection),
+            &event,
+            &state,
+        );
         assert_eq!(pane.current_section(), InstrumentSection::Envelope);
 
         // Tab → Source (wrap)
-        pane.handle_action_impl(ActionId::InstrumentEdit(InstrumentEditActionId::NextSection), &event, &state);
+        pane.handle_action_impl(
+            ActionId::InstrumentEdit(InstrumentEditActionId::NextSection),
+            &event,
+            &state,
+        );
         assert_eq!(pane.current_section(), InstrumentSection::Source);
     }
 
@@ -380,7 +431,11 @@ mod tests {
         assert_eq!(local_idx, 1); // cutoff
 
         // Move stage down: filter goes from index 0 to index 1
-        pane.handle_action_impl(ActionId::InstrumentEdit(InstrumentEditActionId::MoveStageDown), &event, &state);
+        pane.handle_action_impl(
+            ActionId::InstrumentEdit(InstrumentEditActionId::MoveStageDown),
+            &event,
+            &state,
+        );
 
         // Filter is now at chain index 1, cursor should be on cutoff at new position
         assert_eq!(pane.current_section(), InstrumentSection::Processing(1));
@@ -391,21 +446,27 @@ mod tests {
     #[test]
     fn test_toggle_filter_with_existing_chain() {
         let effect = EffectSlot::new(EffectId::new(0), EffectType::Delay);
-        let mut pane = make_pane_with_chain(vec![
-            ProcessingStage::Effect(effect),
-        ]);
+        let mut pane = make_pane_with_chain(vec![ProcessingStage::Effect(effect)]);
 
         let state = AppState::new();
         let event = dummy_event();
 
         // Toggle on: should insert filter at index 0
-        pane.handle_action_impl(ActionId::InstrumentEdit(InstrumentEditActionId::ToggleFilter), &event, &state);
+        pane.handle_action_impl(
+            ActionId::InstrumentEdit(InstrumentEditActionId::ToggleFilter),
+            &event,
+            &state,
+        );
         assert_eq!(pane.processing_chain.len(), 2);
         assert!(pane.processing_chain[0].is_filter());
         assert!(pane.processing_chain[1].is_effect());
 
         // Toggle off: should remove the filter
-        pane.handle_action_impl(ActionId::InstrumentEdit(InstrumentEditActionId::ToggleFilter), &event, &state);
+        pane.handle_action_impl(
+            ActionId::InstrumentEdit(InstrumentEditActionId::ToggleFilter),
+            &event,
+            &state,
+        );
         assert_eq!(pane.processing_chain.len(), 1);
         assert!(pane.processing_chain[0].is_effect());
     }

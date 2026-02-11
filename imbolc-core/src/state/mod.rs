@@ -1,7 +1,7 @@
 pub mod arpeggiator;
+pub mod arrangement;
 pub mod audio_feedback;
 pub mod automation;
-pub mod arrangement;
 pub mod clipboard;
 pub mod custom_synthdef;
 pub mod drum_sequencer;
@@ -20,19 +20,23 @@ pub mod session;
 pub mod undo;
 pub mod vst_plugin;
 
+pub use arrangement::{ArrangementState, Clip, ClipId, ClipPlacement, PlacementId, PlayMode};
 pub use audio_feedback::AudioFeedbackState;
 pub use automation::AutomationTarget;
-pub use midi_connection::MidiConnectionState;
-pub use arrangement::{ArrangementState, Clip, ClipId, ClipPlacement, PlayMode, PlacementId};
 pub use clipboard::{Clipboard, ClipboardContents, ClipboardNote};
 pub use custom_synthdef::{CustomSynthDef, CustomSynthDefRegistry, ParamSpec};
 pub use instrument::*;
-pub use instrument::{InstrumentSection, instrument_row_count, instrument_section_for_row, instrument_row_info};
-pub use instrument::{SourceTypeExt, EffectTypeExt};
+pub use instrument::{
+    instrument_row_count, instrument_row_info, instrument_section_for_row, InstrumentSection,
+};
+pub use instrument::{EffectTypeExt, SourceTypeExt};
 pub use instrument_state::InstrumentState;
-pub use param::{Param, ParamValue, adjust_freq_semitone, adjust_musical_step, is_freq_param};
+pub use midi_connection::MidiConnectionState;
+pub use param::{adjust_freq_semitone, adjust_musical_step, is_freq_param, Param, ParamValue};
 pub use sampler::{BufferId, SampleBuffer, SampleRegistry, SamplerConfig, Slice, SliceId};
-pub use session::{MixerSelection, MixerState, MusicalSettings, SessionState, MAX_BUSES, DEFAULT_BUS_COUNT};
+pub use session::{
+    MixerSelection, MixerState, MusicalSettings, SessionState, DEFAULT_BUS_COUNT, MAX_BUSES,
+};
 pub use undo::UndoHistory;
 pub use vst_plugin::{VstParamSpec, VstPlugin, VstPluginId, VstPluginKind, VstPluginRegistry};
 
@@ -111,7 +115,11 @@ impl AppState {
     /// Get the ownership status for an instrument (for UI display).
     pub fn ownership_status(&self, instrument_id: InstrumentId) -> OwnershipDisplayStatus {
         match &self.network {
-            Some(ctx) => ctx.ownership.get(&instrument_id).cloned().unwrap_or(OwnershipDisplayStatus::Unowned),
+            Some(ctx) => ctx
+                .ownership
+                .get(&instrument_id)
+                .cloned()
+                .unwrap_or(OwnershipDisplayStatus::Unowned),
             None => OwnershipDisplayStatus::Local,
         }
     }
@@ -120,7 +128,10 @@ impl AppState {
     pub fn add_instrument(&mut self, source: SourceType) -> InstrumentId {
         let id = self.instruments.add_instrument(source);
         imbolc_types::reduce::initialize_instrument_from_registries(
-            id, source, &mut self.instruments, &self.session,
+            id,
+            source,
+            &mut self.instruments,
+            &self.session,
         );
         self.session.piano_roll.add_track(id);
         id
@@ -142,12 +153,15 @@ impl AppState {
             inst.mixer.mute || self.session.mixer.master_mute
         }
     }
-
 }
 
 impl imbolc_audio::AudioStateProvider for AppState {
-    fn session(&self) -> &SessionState { &self.session }
-    fn instruments(&self) -> &InstrumentState { &self.instruments }
+    fn session(&self) -> &SessionState {
+        &self.session
+    }
+    fn instruments(&self) -> &InstrumentState {
+        &self.instruments
+    }
 }
 
 #[cfg(test)]
@@ -172,7 +186,11 @@ mod tests {
             .add_lane(AutomationTarget::pan(instrument_id));
 
         assert_eq!(
-            state.session.automation.lanes_for_instrument(instrument_id).len(),
+            state
+                .session
+                .automation
+                .lanes_for_instrument(instrument_id)
+                .len(),
             2
         );
 
@@ -232,7 +250,10 @@ mod tests {
     fn remove_instrument_cleans_up_all() {
         let mut state = AppState::new();
         let id = state.add_instrument(SourceType::Saw);
-        state.session.automation.add_lane(AutomationTarget::level(id));
+        state
+            .session
+            .automation
+            .add_lane(AutomationTarget::level(id));
         assert_eq!(state.session.automation.lanes.len(), 1);
 
         state.remove_instrument(id);

@@ -14,12 +14,12 @@ fn wait_for_server_ready(addr: &str, timeout: Duration) -> Result<(), String> {
         addr: "/status".to_string(),
         args: vec![],
     });
-    let packet = rosc::encoder::encode(&msg)
-        .map_err(|e| format!("Failed to encode /status: {e}"))?;
+    let packet =
+        rosc::encoder::encode(&msg).map_err(|e| format!("Failed to encode /status: {e}"))?;
 
     // Bind a temporary UDP socket on any available port
-    let socket = UdpSocket::bind("127.0.0.1:0")
-        .map_err(|e| format!("Failed to bind UDP socket: {e}"))?;
+    let socket =
+        UdpSocket::bind("127.0.0.1:0").map_err(|e| format!("Failed to bind UDP socket: {e}"))?;
     socket
         .set_read_timeout(Some(Duration::from_millis(200)))
         .map_err(|e| format!("Failed to set read timeout: {e}"))?;
@@ -49,9 +49,7 @@ fn wait_for_server_ready(addr: &str, timeout: Duration) -> Result<(), String> {
 
 /// Auto-start SuperCollider server, connect, and load synthdefs.
 /// Returns status events for the UI layer to forward to the server pane.
-pub fn auto_start_sc(
-    audio: &mut AudioHandle,
-) -> Vec<StatusEvent> {
+pub fn auto_start_sc(audio: &mut AudioHandle) -> Vec<StatusEvent> {
     if std::env::var("IMBOLC_NO_AUDIO").is_ok() {
         return Vec::new();
     }
@@ -94,6 +92,7 @@ pub fn auto_start_sc(
         config.output_device.as_deref(),
         config.buffer_size.as_samples(),
         config.sample_rate,
+        &config.scsynth_args,
     ) {
         Ok(()) => {
             events.push(StatusEvent {

@@ -1,7 +1,7 @@
+use crate::InstrumentId;
+use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::PathBuf;
-use serde::{Deserialize, Serialize};
-use crate::InstrumentId;
 
 /// Runtime recording state.
 /// Tracks audio recording status and automation recording mode.

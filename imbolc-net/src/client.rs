@@ -14,8 +14,8 @@ use imbolc_types::InstrumentId;
 
 use crate::framing::{read_message, write_message};
 use crate::protocol::{
-    ClientId, ClientMessage, NetworkAction, NetworkState, OwnerInfo, PrivilegeLevel,
-    ServerMessage, SessionToken, StatePatch,
+    ClientId, ClientMessage, NetworkAction, NetworkState, OwnerInfo, PrivilegeLevel, ServerMessage,
+    SessionToken, StatePatch,
 };
 
 /// Metering update from server.
@@ -116,22 +116,43 @@ impl RemoteDispatcher {
         let mut reader = BufReader::new(read_stream.try_clone()?);
 
         // Send Hello with ownership request
-        write_message(&mut writer, &ClientMessage::Hello {
-            client_name: client_name.to_string(),
-            requested_instruments,
-            request_privilege,
-            reconnect_token,
-        })?;
+        write_message(
+            &mut writer,
+            &ClientMessage::Hello {
+                client_name: client_name.to_string(),
+                requested_instruments,
+                request_privilege,
+                reconnect_token,
+            },
+        )?;
 
         // Receive response
         let welcome: ServerMessage = read_message(&mut reader)?;
         let (client_id, granted_instruments, state, privilege, session_token) = match welcome {
-            ServerMessage::Welcome { client_id, granted_instruments, state, privilege, session_token } => {
-                (client_id, granted_instruments, state, privilege, session_token)
-            }
-            ServerMessage::ReconnectSuccessful { client_id, restored_instruments, privilege } => {
+            ServerMessage::Welcome {
+                client_id,
+                granted_instruments,
+                state,
+                privilege,
+                session_token,
+            } => (
+                client_id,
+                granted_instruments,
+                state,
+                privilege,
+                session_token,
+            ),
+            ServerMessage::ReconnectSuccessful {
+                client_id,
+                restored_instruments,
+                privilege,
+            } => {
                 // For reconnect, we need to get a fresh state update
-                info!("Reconnected as {:?}, restored {} instruments", client_id, restored_instruments.len());
+                info!(
+                    "Reconnected as {:?}, restored {} instruments",
+                    client_id,
+                    restored_instruments.len()
+                );
                 // Wait for state update
                 let state_msg: ServerMessage = read_message(&mut reader)?;
                 let state = match state_msg {
@@ -143,7 +164,13 @@ impl RemoteDispatcher {
                         ));
                     }
                 };
-                (client_id, restored_instruments, state, privilege, SessionToken::new())
+                (
+                    client_id,
+                    restored_instruments,
+                    state,
+                    privilege,
+                    SessionToken::new(),
+                )
             }
             ServerMessage::ReconnectFailed { reason } => {
                 return Err(io::Error::new(io::ErrorKind::ConnectionRefused, reason));
@@ -289,7 +316,10 @@ impl RemoteDispatcher {
 
     /// Get the privileged client info from state.
     pub fn privileged_client(&self) -> Option<(ClientId, &str)> {
-        self.state.privileged_client.as_ref().map(|(id, name)| (*id, name.as_str()))
+        self.state
+            .privileged_client
+            .as_ref()
+            .map(|(id, name)| (*id, name.as_str()))
     }
 
     /// Send an action to the server.
@@ -391,7 +421,9 @@ impl RemoteDispatcher {
                                     self.state.session.automation = auto;
                                 } else if let Some(lane_patches) = patch.automation_lane_patches {
                                     for (id, lane) in lane_patches {
-                                        if let Some(existing) = self.state.session.automation.lane_mut(id) {
+                                        if let Some(existing) =
+                                            self.state.session.automation.lane_mut(id)
+                                        {
                                             *existing = lane;
                                         }
                                     }
@@ -400,7 +432,8 @@ impl RemoteDispatcher {
                                     self.state.session.mixer = mix;
                                 } else if let Some(bus_patches) = patch.mixer_bus_patches {
                                     for (id, bus) in bus_patches {
-                                        if let Some(existing) = self.state.session.mixer.bus_mut(id) {
+                                        if let Some(existing) = self.state.session.mixer.bus_mut(id)
+                                        {
                                             *existing = bus;
                                         }
                                     }
@@ -411,7 +444,9 @@ impl RemoteDispatcher {
                                 self.state.instruments.rebuild_index();
                             } else if let Some(patches) = patch.instrument_patches {
                                 for (id, new_instrument) in patches {
-                                    if let Some(existing) = self.state.instruments.instrument_mut(id) {
+                                    if let Some(existing) =
+                                        self.state.instruments.instrument_mut(id)
+                                    {
                                         *existing = new_instrument;
                                     }
                                 }
@@ -464,10 +499,7 @@ impl RemoteDispatcher {
 }
 
 /// Background thread that reads messages from the server.
-fn server_reader_thread(
-    stream: TcpStream,
-    update_tx: mpsc::Sender<ServerUpdate>,
-) {
+fn server_reader_thread(stream: TcpStream, update_tx: mpsc::Sender<ServerUpdate>) {
     let mut reader = BufReader::new(stream);
 
     loop {
@@ -478,12 +510,16 @@ fn server_reader_thread(
                         // Shouldn't happen after handshake, but handle it
                         ServerUpdate::State(state)
                     }
-                    ServerMessage::StateUpdate { state } => {
-                        ServerUpdate::State(state)
-                    }
-                    ServerMessage::Metering { playhead, bpm, peaks } => {
-                        ServerUpdate::Metering(MeteringUpdate { playhead, bpm, peaks })
-                    }
+                    ServerMessage::StateUpdate { state } => ServerUpdate::State(state),
+                    ServerMessage::Metering {
+                        playhead,
+                        bpm,
+                        peaks,
+                    } => ServerUpdate::Metering(MeteringUpdate {
+                        playhead,
+                        bpm,
+                        peaks,
+                    }),
                     ServerMessage::Shutdown => {
                         info!("Server sent graceful shutdown");
                         let _ = update_tx.send(ServerUpdate::Shutdown);
@@ -498,21 +534,15 @@ fn server_reader_thread(
                         // Response to our Ping — ignore
                         continue;
                     }
-                    ServerMessage::Error { message } => {
-                        ServerUpdate::Error(message)
-                    }
+                    ServerMessage::Error { message } => ServerUpdate::Error(message),
                     ServerMessage::ActionRejected { reason } => {
                         ServerUpdate::ActionRejected(reason)
                     }
-                    ServerMessage::PrivilegeGranted => {
-                        ServerUpdate::PrivilegeGranted
-                    }
+                    ServerMessage::PrivilegeGranted => ServerUpdate::PrivilegeGranted,
                     ServerMessage::PrivilegeDenied { held_by } => {
                         ServerUpdate::PrivilegeDenied(held_by)
                     }
-                    ServerMessage::PrivilegeRevoked => {
-                        ServerUpdate::PrivilegeRevoked
-                    }
+                    ServerMessage::PrivilegeRevoked => ServerUpdate::PrivilegeRevoked,
                     ServerMessage::ReconnectSuccessful { .. } => {
                         // Should only happen during handshake, not here
                         continue;
@@ -520,9 +550,7 @@ fn server_reader_thread(
                     ServerMessage::ReconnectFailed { reason } => {
                         ServerUpdate::Error(format!("Reconnect failed: {}", reason))
                     }
-                    ServerMessage::StatePatchUpdate { patch } => {
-                        ServerUpdate::Patch(patch)
-                    }
+                    ServerMessage::StatePatchUpdate { patch } => ServerUpdate::Patch(patch),
                     ServerMessage::FullStateSync { state, seq } => {
                         ServerUpdate::FullSync(state, seq)
                     }

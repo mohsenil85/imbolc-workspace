@@ -14,18 +14,42 @@ pub fn translate_key(c: char, layout: KeyboardLayout) -> char {
 fn colemak_to_qwerty(c: char) -> char {
     match c {
         // top row
-        'f' => 'e', 'p' => 'r', 'g' => 't', 'j' => 'y',
-        'l' => 'u', 'u' => 'i', 'y' => 'o', ';' => 'p',
+        'f' => 'e',
+        'p' => 'r',
+        'g' => 't',
+        'j' => 'y',
+        'l' => 'u',
+        'u' => 'i',
+        'y' => 'o',
+        ';' => 'p',
         // home row
-        'r' => 's', 's' => 'd', 't' => 'f', 'd' => 'g',
-        'n' => 'j', 'e' => 'k', 'i' => 'l', 'o' => ';',
+        'r' => 's',
+        's' => 'd',
+        't' => 'f',
+        'd' => 'g',
+        'n' => 'j',
+        'e' => 'k',
+        'i' => 'l',
+        'o' => ';',
         // bottom row
         'k' => 'n',
         // uppercase (Stradella shifted rows)
-        'F' => 'E', 'P' => 'R', 'G' => 'T', 'J' => 'Y',
-        'L' => 'U', 'U' => 'I', 'Y' => 'O', ':' => 'P',
-        'R' => 'S', 'S' => 'D', 'T' => 'F', 'D' => 'G',
-        'N' => 'J', 'E' => 'K', 'I' => 'L', 'O' => ':',
+        'F' => 'E',
+        'P' => 'R',
+        'G' => 'T',
+        'J' => 'Y',
+        'L' => 'U',
+        'U' => 'I',
+        'Y' => 'O',
+        ':' => 'P',
+        'R' => 'S',
+        'S' => 'D',
+        'T' => 'F',
+        'D' => 'G',
+        'N' => 'J',
+        'E' => 'K',
+        'I' => 'L',
+        'O' => ':',
         'K' => 'N',
         // unchanged keys pass through
         other => other,
@@ -74,7 +98,7 @@ pub struct PianoKeyboard {
     octave: i8,
     layout: PianoLayout,
     // Sustain tracking - supports chords (multiple pitches per key)
-    active_keys: HashMap<char, (Vec<u8>, Instant)>,  // char -> (pitches, last_event_time)
+    active_keys: HashMap<char, (Vec<u8>, Instant)>, // char -> (pitches, last_event_time)
     release_timeout: Duration,
     enhanced_keyboard: bool,
 }
@@ -181,12 +205,8 @@ impl PianoKeyboard {
     /// For C/A layouts, returns a single pitch. For Stradella, returns chord pitches.
     pub fn key_to_pitches(&self, key: char) -> Option<Vec<u8>> {
         match self.layout {
-            PianoLayout::C | PianoLayout::A => {
-                self.key_to_pitch(key).map(|p| vec![p])
-            }
-            PianoLayout::Stradella => {
-                self.stradella_pitches(key)
-            }
+            PianoLayout::C | PianoLayout::A => self.key_to_pitch(key).map(|p| vec![p]),
+            PianoLayout::Stradella => self.stradella_pitches(key),
         }
     }
 
@@ -200,7 +220,13 @@ impl PianoKeyboard {
 
     /// Returns Some(pitches) if this is a NEW key press (spawn voices)
     /// Returns None if this is key repeat (sustain, ignore)
-    pub fn key_pressed(&mut self, c: char, pitches: Vec<u8>, now: Instant, is_repeat: bool) -> Option<Vec<u8>> {
+    pub fn key_pressed(
+        &mut self,
+        c: char,
+        pitches: Vec<u8>,
+        now: Instant,
+        is_repeat: bool,
+    ) -> Option<Vec<u8>> {
         if self.enhanced_keyboard && is_repeat {
             // Terminal confirms this is an OS repeat → sustain
             if let Some((_, t)) = self.active_keys.get_mut(&c) {
@@ -237,7 +263,9 @@ impl PianoKeyboard {
 
     /// Release all active keys, returns all pitches
     pub fn release_all(&mut self) -> Vec<u8> {
-        let pitches: Vec<u8> = self.active_keys.values()
+        let pitches: Vec<u8> = self
+            .active_keys
+            .values()
             .flat_map(|(p, _)| p.clone())
             .collect();
         self.active_keys.clear();
@@ -252,23 +280,23 @@ impl PianoKeyboard {
     /// Map a keyboard character to a MIDI note offset for C layout.
     fn key_to_offset_c(key: char) -> Option<u8> {
         match key {
-            'a' => Some(0),   // C
-            's' => Some(2),   // D
-            'd' => Some(4),   // E
-            'f' => Some(5),   // F
-            'g' => Some(7),   // G
-            'h' => Some(9),   // A
-            'j' => Some(11),  // B
-            'w' => Some(1),   // C#
-            'e' => Some(3),   // D#
-            't' => Some(6),   // F#
-            'y' => Some(8),   // G#
-            'u' => Some(10),  // A#
-            'k' => Some(12),  // C (octave up)
-            'l' => Some(14),  // D
-            ';' => Some(16),  // E
-            'o' => Some(13),  // C#
-            'p' => Some(15),  // D#
+            'a' => Some(0),  // C
+            's' => Some(2),  // D
+            'd' => Some(4),  // E
+            'f' => Some(5),  // F
+            'g' => Some(7),  // G
+            'h' => Some(9),  // A
+            'j' => Some(11), // B
+            'w' => Some(1),  // C#
+            'e' => Some(3),  // D#
+            't' => Some(6),  // F#
+            'y' => Some(8),  // G#
+            'u' => Some(10), // A#
+            'k' => Some(12), // C (octave up)
+            'l' => Some(14), // D
+            ';' => Some(16), // E
+            'o' => Some(13), // C#
+            'p' => Some(15), // D#
             _ => None,
         }
     }
@@ -276,23 +304,23 @@ impl PianoKeyboard {
     /// Map a keyboard character to a MIDI note offset for A layout.
     fn key_to_offset_a(key: char) -> Option<u8> {
         match key {
-            'a' => Some(0),   // A
-            's' => Some(2),   // B
-            'd' => Some(3),   // C
-            'f' => Some(5),   // D
-            'g' => Some(7),   // E
-            'h' => Some(8),   // F
-            'j' => Some(10),  // G
-            'w' => Some(1),   // A#
-            'e' => Some(4),   // C#
-            't' => Some(6),   // D#
-            'y' => Some(9),   // F#
-            'u' => Some(11),  // G#
-            'k' => Some(12),  // A (octave up)
-            'l' => Some(14),  // B
-            ';' => Some(15),  // C
-            'o' => Some(13),  // A#
-            'p' => Some(16),  // C#
+            'a' => Some(0),  // A
+            's' => Some(2),  // B
+            'd' => Some(3),  // C
+            'f' => Some(5),  // D
+            'g' => Some(7),  // E
+            'h' => Some(8),  // F
+            'j' => Some(10), // G
+            'w' => Some(1),  // A#
+            'e' => Some(4),  // C#
+            't' => Some(6),  // D#
+            'y' => Some(9),  // F#
+            'u' => Some(11), // G#
+            'k' => Some(12), // A (octave up)
+            'l' => Some(14), // B
+            ';' => Some(15), // C
+            'o' => Some(13), // A#
+            'p' => Some(16), // C#
             _ => None,
         }
     }
@@ -553,7 +581,7 @@ mod tests {
         let mut kb = PianoKeyboard::new();
         kb.activate();
         kb.handle_escape(); // C -> A
-        // 'a' in A layout is offset 0 from A. Base = (4+1)*12 - 3 = 57
+                            // 'a' in A layout is offset 0 from A. Base = (4+1)*12 - 3 = 57
         assert_eq!(kb.key_to_pitch('a'), Some(57));
     }
 
@@ -579,7 +607,7 @@ mod tests {
         kb.activate();
         kb.handle_escape(); // C -> A
         kb.handle_escape(); // A -> Stradella
-        // 'c' = Bass, col 2 (F root). Bass = single root note at bass octave.
+                            // 'c' = Bass, col 2 (F root). Bass = single root note at bass octave.
         let pitches = kb.key_to_pitches('c').unwrap();
         assert_eq!(pitches.len(), 1);
     }

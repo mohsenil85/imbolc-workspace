@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
-use std::sync::mpsc::{self, Receiver, Sender};
 use midir::{MidiInput, MidiInputConnection};
+use std::sync::mpsc::{self, Receiver, Sender};
 
 /// MIDI event types with optional timestamp for sample-accurate scheduling.
 /// Timestamp is in microseconds from a driver-specific epoch.
@@ -143,7 +143,9 @@ impl MidiInputManager {
         }
 
         let port = &ports[port_index];
-        let port_name = midi_in.port_name(port).unwrap_or_else(|_| "Unknown".to_string());
+        let port_name = midi_in
+            .port_name(port)
+            .unwrap_or_else(|_| "Unknown".to_string());
 
         let (tx, rx) = mpsc::channel();
         self.event_sender = Some(tx.clone());
@@ -322,7 +324,11 @@ mod tests {
         let data = [0x90, 60, 100]; // Note On, channel 0, note 60, velocity 100
         let event = parse_midi_message(&data).unwrap();
         match event {
-            MidiEventKind::NoteOn { channel, note, velocity } => {
+            MidiEventKind::NoteOn {
+                channel,
+                note,
+                velocity,
+            } => {
                 assert_eq!(channel, 0);
                 assert_eq!(note, 60);
                 assert_eq!(velocity, 100);
@@ -390,7 +396,11 @@ mod tests {
         let data = [0xB0, 1, 64]; // CC, channel 0, controller 1 (mod wheel), value 64
         let event = parse_midi_message(&data).unwrap();
         match event {
-            MidiEventKind::ControlChange { channel, controller, value } => {
+            MidiEventKind::ControlChange {
+                channel,
+                controller,
+                value,
+            } => {
                 assert_eq!(channel, 0);
                 assert_eq!(controller, 1);
                 assert_eq!(value, 64);

@@ -86,13 +86,24 @@ pub trait AudioBackend: Send {
     fn set_params(&self, node_id: i32, params: &[(&str, f32)]) -> BackendResult;
 
     /// Set multiple parameters on a node as a timestamped bundle.
-    fn set_params_bundled(&self, node_id: i32, params: &[(&str, f32)], offset_secs: f64) -> BackendResult;
+    fn set_params_bundled(
+        &self,
+        node_id: i32,
+        params: &[(&str, f32)],
+        offset_secs: f64,
+    ) -> BackendResult;
 
     /// Send multiple messages as a single timestamped bundle.
     fn send_bundle(&self, messages: Vec<BackendMessage>, offset_secs: f64) -> BackendResult;
 
     /// Send a unit command to a specific UGen instance within a synth node.
-    fn send_unit_cmd(&self, node_id: i32, ugen_index: i32, cmd: &str, args: Vec<RawArg>) -> BackendResult;
+    fn send_unit_cmd(
+        &self,
+        node_id: i32,
+        ugen_index: i32,
+        cmd: &str,
+        args: Vec<RawArg>,
+    ) -> BackendResult;
 
     /// Load a sound file into a buffer at the given buffer number.
     fn load_buffer(&self, bufnum: i32, path: &Path) -> BackendResult;
@@ -117,11 +128,15 @@ pub trait AudioBackend: Send {
 
     /// Clone the underlying UDP socket for the OSC sender thread.
     /// Returns None for test/null backends.
-    fn try_clone_socket(&self) -> Option<std::net::UdpSocket> { None }
+    fn try_clone_socket(&self) -> Option<std::net::UdpSocket> {
+        None
+    }
 
     /// Get the server's socket address for the OSC sender thread.
     /// Returns None for test/null backends.
-    fn server_socket_addr(&self) -> Option<std::net::SocketAddr> { None }
+    fn server_socket_addr(&self) -> Option<std::net::SocketAddr> {
+        None
+    }
 }
 
 /// A loosely-typed argument for backend messages, so engine code doesn't depend on `rosc`.
@@ -213,7 +228,12 @@ impl AudioBackend for ScBackend {
             .map_err(BackendError::from)
     }
 
-    fn set_params_bundled(&self, node_id: i32, params: &[(&str, f32)], offset_secs: f64) -> BackendResult {
+    fn set_params_bundled(
+        &self,
+        node_id: i32,
+        params: &[(&str, f32)],
+        offset_secs: f64,
+    ) -> BackendResult {
         let time = offset_to_osc_time(offset_secs);
         self.client
             .set_params_bundled(node_id, params, time)
@@ -234,7 +254,13 @@ impl AudioBackend for ScBackend {
             .map_err(BackendError::from)
     }
 
-    fn send_unit_cmd(&self, node_id: i32, ugen_index: i32, cmd: &str, args: Vec<RawArg>) -> BackendResult {
+    fn send_unit_cmd(
+        &self,
+        node_id: i32,
+        ugen_index: i32,
+        cmd: &str,
+        args: Vec<RawArg>,
+    ) -> BackendResult {
         let osc_args: Vec<rosc::OscType> = args.into_iter().map(raw_to_osc).collect();
         self.client
             .send_unit_cmd(node_id, ugen_index, cmd, osc_args)
@@ -249,9 +275,7 @@ impl AudioBackend for ScBackend {
     }
 
     fn free_buffer(&self, bufnum: i32) -> BackendResult {
-        self.client
-            .free_buffer(bufnum)
-            .map_err(BackendError::from)
+        self.client.free_buffer(bufnum).map_err(BackendError::from)
     }
 
     fn alloc_buffer(&self, bufnum: i32, num_frames: i32, num_channels: i32) -> BackendResult {
@@ -267,15 +291,11 @@ impl AudioBackend for ScBackend {
     }
 
     fn close_buffer(&self, bufnum: i32) -> BackendResult {
-        self.client
-            .close_buffer(bufnum)
-            .map_err(BackendError::from)
+        self.client.close_buffer(bufnum).map_err(BackendError::from)
     }
 
     fn query_buffer(&self, bufnum: i32) -> BackendResult {
-        self.client
-            .query_buffer(bufnum)
-            .map_err(BackendError::from)
+        self.client.query_buffer(bufnum).map_err(BackendError::from)
     }
 
     fn send_raw(&self, addr: &str, args: Vec<RawArg>) -> BackendResult {
@@ -466,7 +486,12 @@ impl AudioBackend for TestBackend {
         Ok(())
     }
 
-    fn set_params_bundled(&self, node_id: i32, params: &[(&str, f32)], offset_secs: f64) -> BackendResult {
+    fn set_params_bundled(
+        &self,
+        node_id: i32,
+        params: &[(&str, f32)],
+        offset_secs: f64,
+    ) -> BackendResult {
         self.ops.lock().unwrap().push(TestOp::SetParamsBundled {
             node_id,
             params: params.iter().map(|(k, v)| (k.to_string(), *v)).collect(),
@@ -483,7 +508,13 @@ impl AudioBackend for TestBackend {
         Ok(())
     }
 
-    fn send_unit_cmd(&self, node_id: i32, ugen_index: i32, cmd: &str, args: Vec<RawArg>) -> BackendResult {
+    fn send_unit_cmd(
+        &self,
+        node_id: i32,
+        ugen_index: i32,
+        cmd: &str,
+        args: Vec<RawArg>,
+    ) -> BackendResult {
         self.ops.lock().unwrap().push(TestOp::SendUnitCmd {
             node_id,
             ugen_index,
@@ -556,7 +587,13 @@ impl AudioBackend for SharedTestBackend {
     fn create_group(&self, group_id: i32, add_action: i32, target: i32) -> BackendResult {
         self.0.create_group(group_id, add_action, target)
     }
-    fn create_synth(&self, def_name: &str, node_id: i32, group_id: i32, params: &[(String, f32)]) -> BackendResult {
+    fn create_synth(
+        &self,
+        def_name: &str,
+        node_id: i32,
+        group_id: i32,
+        params: &[(String, f32)],
+    ) -> BackendResult {
         self.0.create_synth(def_name, node_id, group_id, params)
     }
     fn free_node(&self, node_id: i32) -> BackendResult {
@@ -568,13 +605,24 @@ impl AudioBackend for SharedTestBackend {
     fn set_params(&self, node_id: i32, params: &[(&str, f32)]) -> BackendResult {
         self.0.set_params(node_id, params)
     }
-    fn set_params_bundled(&self, node_id: i32, params: &[(&str, f32)], offset_secs: f64) -> BackendResult {
+    fn set_params_bundled(
+        &self,
+        node_id: i32,
+        params: &[(&str, f32)],
+        offset_secs: f64,
+    ) -> BackendResult {
         self.0.set_params_bundled(node_id, params, offset_secs)
     }
     fn send_bundle(&self, messages: Vec<BackendMessage>, offset_secs: f64) -> BackendResult {
         self.0.send_bundle(messages, offset_secs)
     }
-    fn send_unit_cmd(&self, node_id: i32, ugen_index: i32, cmd: &str, args: Vec<RawArg>) -> BackendResult {
+    fn send_unit_cmd(
+        &self,
+        node_id: i32,
+        ugen_index: i32,
+        cmd: &str,
+        args: Vec<RawArg>,
+    ) -> BackendResult {
         self.0.send_unit_cmd(node_id, ugen_index, cmd, args)
     }
     fn load_buffer(&self, bufnum: i32, path: &Path) -> BackendResult {
@@ -607,19 +655,49 @@ impl AudioBackend for SharedTestBackend {
 pub struct NullBackend;
 
 impl AudioBackend for NullBackend {
-    fn create_group(&self, _: i32, _: i32, _: i32) -> BackendResult { Ok(()) }
-    fn create_synth(&self, _: &str, _: i32, _: i32, _: &[(String, f32)]) -> BackendResult { Ok(()) }
-    fn free_node(&self, _: i32) -> BackendResult { Ok(()) }
-    fn set_param(&self, _: i32, _: &str, _: f32) -> BackendResult { Ok(()) }
-    fn set_params(&self, _: i32, _: &[(&str, f32)]) -> BackendResult { Ok(()) }
-    fn set_params_bundled(&self, _: i32, _: &[(&str, f32)], _: f64) -> BackendResult { Ok(()) }
-    fn send_bundle(&self, _: Vec<BackendMessage>, _: f64) -> BackendResult { Ok(()) }
-    fn send_unit_cmd(&self, _: i32, _: i32, _: &str, _: Vec<RawArg>) -> BackendResult { Ok(()) }
-    fn load_buffer(&self, _: i32, _: &Path) -> BackendResult { Ok(()) }
-    fn free_buffer(&self, _: i32) -> BackendResult { Ok(()) }
-    fn alloc_buffer(&self, _: i32, _: i32, _: i32) -> BackendResult { Ok(()) }
-    fn open_buffer_for_write(&self, _: i32, _: &Path) -> BackendResult { Ok(()) }
-    fn close_buffer(&self, _: i32) -> BackendResult { Ok(()) }
-    fn query_buffer(&self, _: i32) -> BackendResult { Ok(()) }
-    fn send_raw(&self, _: &str, _: Vec<RawArg>) -> BackendResult { Ok(()) }
+    fn create_group(&self, _: i32, _: i32, _: i32) -> BackendResult {
+        Ok(())
+    }
+    fn create_synth(&self, _: &str, _: i32, _: i32, _: &[(String, f32)]) -> BackendResult {
+        Ok(())
+    }
+    fn free_node(&self, _: i32) -> BackendResult {
+        Ok(())
+    }
+    fn set_param(&self, _: i32, _: &str, _: f32) -> BackendResult {
+        Ok(())
+    }
+    fn set_params(&self, _: i32, _: &[(&str, f32)]) -> BackendResult {
+        Ok(())
+    }
+    fn set_params_bundled(&self, _: i32, _: &[(&str, f32)], _: f64) -> BackendResult {
+        Ok(())
+    }
+    fn send_bundle(&self, _: Vec<BackendMessage>, _: f64) -> BackendResult {
+        Ok(())
+    }
+    fn send_unit_cmd(&self, _: i32, _: i32, _: &str, _: Vec<RawArg>) -> BackendResult {
+        Ok(())
+    }
+    fn load_buffer(&self, _: i32, _: &Path) -> BackendResult {
+        Ok(())
+    }
+    fn free_buffer(&self, _: i32) -> BackendResult {
+        Ok(())
+    }
+    fn alloc_buffer(&self, _: i32, _: i32, _: i32) -> BackendResult {
+        Ok(())
+    }
+    fn open_buffer_for_write(&self, _: i32, _: &Path) -> BackendResult {
+        Ok(())
+    }
+    fn close_buffer(&self, _: i32) -> BackendResult {
+        Ok(())
+    }
+    fn query_buffer(&self, _: i32) -> BackendResult {
+        Ok(())
+    }
+    fn send_raw(&self, _: &str, _: Vec<RawArg>) -> BackendResult {
+        Ok(())
+    }
 }

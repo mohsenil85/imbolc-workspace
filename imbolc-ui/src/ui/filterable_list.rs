@@ -5,10 +5,14 @@ pub trait FilterableItem {
     /// Primary text used for filtering and tab-completion.
     fn primary_text(&self) -> &str;
     /// Secondary text also checked during filtering.
-    fn secondary_text(&self) -> &str { "" }
+    fn secondary_text(&self) -> &str {
+        ""
+    }
     /// Text inserted into the input on tab-complete/arrow selection.
     /// Defaults to `primary_text()`.
-    fn completion_text(&self) -> String { self.primary_text().to_string() }
+    fn completion_text(&self) -> String {
+        self.primary_text().to_string()
+    }
 }
 
 /// Shared filtering, tab-completion, scrolling, and selection logic
@@ -70,7 +74,9 @@ impl<T: FilterableItem> FilterableList<T> {
 
     /// Returns the selected item, if any.
     pub fn selected_item(&self) -> Option<&T> {
-        self.filtered.get(self.selected).map(|&idx| &self.items[idx])
+        self.filtered
+            .get(self.selected)
+            .map(|&idx| &self.items[idx])
     }
 
     pub fn update_filter(&mut self) {
@@ -189,13 +195,20 @@ mod tests {
 
     impl TestItem {
         fn new(primary: &str, secondary: &str) -> Self {
-            Self { primary: primary.to_string(), secondary: secondary.to_string() }
+            Self {
+                primary: primary.to_string(),
+                secondary: secondary.to_string(),
+            }
         }
     }
 
     impl FilterableItem for TestItem {
-        fn primary_text(&self) -> &str { &self.primary }
-        fn secondary_text(&self) -> &str { &self.secondary }
+        fn primary_text(&self) -> &str {
+            &self.primary
+        }
+        fn secondary_text(&self) -> &str {
+            &self.secondary
+        }
     }
 
     #[test]
@@ -252,10 +265,7 @@ mod tests {
     #[test]
     fn tab_complete_single_match() {
         let mut list = FilterableList::new(10);
-        list.set_items(vec![
-            TestItem::new("alpha", ""),
-            TestItem::new("beta", ""),
-        ]);
+        list.set_items(vec![TestItem::new("alpha", ""), TestItem::new("beta", "")]);
 
         list.filter_base = "alp".to_string();
         list.update_filter();
@@ -277,10 +287,7 @@ mod tests {
     #[test]
     fn selected_item_returns_correct() {
         let mut list = FilterableList::new(10);
-        list.set_items(vec![
-            TestItem::new("alpha", ""),
-            TestItem::new("beta", ""),
-        ]);
+        list.set_items(vec![TestItem::new("alpha", ""), TestItem::new("beta", "")]);
         assert_eq!(list.selected_item().unwrap().primary_text(), "alpha");
 
         list.move_down();

@@ -6,7 +6,12 @@ use crate::ui::{Action, AutomationAction, InputEvent, KeyCode, VstParamAction};
 use super::VstParamPane;
 
 impl VstParamPane {
-    pub(super) fn handle_action_impl(&mut self, action: ActionId, _event: &InputEvent, state: &AppState) -> Action {
+    pub(super) fn handle_action_impl(
+        &mut self,
+        action: ActionId,
+        _event: &InputEvent,
+        state: &AppState,
+    ) -> Action {
         let ActionId::VstParams(action) = action else {
             return Action::None;
         };
@@ -55,7 +60,9 @@ impl VstParamPane {
                 Action::None
             }
             VstParamsActionId::Down | VstParamsActionId::Next => {
-                if !self.filtered_indices.is_empty() && self.selected_param + 1 < self.filtered_indices.len() {
+                if !self.filtered_indices.is_empty()
+                    && self.selected_param + 1 < self.filtered_indices.len()
+                {
                     self.selected_param += 1;
                 }
                 Action::None
@@ -64,7 +71,12 @@ impl VstParamPane {
                 if let Some(&param_idx) = self.filtered_indices.get(self.selected_param) {
                     let idx = self.get_param_index(param_idx, state);
                     if let Some(idx) = idx {
-                        return Action::VstParam(VstParamAction::AdjustParam(instrument_id, target, idx, -0.01));
+                        return Action::VstParam(VstParamAction::AdjustParam(
+                            instrument_id,
+                            target,
+                            idx,
+                            -0.01,
+                        ));
                     }
                 }
                 Action::None
@@ -73,7 +85,12 @@ impl VstParamPane {
                 if let Some(&param_idx) = self.filtered_indices.get(self.selected_param) {
                     let idx = self.get_param_index(param_idx, state);
                     if let Some(idx) = idx {
-                        return Action::VstParam(VstParamAction::AdjustParam(instrument_id, target, idx, 0.01));
+                        return Action::VstParam(VstParamAction::AdjustParam(
+                            instrument_id,
+                            target,
+                            idx,
+                            0.01,
+                        ));
                     }
                 }
                 Action::None
@@ -82,7 +99,12 @@ impl VstParamPane {
                 if let Some(&param_idx) = self.filtered_indices.get(self.selected_param) {
                     let idx = self.get_param_index(param_idx, state);
                     if let Some(idx) = idx {
-                        return Action::VstParam(VstParamAction::AdjustParam(instrument_id, target, idx, -0.1));
+                        return Action::VstParam(VstParamAction::AdjustParam(
+                            instrument_id,
+                            target,
+                            idx,
+                            -0.1,
+                        ));
                     }
                 }
                 Action::None
@@ -91,7 +113,12 @@ impl VstParamPane {
                 if let Some(&param_idx) = self.filtered_indices.get(self.selected_param) {
                     let idx = self.get_param_index(param_idx, state);
                     if let Some(idx) = idx {
-                        return Action::VstParam(VstParamAction::AdjustParam(instrument_id, target, idx, 0.1));
+                        return Action::VstParam(VstParamAction::AdjustParam(
+                            instrument_id,
+                            target,
+                            idx,
+                            0.1,
+                        ));
                     }
                 }
                 Action::None
@@ -100,7 +127,11 @@ impl VstParamPane {
                 if let Some(&param_idx) = self.filtered_indices.get(self.selected_param) {
                     let idx = self.get_param_index(param_idx, state);
                     if let Some(idx) = idx {
-                        return Action::VstParam(VstParamAction::ResetParam(instrument_id, target, idx));
+                        return Action::VstParam(VstParamAction::ResetParam(
+                            instrument_id,
+                            target,
+                            idx,
+                        ));
                     }
                 }
                 Action::None

@@ -88,7 +88,11 @@ pub fn tick_drum_sequencer(
 
         // Handle initial step when sequencer first starts (no threshold crossed yet)
         if steps_to_play.is_empty() && seq.last_played_step != Some(seq.current_step) {
-            steps_to_play.push((seq.current_step, seq.current_pattern, engine.schedule_lookahead_secs));
+            steps_to_play.push((
+                seq.current_step,
+                seq.current_pattern,
+                engine.schedule_lookahead_secs,
+            ));
         }
 
         // Play each step with its precise offset
@@ -96,27 +100,29 @@ pub fn tick_drum_sequencer(
             if engine.is_running() && !instrument.mixer.mute {
                 let pattern = &seq.patterns[pattern_idx];
                 for (pad_idx, pad) in seq.pads.iter().enumerate() {
-                    if let Some(step_data) = pattern
-                        .steps
-                        .get(pad_idx)
-                        .and_then(|s| s.get(step))
-                    {
+                    if let Some(step_data) = pattern.steps.get(pad_idx).and_then(|s| s.get(step)) {
                         if !step_data.active {
                             continue;
                         }
 
                         // Probability check: skip hit if random exceeds probability
                         if step_data.probability < 1.0 {
-                            *rng_state = rng_state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+                            *rng_state = rng_state
+                                .wrapping_mul(6364136223846793005)
+                                .wrapping_add(1442695040888963407);
                             let r = ((*rng_state >> 33) as f32) / (u32::MAX as f32);
-                            if r > step_data.probability { continue; }
+                            if r > step_data.probability {
+                                continue;
+                            }
                         }
 
                         // Per-track groove settings
-                        let effective_humanize_vel = instrument.groove
+                        let effective_humanize_vel = instrument
+                            .groove
                             .humanize_velocity
                             .unwrap_or(session.humanize.velocity);
-                        let effective_humanize_time = instrument.groove
+                        let effective_humanize_time = instrument
+                            .groove
                             .humanize_timing
                             .unwrap_or(session.humanize.timing);
                         let timing_offset_ms = instrument.groove.timing_offset_ms;
@@ -126,7 +132,9 @@ pub fn tick_drum_sequencer(
 
                         // Timing humanization: jitter offset by up to +/- 20ms
                         if effective_humanize_time > 0.0 {
-                            *rng_state = rng_state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+                            *rng_state = rng_state
+                                .wrapping_mul(6364136223846793005)
+                                .wrapping_add(1442695040888963407);
                             let r = ((*rng_state >> 33) as f32) / (u32::MAX as f32);
                             let jitter = (r - 0.5) * 2.0 * effective_humanize_time * 0.02;
                             final_offset = (final_offset + jitter as f64).max(0.0);
@@ -135,7 +143,9 @@ pub fn tick_drum_sequencer(
                         let mut amp = (step_data.velocity as f32 / 127.0) * pad.level;
                         // Velocity humanization using per-track setting
                         if effective_humanize_vel > 0.0 {
-                            *rng_state = rng_state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+                            *rng_state = rng_state
+                                .wrapping_mul(6364136223846793005)
+                                .wrapping_add(1442695040888963407);
                             let r = ((*rng_state >> 33) as f32) / (u32::MAX as f32);
                             let jitter = (r - 0.5) * 2.0 * effective_humanize_vel * (30.0 / 127.0);
                             amp = (amp + jitter).clamp(0.01, 1.0);
@@ -148,14 +158,24 @@ pub fn tick_drum_sequencer(
                         if let Some(target_instrument_id) = pad.instrument_id {
                             // Instrument trigger mode: collect for execution after loop
                             let freq = pad.trigger_freq * 2.0_f32.powf(total_pitch as f32 / 12.0);
-                            instrument_triggers.push((target_instrument_id, freq, amp, final_offset));
+                            instrument_triggers.push((
+                                target_instrument_id,
+                                freq,
+                                amp,
+                                final_offset,
+                            ));
                         } else if let Some(buffer_id) = pad.buffer_id {
                             // Sample mode: play one-shot sample
                             let pitch_rate = 2.0_f32.powf(total_pitch as f32 / 12.0);
                             let rate = if pad.reverse { -pitch_rate } else { pitch_rate };
                             let _ = engine.play_drum_hit_to_instrument(
-                                buffer_id, amp, instrument.id,
-                                pad.slice_start, pad.slice_end, rate, final_offset,
+                                buffer_id,
+                                amp,
+                                instrument.id,
+                                pad.slice_start,
+                                pad.slice_end,
+                                rate,
+                                final_offset,
                             );
                         }
                     }
@@ -171,6 +191,7 @@ pub fn tick_drum_sequencer(
 
     // Execute collected instrument triggers (needs immutable borrow of instruments)
     for (target_id, freq, amp, offset) in instrument_triggers {
-        let _ = engine.trigger_instrument_oneshot(target_id, freq, amp, offset, instruments, session);
+        let _ =
+            engine.trigger_instrument_oneshot(target_id, freq, amp, offset, instruments, session);
     }
 }

@@ -122,7 +122,10 @@ impl Keybindings {
         bindings.insert(KeyPattern::new("n").ctrl(), GuiAction::NewProject);
         bindings.insert(KeyPattern::new("o").ctrl(), GuiAction::OpenProject);
         bindings.insert(KeyPattern::new("s").ctrl(), GuiAction::SaveProject);
-        bindings.insert(KeyPattern::new("s").ctrl().shift(), GuiAction::SaveProjectAs);
+        bindings.insert(
+            KeyPattern::new("s").ctrl().shift(),
+            GuiAction::SaveProjectAs,
+        );
 
         // Edit
         bindings.insert(KeyPattern::new("z").ctrl(), GuiAction::Undo);

@@ -98,8 +98,7 @@ impl AppRuntime {
                         .selected_instrument()
                         .filter(|s| s.source.is_audio_input() || s.source.is_bus_in())
                         .map(|s| s.id);
-                    wf.audio_in_waveform =
-                        inst_data.map(|id| self.audio.audio_in_waveform(id));
+                    wf.audio_in_waveform = inst_data.map(|id| self.audio.audio_in_waveform(id));
                 }
             }
         } else {

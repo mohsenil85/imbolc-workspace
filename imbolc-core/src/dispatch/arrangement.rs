@@ -1,7 +1,7 @@
 use crate::action::{ArrangementAction, AudioEffect, DispatchResult, NavIntent, PaneId};
-use imbolc_audio::AudioHandle;
 use crate::state::arrangement::{ClipEditContext, PlayMode};
 use crate::state::AppState;
+use imbolc_audio::AudioHandle;
 
 pub(super) fn dispatch_arrangement(
     action: &ArrangementAction,
@@ -19,8 +19,15 @@ pub(super) fn dispatch_arrangement(
             result.audio_effects.push(AudioEffect::UpdatePianoRoll);
             result
         }
-        ArrangementAction::CreateClip { instrument_id, length_ticks } => {
-            let clip_id = state.session.arrangement.add_clip("Clip".to_string(), *instrument_id, *length_ticks);
+        ArrangementAction::CreateClip {
+            instrument_id,
+            length_ticks,
+        } => {
+            let clip_id = state.session.arrangement.add_clip(
+                "Clip".to_string(),
+                *instrument_id,
+                *length_ticks,
+            );
             if let Some(clip) = state.session.arrangement.clip_mut(clip_id) {
                 clip.name = format!("Clip {}", clip_id);
             }
@@ -57,7 +64,11 @@ pub(super) fn dispatch_arrangement(
             // Capture automation lanes for this instrument within the loop region
             let mut clip_automation_lanes = Vec::new();
             if length_ticks > 0 {
-                for lane in state.session.automation.lanes_for_instrument(*instrument_id) {
+                for lane in state
+                    .session
+                    .automation
+                    .lanes_for_instrument(*instrument_id)
+                {
                     let points: Vec<_> = lane
                         .points
                         .iter()
@@ -77,7 +88,11 @@ pub(super) fn dispatch_arrangement(
                 }
             }
 
-            let clip_id = state.session.arrangement.add_clip("Clip".to_string(), *instrument_id, length_ticks);
+            let clip_id = state.session.arrangement.add_clip(
+                "Clip".to_string(),
+                *instrument_id,
+                length_ticks,
+            );
             if let Some(clip) = state.session.arrangement.clip_mut(clip_id) {
                 clip.name = format!("Clip {}", clip_id);
                 clip.notes = notes;
@@ -98,8 +113,15 @@ pub(super) fn dispatch_arrangement(
             }
             DispatchResult::none()
         }
-        ArrangementAction::PlaceClip { clip_id, instrument_id, start_tick } => {
-            state.session.arrangement.add_placement(*clip_id, *instrument_id, *start_tick);
+        ArrangementAction::PlaceClip {
+            clip_id,
+            instrument_id,
+            start_tick,
+        } => {
+            state
+                .session
+                .arrangement
+                .add_placement(*clip_id, *instrument_id, *start_tick);
             let mut result = DispatchResult::none();
             result.audio_effects.push(AudioEffect::UpdatePianoRoll);
             result.audio_effects.push(AudioEffect::UpdateAutomation);
@@ -112,15 +134,27 @@ pub(super) fn dispatch_arrangement(
             result.audio_effects.push(AudioEffect::UpdateAutomation);
             result
         }
-        ArrangementAction::MovePlacement { placement_id, new_start_tick } => {
-            state.session.arrangement.move_placement(*placement_id, *new_start_tick);
+        ArrangementAction::MovePlacement {
+            placement_id,
+            new_start_tick,
+        } => {
+            state
+                .session
+                .arrangement
+                .move_placement(*placement_id, *new_start_tick);
             let mut result = DispatchResult::none();
             result.audio_effects.push(AudioEffect::UpdatePianoRoll);
             result.audio_effects.push(AudioEffect::UpdateAutomation);
             result
         }
-        ArrangementAction::ResizePlacement { placement_id, new_length } => {
-            state.session.arrangement.resize_placement(*placement_id, *new_length);
+        ArrangementAction::ResizePlacement {
+            placement_id,
+            new_length,
+        } => {
+            state
+                .session
+                .arrangement
+                .resize_placement(*placement_id, *new_length);
             let mut result = DispatchResult::none();
             result.audio_effects.push(AudioEffect::UpdatePianoRoll);
             result.audio_effects.push(AudioEffect::UpdateAutomation);
@@ -138,10 +172,11 @@ pub(super) fn dispatch_arrangement(
             if let Some(original) = original {
                 if let Some(clip) = state.session.arrangement.clip(original.clip_id) {
                     let new_start = original.end_tick(clip);
-                    let new_id = state
-                        .session
-                        .arrangement
-                        .add_placement(original.clip_id, original.instrument_id, new_start);
+                    let new_id = state.session.arrangement.add_placement(
+                        original.clip_id,
+                        original.instrument_id,
+                        new_start,
+                    );
                     if let Some(new_placement) = state
                         .session
                         .arrangement
@@ -214,7 +249,12 @@ pub(super) fn dispatch_arrangement(
                 pr.looping = true;
                 state.audio.playhead = 0;
 
-                (stashed_notes, stashed_loop_start, stashed_loop_end, stashed_looping)
+                (
+                    stashed_notes,
+                    stashed_loop_start,
+                    stashed_loop_end,
+                    stashed_looping,
+                )
             };
 
             // Stash session automation lanes for this instrument, then load clip automation
@@ -228,7 +268,10 @@ pub(super) fn dispatch_arrangement(
                 .collect();
             let stashed_selected_automation_lane = state.session.automation.selected_lane;
 
-            state.session.automation.remove_lanes_for_instrument(clip.instrument_id);
+            state
+                .session
+                .automation
+                .remove_lanes_for_instrument(clip.instrument_id);
 
             // Load clip automation lanes into session
             for clip_lane in &clip.automation_lanes {
@@ -289,10 +332,16 @@ pub(super) fn dispatch_arrangement(
             }
 
             // Remove clip automation lanes from session and restore stashed lanes
-            state.session.automation.remove_lanes_for_instrument(ctx.instrument_id);
+            state
+                .session
+                .automation
+                .remove_lanes_for_instrument(ctx.instrument_id);
 
             for stashed_lane in &ctx.stashed_automation_lanes {
-                let lane_id = state.session.automation.add_lane(stashed_lane.target.clone());
+                let lane_id = state
+                    .session
+                    .automation
+                    .add_lane(stashed_lane.target.clone());
                 if let Some(session_lane) = state.session.automation.lane_mut(lane_id) {
                     session_lane.points = stashed_lane.points.clone();
                     session_lane.enabled = stashed_lane.enabled;

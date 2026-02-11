@@ -19,10 +19,10 @@ pub struct ParamSpec {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CustomSynthDef {
     pub id: CustomSynthDefId,
-    pub name: String,              // Display name (derived from synthdef name)
-    pub synthdef_name: String,     // SuperCollider name (e.g., "my_bass")
-    pub source_path: PathBuf,      // Original .scd file path
-    pub params: Vec<ParamSpec>,    // Extracted parameters
+    pub name: String,           // Display name (derived from synthdef name)
+    pub synthdef_name: String,  // SuperCollider name (e.g., "my_bass")
+    pub source_path: PathBuf,   // Original .scd file path
+    pub params: Vec<ParamSpec>, // Extracted parameters
 }
 
 /// Registry of all custom synthdefs

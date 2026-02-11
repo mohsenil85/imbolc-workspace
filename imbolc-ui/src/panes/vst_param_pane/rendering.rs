@@ -1,6 +1,6 @@
 use crate::state::AppState;
 use crate::ui::layout_helpers::center_rect;
-use crate::ui::{Rect, RenderBuf, Color, Style};
+use crate::ui::{Color, Rect, RenderBuf, Style};
 
 use super::VstParamPane;
 
@@ -9,11 +9,13 @@ impl VstParamPane {
         let rect = center_rect(area, 80.min(area.width), 30.min(area.height));
 
         // Determine plugin name and instrument number
-        let plugin_name = self.get_plugin_id(state)
+        let plugin_name = self
+            .get_plugin_id(state)
             .and_then(|pid| state.session.vst_plugins.get(pid))
             .map(|p| p.name.clone())
             .unwrap_or_else(|| "—".to_string());
-        let inst_label = self.instrument_id
+        let inst_label = self
+            .instrument_id
             .map(|id| format!("Inst {}", id))
             .unwrap_or_else(|| "—".to_string());
 
@@ -22,7 +24,10 @@ impl VstParamPane {
                 format!(" VST Params: {} — {} ", plugin_name, inst_label)
             }
             crate::action::VstTarget::Effect(idx) => {
-                format!(" VST Effect Params: {} — {} FX {} ", plugin_name, inst_label, idx)
+                format!(
+                    " VST Effect Params: {} — {} FX {} ",
+                    plugin_name, inst_label, idx
+                )
             }
         };
 
@@ -55,18 +60,19 @@ impl VstParamPane {
         let list_height = inner.height.saturating_sub(2) as usize; // -1 for search, -1 for help
 
         // Get params to display
-        let (params, param_values) = self.get_plugin_id(state)
+        let (params, param_values) = self
+            .get_plugin_id(state)
             .and_then(|pid| state.session.vst_plugins.get(pid))
             .map(|plugin| {
-                let param_vals = self.instrument_id
+                let param_vals = self
+                    .instrument_id
                     .and_then(|id| state.instruments.instrument(id))
                     .map(|inst| match self.target {
                         crate::action::VstTarget::Source => inst.vst_source_params().to_vec(),
-                        crate::action::VstTarget::Effect(effect_id) => {
-                            inst.effect_by_id(effect_id)
-                                .map(|e| e.vst_param_values.clone())
-                                .unwrap_or_default()
-                        }
+                        crate::action::VstTarget::Effect(effect_id) => inst
+                            .effect_by_id(effect_id)
+                            .map(|e| e.vst_param_values.clone())
+                            .unwrap_or_default(),
                     })
                     .unwrap_or_default();
                 (plugin.params.clone(), param_vals)
@@ -76,7 +82,10 @@ impl VstParamPane {
         if params.is_empty() {
             buf.draw_line(
                 Rect::new(inner.x + 2, list_y + 1, inner.width.saturating_sub(2), 1),
-                &[("No params discovered. Press 'd' to discover.", Style::new().fg(Color::DARK_GRAY))],
+                &[(
+                    "No params discovered. Press 'd' to discover.",
+                    Style::new().fg(Color::DARK_GRAY),
+                )],
             );
         }
 
@@ -89,17 +98,24 @@ impl VstParamPane {
 
         let bar_width = (inner.width as usize).saturating_sub(30).max(8);
 
-        for (row_idx, &filtered_idx) in self.filtered_indices.iter()
+        for (row_idx, &filtered_idx) in self
+            .filtered_indices
+            .iter()
             .skip(scroll)
             .take(list_height)
             .enumerate()
         {
             let y = list_y + row_idx as u16;
-            if y >= inner.y + inner.height - 1 { break; } // Leave room for help line
+            if y >= inner.y + inner.height - 1 {
+                break;
+            } // Leave room for help line
 
-            let Some(spec) = params.get(filtered_idx) else { continue };
+            let Some(spec) = params.get(filtered_idx) else {
+                continue;
+            };
 
-            let value = param_values.iter()
+            let value = param_values
+                .iter()
                 .find(|(idx, _)| *idx == spec.index)
                 .map(|(_, v)| *v)
                 .unwrap_or(spec.default);
@@ -113,22 +129,27 @@ impl VstParamPane {
             let index_str = format!("{:03}", spec.index);
             let name = &spec.name;
             let value_str = format!("{:.2}", value);
-            let label_suffix = spec.label.as_deref()
+            let label_suffix = spec
+                .label
+                .as_deref()
                 .filter(|l| !l.is_empty())
                 .map(|l| format!(" {}", l))
                 .unwrap_or_default();
 
             // Build bar
             let filled = (value * bar_width as f32).round() as usize;
-            let bar: String = (0..bar_width).map(|i| {
-                if i < filled { '=' } else { '-' }
-            }).collect();
+            let bar: String = (0..bar_width)
+                .map(|i| if i < filled { '=' } else { '-' })
+                .collect();
 
             let line = format!(
                 "{} {} {:<20} [{}] {}{}",
-                indicator, index_str,
+                indicator,
+                index_str,
                 if name.len() > 20 { &name[..20] } else { name },
-                bar, value_str, label_suffix,
+                bar,
+                value_str,
+                label_suffix,
             );
 
             let style = if is_selected {
@@ -148,6 +169,5 @@ impl VstParamPane {
                 }
             }
         }
-
     }
 }

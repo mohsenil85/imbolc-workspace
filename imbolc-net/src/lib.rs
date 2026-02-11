@@ -14,8 +14,8 @@ pub mod discovery;
 
 pub use client::{MeteringUpdate, OwnershipStatus, RemoteDispatcher};
 pub use protocol::{
-    ClientId, ClientMessage, NetworkAction, NetworkState, OwnerInfo, PrivilegeLevel,
-    ServerMessage, SessionToken, StatePatch,
+    ClientId, ClientMessage, NetworkAction, NetworkState, OwnerInfo, PrivilegeLevel, ServerMessage,
+    SessionToken, StatePatch,
 };
 pub use server::{DirtyFlags, NetServer};
 pub use session_file::{clear_session, load_session, save_session, SavedSession};

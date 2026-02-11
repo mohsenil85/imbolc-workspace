@@ -20,7 +20,9 @@ pub(super) fn handle_set_filter(
     reduce(state, &InstrumentAction::SetFilter(id, filter_type));
     let mut result = DispatchResult::none();
     result.audio_effects.push(AudioEffect::RebuildInstruments);
-    result.audio_effects.push(AudioEffect::RebuildRoutingForInstrument(id));
+    result
+        .audio_effects
+        .push(AudioEffect::RebuildRoutingForInstrument(id));
     result
 }
 
@@ -28,7 +30,9 @@ pub(super) fn handle_toggle_filter(state: &mut AppState, id: InstrumentId) -> Di
     reduce(state, &InstrumentAction::ToggleFilter(id));
     let mut result = DispatchResult::none();
     result.audio_effects.push(AudioEffect::RebuildInstruments);
-    result.audio_effects.push(AudioEffect::RebuildRoutingForInstrument(id));
+    result
+        .audio_effects
+        .push(AudioEffect::RebuildRoutingForInstrument(id));
     result
 }
 
@@ -53,8 +57,17 @@ pub(super) fn handle_adjust_filter_cutoff(
             let cutoff = filter.cutoff.value;
             let target = AutomationTarget::filter_cutoff(id);
             let normalized = target.normalize_value(cutoff);
-            maybe_record_automation(state, &mut result, AutomationTarget::filter_cutoff(id), normalized);
-            result.audio_effects.push(AudioEffect::SetFilterParam(id, FilterParamKind::Cutoff, cutoff));
+            maybe_record_automation(
+                state,
+                &mut result,
+                AutomationTarget::filter_cutoff(id),
+                normalized,
+            );
+            result.audio_effects.push(AudioEffect::SetFilterParam(
+                id,
+                FilterParamKind::Cutoff,
+                cutoff,
+            ));
         }
     }
 
@@ -76,8 +89,17 @@ pub(super) fn handle_adjust_filter_resonance(
             let resonance = filter.resonance.value;
             let target = AutomationTarget::filter_resonance(id);
             let normalized = target.normalize_value(resonance);
-            maybe_record_automation(state, &mut result, AutomationTarget::filter_resonance(id), normalized);
-            result.audio_effects.push(AudioEffect::SetFilterParam(id, FilterParamKind::Resonance, resonance));
+            maybe_record_automation(
+                state,
+                &mut result,
+                AutomationTarget::filter_resonance(id),
+                normalized,
+            );
+            result.audio_effects.push(AudioEffect::SetFilterParam(
+                id,
+                FilterParamKind::Resonance,
+                resonance,
+            ));
         }
     }
 

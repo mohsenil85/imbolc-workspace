@@ -3,15 +3,17 @@ use std::any::Any;
 use crate::state::{AppState, EqBandType, EqConfig, InstrumentId};
 use crate::ui::action_id::{ActionId, EqActionId};
 use crate::ui::layout_helpers::center_rect;
-use crate::ui::{Rect, RenderBuf, Action, Color, InputEvent, InstrumentAction, Keymap, Pane, Style};
+use crate::ui::{
+    Action, Color, InputEvent, InstrumentAction, Keymap, Pane, Rect, RenderBuf, Style,
+};
 use imbolc_types::EqParamKind;
 
 use crate::state::instrument::EqBand;
 
 pub struct EqPane {
     keymap: Keymap,
-    selected_band: usize,   // 0-11
-    selected_param: usize,  // 0=freq, 1=gain, 2=q, 3=enabled
+    selected_band: usize,  // 0-11
+    selected_param: usize, // 0=freq, 1=gain, 2=q, 3=enabled
 }
 
 impl EqPane {
@@ -59,12 +61,26 @@ impl Pane for EqPane {
                 self.selected_param = (self.selected_param + 1).min(3);
                 Action::None
             }
-            ActionId::Eq(EqActionId::Increase) | ActionId::Eq(EqActionId::IncreaseBig) | ActionId::Eq(EqActionId::IncreaseTiny) => {
-                adjust_param(instrument_id, instrument.eq(), self.selected_band, self.selected_param, true, action)
-            }
-            ActionId::Eq(EqActionId::Decrease) | ActionId::Eq(EqActionId::DecreaseBig) | ActionId::Eq(EqActionId::DecreaseTiny) => {
-                adjust_param(instrument_id, instrument.eq(), self.selected_band, self.selected_param, false, action)
-            }
+            ActionId::Eq(EqActionId::Increase)
+            | ActionId::Eq(EqActionId::IncreaseBig)
+            | ActionId::Eq(EqActionId::IncreaseTiny) => adjust_param(
+                instrument_id,
+                instrument.eq(),
+                self.selected_band,
+                self.selected_param,
+                true,
+                action,
+            ),
+            ActionId::Eq(EqActionId::Decrease)
+            | ActionId::Eq(EqActionId::DecreaseBig)
+            | ActionId::Eq(EqActionId::DecreaseTiny) => adjust_param(
+                instrument_id,
+                instrument.eq(),
+                self.selected_band,
+                self.selected_param,
+                false,
+                action,
+            ),
             ActionId::Eq(EqActionId::ToggleEq) => {
                 Action::Instrument(InstrumentAction::ToggleEq(instrument_id))
             }
@@ -73,7 +89,10 @@ impl Pane for EqPane {
                     let band = &eq.bands[self.selected_band];
                     let new_val = if band.enabled { 0.0 } else { 1.0 };
                     Action::Instrument(InstrumentAction::SetEqParam(
-                        instrument_id, self.selected_band, EqParamKind::Enabled, new_val,
+                        instrument_id,
+                        self.selected_band,
+                        EqParamKind::Enabled,
+                        new_val,
                     ))
                 } else {
                     Action::None
@@ -118,7 +137,15 @@ impl Pane for EqPane {
         let curve_width = inner.width.saturating_sub(6);
         let curve_x = inner.x + 5;
 
-        render_frequency_curve(curve_x, curve_y, curve_width, curve_height, eq, self.selected_band, buf);
+        render_frequency_curve(
+            curve_x,
+            curve_y,
+            curve_width,
+            curve_height,
+            eq,
+            self.selected_band,
+            buf,
+        );
 
         // dB axis labels
         let db_labels = ["+24", "+12", "  0", "-12", "-24"];
@@ -154,7 +181,15 @@ impl Pane for EqPane {
 
         // -- Band info (two rows of 6 bands each) --
         let info_y = freq_axis_y + 2;
-        render_band_info(inner.x, info_y, inner.width, eq, self.selected_band, self.selected_param, buf);
+        render_band_info(
+            inner.x,
+            info_y,
+            inner.width,
+            eq,
+            self.selected_band,
+            self.selected_param,
+            buf,
+        );
     }
 
     fn keymap(&self) -> &Keymap {
@@ -199,16 +234,27 @@ fn adjust_param(
 
     let delta = match (param_idx, action) {
         // Freq: log-ish steps
-        (0, ActionId::Eq(EqActionId::IncreaseBig)) | (0, ActionId::Eq(EqActionId::DecreaseBig)) => current * 0.2,
-        (0, ActionId::Eq(EqActionId::IncreaseTiny)) | (0, ActionId::Eq(EqActionId::DecreaseTiny)) => current * 0.01,
-        (0, ActionId::Eq(EqActionId::Increase)) | (0, ActionId::Eq(EqActionId::Decrease)) => current * 0.05,
+        (0, ActionId::Eq(EqActionId::IncreaseBig)) | (0, ActionId::Eq(EqActionId::DecreaseBig)) => {
+            current * 0.2
+        }
+        (0, ActionId::Eq(EqActionId::IncreaseTiny))
+        | (0, ActionId::Eq(EqActionId::DecreaseTiny)) => current * 0.01,
+        (0, ActionId::Eq(EqActionId::Increase)) | (0, ActionId::Eq(EqActionId::Decrease)) => {
+            current * 0.05
+        }
         // Gain: dB steps
-        (1, ActionId::Eq(EqActionId::IncreaseBig)) | (1, ActionId::Eq(EqActionId::DecreaseBig)) => 3.0,
-        (1, ActionId::Eq(EqActionId::IncreaseTiny)) | (1, ActionId::Eq(EqActionId::DecreaseTiny)) => 0.1,
+        (1, ActionId::Eq(EqActionId::IncreaseBig)) | (1, ActionId::Eq(EqActionId::DecreaseBig)) => {
+            3.0
+        }
+        (1, ActionId::Eq(EqActionId::IncreaseTiny))
+        | (1, ActionId::Eq(EqActionId::DecreaseTiny)) => 0.1,
         (1, ActionId::Eq(EqActionId::Increase)) | (1, ActionId::Eq(EqActionId::Decrease)) => 0.5,
         // Q
-        (2, ActionId::Eq(EqActionId::IncreaseBig)) | (2, ActionId::Eq(EqActionId::DecreaseBig)) => 1.0,
-        (2, ActionId::Eq(EqActionId::IncreaseTiny)) | (2, ActionId::Eq(EqActionId::DecreaseTiny)) => 0.05,
+        (2, ActionId::Eq(EqActionId::IncreaseBig)) | (2, ActionId::Eq(EqActionId::DecreaseBig)) => {
+            1.0
+        }
+        (2, ActionId::Eq(EqActionId::IncreaseTiny))
+        | (2, ActionId::Eq(EqActionId::DecreaseTiny)) => 0.05,
         (2, ActionId::Eq(EqActionId::Increase)) | (2, ActionId::Eq(EqActionId::Decrease)) => 0.1,
         _ => 0.0,
     };
@@ -220,7 +266,10 @@ fn adjust_param(
     };
 
     Action::Instrument(InstrumentAction::SetEqParam(
-        instrument_id, band_idx, param, new_val,
+        instrument_id,
+        band_idx,
+        param,
+        new_val,
     ))
 }
 
@@ -265,7 +314,10 @@ fn composite_response_db(eq: &EqConfig, freq: f32) -> f32 {
 
 /// Render the frequency response curve.
 fn render_frequency_curve(
-    x: u16, y: u16, width: u16, height: u16,
+    x: u16,
+    y: u16,
+    width: u16,
+    height: u16,
     eq: &EqConfig,
     selected_band: usize,
     buf: &mut RenderBuf,
@@ -333,7 +385,9 @@ fn render_frequency_curve(
 
 /// Render band info in two rows of 6 bands each.
 fn render_band_info(
-    x: u16, y: u16, width: u16,
+    x: u16,
+    y: u16,
+    width: u16,
     eq: &EqConfig,
     selected_band: usize,
     selected_param: usize,
@@ -350,24 +404,37 @@ fn render_band_info(
         let by = y + (row as u16) * (row_height + 1);
         let is_selected = i == selected_band;
 
-        let type_color = if is_selected { Color::new(255, 200, 50) } else { Color::WHITE };
+        let type_color = if is_selected {
+            Color::new(255, 200, 50)
+        } else {
+            Color::WHITE
+        };
 
         // Row 0: type + freq
-        let label = format!("{} {}",
-            band.band_type.name(),
-            format_freq(band.freq),
-        );
-        let label_style = Style::new().fg(if is_selected && selected_param == 0 { Color::new(255, 200, 50) } else { type_color });
+        let label = format!("{} {}", band.band_type.name(), format_freq(band.freq),);
+        let label_style = Style::new().fg(if is_selected && selected_param == 0 {
+            Color::new(255, 200, 50)
+        } else {
+            type_color
+        });
         render_text_at(bx, by, &label, label_style, width, buf);
 
         // Row 1: gain
         let gain_str = format!("{:+.1}dB", band.gain);
-        let gain_style = Style::new().fg(if is_selected && selected_param == 1 { Color::new(255, 200, 50) } else { Color::WHITE });
+        let gain_style = Style::new().fg(if is_selected && selected_param == 1 {
+            Color::new(255, 200, 50)
+        } else {
+            Color::WHITE
+        });
         render_text_at(bx, by + 1, &gain_str, gain_style, width, buf);
 
         // Row 2: Q
         let q_str = format!("Q:{:.2}", band.q);
-        let q_style = Style::new().fg(if is_selected && selected_param == 2 { Color::new(255, 200, 50) } else { Color::WHITE });
+        let q_style = Style::new().fg(if is_selected && selected_param == 2 {
+            Color::new(255, 200, 50)
+        } else {
+            Color::WHITE
+        });
         render_text_at(bx, by + 2, &q_str, q_style, width, buf);
 
         // Row 3: enabled

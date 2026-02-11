@@ -1,10 +1,12 @@
 use std::any::Any;
 
-use crate::state::{AppState, SourceType};
 use crate::state::arrangement::PlayMode;
+use crate::state::{AppState, SourceType};
 use crate::ui::action_id::{ActionId, TrackActionId};
 use crate::ui::layout_helpers::center_rect;
-use crate::ui::{Rect, RenderBuf, Action, ArrangementAction, Color, InputEvent, Keymap, Pane, Style};
+use crate::ui::{
+    Action, ArrangementAction, Color, InputEvent, Keymap, Pane, Rect, RenderBuf, Style,
+};
 
 fn source_color(source: SourceType) -> Color {
     match source {
@@ -93,8 +95,12 @@ impl Pane for TrackPane {
                     Action::None
                 }
             }
-            ActionId::Track(TrackActionId::CursorLeft) => Action::Arrangement(ArrangementAction::MoveCursor(-1)),
-            ActionId::Track(TrackActionId::CursorRight) => Action::Arrangement(ArrangementAction::MoveCursor(1)),
+            ActionId::Track(TrackActionId::CursorLeft) => {
+                Action::Arrangement(ArrangementAction::MoveCursor(-1))
+            }
+            ActionId::Track(TrackActionId::CursorRight) => {
+                Action::Arrangement(ArrangementAction::MoveCursor(1))
+            }
             ActionId::Track(TrackActionId::CursorHome) => {
                 // Jump to tick 0
                 let delta = -(arr.cursor_tick as i32 / arr.ticks_per_col.max(1) as i32);
@@ -110,9 +116,7 @@ impl Pane for TrackPane {
                 }
             }
             ActionId::Track(TrackActionId::NewClip) => {
-                Action::Arrangement(ArrangementAction::CaptureClipFromPianoRoll {
-                    instrument_id,
-                })
+                Action::Arrangement(ArrangementAction::CaptureClipFromPianoRoll { instrument_id })
             }
             ActionId::Track(TrackActionId::NewEmptyClip) => {
                 let tpb = self.ticks_per_bar(state);
@@ -168,8 +172,12 @@ impl Pane for TrackPane {
                     Action::None
                 }
             }
-            ActionId::Track(TrackActionId::ToggleMode) => Action::Arrangement(ArrangementAction::TogglePlayMode),
-            ActionId::Track(TrackActionId::PlayStop) => Action::Arrangement(ArrangementAction::PlayStop),
+            ActionId::Track(TrackActionId::ToggleMode) => {
+                Action::Arrangement(ArrangementAction::TogglePlayMode)
+            }
+            ActionId::Track(TrackActionId::PlayStop) => {
+                Action::Arrangement(ArrangementAction::PlayStop)
+            }
             ActionId::Track(TrackActionId::MoveLeft) => {
                 if let Some(placement) = arr.placement_at(instrument_id, arr.cursor_tick) {
                     let new_start = placement.start_tick.saturating_sub(arr.ticks_per_col);
@@ -192,8 +200,12 @@ impl Pane for TrackPane {
                     Action::None
                 }
             }
-            ActionId::Track(TrackActionId::ZoomIn) => Action::Arrangement(ArrangementAction::ZoomIn),
-            ActionId::Track(TrackActionId::ZoomOut) => Action::Arrangement(ArrangementAction::ZoomOut),
+            ActionId::Track(TrackActionId::ZoomIn) => {
+                Action::Arrangement(ArrangementAction::ZoomIn)
+            }
+            ActionId::Track(TrackActionId::ZoomOut) => {
+                Action::Arrangement(ArrangementAction::ZoomOut)
+            }
             ActionId::Track(TrackActionId::SelectNextPlacement) => {
                 let placements = arr.placements_for_instrument(instrument_id);
                 if placements.is_empty() {
@@ -202,7 +214,11 @@ impl Pane for TrackPane {
                 let next = match arr.selected_placement {
                     Some(i) => {
                         let next_idx = i + 1;
-                        if next_idx < placements.len() { Some(next_idx) } else { Some(0) }
+                        if next_idx < placements.len() {
+                            Some(next_idx)
+                        } else {
+                            Some(0)
+                        }
                     }
                     None => Some(0),
                 };
@@ -335,7 +351,9 @@ impl Pane for TrackPane {
             if is_selected {
                 for row in 0..lane_height {
                     let y = lane_y + row;
-                    if y >= lanes_area_y + lanes_area_height { break; }
+                    if y >= lanes_area_y + lanes_area_height {
+                        break;
+                    }
                     for x in inner.x..timeline_x {
                         buf.set_cell(x, y, ' ', sel_bg);
                     }
@@ -344,7 +362,12 @@ impl Pane for TrackPane {
 
             // Selection indicator
             if is_selected {
-                buf.set_cell(inner.x, lane_y, '>', Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG).bold());
+                buf.set_cell(
+                    inner.x,
+                    lane_y,
+                    '>',
+                    Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG).bold(),
+                );
             }
 
             // Instrument number + name
@@ -377,13 +400,18 @@ impl Pane for TrackPane {
             // Line 2: source type
             buf.draw_line(
                 Rect::new(inner.x + 1, lane_y + 1, label_width, 1),
-                &[(&src_short[..src_short.len().min(label_width as usize)], src_style)],
+                &[(
+                    &src_short[..src_short.len().min(label_width as usize)],
+                    src_style,
+                )],
             );
 
             // Separator between label and timeline
             for row in 0..lane_height {
                 let y = lane_y + row;
-                if y >= lanes_area_y + lanes_area_height { break; }
+                if y >= lanes_area_y + lanes_area_height {
+                    break;
+                }
                 buf.set_cell(inner.x + label_width, y, '|', Style::new().fg(Color::GRAY));
             }
 
@@ -399,7 +427,9 @@ impl Pane for TrackPane {
 
                 for row in 0..lane_height {
                     let y = lane_y + row;
-                    if y >= lanes_area_y + lanes_area_height { break; }
+                    if y >= lanes_area_y + lanes_area_height {
+                        break;
+                    }
                     if is_bar {
                         buf.set_cell(x, y, '|', bar_line_style);
                     } else if is_beat && row == 0 {
@@ -413,18 +443,26 @@ impl Pane for TrackPane {
             for placement in &placements {
                 if let Some(clip) = arr.clip(placement.clip_id) {
                     let _eff_len = placement.effective_length(clip);
-                    let start_col = placement.start_tick.saturating_sub(arr.view_start_tick) / ticks_per_col;
-                    let end_col = placement.end_tick(clip).saturating_sub(arr.view_start_tick) / ticks_per_col;
+                    let start_col =
+                        placement.start_tick.saturating_sub(arr.view_start_tick) / ticks_per_col;
+                    let end_col = placement.end_tick(clip).saturating_sub(arr.view_start_tick)
+                        / ticks_per_col;
 
                     // Skip if entirely off-screen
                     if placement.end_tick(clip) <= arr.view_start_tick {
                         continue;
                     }
-                    if placement.start_tick >= arr.view_start_tick + (timeline_width as u32) * ticks_per_col {
+                    if placement.start_tick
+                        >= arr.view_start_tick + (timeline_width as u32) * ticks_per_col
+                    {
                         continue;
                     }
 
-                    let vis_start = if placement.start_tick < arr.view_start_tick { 0 } else { start_col as u16 };
+                    let vis_start = if placement.start_tick < arr.view_start_tick {
+                        0
+                    } else {
+                        start_col as u16
+                    };
                     let vis_end = (end_col as u16).min(timeline_width);
 
                     if vis_start >= vis_end {
@@ -433,14 +471,20 @@ impl Pane for TrackPane {
 
                     let clip_bg = source_c;
                     let clip_style = Style::new().fg(Color::BLACK).bg(clip_bg);
-                    let sel_clip_style = Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG).bold();
+                    let sel_clip_style =
+                        Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG).bold();
 
-                    let is_placement_selected = arr.selected_placement
+                    let is_placement_selected = arr
+                        .selected_placement
                         .and_then(|idx| arr.placements.get(idx))
                         .map(|p| p.id == placement.id)
                         .unwrap_or(false);
 
-                    let style = if is_placement_selected { sel_clip_style } else { clip_style };
+                    let style = if is_placement_selected {
+                        sel_clip_style
+                    } else {
+                        clip_style
+                    };
 
                     // Render clip block
                     let block_width = vis_end - vis_start;
@@ -457,7 +501,9 @@ impl Pane for TrackPane {
                     // Fill both rows of the lane
                     for row in 0..lane_height {
                         let y = lane_y + row;
-                        if y >= lanes_area_y + lanes_area_height { break; }
+                        if y >= lanes_area_y + lanes_area_height {
+                            break;
+                        }
                         let x = timeline_x + vis_start;
                         if row == 0 {
                             // Name on first row
@@ -481,7 +527,9 @@ impl Pane for TrackPane {
                         let x = timeline_x + vis_start;
                         for row in 0..lane_height {
                             let y = lane_y + row;
-                            if y >= lanes_area_y + lanes_area_height { break; }
+                            if y >= lanes_area_y + lanes_area_height {
+                                break;
+                            }
                             buf.set_cell(x, y, '[', style);
                         }
                     }
@@ -489,7 +537,9 @@ impl Pane for TrackPane {
                         let x = timeline_x + vis_end - 1;
                         for row in 0..lane_height {
                             let y = lane_y + row;
-                            if y >= lanes_area_y + lanes_area_height { break; }
+                            if y >= lanes_area_y + lanes_area_height {
+                                break;
+                            }
                             buf.set_cell(x, y, ']', style);
                         }
                     }
@@ -525,7 +575,8 @@ impl Pane for TrackPane {
             let cursor_col = (arr.cursor_tick - arr.view_start_tick) / ticks_per_col;
             if (cursor_col as u16) < timeline_width {
                 let x = timeline_x + cursor_col as u16;
-                let lane_y = lanes_area_y + ((selected_lane - scroll.min(selected_lane)) as u16) * lane_height;
+                let lane_y = lanes_area_y
+                    + ((selected_lane - scroll.min(selected_lane)) as u16) * lane_height;
                 let cursor_style = Style::new().fg(Color::CYAN);
                 for row in 0..lane_height {
                     let y = lane_y + row;

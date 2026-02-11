@@ -3,16 +3,18 @@ use std::any::Any;
 use crate::state::AppState;
 use crate::ui::action_id::{ActionId, WaveformActionId};
 use crate::ui::layout_helpers::center_rect;
-use crate::ui::{Rect, RenderBuf, Action, Color, InputEvent, Keymap, Pane, Style};
+use crate::ui::{Action, Color, InputEvent, Keymap, Pane, Rect, RenderBuf, Style};
 
 /// Waveform display characters (8 levels) - used for spectrum/meters
-const WAVEFORM_CHARS: [char; 8] = ['\u{2581}', '\u{2582}', '\u{2583}', '\u{2584}', '\u{2585}', '\u{2586}', '\u{2587}', '\u{2588}'];
+const WAVEFORM_CHARS: [char; 8] = [
+    '\u{2581}', '\u{2582}', '\u{2583}', '\u{2584}', '\u{2585}', '\u{2586}', '\u{2587}', '\u{2588}',
+];
 
 /// Braille dot pattern offsets (2 columns x 4 rows)
 /// Column 0: bits 0,1,2,6  Column 1: bits 3,4,5,7
 const BRAILLE_DOT_OFFSETS: [[u8; 4]; 2] = [
-    [0, 1, 2, 6],  // left column (x=0): rows 0,1,2,3
-    [3, 4, 5, 7],  // right column (x=1): rows 0,1,2,3
+    [0, 1, 2, 6], // left column (x=0): rows 0,1,2,3
+    [3, 4, 5, 7], // right column (x=1): rows 0,1,2,3
 ];
 
 /// Convert a set of dot coordinates to a braille character
@@ -33,19 +35,23 @@ const SPECTRUM_LABELS: [&str; 7] = ["60", "150", "400", "1k", "2.5k", "6k", "15k
 /// Color a waveform/meter row by its distance from center (0.0=center, 1.0=edge)
 fn waveform_color(frac: f32) -> Color {
     if frac > 0.85 {
-        Color::new(220, 40, 40)   // red
+        Color::new(220, 40, 40) // red
     } else if frac > 0.7 {
-        Color::new(220, 120, 30)  // orange
+        Color::new(220, 120, 30) // orange
     } else if frac > 0.5 {
-        Color::new(200, 200, 40)  // yellow
+        Color::new(200, 200, 40) // yellow
     } else {
-        Color::new(60, 200, 80)   // green
+        Color::new(60, 200, 80) // green
     }
 }
 
 /// Convert linear amplitude to dB
 fn amp_to_db(amp: f32) -> f32 {
-    if amp <= 0.0 { -96.0 } else { 20.0 * amp.log10() }
+    if amp <= 0.0 {
+        -96.0
+    } else {
+        20.0 * amp.log10()
+    }
 }
 
 /// Display mode for the waveform pane
@@ -105,7 +111,9 @@ impl Default for WaveformPane {
 impl WaveformPane {
     fn render_waveform(&self, area: Rect, buf: &mut RenderBuf, state: &AppState) {
         let is_recorded = state.recorded_waveform_peaks.is_some();
-        let waveform = state.recorded_waveform_peaks.as_deref()
+        let waveform = state
+            .recorded_waveform_peaks
+            .as_deref()
             .or(self.audio_in_waveform.as_deref())
             .unwrap_or(&[]);
 
@@ -115,7 +123,9 @@ impl WaveformPane {
         let grid_x = rect.x + 1;
         let grid_y = rect.y + header_height;
         let grid_width = rect.width.saturating_sub(2);
-        let grid_height = rect.height.saturating_sub(header_height + footer_height + 1);
+        let grid_height = rect
+            .height
+            .saturating_sub(header_height + footer_height + 1);
 
         let title = if is_recorded {
             " Recorded Waveform ".to_string()
@@ -144,8 +154,10 @@ impl WaveformPane {
         if waveform_len == 0 {
             let status_y = grid_y + grid_height;
             let status = "Samples: 0  [Tab: cycle mode]";
-            buf.draw_line(Rect::new(rect.x + 1, status_y, rect.width.saturating_sub(2), 1),
-                &[(status, Style::new().fg(Color::GRAY))]);
+            buf.draw_line(
+                Rect::new(rect.x + 1, status_y, rect.width.saturating_sub(2), 1),
+                &[(status, Style::new().fg(Color::GRAY))],
+            );
             return;
         }
 
@@ -220,15 +232,22 @@ impl WaveformPane {
                     let frac = char_center_dist / (grid_height as f32 / 2.0);
                     let color = waveform_color(frac);
                     let style = Style::new().fg(color);
-                    buf.set_cell(grid_x + char_col as u16, grid_y + char_row as u16, braille, style);
+                    buf.set_cell(
+                        grid_x + char_col as u16,
+                        grid_y + char_row as u16,
+                        braille,
+                        style,
+                    );
                 }
             }
         }
 
         let status_y = grid_y + grid_height;
         let status = format!("Samples: {}  [Tab: cycle mode]", waveform_len);
-        buf.draw_line(Rect::new(rect.x + 1, status_y, rect.width.saturating_sub(2), 1),
-            &[(&status, Style::new().fg(Color::GRAY))]);
+        buf.draw_line(
+            Rect::new(rect.x + 1, status_y, rect.width.saturating_sub(2), 1),
+            &[(&status, Style::new().fg(Color::GRAY))],
+        );
     }
 
     fn render_spectrum(&self, area: Rect, buf: &mut RenderBuf, state: &AppState) {
@@ -238,7 +257,9 @@ impl WaveformPane {
         let grid_x = rect.x + 1;
         let grid_y = rect.y + header_height;
         let grid_width = rect.width.saturating_sub(2);
-        let grid_height = rect.height.saturating_sub(header_height + footer_height + 1);
+        let grid_height = rect
+            .height
+            .saturating_sub(header_height + footer_height + 1);
 
         self.render_border(rect, buf, " Spectrum Analyzer ", Color::METER_LOW);
         self.render_header(rect, buf, state, "Spectrum");
@@ -270,23 +291,33 @@ impl WaveformPane {
             let label_y = grid_y + grid_height;
             let label = SPECTRUM_LABELS[i];
             let label_x = bar_x + (bar_width as u16 / 2).saturating_sub(label.len() as u16 / 2);
-            buf.draw_line(Rect::new(label_x, label_y, label.len() as u16 + 1, 1),
-                &[(label, Style::new().fg(Color::GRAY))]);
+            buf.draw_line(
+                Rect::new(label_x, label_y, label.len() as u16 + 1, 1),
+                &[(label, Style::new().fg(Color::GRAY))],
+            );
 
             // dB value above
             let db = amp_to_db(amp);
-            let db_str = if db <= -60.0 { "-inf".to_string() } else { format!("{:.0}", db) };
+            let db_str = if db <= -60.0 {
+                "-inf".to_string()
+            } else {
+                format!("{:.0}", db)
+            };
             let db_x = bar_x + (bar_width as u16 / 2).saturating_sub(db_str.len() as u16 / 2);
             let db_y = grid_y + grid_height + 1;
             if db_y < rect.y + rect.height - 1 {
-                buf.draw_line(Rect::new(db_x, db_y, 5, 1),
-                    &[(&db_str, Style::new().fg(Color::DARK_GRAY))]);
+                buf.draw_line(
+                    Rect::new(db_x, db_y, 5, 1),
+                    &[(&db_str, Style::new().fg(Color::DARK_GRAY))],
+                );
             }
         }
 
         let status_y = rect.y + rect.height - 2;
-        buf.draw_line(Rect::new(rect.x + 1, status_y, rect.width.saturating_sub(2), 1),
-            &[("[Tab: cycle mode]", Style::new().fg(Color::DARK_GRAY))]);
+        buf.draw_line(
+            Rect::new(rect.x + 1, status_y, rect.width.saturating_sub(2), 1),
+            &[("[Tab: cycle mode]", Style::new().fg(Color::DARK_GRAY))],
+        );
     }
 
     fn render_oscilloscope(&self, area: Rect, buf: &mut RenderBuf, state: &AppState) {
@@ -296,7 +327,9 @@ impl WaveformPane {
         let grid_x = rect.x + 1;
         let grid_y = rect.y + header_height;
         let grid_width = rect.width.saturating_sub(2);
-        let grid_height = rect.height.saturating_sub(header_height + footer_height + 1);
+        let grid_height = rect
+            .height
+            .saturating_sub(header_height + footer_height + 1);
 
         self.render_border(rect, buf, " Oscilloscope ", Color::MIDI_COLOR);
         self.render_header(rect, buf, state, "Oscilloscope");
@@ -317,7 +350,10 @@ impl WaveformPane {
 
         // +1/-1 labels
         buf.draw_line(Rect::new(grid_x, grid_y, 2, 1), &[("+1", dark_gray)]);
-        buf.draw_line(Rect::new(grid_x, grid_y + grid_height - 1, 2, 1), &[("-1", dark_gray)]);
+        buf.draw_line(
+            Rect::new(grid_x, grid_y + grid_height - 1, 2, 1),
+            &[("-1", dark_gray)],
+        );
 
         // Use fixed display size to prevent jumping from variable OSC receive rate
         const DISPLAY_SAMPLES: usize = 200;
@@ -328,7 +364,11 @@ impl WaveformPane {
         let display_buffer: Vec<f32> = if scope_len == 0 {
             vec![0.0; DISPLAY_SAMPLES]
         } else if scope_len >= DISPLAY_SAMPLES {
-            scope.iter().skip(scope_len - DISPLAY_SAMPLES).copied().collect()
+            scope
+                .iter()
+                .skip(scope_len - DISPLAY_SAMPLES)
+                .copied()
+                .collect()
         } else {
             // Stretch available samples to fill display (nearest-neighbor interpolation)
             (0..DISPLAY_SAMPLES)
@@ -339,8 +379,10 @@ impl WaveformPane {
         if scope_len == 0 {
             let status_y = grid_y + grid_height;
             let status = "Samples: 0  [Tab: cycle mode]";
-            buf.draw_line(Rect::new(rect.x + 1, status_y, rect.width.saturating_sub(2), 1),
-                &[(status, Style::new().fg(Color::GRAY))]);
+            buf.draw_line(
+                Rect::new(rect.x + 1, status_y, rect.width.saturating_sub(2), 1),
+                &[(status, Style::new().fg(Color::GRAY))],
+            );
             return;
         }
 
@@ -362,7 +404,11 @@ impl WaveformPane {
 
             // Connect to previous point for smooth lines
             if let Some(prev_y) = prev_dot_y {
-                let (y_min, y_max) = if dot_y < prev_y { (dot_y, prev_y) } else { (prev_y, dot_y) };
+                let (y_min, y_max) = if dot_y < prev_y {
+                    (dot_y, prev_y)
+                } else {
+                    (prev_y, dot_y)
+                };
                 for cell in &mut column[y_min..=y_max] {
                     *cell = true;
                 }
@@ -389,15 +435,22 @@ impl WaveformPane {
 
                 if !dots.is_empty() {
                     let braille = dots_to_braille(&dots);
-                    buf.set_cell(grid_x + char_col as u16, grid_y + char_row as u16, braille, green);
+                    buf.set_cell(
+                        grid_x + char_col as u16,
+                        grid_y + char_row as u16,
+                        braille,
+                        green,
+                    );
                 }
             }
         }
 
         let status_y = grid_y + grid_height;
         let status = format!("Samples: {}  [Tab: cycle mode]", scope_len);
-        buf.draw_line(Rect::new(rect.x + 1, status_y, rect.width.saturating_sub(2), 1),
-            &[(&status, Style::new().fg(Color::GRAY))]);
+        buf.draw_line(
+            Rect::new(rect.x + 1, status_y, rect.width.saturating_sub(2), 1),
+            &[(&status, Style::new().fg(Color::GRAY))],
+        );
     }
 
     fn render_lufs_meter(&self, area: Rect, buf: &mut RenderBuf, state: &AppState) {
@@ -407,7 +460,9 @@ impl WaveformPane {
         let grid_x = rect.x + 1;
         let grid_y = rect.y + header_height;
         let grid_width = rect.width.saturating_sub(2);
-        let grid_height = rect.height.saturating_sub(header_height + footer_height + 1);
+        let grid_height = rect
+            .height
+            .saturating_sub(header_height + footer_height + 1);
 
         self.render_border(rect, buf, " Level Meter ", Color::METER_LOW);
         self.render_header(rect, buf, state, "Level Meter");
@@ -416,10 +471,28 @@ impl WaveformPane {
         let meter_width = grid_width / 2 - 4; // space for each channel
 
         // Left channel
-        self.render_single_meter(grid_x + 2, grid_y, meter_width, grid_height, viz.peak_l, viz.rms_l, "L", buf);
+        self.render_single_meter(
+            grid_x + 2,
+            grid_y,
+            meter_width,
+            grid_height,
+            viz.peak_l,
+            viz.rms_l,
+            "L",
+            buf,
+        );
 
         // Right channel
-        self.render_single_meter(grid_x + grid_width / 2 + 2, grid_y, meter_width, grid_height, viz.peak_r, viz.rms_r, "R", buf);
+        self.render_single_meter(
+            grid_x + grid_width / 2 + 2,
+            grid_y,
+            meter_width,
+            grid_height,
+            viz.peak_r,
+            viz.rms_r,
+            "R",
+            buf,
+        );
 
         // Numeric readout at bottom
         let status_y = grid_y + grid_height;
@@ -431,12 +504,24 @@ impl WaveformPane {
             "L: peak {:.1}dB  rms {:.1}dB    R: peak {:.1}dB  rms {:.1}dB    [Tab: cycle mode]",
             peak_db_l, rms_db_l, peak_db_r, rms_db_r,
         );
-        buf.draw_line(Rect::new(rect.x + 1, status_y, rect.width.saturating_sub(2), 1),
-            &[(&status, Style::new().fg(Color::GRAY))]);
+        buf.draw_line(
+            Rect::new(rect.x + 1, status_y, rect.width.saturating_sub(2), 1),
+            &[(&status, Style::new().fg(Color::GRAY))],
+        );
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn render_single_meter(&self, x: u16, y: u16, width: u16, height: u16, peak: f32, rms: f32, label: &str, buf: &mut RenderBuf) {
+    fn render_single_meter(
+        &self,
+        x: u16,
+        y: u16,
+        width: u16,
+        height: u16,
+        peak: f32,
+        rms: f32,
+        label: &str,
+        buf: &mut RenderBuf,
+    ) {
         // dB scale: -60 to 0
         let db_range = 60.0_f32;
         let peak_db = amp_to_db(peak).max(-db_range);
@@ -466,28 +551,48 @@ impl WaveformPane {
             let peak_y = y + height - peak_height.min(height);
             let peak_frac_color = peak_height as f32 / height as f32;
             let peak_color = waveform_color(peak_frac_color);
-            buf.set_cell(x + rms_width + 1, peak_y, '\u{2501}', Style::new().fg(peak_color));
+            buf.set_cell(
+                x + rms_width + 1,
+                peak_y,
+                '\u{2501}',
+                Style::new().fg(peak_color),
+            );
         }
 
         // Channel label
         let label_x = x + rms_width / 2;
         let label_y = y + height;
         if label_y < y + height + 2 {
-            buf.draw_line(Rect::new(label_x, label_y, 2, 1),
-                &[(label, Style::new().fg(Color::WHITE))]);
+            buf.draw_line(
+                Rect::new(label_x, label_y, 2, 1),
+                &[(label, Style::new().fg(Color::WHITE))],
+            );
         }
 
         // dB scale markers on the left side of meter
         let dark_gray = Style::new().fg(Color::DARK_GRAY);
-        let markers = [("0", 0.0), ("-6", 6.0), ("-12", 12.0), ("-24", 24.0), ("-48", 48.0)];
+        let markers = [
+            ("0", 0.0),
+            ("-6", 6.0),
+            ("-12", 12.0),
+            ("-24", 24.0),
+            ("-48", 48.0),
+        ];
         for (text, db_offset) in markers {
             let frac = (db_range - db_offset) / db_range;
             let marker_y = y + ((1.0 - frac) * height as f32) as u16;
             if marker_y >= y && marker_y < y + height {
                 // Tick mark
                 if x > 0 {
-                    buf.draw_line(Rect::new(x.saturating_sub(text.len() as u16 + 1), marker_y, text.len() as u16, 1),
-                        &[(text, dark_gray)]);
+                    buf.draw_line(
+                        Rect::new(
+                            x.saturating_sub(text.len() as u16 + 1),
+                            marker_y,
+                            text.len() as u16,
+                            1,
+                        ),
+                        &[(text, dark_gray)],
+                    );
                 }
             }
         }
@@ -501,12 +606,11 @@ impl WaveformPane {
     fn render_header(&self, rect: Rect, buf: &mut RenderBuf, state: &AppState, mode_name: &str) {
         let header_y = rect.y + 1;
         let play_icon = if state.audio.playing { "||" } else { "> " };
-        let header_text = format!(
-            " BPM:{:.0}  {}  {}",
-            state.audio.bpm, play_icon, mode_name,
+        let header_text = format!(" BPM:{:.0}  {}  {}", state.audio.bpm, play_icon, mode_name,);
+        buf.draw_line(
+            Rect::new(rect.x + 1, header_y, rect.width.saturating_sub(2), 1),
+            &[(&header_text, Style::new().fg(Color::WHITE))],
         );
-        buf.draw_line(Rect::new(rect.x + 1, header_y, rect.width.saturating_sub(2), 1),
-            &[(&header_text, Style::new().fg(Color::WHITE))]);
     }
 }
 
@@ -515,7 +619,12 @@ impl Pane for WaveformPane {
         "waveform"
     }
 
-    fn handle_action(&mut self, action: ActionId, _event: &InputEvent, _state: &AppState) -> Action {
+    fn handle_action(
+        &mut self,
+        action: ActionId,
+        _event: &InputEvent,
+        _state: &AppState,
+    ) -> Action {
         match action {
             ActionId::Waveform(WaveformActionId::CycleMode) => {
                 self.mode = self.mode.next();

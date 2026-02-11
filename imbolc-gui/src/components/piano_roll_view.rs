@@ -21,11 +21,7 @@ const DEFAULT_VELOCITY: u8 = 100;
 
 /// Piano roll view for editing notes in a clip.
 #[component]
-pub fn PianoRollView(
-    clip_id: ClipId,
-    instrument_id: InstrumentId,
-    clip_length: u32,
-) -> Element {
+pub fn PianoRollView(clip_id: ClipId, instrument_id: InstrumentId, clip_length: u32) -> Element {
     let state = use_context::<Signal<SharedState>>();
     let mut dispatch = use_dispatch();
 
@@ -36,18 +32,24 @@ pub fn PianoRollView(
     // Get clip data
     let clip_data = {
         let s = state.read();
-        s.app.session.arrangement.clips.iter()
+        s.app
+            .session
+            .arrangement
+            .clips
+            .iter()
             .find(|c| c.id == clip_id)
             .map(|c| (c.notes.clone(), c.length_ticks))
     };
 
     let (notes, length_ticks) = match clip_data {
         Some(data) => data,
-        None => return rsx! {
-            div { class: "piano-roll-error",
-                "Clip not found"
+        None => {
+            return rsx! {
+                div { class: "piano-roll-error",
+                    "Clip not found"
+                }
             }
-        },
+        }
     };
 
     // Get playhead position
@@ -59,7 +61,10 @@ pub fn PianoRollView(
     // Get track index for this instrument
     let track_index = {
         let s = state.read();
-        s.app.session.piano_roll.track_order
+        s.app
+            .session
+            .piano_roll
+            .track_order
             .iter()
             .position(|&id| id == instrument_id)
             .unwrap_or(0)
@@ -83,10 +88,9 @@ pub fn PianoRollView(
         .collect();
 
     // Filter visible notes
-    let visible_notes: Vec<_> = notes.iter()
-        .filter(|n| {
-            n.pitch >= bottom_pitch && n.pitch < bottom_pitch + VISIBLE_PITCHES
-        })
+    let visible_notes: Vec<_> = notes
+        .iter()
+        .filter(|n| n.pitch >= bottom_pitch && n.pitch < bottom_pitch + VISIBLE_PITCHES)
         .cloned()
         .collect();
 
@@ -260,7 +264,9 @@ pub fn PianoRollView(
 
 /// Convert MIDI pitch to note name.
 fn pitch_to_name(pitch: u8) -> String {
-    let note_names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+    let note_names = [
+        "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
+    ];
     let octave = (pitch / 12) as i8 - 1;
     let note = note_names[(pitch % 12) as usize];
     format!("{}{}", note, octave)

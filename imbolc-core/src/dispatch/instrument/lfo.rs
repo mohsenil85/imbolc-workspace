@@ -20,7 +20,9 @@ pub(super) fn handle_toggle_lfo(state: &mut AppState, id: InstrumentId) -> Dispa
     reduce(state, &InstrumentAction::ToggleLfo(id));
     let mut result = DispatchResult::none();
     result.audio_effects.push(AudioEffect::RebuildInstruments);
-    result.audio_effects.push(AudioEffect::RebuildRoutingForInstrument(id));
+    result
+        .audio_effects
+        .push(AudioEffect::RebuildRoutingForInstrument(id));
     result
 }
 
@@ -35,8 +37,15 @@ pub(super) fn handle_adjust_lfo_rate(
     if let Some(instrument) = state.instruments.instrument(id) {
         let rate = instrument.modulation.lfo.rate;
         let normalized = (rate - LFO_RATE_MIN) / (LFO_RATE_MAX - LFO_RATE_MIN);
-        maybe_record_automation(state, &mut result, AutomationTarget::lfo_rate(id), normalized);
-        result.audio_effects.push(AudioEffect::SetLfoParam(id, LfoParamKind::Rate, rate));
+        maybe_record_automation(
+            state,
+            &mut result,
+            AutomationTarget::lfo_rate(id),
+            normalized,
+        );
+        result
+            .audio_effects
+            .push(AudioEffect::SetLfoParam(id, LfoParamKind::Rate, rate));
     }
 
     result.audio_effects.push(AudioEffect::RebuildInstruments);
@@ -54,7 +63,9 @@ pub(super) fn handle_adjust_lfo_depth(
     if let Some(instrument) = state.instruments.instrument(id) {
         let depth = instrument.modulation.lfo.depth;
         maybe_record_automation(state, &mut result, AutomationTarget::lfo_depth(id), depth);
-        result.audio_effects.push(AudioEffect::SetLfoParam(id, LfoParamKind::Depth, depth));
+        result
+            .audio_effects
+            .push(AudioEffect::SetLfoParam(id, LfoParamKind::Depth, depth));
     }
 
     result.audio_effects.push(AudioEffect::RebuildInstruments);
@@ -69,7 +80,9 @@ pub(super) fn handle_set_lfo_shape(
     reduce(state, &InstrumentAction::SetLfoShape(id, shape));
     let mut result = DispatchResult::none();
     result.audio_effects.push(AudioEffect::RebuildInstruments);
-    result.audio_effects.push(AudioEffect::RebuildRoutingForInstrument(id));
+    result
+        .audio_effects
+        .push(AudioEffect::RebuildRoutingForInstrument(id));
     result
 }
 
@@ -81,6 +94,8 @@ pub(super) fn handle_set_lfo_target(
     reduce(state, &InstrumentAction::SetLfoTarget(id, target));
     let mut result = DispatchResult::none();
     result.audio_effects.push(AudioEffect::RebuildInstruments);
-    result.audio_effects.push(AudioEffect::RebuildRoutingForInstrument(id));
+    result
+        .audio_effects
+        .push(AudioEffect::RebuildRoutingForInstrument(id));
     result
 }

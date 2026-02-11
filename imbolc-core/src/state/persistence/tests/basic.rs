@@ -1,14 +1,17 @@
 use std::path::PathBuf;
 
-use imbolc_types::{BusId, CustomSynthDefId, EffectId, MixerSend, ParamIndex};
-use crate::state::AutomationTarget;
+use super::{load_project, save_project, temp_db_path};
 use crate::state::custom_synthdef::{CustomSynthDef, CustomSynthDefRegistry, ParamSpec};
-use crate::state::instrument::{EffectType, FilterType, LfoConfig, LfoShape, ParameterTarget, ModSource, OutputTarget, SourceType};
+use crate::state::instrument::{
+    EffectType, FilterType, LfoConfig, LfoShape, ModSource, OutputTarget, ParameterTarget,
+    SourceType,
+};
 use crate::state::instrument_state::InstrumentState;
 use crate::state::param::ParamValue;
 use crate::state::sampler::Slice;
 use crate::state::session::SessionState;
-use super::{save_project, load_project, temp_db_path};
+use crate::state::AutomationTarget;
+use imbolc_types::{BusId, CustomSynthDefId, EffectId, MixerSend, ParamIndex};
 
 #[test]
 fn save_and_load_round_trip_basic() {
@@ -65,7 +68,10 @@ fn save_and_load_round_trip_basic() {
     assert_eq!(loaded_inst.name, "Test");
     assert!((loaded_inst.mixer.level - 0.42).abs() < 0.001);
     assert!((loaded_inst.mixer.pan - -0.2).abs() < 0.001);
-    assert_eq!(loaded_inst.mixer.output_target, OutputTarget::Bus(BusId::new(2)));
+    assert_eq!(
+        loaded_inst.mixer.output_target,
+        OutputTarget::Bus(BusId::new(2))
+    );
     assert!(loaded_inst.filter().is_some());
     assert_eq!(loaded_inst.filter().unwrap().filter_type, FilterType::Hpf);
     if let Some(filter) = loaded_inst.filter() {
@@ -73,7 +79,10 @@ fn save_and_load_round_trip_basic() {
         assert!((filter.resonance.value - 0.42).abs() < 0.01);
     }
     assert_eq!(loaded_inst.effects().count(), 1);
-    assert_eq!(loaded_inst.effects().next().unwrap().effect_type, EffectType::Delay);
+    assert_eq!(
+        loaded_inst.effects().next().unwrap().effect_type,
+        EffectType::Delay
+    );
 
     assert_eq!(loaded_session.piano_roll.track_order.len(), 1);
     assert_eq!(loaded_session.piano_roll.track_order[0], inst_id);
@@ -148,9 +157,15 @@ fn save_and_load_round_trip_complex() {
         inst.mixer.output_target = OutputTarget::Bus(BusId::new(2));
         inst.mixer.level = 0.55;
         inst.mixer.pan = 0.25;
-        inst.mixer.sends.insert(BusId::new(1), MixerSend {
-            bus_id: BusId::new(1), level: 0.33, enabled: true, tap_point: Default::default(),
-        });
+        inst.mixer.sends.insert(
+            BusId::new(1),
+            MixerSend {
+                bus_id: BusId::new(1),
+                level: 0.33,
+                enabled: true,
+                tap_point: Default::default(),
+            },
+        );
 
         let delay_id = inst.add_effect(EffectType::Delay);
         if let Some(effect) = inst.effect_by_id_mut(delay_id) {
@@ -196,10 +211,7 @@ fn save_and_load_round_trip_complex() {
                 buffer_id: Some(55),
                 path: Some("/tmp/chop.wav".to_string()),
                 name: "Chop".to_string(),
-                slices: vec![
-                    Slice::new(0, 0.0, 0.5),
-                    Slice::new(1, 0.5, 1.0),
-                ],
+                slices: vec![Slice::new(0, 0.0, 0.5), Slice::new(1, 0.5, 1.0)],
                 selected_slice: 1,
                 next_slice_id: 2,
                 waveform_peaks: vec![0.1, 0.2],
@@ -218,9 +230,11 @@ fn save_and_load_round_trip_complex() {
     session.piano_roll.toggle_note(0, 60, 0, 480, 100);
 
     // Automation lane targeting effect param
-    let lane_id = session
-        .automation
-        .add_lane(AutomationTarget::effect_param(saw_id, EffectId::new(0), ParamIndex::new(0)));
+    let lane_id = session.automation.add_lane(AutomationTarget::effect_param(
+        saw_id,
+        EffectId::new(0),
+        ParamIndex::new(0),
+    ));
     if let Some(lane) = session.automation.lane_mut(lane_id) {
         lane.add_point(0, 0.2);
         lane.add_point(480, 0.8);
@@ -230,22 +244,20 @@ fn save_and_load_round_trip_complex() {
     session.midi_recording.live_input_instrument = Some(saw_id);
     session.midi_recording.note_passthrough = false;
     session.midi_recording.channel_filter = Some(2);
-    let mut cc = crate::state::midi_recording::MidiCcMapping::new(
-        7,
-        AutomationTarget::level(saw_id),
-    );
+    let mut cc =
+        crate::state::midi_recording::MidiCcMapping::new(7, AutomationTarget::level(saw_id));
     cc.channel = Some(1);
     cc.min_value = 0.1;
     cc.max_value = 0.9;
     session.midi_recording.add_cc_mapping(cc);
-    session.midi_recording.add_pitch_bend_config(
-        crate::state::midi_recording::PitchBendConfig {
+    session
+        .midi_recording
+        .add_pitch_bend_config(crate::state::midi_recording::PitchBendConfig {
             target: AutomationTarget::sample_rate(sampler_id),
             center_value: 1.0,
             range: 0.5,
             sensitivity: 2.0,
-        },
-    );
+        });
 
     let path = temp_db_path();
     save_project(&path, &session, &instruments).expect("save_project");
@@ -266,10 +278,17 @@ fn save_and_load_round_trip_complex() {
         .find(|i| i.id == saw_id)
         .unwrap();
     assert!(matches!(loaded_saw.source, SourceType::Saw));
-    assert_eq!(loaded_saw.mixer.output_target, OutputTarget::Bus(BusId::new(2)));
+    assert_eq!(
+        loaded_saw.mixer.output_target,
+        OutputTarget::Bus(BusId::new(2))
+    );
     assert!((loaded_saw.mixer.level - 0.55).abs() < 0.001);
     assert!((loaded_saw.mixer.pan - 0.25).abs() < 0.001);
-    let send = loaded_saw.mixer.sends.get(&BusId::new(1)).expect("send for bus 1");
+    let send = loaded_saw
+        .mixer
+        .sends
+        .get(&BusId::new(1))
+        .expect("send for bus 1");
     assert!(send.enabled);
     assert!((send.level - 0.33).abs() < 0.001);
     assert!(loaded_saw.filter().is_some());
@@ -340,7 +359,10 @@ fn save_and_load_round_trip_complex() {
     assert!(matches!(loaded_custom.source, SourceType::Custom(id) if id == custom_id));
 
     // MIDI recording
-    assert_eq!(loaded_session.midi_recording.live_input_instrument, Some(saw_id));
+    assert_eq!(
+        loaded_session.midi_recording.live_input_instrument,
+        Some(saw_id)
+    );
     assert!(!loaded_session.midi_recording.note_passthrough);
     assert_eq!(loaded_session.midi_recording.channel_filter, Some(2));
     assert_eq!(loaded_session.midi_recording.cc_mappings.len(), 1);

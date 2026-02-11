@@ -1,12 +1,14 @@
 use std::any::Any;
 
-use imbolc_core::state::persistence::CheckpointInfo;
 use imbolc_core::state::persistence::checkpoint;
+use imbolc_core::state::persistence::CheckpointInfo;
 
 use crate::state::AppState;
 use crate::ui::action_id::{ActionId, CheckpointListActionId};
 use crate::ui::layout_helpers::center_rect;
-use crate::ui::{Rect, RenderBuf, Action, Color, InputEvent, Keymap, NavAction, Pane, SessionAction, Style};
+use crate::ui::{
+    Action, Color, InputEvent, Keymap, NavAction, Pane, Rect, RenderBuf, SessionAction, Style,
+};
 
 pub struct CheckpointListPane {
     keymap: Keymap,
@@ -50,13 +52,19 @@ impl Pane for CheckpointListPane {
 
     fn handle_action(&mut self, action: ActionId, _event: &InputEvent, state: &AppState) -> Action {
         match action {
-            ActionId::CheckpointList(CheckpointListActionId::Close) => Action::Nav(NavAction::PopPane),
+            ActionId::CheckpointList(CheckpointListActionId::Close) => {
+                Action::Nav(NavAction::PopPane)
+            }
             ActionId::CheckpointList(CheckpointListActionId::Up) => {
-                if self.selected > 0 { self.selected -= 1; }
+                if self.selected > 0 {
+                    self.selected -= 1;
+                }
                 Action::None
             }
             ActionId::CheckpointList(CheckpointListActionId::Down) => {
-                if self.selected + 1 < self.checkpoints.len() { self.selected += 1; }
+                if self.selected + 1 < self.checkpoints.len() {
+                    self.selected += 1;
+                }
                 Action::None
             }
             ActionId::CheckpointList(CheckpointListActionId::Select) => {
@@ -80,7 +88,9 @@ impl Pane for CheckpointListPane {
 
     fn render(&mut self, area: Rect, buf: &mut RenderBuf, _state: &AppState) {
         let width = 52_u16.min(area.width.saturating_sub(4));
-        let height = (self.checkpoints.len() as u16 + 8).min(area.height.saturating_sub(4)).max(10);
+        let height = (self.checkpoints.len() as u16 + 8)
+            .min(area.height.saturating_sub(4))
+            .max(10);
         let rect = center_rect(area, width, height);
 
         let border_style = Style::new().fg(Color::CYAN);
@@ -88,13 +98,19 @@ impl Pane for CheckpointListPane {
 
         // Section header
         let header_area = Rect::new(inner.x + 1, inner.y, inner.width.saturating_sub(2), 1);
-        buf.draw_line(header_area, &[("Saved Checkpoints", Style::new().fg(Color::DARK_GRAY))]);
+        buf.draw_line(
+            header_area,
+            &[("Saved Checkpoints", Style::new().fg(Color::DARK_GRAY))],
+        );
 
         if self.checkpoints.is_empty() {
             let empty_y = inner.y + 2;
             if empty_y < inner.y + inner.height {
                 let empty_area = Rect::new(inner.x + 1, empty_y, inner.width.saturating_sub(2), 1);
-                buf.draw_line(empty_area, &[("No checkpoints", Style::new().fg(Color::DARK_GRAY))]);
+                buf.draw_line(
+                    empty_area,
+                    &[("No checkpoints", Style::new().fg(Color::DARK_GRAY))],
+                );
             }
         }
 
@@ -106,7 +122,13 @@ impl Pane for CheckpointListPane {
             0
         };
 
-        for (i, cp) in self.checkpoints.iter().skip(scroll).take(max_visible).enumerate() {
+        for (i, cp) in self
+            .checkpoints
+            .iter()
+            .skip(scroll)
+            .take(max_visible)
+            .enumerate()
+        {
             let y = inner.y + 2 + i as u16;
             if y >= inner.y + inner.height.saturating_sub(2) {
                 break;
@@ -133,7 +155,12 @@ impl Pane for CheckpointListPane {
             // Clear the line for selected item
             if is_selected {
                 for x in (inner.x + 1)..(inner.x + 1 + inner.width.saturating_sub(2)) {
-                    buf.set_cell(x, y, ' ', Style::new().fg(Color::BLACK).bg(Color::CYAN).bold());
+                    buf.set_cell(
+                        x,
+                        y,
+                        ' ',
+                        Style::new().fg(Color::BLACK).bg(Color::CYAN).bold(),
+                    );
                 }
             }
 
@@ -143,12 +170,15 @@ impl Pane for CheckpointListPane {
             let time_col = format!("  {}", time_str);
 
             let line_area = Rect::new(inner.x, y, inner.width, 1);
-            buf.draw_line(line_area, &[
-                (prefix, name_style),
-                (&display_name, name_style),
-                (&padding, name_style),
-                (&time_col, time_style),
-            ]);
+            buf.draw_line(
+                line_area,
+                &[
+                    (prefix, name_style),
+                    (&display_name, name_style),
+                    (&padding, name_style),
+                    (&time_col, time_style),
+                ],
+            );
         }
 
         // Footer
@@ -157,11 +187,17 @@ impl Pane for CheckpointListPane {
             let hi = Style::new().fg(Color::CYAN).bold();
             let lo = Style::new().fg(Color::DARK_GRAY);
             let footer_area = Rect::new(inner.x + 1, footer_y, inner.width.saturating_sub(2), 1);
-            buf.draw_line(footer_area, &[
-                ("[Enter]", hi), (" Restore  ", lo),
-                ("[D]", hi), ("elete  ", lo),
-                ("[Esc]", hi), (" Close", lo),
-            ]);
+            buf.draw_line(
+                footer_area,
+                &[
+                    ("[Enter]", hi),
+                    (" Restore  ", lo),
+                    ("[D]", hi),
+                    ("elete  ", lo),
+                    ("[Esc]", hi),
+                    (" Close", lo),
+                ],
+            );
         }
     }
 

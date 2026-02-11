@@ -1,9 +1,11 @@
 use crate::action::{AudioEffect, DispatchResult, MixerAction};
-use imbolc_audio::AudioHandle;
-use imbolc_types::{DomainAction, MixerSelection};
-use crate::dispatch::helpers::{apply_bus_update, apply_layer_group_update, maybe_record_automation};
+use crate::dispatch::helpers::{
+    apply_bus_update, apply_layer_group_update, maybe_record_automation,
+};
 use crate::state::automation::AutomationTarget;
 use crate::state::AppState;
+use imbolc_audio::AudioHandle;
+use imbolc_types::{DomainAction, MixerSelection};
 
 pub(super) fn dispatch_mixer(
     action: &MixerAction,
@@ -24,77 +26,82 @@ pub(super) fn dispatch_mixer(
     let mut result = DispatchResult::none();
     match action {
         // Navigation-only: no audio effects needed
-        MixerAction::Move(_) | MixerAction::Jump(_) | MixerAction::SelectAt(_) | MixerAction::CycleSection => {}
+        MixerAction::Move(_)
+        | MixerAction::Jump(_)
+        | MixerAction::SelectAt(_)
+        | MixerAction::CycleSection => {}
 
-        MixerAction::AdjustLevel(_delta) => {
-            match selection {
-                MixerSelection::Instrument(idx) => {
-                    result.audio_effects.push(AudioEffect::RebuildInstruments);
-                    result.audio_effects.push(AudioEffect::UpdateMixerParams);
-                    if let Some(instrument) = state.instruments.instruments.get(idx) {
-                        if state.recording.automation_recording && state.audio.playing {
-                            maybe_record_automation(state, &mut result,
-                                AutomationTarget::level(instrument.id),
-                                instrument.mixer.level);
-                        }
+        MixerAction::AdjustLevel(_delta) => match selection {
+            MixerSelection::Instrument(idx) => {
+                result.audio_effects.push(AudioEffect::RebuildInstruments);
+                result.audio_effects.push(AudioEffect::UpdateMixerParams);
+                if let Some(instrument) = state.instruments.instruments.get(idx) {
+                    if state.recording.automation_recording && state.audio.playing {
+                        maybe_record_automation(
+                            state,
+                            &mut result,
+                            AutomationTarget::level(instrument.id),
+                            instrument.mixer.level,
+                        );
                     }
-                }
-                MixerSelection::LayerGroup(group_id) => {
-                    result.audio_effects.push(AudioEffect::RebuildSession);
-                    result.audio_effects.push(AudioEffect::UpdateMixerParams);
-                    if let Some(gm) = state.session.mixer.layer_group_mixer(group_id) {
-                        let mute = state.session.mixer.effective_layer_group_mute(gm);
-                        apply_layer_group_update(audio, Some((group_id, gm.level, mute, gm.pan)));
-                    }
-                }
-                MixerSelection::Bus(id) => {
-                    result.audio_effects.push(AudioEffect::RebuildSession);
-                    result.audio_effects.push(AudioEffect::UpdateMixerParams);
-                    if let Some(bus) = state.session.bus(id) {
-                        let mute = state.session.effective_bus_mute(bus);
-                        apply_bus_update(audio, Some((id, bus.level, mute, bus.pan)));
-                        if state.recording.automation_recording && state.audio.playing {
-                            maybe_record_automation(state, &mut result,
-                                AutomationTarget::bus_level(id),
-                                bus.level);
-                        }
-                    }
-                }
-                MixerSelection::Master => {
-                    result.audio_effects.push(AudioEffect::RebuildSession);
-                    result.audio_effects.push(AudioEffect::UpdateMixerParams);
                 }
             }
-        }
-
-        MixerAction::ToggleMute => {
-            match selection {
-                MixerSelection::Instrument(_) => {
-                    result.audio_effects.push(AudioEffect::RebuildInstruments);
-                    result.audio_effects.push(AudioEffect::UpdateMixerParams);
-                }
-                MixerSelection::LayerGroup(group_id) => {
-                    result.audio_effects.push(AudioEffect::RebuildSession);
-                    result.audio_effects.push(AudioEffect::UpdateMixerParams);
-                    if let Some(gm) = state.session.mixer.layer_group_mixer(group_id) {
-                        let mute = state.session.mixer.effective_layer_group_mute(gm);
-                        apply_layer_group_update(audio, Some((group_id, gm.level, mute, gm.pan)));
-                    }
-                }
-                MixerSelection::Bus(id) => {
-                    result.audio_effects.push(AudioEffect::RebuildSession);
-                    result.audio_effects.push(AudioEffect::UpdateMixerParams);
-                    if let Some(bus) = state.session.bus(id) {
-                        let mute = state.session.effective_bus_mute(bus);
-                        apply_bus_update(audio, Some((id, bus.level, mute, bus.pan)));
-                    }
-                }
-                MixerSelection::Master => {
-                    result.audio_effects.push(AudioEffect::RebuildSession);
-                    result.audio_effects.push(AudioEffect::UpdateMixerParams);
+            MixerSelection::LayerGroup(group_id) => {
+                result.audio_effects.push(AudioEffect::RebuildSession);
+                result.audio_effects.push(AudioEffect::UpdateMixerParams);
+                if let Some(gm) = state.session.mixer.layer_group_mixer(group_id) {
+                    let mute = state.session.mixer.effective_layer_group_mute(gm);
+                    apply_layer_group_update(audio, Some((group_id, gm.level, mute, gm.pan)));
                 }
             }
-        }
+            MixerSelection::Bus(id) => {
+                result.audio_effects.push(AudioEffect::RebuildSession);
+                result.audio_effects.push(AudioEffect::UpdateMixerParams);
+                if let Some(bus) = state.session.bus(id) {
+                    let mute = state.session.effective_bus_mute(bus);
+                    apply_bus_update(audio, Some((id, bus.level, mute, bus.pan)));
+                    if state.recording.automation_recording && state.audio.playing {
+                        maybe_record_automation(
+                            state,
+                            &mut result,
+                            AutomationTarget::bus_level(id),
+                            bus.level,
+                        );
+                    }
+                }
+            }
+            MixerSelection::Master => {
+                result.audio_effects.push(AudioEffect::RebuildSession);
+                result.audio_effects.push(AudioEffect::UpdateMixerParams);
+            }
+        },
+
+        MixerAction::ToggleMute => match selection {
+            MixerSelection::Instrument(_) => {
+                result.audio_effects.push(AudioEffect::RebuildInstruments);
+                result.audio_effects.push(AudioEffect::UpdateMixerParams);
+            }
+            MixerSelection::LayerGroup(group_id) => {
+                result.audio_effects.push(AudioEffect::RebuildSession);
+                result.audio_effects.push(AudioEffect::UpdateMixerParams);
+                if let Some(gm) = state.session.mixer.layer_group_mixer(group_id) {
+                    let mute = state.session.mixer.effective_layer_group_mute(gm);
+                    apply_layer_group_update(audio, Some((group_id, gm.level, mute, gm.pan)));
+                }
+            }
+            MixerSelection::Bus(id) => {
+                result.audio_effects.push(AudioEffect::RebuildSession);
+                result.audio_effects.push(AudioEffect::UpdateMixerParams);
+                if let Some(bus) = state.session.bus(id) {
+                    let mute = state.session.effective_bus_mute(bus);
+                    apply_bus_update(audio, Some((id, bus.level, mute, bus.pan)));
+                }
+            }
+            MixerSelection::Master => {
+                result.audio_effects.push(AudioEffect::RebuildSession);
+                result.audio_effects.push(AudioEffect::UpdateMixerParams);
+            }
+        },
 
         MixerAction::ToggleSolo => {
             match selection {
@@ -123,19 +130,19 @@ pub(super) fn dispatch_mixer(
             }
         }
 
-        MixerAction::CycleOutput | MixerAction::CycleOutputReverse => {
-            match selection {
-                MixerSelection::Instrument(idx) => {
-                    if let Some(inst) = state.instruments.instruments.get(idx) {
-                        result.audio_effects.push(AudioEffect::RebuildRoutingForInstrument(inst.id));
-                    }
+        MixerAction::CycleOutput | MixerAction::CycleOutputReverse => match selection {
+            MixerSelection::Instrument(idx) => {
+                if let Some(inst) = state.instruments.instruments.get(idx) {
+                    result
+                        .audio_effects
+                        .push(AudioEffect::RebuildRoutingForInstrument(inst.id));
                 }
-                MixerSelection::LayerGroup(_) => {
-                    result.audio_effects.push(AudioEffect::RebuildRouting);
-                }
-                _ => {}
             }
-        }
+            MixerSelection::LayerGroup(_) => {
+                result.audio_effects.push(AudioEffect::RebuildRouting);
+            }
+            _ => {}
+        },
 
         MixerAction::AdjustSend(bus_id, _delta) => {
             let bus_id = *bus_id;
@@ -145,9 +152,12 @@ pub(super) fn dispatch_mixer(
                     if let Some(instrument) = state.instruments.instruments.get(idx) {
                         if let Some(send) = instrument.mixer.sends.get(&bus_id) {
                             if state.recording.automation_recording && state.audio.playing {
-                                maybe_record_automation(state, &mut result,
+                                maybe_record_automation(
+                                    state,
+                                    &mut result,
                                     AutomationTarget::send_level(instrument.id, bus_id),
-                                    send.level);
+                                    send.level,
+                                );
                             }
                         }
                     }
@@ -160,70 +170,68 @@ pub(super) fn dispatch_mixer(
             }
         }
 
-        MixerAction::ToggleSend(_bus_id) => {
-            match selection {
-                MixerSelection::Instrument(idx) => {
-                    if let Some(instrument) = state.instruments.instruments.get(idx) {
-                        result.audio_effects.push(AudioEffect::RebuildInstruments);
-                        result.audio_effects.push(AudioEffect::RebuildRoutingForInstrument(instrument.id));
-                    }
-                }
-                MixerSelection::LayerGroup(_) => {
-                    result.audio_effects.push(AudioEffect::RebuildSession);
-                    result.audio_effects.push(AudioEffect::RebuildRouting);
-                }
-                _ => {}
-            }
-        }
-
-        MixerAction::CycleSendTapPoint(_bus_id) => {
-            match selection {
-                MixerSelection::Instrument(idx) => {
-                    if let Some(instrument) = state.instruments.instruments.get(idx) {
-                        result.audio_effects.push(AudioEffect::RebuildInstruments);
-                        result.audio_effects.push(AudioEffect::RebuildRoutingForInstrument(instrument.id));
-                    }
-                }
-                MixerSelection::LayerGroup(_) => {
-                    result.audio_effects.push(AudioEffect::RebuildSession);
-                    result.audio_effects.push(AudioEffect::RebuildRouting);
-                }
-                _ => {}
-            }
-        }
-
-        MixerAction::AdjustPan(_delta) => {
-            match selection {
-                MixerSelection::Instrument(idx) => {
+        MixerAction::ToggleSend(_bus_id) => match selection {
+            MixerSelection::Instrument(idx) => {
+                if let Some(instrument) = state.instruments.instruments.get(idx) {
                     result.audio_effects.push(AudioEffect::RebuildInstruments);
-                    result.audio_effects.push(AudioEffect::UpdateMixerParams);
-                    if let Some(instrument) = state.instruments.instruments.get(idx) {
-                        if state.recording.automation_recording && state.audio.playing {
-                            let target = AutomationTarget::pan(instrument.id);
-                            let normalized = target.normalize_value(instrument.mixer.pan);
-                            maybe_record_automation(state, &mut result, target, normalized);
-                        }
-                    }
+                    result
+                        .audio_effects
+                        .push(AudioEffect::RebuildRoutingForInstrument(instrument.id));
                 }
-                MixerSelection::LayerGroup(group_id) => {
-                    result.audio_effects.push(AudioEffect::RebuildSession);
-                    result.audio_effects.push(AudioEffect::UpdateMixerParams);
-                    if let Some(gm) = state.session.mixer.layer_group_mixer(group_id) {
-                        let mute = state.session.mixer.effective_layer_group_mute(gm);
-                        apply_layer_group_update(audio, Some((group_id, gm.level, mute, gm.pan)));
-                    }
-                }
-                MixerSelection::Bus(id) => {
-                    result.audio_effects.push(AudioEffect::RebuildSession);
-                    result.audio_effects.push(AudioEffect::UpdateMixerParams);
-                    if let Some(bus) = state.session.bus(id) {
-                        let mute = state.session.effective_bus_mute(bus);
-                        apply_bus_update(audio, Some((id, bus.level, mute, bus.pan)));
-                    }
-                }
-                MixerSelection::Master => {}
             }
-        }
+            MixerSelection::LayerGroup(_) => {
+                result.audio_effects.push(AudioEffect::RebuildSession);
+                result.audio_effects.push(AudioEffect::RebuildRouting);
+            }
+            _ => {}
+        },
+
+        MixerAction::CycleSendTapPoint(_bus_id) => match selection {
+            MixerSelection::Instrument(idx) => {
+                if let Some(instrument) = state.instruments.instruments.get(idx) {
+                    result.audio_effects.push(AudioEffect::RebuildInstruments);
+                    result
+                        .audio_effects
+                        .push(AudioEffect::RebuildRoutingForInstrument(instrument.id));
+                }
+            }
+            MixerSelection::LayerGroup(_) => {
+                result.audio_effects.push(AudioEffect::RebuildSession);
+                result.audio_effects.push(AudioEffect::RebuildRouting);
+            }
+            _ => {}
+        },
+
+        MixerAction::AdjustPan(_delta) => match selection {
+            MixerSelection::Instrument(idx) => {
+                result.audio_effects.push(AudioEffect::RebuildInstruments);
+                result.audio_effects.push(AudioEffect::UpdateMixerParams);
+                if let Some(instrument) = state.instruments.instruments.get(idx) {
+                    if state.recording.automation_recording && state.audio.playing {
+                        let target = AutomationTarget::pan(instrument.id);
+                        let normalized = target.normalize_value(instrument.mixer.pan);
+                        maybe_record_automation(state, &mut result, target, normalized);
+                    }
+                }
+            }
+            MixerSelection::LayerGroup(group_id) => {
+                result.audio_effects.push(AudioEffect::RebuildSession);
+                result.audio_effects.push(AudioEffect::UpdateMixerParams);
+                if let Some(gm) = state.session.mixer.layer_group_mixer(group_id) {
+                    let mute = state.session.mixer.effective_layer_group_mute(gm);
+                    apply_layer_group_update(audio, Some((group_id, gm.level, mute, gm.pan)));
+                }
+            }
+            MixerSelection::Bus(id) => {
+                result.audio_effects.push(AudioEffect::RebuildSession);
+                result.audio_effects.push(AudioEffect::UpdateMixerParams);
+                if let Some(bus) = state.session.bus(id) {
+                    let mute = state.session.effective_bus_mute(bus);
+                    apply_bus_update(audio, Some((id, bus.level, mute, bus.pan)));
+                }
+            }
+            MixerSelection::Master => {}
+        },
     }
 
     result
@@ -281,7 +289,9 @@ mod tests {
         assert!(!state.instruments.instruments[0].mixer.mute);
         let result = dispatch_mixer(&MixerAction::ToggleMute, &mut state, &mut audio);
         assert!(state.instruments.instruments[0].mixer.mute);
-        assert!(result.audio_effects.contains(&AudioEffect::RebuildInstruments));
+        assert!(result
+            .audio_effects
+            .contains(&AudioEffect::RebuildInstruments));
     }
 
     #[test]
@@ -311,7 +321,9 @@ mod tests {
         state.session.mixer.selection = MixerSelection::Instrument(0);
         let result = dispatch_mixer(&MixerAction::ToggleSolo, &mut state, &mut audio);
         assert!(state.instruments.instruments[0].mixer.solo);
-        assert!(result.audio_effects.contains(&AudioEffect::RebuildInstruments));
+        assert!(result
+            .audio_effects
+            .contains(&AudioEffect::RebuildInstruments));
     }
 
     #[test]
@@ -344,11 +356,19 @@ mod tests {
 
         state.session.mixer.selection = MixerSelection::Instrument(0);
         dispatch_mixer(&MixerAction::CycleSection, &mut state, &mut audio);
-        assert!(matches!(state.session.mixer.selection, MixerSelection::Bus(id) if id == BusId::new(1)));
+        assert!(
+            matches!(state.session.mixer.selection, MixerSelection::Bus(id) if id == BusId::new(1))
+        );
         dispatch_mixer(&MixerAction::CycleSection, &mut state, &mut audio);
-        assert!(matches!(state.session.mixer.selection, MixerSelection::Master));
+        assert!(matches!(
+            state.session.mixer.selection,
+            MixerSelection::Master
+        ));
         dispatch_mixer(&MixerAction::CycleSection, &mut state, &mut audio);
-        assert!(matches!(state.session.mixer.selection, MixerSelection::Instrument(_)));
+        assert!(matches!(
+            state.session.mixer.selection,
+            MixerSelection::Instrument(_)
+        ));
     }
 
     #[test]
@@ -359,13 +379,32 @@ mod tests {
         // Sends start empty (lazily created)
         assert!(state.instruments.instruments[0].mixer.sends.is_empty());
 
-        dispatch_mixer(&MixerAction::ToggleSend(BusId::new(1)), &mut state, &mut audio);
-        let send = state.instruments.instruments[0].mixer.sends.get(&BusId::new(1)).unwrap();
+        dispatch_mixer(
+            &MixerAction::ToggleSend(BusId::new(1)),
+            &mut state,
+            &mut audio,
+        );
+        let send = state.instruments.instruments[0]
+            .mixer
+            .sends
+            .get(&BusId::new(1))
+            .unwrap();
         assert!(send.enabled);
         assert!((send.level - 0.5).abs() < f32::EPSILON);
 
-        dispatch_mixer(&MixerAction::ToggleSend(BusId::new(1)), &mut state, &mut audio);
-        assert!(!state.instruments.instruments[0].mixer.sends.get(&BusId::new(1)).unwrap().enabled);
+        dispatch_mixer(
+            &MixerAction::ToggleSend(BusId::new(1)),
+            &mut state,
+            &mut audio,
+        );
+        assert!(
+            !state.instruments.instruments[0]
+                .mixer
+                .sends
+                .get(&BusId::new(1))
+                .unwrap()
+                .enabled
+        );
     }
 
     #[test]
@@ -376,11 +415,44 @@ mod tests {
         state.session.mixer.selection = MixerSelection::Instrument(0);
         state.instruments.instruments[0].mixer.sends.insert(
             BusId::new(1),
-            MixerSend { bus_id: BusId::new(1), level: 0.5, enabled: true, tap_point: Default::default() },
+            MixerSend {
+                bus_id: BusId::new(1),
+                level: 0.5,
+                enabled: true,
+                tap_point: Default::default(),
+            },
         );
-        dispatch_mixer(&MixerAction::AdjustSend(BusId::new(1), 2.0), &mut state, &mut audio);
-        assert!((state.instruments.instruments[0].mixer.sends.get(&BusId::new(1)).unwrap().level - 1.0).abs() < f32::EPSILON);
-        dispatch_mixer(&MixerAction::AdjustSend(BusId::new(1), -5.0), &mut state, &mut audio);
-        assert!((state.instruments.instruments[0].mixer.sends.get(&BusId::new(1)).unwrap().level - 0.0).abs() < f32::EPSILON);
+        dispatch_mixer(
+            &MixerAction::AdjustSend(BusId::new(1), 2.0),
+            &mut state,
+            &mut audio,
+        );
+        assert!(
+            (state.instruments.instruments[0]
+                .mixer
+                .sends
+                .get(&BusId::new(1))
+                .unwrap()
+                .level
+                - 1.0)
+                .abs()
+                < f32::EPSILON
+        );
+        dispatch_mixer(
+            &MixerAction::AdjustSend(BusId::new(1), -5.0),
+            &mut state,
+            &mut audio,
+        );
+        assert!(
+            (state.instruments.instruments[0]
+                .mixer
+                .sends
+                .get(&BusId::new(1))
+                .unwrap()
+                .level
+                - 0.0)
+                .abs()
+                < f32::EPSILON
+        );
     }
 }

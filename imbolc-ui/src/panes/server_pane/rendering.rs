@@ -1,9 +1,9 @@
-use super::{ServerPane, ServerPaneFocus, BufferSize};
+use super::{BufferSize, ServerPane, ServerPaneFocus};
 use crate::audio::devices::AudioDevice;
 use crate::audio::ServerStatus;
 use crate::state::AppState;
-use crate::ui::{Rect, RenderBuf, Color, Style};
 use crate::ui::layout_helpers::center_rect;
+use crate::ui::{Color, Rect, RenderBuf, Style};
 
 impl ServerPane {
     pub(super) fn render_impl(&mut self, area: Rect, buf: &mut RenderBuf, state: &AppState) {
@@ -28,7 +28,10 @@ impl ServerPane {
         };
         buf.draw_line(
             Rect::new(x, y, w, 1),
-            &[("Server:     ", label_style), (server_text, Style::new().fg(server_color).bold())],
+            &[
+                ("Server:     ", label_style),
+                (server_text, Style::new().fg(server_color).bold()),
+            ],
         );
         y += 1;
 
@@ -42,7 +45,10 @@ impl ServerPane {
         };
         buf.draw_line(
             Rect::new(x, y, w, 1),
-            &[("Connection: ", label_style), (status_text, Style::new().fg(status_color).bold())],
+            &[
+                ("Connection: ", label_style),
+                (status_text, Style::new().fg(status_color).bold()),
+            ],
         );
         y += 1;
 
@@ -64,38 +70,90 @@ impl ServerPane {
             let rec_text = format!("REC {:02}:{:02}", mins, secs);
             buf.draw_line(
                 Rect::new(x, y, w, 1),
-                &[("Recording:  ", label_style), (&rec_text, Style::new().fg(Color::MUTE_COLOR).bold())],
+                &[
+                    ("Recording:  ", label_style),
+                    (&rec_text, Style::new().fg(Color::MUTE_COLOR).bold()),
+                ],
             );
         }
         y += 1;
 
+        // Imbolc audio-thread telemetry
+        buf.draw_line(
+            Rect::new(x, y, w, 1),
+            &[("── Imbolc Telemetry ──", Style::new().fg(Color::DARK_GRAY))],
+        );
+        y += 1;
+        let telemetry_line = format!(
+            "avg={}us  max={}us  p95={}us  overruns={}  lookahead={:.1}ms  osc_q={}",
+            state.audio.telemetry_avg_tick_us,
+            state.audio.telemetry_max_tick_us,
+            state.audio.telemetry_p95_tick_us,
+            state.audio.telemetry_overruns,
+            state.audio.telemetry_lookahead_ms,
+            state.audio.telemetry_osc_queue_depth,
+        );
+        buf.draw_line(
+            Rect::new(x, y, w, 1),
+            &[(&telemetry_line, Style::new().fg(Color::WHITE))],
+        );
+        y += 1;
+
         // Output Device section
         let output_focused = self.focus == ServerPaneFocus::OutputDevice;
-        let section_color = if output_focused { Color::GOLD } else { Color::DARK_GRAY };
+        let section_color = if output_focused {
+            Color::GOLD
+        } else {
+            Color::DARK_GRAY
+        };
         buf.draw_line(
             Rect::new(x, y, w, 1),
             &[("── Output Device ──", Style::new().fg(section_color))],
         );
         y += 1;
 
-        y = self.render_device_list(buf, x, y, w, &output_devs, self.selected_output, output_focused);
+        y = self.render_device_list(
+            buf,
+            x,
+            y,
+            w,
+            &output_devs,
+            self.selected_output,
+            output_focused,
+        );
         y += 1;
 
         // Input Device section
         let input_focused = self.focus == ServerPaneFocus::InputDevice;
-        let section_color = if input_focused { Color::GOLD } else { Color::DARK_GRAY };
+        let section_color = if input_focused {
+            Color::GOLD
+        } else {
+            Color::DARK_GRAY
+        };
         buf.draw_line(
             Rect::new(x, y, w, 1),
             &[("── Input Device ──", Style::new().fg(section_color))],
         );
         y += 1;
 
-        y = self.render_device_list(buf, x, y, w, &input_devs, self.selected_input, input_focused);
+        y = self.render_device_list(
+            buf,
+            x,
+            y,
+            w,
+            &input_devs,
+            self.selected_input,
+            input_focused,
+        );
         y += 1;
 
         // Buffer Size section
         let buffer_focused = self.focus == ServerPaneFocus::BufferSize;
-        let section_color = if buffer_focused { Color::GOLD } else { Color::DARK_GRAY };
+        let section_color = if buffer_focused {
+            Color::GOLD
+        } else {
+            Color::DARK_GRAY
+        };
         buf.draw_line(
             Rect::new(x, y, w, 1),
             &[("── Buffer Size ──", Style::new().fg(section_color))],
@@ -105,15 +163,74 @@ impl ServerPane {
         y = self.render_buffer_size_list(buf, x, y, w, buffer_focused);
         y += 1;
 
+        // scsynth extra args section
+        let args_focused = self.focus == ServerPaneFocus::ScsynthArgs;
+        let section_color = if args_focused {
+            Color::GOLD
+        } else {
+            Color::DARK_GRAY
+        };
+        buf.draw_line(
+            Rect::new(x, y, w, 1),
+            &[("── scsynth Args ──", Style::new().fg(section_color))],
+        );
+        y += 1;
+
+        let marker_style = if args_focused {
+            Style::new().fg(Color::GOLD)
+        } else {
+            Style::new().fg(Color::WHITE)
+        };
+        let marker = if args_focused { "> " } else { "  " };
+        let args_text = if self.editing_scsynth_args {
+            format!(
+                "{}_",
+                if self.scsynth_args_edit.is_empty() {
+                    "<empty>".to_string()
+                } else {
+                    self.scsynth_args_edit.clone()
+                }
+            )
+        } else if self.scsynth_args.is_empty() {
+            "(none)".to_string()
+        } else {
+            self.scsynth_args.clone()
+        };
+        let args_style = if self.editing_scsynth_args {
+            Style::new().fg(Color::SKY_BLUE).bold()
+        } else if self.scsynth_args.is_empty() {
+            Style::new().fg(Color::DARK_GRAY)
+        } else {
+            Style::new().fg(Color::WHITE)
+        };
+        buf.draw_line(
+            Rect::new(x, y, w, 1),
+            &[(marker, marker_style), (&args_text, args_style)],
+        );
+        y += 1;
+
+        let args_hint = if self.editing_scsynth_args {
+            "[Enter] Apply+Restart  [Esc] Cancel"
+        } else {
+            "[Enter] Edit args"
+        };
+        buf.draw_line(
+            Rect::new(x, y, w, 1),
+            &[(args_hint, Style::new().fg(Color::DARK_GRAY))],
+        );
+        y += 1;
+
         // Restart hint if config is dirty and server is running
-        if self.device_config_dirty && self.server_running
-            && y < rect.y + rect.height - 3 {
-                buf.draw_line(
-                    Rect::new(x, y, w, 1),
-                    &[("(restart server to apply device changes)", Style::new().fg(Color::ORANGE))],
-                );
-                y += 1;
-            }
+        if self.device_config_dirty && self.server_running && y < rect.y + rect.height - 3 {
+            buf.draw_line(
+                Rect::new(x, y, w, 1),
+                &[(
+                    "(restart server to apply device changes)",
+                    Style::new().fg(Color::ORANGE),
+                )],
+            );
+            y += 1;
+        }
 
         // Network section (only in network mode)
         if let Some(ref net) = state.network {
@@ -129,19 +246,28 @@ impl ServerPane {
             };
             buf.draw_line(
                 Rect::new(x, y, w, 1),
-                &[("Status:     ", label_style), (status_text, Style::new().fg(status_color).bold())],
+                &[
+                    ("Status:     ", label_style),
+                    (status_text, Style::new().fg(status_color).bold()),
+                ],
             );
             y += 1;
 
             if let Some(ref priv_name) = net.privileged_client_name {
                 buf.draw_line(
                     Rect::new(x, y, w, 1),
-                    &[("Privilege:  ", label_style), (priv_name, Style::new().fg(Color::METER_LOW))],
+                    &[
+                        ("Privilege:  ", label_style),
+                        (priv_name, Style::new().fg(Color::METER_LOW)),
+                    ],
                 );
             } else {
                 buf.draw_line(
                     Rect::new(x, y, w, 1),
-                    &[("Privilege:  ", label_style), ("(none)", Style::new().fg(Color::DARK_GRAY))],
+                    &[
+                        ("Privilege:  ", label_style),
+                        ("(none)", Style::new().fg(Color::DARK_GRAY)),
+                    ],
                 );
             }
             y += 1;
@@ -244,7 +370,11 @@ impl ServerPane {
         // "System Default" entry (index 0)
         let is_selected = selected == 0;
         let marker = if is_selected { "> " } else { "  " };
-        let style = if is_selected { selected_style } else { normal_style };
+        let style = if is_selected {
+            selected_style
+        } else {
+            normal_style
+        };
         buf.draw_line(
             Rect::new(x, y, w, 1),
             &[(marker, marker_style), ("System Default", style)],
@@ -255,7 +385,11 @@ impl ServerPane {
         for (i, device) in devices.iter().enumerate() {
             let is_selected = selected == i + 1;
             let marker = if is_selected { "> " } else { "  " };
-            let style = if is_selected { selected_style } else { normal_style };
+            let style = if is_selected {
+                selected_style
+            } else {
+                normal_style
+            };
 
             let mut info_parts = Vec::new();
             if let Some(sr) = device.sample_rate {
@@ -282,7 +416,11 @@ impl ServerPane {
 
             buf.draw_line(
                 Rect::new(x, y, w, 1),
-                &[(marker, marker_style), (&device.name, style), (&suffix, info_style)],
+                &[
+                    (marker, marker_style),
+                    (&device.name, style),
+                    (&suffix, info_style),
+                ],
             );
             y += 1;
         }
@@ -314,7 +452,11 @@ impl ServerPane {
         for (i, &bs) in BufferSize::ALL.iter().enumerate() {
             let is_selected = self.selected_buffer_size == i;
             let marker = if is_selected { "> " } else { "  " };
-            let style = if is_selected { selected_style } else { normal_style };
+            let style = if is_selected {
+                selected_style
+            } else {
+                normal_style
+            };
 
             let samples = bs.as_samples();
             let latency = bs.latency_ms(self.sample_rate);
@@ -323,7 +465,11 @@ impl ServerPane {
 
             buf.draw_line(
                 Rect::new(x, y, w, 1),
-                &[(marker, marker_style), (&label, style), (&suffix, info_style)],
+                &[
+                    (marker, marker_style),
+                    (&label, style),
+                    (&suffix, info_style),
+                ],
             );
             y += 1;
         }

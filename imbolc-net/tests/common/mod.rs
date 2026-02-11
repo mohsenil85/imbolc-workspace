@@ -5,10 +5,10 @@ use std::io::{BufReader, BufWriter};
 use std::net::TcpStream;
 use std::time::{Duration, Instant};
 
+use imbolc_net::framing::{read_message, write_message};
 use imbolc_net::protocol::{
     ClientId, ClientMessage, NetworkAction, NetworkState, ServerMessage, SessionToken,
 };
-use imbolc_net::framing::{read_message, write_message};
 use imbolc_net::server::NetServer;
 use imbolc_types::{InstrumentId, InstrumentState, SessionState};
 
@@ -130,11 +130,7 @@ impl RawClient {
     }
 
     /// Send Hello with reconnect token (without waiting for the response).
-    pub fn send_reconnect(
-        &mut self,
-        name: &str,
-        token: SessionToken,
-    ) -> std::io::Result<()> {
+    pub fn send_reconnect(&mut self, name: &str, token: SessionToken) -> std::io::Result<()> {
         self.send(&ClientMessage::Hello {
             client_name: name.to_string(),
             requested_instruments: vec![],

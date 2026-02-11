@@ -13,7 +13,7 @@ use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
 
-use imbolc_types::{DomainAction, DispatchResult, UiAction};
+use imbolc_types::{DispatchResult, DomainAction, UiAction};
 
 /// Log directory: `~/.local/share/imbolc/`
 fn log_dir() -> PathBuf {
@@ -212,11 +212,7 @@ pub fn replay_domain_log(path: &Path) -> Result<crate::state::AppState, ReplayEr
                 continue;
             }
             if reduce::is_reducible(&action) {
-                reduce::reduce_action(
-                    &action,
-                    &mut state.instruments,
-                    &mut state.session,
-                );
+                reduce::reduce_action(&action, &mut state.instruments, &mut state.session);
             }
         }
     }

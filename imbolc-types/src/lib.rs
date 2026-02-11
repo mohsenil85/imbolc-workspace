@@ -8,27 +8,33 @@
 //! Types are being migrated from imbolc-core incrementally.
 //! See plans/imbolc-net.md for the full extraction plan.
 
-mod param;
-pub mod state;
 pub mod action;
 mod audio;
+mod param;
 pub mod reduce;
+pub mod state;
 
-pub use audio::{AudioFeedback, ExportKind, ServerStatus};
-pub use param::{Param, ParamValue, adjust_freq_semitone, adjust_musical_step, is_freq_param};
 pub use action::*;
+pub use audio::{AudioFeedback, ExportKind, ServerStatus};
+pub use param::{adjust_freq_semitone, adjust_musical_step, is_freq_param, Param, ParamValue};
 
 // Re-export all state types at crate root for convenience
 pub use state::*;
 
 /// Unique identifier for an instrument.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
 #[serde(transparent)]
 pub struct InstrumentId(u32);
 
 impl InstrumentId {
-    pub fn new(id: u32) -> Self { Self(id) }
-    pub fn get(self) -> u32 { self.0 }
+    pub fn new(id: u32) -> Self {
+        Self(id)
+    }
+    pub fn get(self) -> u32 {
+        self.0
+    }
 }
 
 impl std::fmt::Display for InstrumentId {
@@ -38,7 +44,9 @@ impl std::fmt::Display for InstrumentId {
 }
 
 /// Newtype for bus identifiers. Bus IDs are always >= 1 (allocated by MixerState).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
 #[serde(transparent)]
 pub struct BusId(u8);
 
@@ -62,13 +70,29 @@ impl std::fmt::Display for BusId {
 }
 
 /// Unique identifier for an effect slot within an instrument.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 #[serde(transparent)]
 pub struct EffectId(u32);
 
 impl EffectId {
-    pub fn new(id: u32) -> Self { Self(id) }
-    pub fn get(self) -> u32 { self.0 }
+    pub fn new(id: u32) -> Self {
+        Self(id)
+    }
+    pub fn get(self) -> u32 {
+        self.0
+    }
 }
 
 impl std::fmt::Display for EffectId {
@@ -78,13 +102,29 @@ impl std::fmt::Display for EffectId {
 }
 
 /// Unique identifier for a custom SynthDef.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 #[serde(transparent)]
 pub struct CustomSynthDefId(u32);
 
 impl CustomSynthDefId {
-    pub fn new(id: u32) -> Self { Self(id) }
-    pub fn get(self) -> u32 { self.0 }
+    pub fn new(id: u32) -> Self {
+        Self(id)
+    }
+    pub fn get(self) -> u32 {
+        self.0
+    }
 }
 
 impl std::fmt::Display for CustomSynthDefId {
@@ -94,13 +134,29 @@ impl std::fmt::Display for CustomSynthDefId {
 }
 
 /// Unique identifier for a VST plugin.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 #[serde(transparent)]
 pub struct VstPluginId(u32);
 
 impl VstPluginId {
-    pub fn new(id: u32) -> Self { Self(id) }
-    pub fn get(self) -> u32 { self.0 }
+    pub fn new(id: u32) -> Self {
+        Self(id)
+    }
+    pub fn get(self) -> u32 {
+        self.0
+    }
 }
 
 impl std::fmt::Display for VstPluginId {
@@ -110,13 +166,19 @@ impl std::fmt::Display for VstPluginId {
 }
 
 /// Index of a parameter within an effect's parameter list (0-based).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
 #[serde(transparent)]
 pub struct ParamIndex(usize);
 
 impl ParamIndex {
-    pub fn new(idx: usize) -> Self { Self(idx) }
-    pub fn get(self) -> usize { self.0 }
+    pub fn new(idx: usize) -> Self {
+        Self(idx)
+    }
+    pub fn get(self) -> usize {
+        self.0
+    }
 }
 
 impl std::fmt::Display for ParamIndex {

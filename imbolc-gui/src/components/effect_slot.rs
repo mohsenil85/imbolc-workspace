@@ -118,9 +118,7 @@ pub fn EffectSlotComponent(
 
 /// Add effect dropdown and button.
 #[component]
-pub fn AddEffectButton(
-    instrument_id: InstrumentId,
-) -> Element {
+pub fn AddEffectButton(instrument_id: InstrumentId) -> Element {
     let mut dispatch = use_dispatch();
     let mut selected_type = use_signal(|| EffectType::Delay);
 

@@ -3,7 +3,9 @@ use std::any::Any;
 use crate::state::{AppState, InstrumentId, SwingGrid};
 use crate::ui::action_id::{ActionId, GrooveActionId};
 use crate::ui::layout_helpers::center_rect;
-use crate::ui::{Action, Color, InputEvent, InstrumentAction, Keymap, Pane, Rect, RenderBuf, Style};
+use crate::ui::{
+    Action, Color, InputEvent, InstrumentAction, Keymap, Pane, Rect, RenderBuf, Style,
+};
 
 /// Parameter indices for the groove pane
 const PARAM_SWING: usize = 0;
@@ -68,7 +70,10 @@ impl Pane for GroovePane {
             ActionId::Groove(GrooveActionId::CycleSwingGrid) => {
                 let current = groove.swing_grid.unwrap_or(SwingGrid::Eighths);
                 let next = current.next();
-                Action::Instrument(InstrumentAction::SetTrackSwingGrid(instrument_id, Some(next)))
+                Action::Instrument(InstrumentAction::SetTrackSwingGrid(
+                    instrument_id,
+                    Some(next),
+                ))
             }
             ActionId::Groove(GrooveActionId::CycleTimeSig) => {
                 Action::Instrument(InstrumentAction::CycleTrackTimeSignature(instrument_id))
@@ -130,42 +135,62 @@ impl Pane for GroovePane {
 
         // Swing amount
         render_param_row(
-            buf, label_x, value_x, y,
+            buf,
+            label_x,
+            value_x,
+            y,
             "Swing:",
             &format!("{:.0}%", swing * 100.0),
             swing_is_global,
             self.selected_param == PARAM_SWING,
-            normal_style, global_style, selected_style,
+            normal_style,
+            global_style,
+            selected_style,
         );
 
         // Swing grid
         render_param_row(
-            buf, label_x, value_x, y + 1,
+            buf,
+            label_x,
+            value_x,
+            y + 1,
             "Swing Grid:",
             swing_grid.name(),
             grid_is_global,
             self.selected_param == PARAM_SWING_GRID,
-            normal_style, global_style, selected_style,
+            normal_style,
+            global_style,
+            selected_style,
         );
 
         // Humanize velocity
         render_param_row(
-            buf, label_x, value_x, y + 2,
+            buf,
+            label_x,
+            value_x,
+            y + 2,
             "Humanize Vel:",
             &format!("{:.0}%", humanize_vel * 100.0),
             hvel_is_global,
             self.selected_param == PARAM_HUMANIZE_VEL,
-            normal_style, global_style, selected_style,
+            normal_style,
+            global_style,
+            selected_style,
         );
 
         // Humanize timing
         render_param_row(
-            buf, label_x, value_x, y + 3,
+            buf,
+            label_x,
+            value_x,
+            y + 3,
             "Humanize Time:",
             &format!("{:.0}%", humanize_time * 100.0),
             htime_is_global,
             self.selected_param == PARAM_HUMANIZE_TIME,
-            normal_style, global_style, selected_style,
+            normal_style,
+            global_style,
+            selected_style,
         );
 
         // Timing offset
@@ -175,14 +200,18 @@ impl Pane for GroovePane {
             format!("{:.1}ms", timing_offset)
         };
         render_param_row(
-            buf, label_x, value_x, y + 4,
+            buf,
+            label_x,
+            value_x,
+            y + 4,
             "Push/Pull:",
             &offset_str,
             false, // Timing offset has no global default
             self.selected_param == PARAM_TIMING_OFFSET,
-            normal_style, global_style, selected_style,
+            normal_style,
+            global_style,
+            selected_style,
         );
-
     }
 
     fn keymap(&self) -> &Keymap {
@@ -217,7 +246,11 @@ fn render_param_row(
     global_style: Style,
     selected_style: Style,
 ) {
-    let label_style = if is_selected { selected_style } else { normal_style };
+    let label_style = if is_selected {
+        selected_style
+    } else {
+        normal_style
+    };
     let value_style = if is_selected {
         selected_style
     } else if is_global {
@@ -262,13 +295,23 @@ fn adjust_param(
                 _ => 0.05,
             };
             let signed_delta = if increase { delta } else { -delta };
-            Action::Instrument(InstrumentAction::AdjustTrackSwing(instrument_id, signed_delta))
+            Action::Instrument(InstrumentAction::AdjustTrackSwing(
+                instrument_id,
+                signed_delta,
+            ))
         }
         PARAM_SWING_GRID => {
             // Cycle swing grid
             let current = groove.swing_grid.unwrap_or(SwingGrid::Eighths);
-            let next = if increase { current.next() } else { cycle_swing_grid_rev(current) };
-            Action::Instrument(InstrumentAction::SetTrackSwingGrid(instrument_id, Some(next)))
+            let next = if increase {
+                current.next()
+            } else {
+                cycle_swing_grid_rev(current)
+            };
+            Action::Instrument(InstrumentAction::SetTrackSwingGrid(
+                instrument_id,
+                Some(next),
+            ))
         }
         PARAM_HUMANIZE_VEL => {
             let delta = match action {
@@ -279,7 +322,10 @@ fn adjust_param(
                 _ => 0.05,
             };
             let signed_delta = if increase { delta } else { -delta };
-            Action::Instrument(InstrumentAction::AdjustTrackHumanizeVelocity(instrument_id, signed_delta))
+            Action::Instrument(InstrumentAction::AdjustTrackHumanizeVelocity(
+                instrument_id,
+                signed_delta,
+            ))
         }
         PARAM_HUMANIZE_TIME => {
             let delta = match action {
@@ -290,7 +336,10 @@ fn adjust_param(
                 _ => 0.05,
             };
             let signed_delta = if increase { delta } else { -delta };
-            Action::Instrument(InstrumentAction::AdjustTrackHumanizeTiming(instrument_id, signed_delta))
+            Action::Instrument(InstrumentAction::AdjustTrackHumanizeTiming(
+                instrument_id,
+                signed_delta,
+            ))
         }
         PARAM_TIMING_OFFSET => {
             let delta = match action {
@@ -301,7 +350,10 @@ fn adjust_param(
                 _ => 1.0,
             };
             let signed_delta = if increase { delta } else { -delta };
-            Action::Instrument(InstrumentAction::AdjustTrackTimingOffset(instrument_id, signed_delta))
+            Action::Instrument(InstrumentAction::AdjustTrackTimingOffset(
+                instrument_id,
+                signed_delta,
+            ))
         }
         _ => Action::None,
     }

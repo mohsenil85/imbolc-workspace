@@ -1,7 +1,7 @@
-use imbolc_audio::AudioHandle;
-use crate::state::AppState;
-use crate::state::automation::AutomationTarget;
 use crate::action::{AudioEffect, DispatchResult, EqParamKind};
+use crate::state::automation::AutomationTarget;
+use crate::state::AppState;
+use imbolc_audio::AudioHandle;
 use imbolc_types::{DomainAction, InstrumentAction};
 
 use super::super::automation::record_automation_point;
@@ -15,7 +15,12 @@ pub(super) fn handle_set_eq_param(
     value: f32,
 ) -> DispatchResult {
     imbolc_types::reduce::reduce_action(
-        &DomainAction::Instrument(InstrumentAction::SetEqParam(instrument_id, band_idx, param, value)),
+        &DomainAction::Instrument(InstrumentAction::SetEqParam(
+            instrument_id,
+            band_idx,
+            param,
+            value,
+        )),
         &mut state.instruments,
         &mut state.session,
     );
@@ -23,7 +28,11 @@ pub(super) fn handle_set_eq_param(
     // Send real-time param update to audio engine
     if audio.is_running() {
         let sc_param = format!("b{}_{}", band_idx, param.as_str());
-        let sc_value = if param == EqParamKind::Q { 1.0 / value } else { value };
+        let sc_value = if param == EqParamKind::Q {
+            1.0 / value
+        } else {
+            value
+        };
         let _ = audio.set_eq_param(instrument_id, &sc_param, sc_value);
     }
 
@@ -58,6 +67,8 @@ pub(super) fn handle_toggle_eq(
     );
     let mut result = DispatchResult::none();
     result.audio_effects.push(AudioEffect::RebuildInstruments);
-    result.audio_effects.push(AudioEffect::RebuildRoutingForInstrument(instrument_id));
+    result
+        .audio_effects
+        .push(AudioEffect::RebuildRoutingForInstrument(instrument_id));
     result
 }

@@ -4,9 +4,8 @@
 //! This module converts back from our abstracted types at the point of consumption.
 
 use crossterm::event::{
-    Event as CtEvent, KeyCode as CtKeyCode, KeyEvent as CtKeyEvent,
-    KeyEventKind, KeyEventState, KeyModifiers,
-    MouseButton as CtMouseButton, MouseEvent as CtMouseEvent,
+    Event as CtEvent, KeyCode as CtKeyCode, KeyEvent as CtKeyEvent, KeyEventKind, KeyEventState,
+    KeyModifiers, MouseButton as CtMouseButton, MouseEvent as CtMouseEvent,
     MouseEventKind as CtMouseEventKind,
 };
 use rat_event::Outcome;

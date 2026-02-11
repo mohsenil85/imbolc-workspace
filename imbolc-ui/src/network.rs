@@ -8,29 +8,26 @@ use std::time::{Duration, Instant};
 use imbolc_net::{NetworkState, RemoteDispatcher};
 use imbolc_types::Action;
 
-use crate::audio::AudioHandle;
 use crate::action::{AudioEffect, IoFeedback};
+use crate::audio::AudioHandle;
 use crate::config;
 use crate::dispatch::LocalDispatcher;
 use crate::global_actions::{
     process_layer_actions, process_nav_and_sync, process_pane_switcher_auto_pop,
     process_text_edit_auto_pop, render_frame,
 };
+use crate::register_all_panes;
 use crate::setup;
 use crate::state::{self, AppState};
-use crate::ui::{
-    Frame, InputSource, LayerStack, PaneId, RatatuiBackend,
-    keybindings,
-};
-use crate::register_all_panes;
+use crate::ui::{keybindings, Frame, InputSource, LayerStack, PaneId, RatatuiBackend};
 
 // =============================================================================
 // Server Mode
 // =============================================================================
 
 pub fn run_server() -> std::io::Result<()> {
-    use std::thread;
     use imbolc_net::NetServer;
+    use std::thread;
 
     log::info!("Starting Imbolc server mode");
 
@@ -86,10 +83,9 @@ pub fn run_server() -> std::io::Result<()> {
         server.tick_heartbeat();
 
         // Poll for client actions (pass refs, NetworkState built only during Hello handshake)
-        for (client_id, net_action) in server.poll_actions(
-            &dispatcher.state().session,
-            &dispatcher.state().instruments,
-        ) {
+        for (client_id, net_action) in
+            server.poll_actions(&dispatcher.state().session, &dispatcher.state().instruments)
+        {
             log::debug!("Received action from {:?}: {:?}", client_id, net_action);
 
             // Mark dirty based on action
@@ -174,8 +170,8 @@ pub fn run_server() -> std::io::Result<()> {
 /// Discover available Imbolc servers on the LAN and connect to one.
 #[cfg(feature = "mdns")]
 pub fn run_discovery(own_instruments: Vec<u32>) -> std::io::Result<()> {
-    use std::io::{self, Write};
     use imbolc_net::DiscoveryClient;
+    use std::io::{self, Write};
 
     println!("Searching for Imbolc servers on LAN...\n");
 
@@ -198,7 +194,11 @@ pub fn run_discovery(own_instruments: Vec<u32>) -> std::io::Result<()> {
             server.address,
             server.session_name,
             server.client_count,
-            if server.client_count == 1 { "client" } else { "clients" }
+            if server.client_count == 1 {
+                "client"
+            } else {
+                "clients"
+            }
         );
     }
 
@@ -293,7 +293,7 @@ pub fn run_client(addr: &str, own_instruments: Vec<u32>) -> std::io::Result<()> 
             // State was updated from server
             local_state.session = remote.state().session.clone();
             local_state.instruments = remote.state().instruments.clone();
-    local_state.instruments.rebuild_index();
+            local_state.instruments.rebuild_index();
             sync_network_context(&mut local_state, &remote);
         }
 
@@ -328,7 +328,13 @@ pub fn run_client(addr: &str, own_instruments: Vec<u32>) -> std::io::Result<()> 
                 let now_render = Instant::now();
                 if now_render.duration_since(last_render_time).as_millis() >= 16 {
                     last_render_time = now_render;
-                    render_frame(&mut backend, &app_frame, &mut panes, &local_state, &mut last_area)?;
+                    render_frame(
+                        &mut backend,
+                        &app_frame,
+                        &mut panes,
+                        &local_state,
+                        &mut last_area,
+                    )?;
                 }
 
                 std::thread::sleep(Duration::from_millis(delay_ms));
@@ -339,14 +345,18 @@ pub fn run_client(addr: &str, own_instruments: Vec<u32>) -> std::io::Result<()> 
                         remote = new_remote;
 
                         // Save new session token
-                        if let Err(e) = imbolc_net::save_session(&saved_addr, remote.session_token(), &saved_name) {
+                        if let Err(e) = imbolc_net::save_session(
+                            &saved_addr,
+                            remote.session_token(),
+                            &saved_name,
+                        ) {
                             log::warn!("Failed to save session token: {}", e);
                         }
 
                         // Sync state
                         local_state.session = remote.state().session.clone();
                         local_state.instruments = remote.state().instruments.clone();
-    local_state.instruments.rebuild_index();
+                        local_state.instruments.rebuild_index();
                         sync_network_context(&mut local_state, &remote);
                         reconnected = true;
                         break;
@@ -370,7 +380,9 @@ pub fn run_client(addr: &str, own_instruments: Vec<u32>) -> std::io::Result<()> 
         if let Some(app_event) = backend.poll_event(Duration::from_millis(2)) {
             let pane_action = match app_event {
                 crate::ui::AppEvent::Mouse(mouse_event) => {
-                    panes.active_mut().handle_mouse(&mouse_event, last_area, &local_state)
+                    panes
+                        .active_mut()
+                        .handle_mouse(&mouse_event, last_area, &local_state)
                 }
                 crate::ui::AppEvent::Resize(_, _) => Action::None,
                 crate::ui::AppEvent::Key(event) => {
@@ -382,13 +394,16 @@ pub fn run_client(addr: &str, own_instruments: Vec<u32>) -> std::io::Result<()> 
                                 break;
                             }
                             // Handle privilege request in network mode
-                            if matches!(action, ActionId::Global(GlobalActionId::RequestPrivilege)) {
+                            if matches!(action, ActionId::Global(GlobalActionId::RequestPrivilege))
+                            {
                                 if let Err(e) = remote.request_privilege() {
                                     log::warn!("Failed to request privilege: {}", e);
                                 }
                                 Action::None
                             } else {
-                                panes.active_mut().handle_action(action, &event, &local_state)
+                                panes
+                                    .active_mut()
+                                    .handle_action(action, &event, &local_state)
                             }
                         }
                         crate::ui::LayerResult::Blocked | crate::ui::LayerResult::Unresolved => {
@@ -429,7 +444,13 @@ pub fn run_client(addr: &str, own_instruments: Vec<u32>) -> std::io::Result<()> 
         if now_render.duration_since(last_render_time).as_millis() >= 16 {
             last_render_time = now_render;
 
-            render_frame(&mut backend, &app_frame, &mut panes, &local_state, &mut last_area)?;
+            render_frame(
+                &mut backend,
+                &app_frame,
+                &mut panes,
+                &local_state,
+                &mut last_area,
+            )?;
         }
     }
 
@@ -503,9 +524,11 @@ pub fn action_to_network_action(action: &Action) -> Option<imbolc_net::NetworkAc
 
 /// Sync network display context from RemoteDispatcher to AppState.
 pub fn sync_network_context(local_state: &mut AppState, remote: &RemoteDispatcher) {
-    use std::collections::HashMap;
     use imbolc_net::OwnershipStatus;
-    use state::{ClientDisplayInfo, NetworkConnectionStatus, NetworkDisplayContext, OwnershipDisplayStatus};
+    use state::{
+        ClientDisplayInfo, NetworkConnectionStatus, NetworkDisplayContext, OwnershipDisplayStatus,
+    };
+    use std::collections::HashMap;
 
     let mut ownership = HashMap::new();
 
@@ -523,23 +546,30 @@ pub fn sync_network_context(local_state: &mut AppState, remote: &RemoteDispatche
     // Build connected clients list by deduplicating the ownership map by client name
     let mut client_counts: HashMap<String, (bool, usize)> = HashMap::new();
     for owner_info in remote.ownership_map().values() {
-        let is_priv = remote.privileged_client()
+        let is_priv = remote
+            .privileged_client()
             .map(|(id, _)| id == owner_info.client_id)
             .unwrap_or(false);
-        let entry = client_counts.entry(owner_info.client_name.clone()).or_insert((is_priv, 0));
+        let entry = client_counts
+            .entry(owner_info.client_name.clone())
+            .or_insert((is_priv, 0));
         entry.1 += 1;
     }
     // Always include ourselves
     let client_name = remote.client_name().to_string();
-    client_counts.entry(client_name.clone()).or_insert((remote.is_privileged(), 0));
+    client_counts
+        .entry(client_name.clone())
+        .or_insert((remote.is_privileged(), 0));
 
     let connected_clients: Vec<ClientDisplayInfo> = client_counts
         .into_iter()
-        .map(|(name, (is_privileged, owned_instrument_count))| ClientDisplayInfo {
-            name,
-            is_privileged,
-            owned_instrument_count,
-        })
+        .map(
+            |(name, (is_privileged, owned_instrument_count))| ClientDisplayInfo {
+                name,
+                is_privileged,
+                owned_instrument_count,
+            },
+        )
         .collect();
 
     let connection_status = if remote.connection_lost() {

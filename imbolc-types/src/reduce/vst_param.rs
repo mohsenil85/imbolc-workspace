@@ -1,6 +1,6 @@
 use crate::{
-    EffectType, Instrument, InstrumentState, SessionState, SourceExtra,
-    SourceType, VstParamAction, VstTarget,
+    EffectType, Instrument, InstrumentState, SessionState, SourceExtra, SourceType, VstParamAction,
+    VstTarget,
 };
 
 pub(super) fn reduce(
@@ -23,22 +23,26 @@ pub(super) fn reduce(
             true
         }
         VstParamAction::AdjustParam(instrument_id, target, param_index, delta) => {
-            let current = instruments.instrument(*instrument_id)
+            let current = instruments
+                .instrument(*instrument_id)
                 .map(|inst| {
                     let values = match *target {
                         VstTarget::Source => inst.vst_source_params(),
-                        VstTarget::Effect(effect_id) => {
-                            inst.effect_by_id(effect_id)
-                                .map(|e| e.vst_param_values.as_slice())
-                                .unwrap_or(&[])
-                        }
+                        VstTarget::Effect(effect_id) => inst
+                            .effect_by_id(effect_id)
+                            .map(|e| e.vst_param_values.as_slice())
+                            .unwrap_or(&[]),
                     };
-                    values.iter().find(|(idx, _)| *idx == *param_index)
+                    values
+                        .iter()
+                        .find(|(idx, _)| *idx == *param_index)
                         .map(|(_, v)| *v)
                         .unwrap_or_else(|| {
                             if let Some(plugin_id) = get_vst_plugin_id(inst, *target) {
                                 if let Some(plugin) = session.vst_plugins.get(plugin_id) {
-                                    if let Some(spec) = plugin.params.iter().find(|p| p.index == *param_index) {
+                                    if let Some(spec) =
+                                        plugin.params.iter().find(|p| p.index == *param_index)
+                                    {
                                         return spec.default;
                                     }
                                 }
@@ -60,10 +64,13 @@ pub(super) fn reduce(
             true
         }
         VstParamAction::ResetParam(instrument_id, target, param_index) => {
-            let default = instruments.instrument(*instrument_id)
+            let default = instruments
+                .instrument(*instrument_id)
                 .and_then(|inst| {
                     let plugin_id = get_vst_plugin_id(inst, *target)?;
-                    session.vst_plugins.get(plugin_id)
+                    session
+                        .vst_plugins
+                        .get(plugin_id)
                         .and_then(|plugin| plugin.params.iter().find(|p| p.index == *param_index))
                         .map(|spec| spec.default)
                 })
@@ -93,27 +100,30 @@ fn get_vst_plugin_id(instrument: &Instrument, target: VstTarget) -> Option<crate
                 None
             }
         }
-        VstTarget::Effect(effect_id) => {
-            instrument.effect_by_id(effect_id).and_then(|e| {
-                if let EffectType::Vst(id) = e.effect_type {
-                    Some(id)
-                } else {
-                    None
-                }
-            })
-        }
+        VstTarget::Effect(effect_id) => instrument.effect_by_id(effect_id).and_then(|e| {
+            if let EffectType::Vst(id) = e.effect_type {
+                Some(id)
+            } else {
+                None
+            }
+        }),
     }
 }
 
-fn get_param_values_mut(instrument: &mut Instrument, target: VstTarget) -> Option<&mut Vec<(u32, f32)>> {
+fn get_param_values_mut(
+    instrument: &mut Instrument,
+    target: VstTarget,
+) -> Option<&mut Vec<(u32, f32)>> {
     match target {
         VstTarget::Source => match &mut instrument.source_extra {
-            SourceExtra::Vst { ref mut param_values, .. } => Some(param_values),
+            SourceExtra::Vst {
+                ref mut param_values,
+                ..
+            } => Some(param_values),
             _ => None,
         },
-        VstTarget::Effect(effect_id) => {
-            instrument.effect_by_id_mut(effect_id)
-                .map(|e| &mut e.vst_param_values)
-        }
+        VstTarget::Effect(effect_id) => instrument
+            .effect_by_id_mut(effect_id)
+            .map(|e| &mut e.vst_param_values),
     }
 }

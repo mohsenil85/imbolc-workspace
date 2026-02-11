@@ -4,13 +4,15 @@ use std::time::Duration;
 
 use super::commands::AudioFeedback;
 use super::engine::AudioEngine;
-use crate::arp_state::ArpPlayState;
 use super::snapshot::{AutomationSnapshot, InstrumentSnapshot, PianoRollSnapshot, SessionSnapshot};
-use imbolc_types::{AutomationTarget, InstrumentId};
+use crate::arp_state::ArpPlayState;
 use imbolc_types::SwingGrid;
+use imbolc_types::{AutomationTarget, InstrumentId};
 
 fn next_random(state: &mut u64) -> f32 {
-    *state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+    *state = state
+        .wrapping_mul(6364136223846793005)
+        .wrapping_add(1442695040888963407);
     ((*state >> 33) as f32) / (u32::MAX as f32)
 }
 
@@ -86,11 +88,17 @@ pub fn tick_playback(
                 let post_wrap_base = (piano_roll.loop_end - old_playhead) as f64;
 
                 scan_ranges = vec![
-                    (scan_start, piano_roll.loop_end, (scan_start as f64 - old_playhead as f64)),
+                    (
+                        scan_start,
+                        piano_roll.loop_end,
+                        (scan_start as f64 - old_playhead as f64),
+                    ),
                     (piano_roll.loop_start, after_wrap_end, post_wrap_base),
                 ];
                 effective_scan_end = after_wrap_end;
-            } else if scan_end_raw > piano_roll.loop_end && piano_roll.loop_end > piano_roll.loop_start {
+            } else if scan_end_raw > piano_roll.loop_end
+                && piano_roll.loop_end > piano_roll.loop_start
+            {
                 // Pre-scheduling crosses the loop boundary but playhead hasn't wrapped yet.
                 // Scan [scan_start, loop_end) and [loop_start, loop_start + overflow)
                 let overflow = scan_end_raw - piano_roll.loop_end;
@@ -98,14 +106,22 @@ pub fn tick_playback(
                 let post_wrap_base = (piano_roll.loop_end - old_playhead) as f64;
 
                 scan_ranges = vec![
-                    (scan_start, piano_roll.loop_end, (scan_start as f64 - old_playhead as f64)),
+                    (
+                        scan_start,
+                        piano_roll.loop_end,
+                        (scan_start as f64 - old_playhead as f64),
+                    ),
                     (piano_roll.loop_start, after_wrap_end, post_wrap_base),
                 ];
                 effective_scan_end = after_wrap_end;
             } else {
                 // No wrap — simple linear scan
                 let clamped_end = scan_end_raw.min(piano_roll.loop_end);
-                scan_ranges = vec![(scan_start, clamped_end, (scan_start as f64 - old_playhead as f64))];
+                scan_ranges = vec![(
+                    scan_start,
+                    clamped_end,
+                    (scan_start as f64 - old_playhead as f64),
+                )];
                 effective_scan_end = clamped_end;
             };
 
@@ -130,9 +146,16 @@ pub fn tick_playback(
                             for &target_id in &targets {
                                 // Skip muted/inactive siblings
                                 let skip = instruments.instrument(target_id).is_none_or(|inst| {
-                                    !inst.mixer.active || if any_solo { !inst.mixer.solo } else { inst.mixer.mute }
+                                    !inst.mixer.active
+                                        || if any_solo {
+                                            !inst.mixer.solo
+                                        } else {
+                                            inst.mixer.mute
+                                        }
                                 });
-                                if skip { continue; }
+                                if skip {
+                                    continue;
+                                }
                                 note_ons.push((
                                     target_id,
                                     note.pitch,
@@ -148,11 +171,26 @@ pub fn tick_playback(
                 }
             }
 
-            playback_data = Some((note_ons, old_playhead, new_playhead, tick_delta, secs_per_tick, effective_scan_end));
+            playback_data = Some((
+                note_ons,
+                old_playhead,
+                new_playhead,
+                tick_delta,
+                secs_per_tick,
+                effective_scan_end,
+            ));
         }
     }
 
-    if let Some((note_ons, _old_playhead, new_playhead, tick_delta, secs_per_tick, effective_scan_end)) = playback_data {
+    if let Some((
+        note_ons,
+        _old_playhead,
+        new_playhead,
+        tick_delta,
+        secs_per_tick,
+        effective_scan_end,
+    )) = playback_data
+    {
         // Update the high-water mark
         *last_scheduled_tick = Some(effective_scan_end);
 
@@ -162,7 +200,16 @@ pub fn tick_playback(
             let global_humanize_vel = session.humanize.velocity;
             let global_humanize_time = session.humanize.timing;
 
-            for &(instrument_id, pitch, velocity, duration, note_tick, probability, ticks_from_old) in &note_ons {
+            for &(
+                instrument_id,
+                pitch,
+                velocity,
+                duration,
+                note_tick,
+                probability,
+                ticks_from_old,
+            ) in &note_ons
+            {
                 // Probability check: skip note if random exceeds probability
                 if probability < 1.0 && next_random(rng_state) > probability {
                     continue;
@@ -170,9 +217,7 @@ pub fn tick_playback(
 
                 // Get per-track groove settings, falling back to global
                 let groove = instruments.instrument(instrument_id).map(|i| &i.groove);
-                let effective_swing = groove
-                    .and_then(|g| g.swing_amount)
-                    .unwrap_or(global_swing);
+                let effective_swing = groove.and_then(|g| g.swing_amount).unwrap_or(global_swing);
                 let effective_swing_grid = groove
                     .and_then(|g| g.swing_grid)
                     .unwrap_or(SwingGrid::Eighths);
@@ -185,15 +230,16 @@ pub fn tick_playback(
                 let timing_offset_ms = groove.map(|g| g.timing_offset_ms).unwrap_or(0.0);
 
                 // Check if this instrument has arpeggiator enabled
-                let arp_enabled = instruments.instruments.iter()
+                let arp_enabled = instruments
+                    .instruments
+                    .iter()
                     .find(|inst| inst.id == instrument_id)
                     .map(|inst| inst.note_input.arpeggiator.enabled)
                     .unwrap_or(false);
 
                 if arp_enabled {
                     // Buffer note for arpeggiator instead of spawning directly
-                    let arp = arp_states.entry(instrument_id)
-                        .or_default();
+                    let arp = arp_states.entry(instrument_id).or_default();
                     if !arp.held_notes.contains(&pitch) {
                         arp.held_notes.push(pitch);
                         arp.held_notes.sort();
@@ -215,10 +261,9 @@ pub fn tick_playback(
                     let sixteenth = tpb / 4.0;
                     let pos_in_beat = (note_tick as f64) % tpb;
 
-                    let apply_eighth_swing = matches!(
-                        effective_swing_grid,
-                        SwingGrid::Eighths | SwingGrid::Both
-                    ) && (pos_in_beat - eighth).abs() < 1.0;
+                    let apply_eighth_swing =
+                        matches!(effective_swing_grid, SwingGrid::Eighths | SwingGrid::Both)
+                            && (pos_in_beat - eighth).abs() < 1.0;
 
                     let apply_sixteenth_swing = matches!(
                         effective_swing_grid,
@@ -235,22 +280,28 @@ pub fn tick_playback(
 
                 // Apply timing humanization: jitter offset by up to +/- 20ms
                 if effective_humanize_time > 0.0 {
-                    let jitter = (next_random(rng_state) - 0.5) * 2.0 * effective_humanize_time * 0.02;
+                    let jitter =
+                        (next_random(rng_state) - 0.5) * 2.0 * effective_humanize_time * 0.02;
                     offset = (offset + jitter as f64).max(0.0);
                 }
 
                 // Apply velocity humanization: jitter velocity by up to +/- 30
                 let mut vel_f = velocity as f32 / 127.0;
                 if effective_humanize_vel > 0.0 {
-                    let jitter = (next_random(rng_state) - 0.5) * 2.0 * effective_humanize_vel * (30.0 / 127.0);
+                    let jitter = (next_random(rng_state) - 0.5)
+                        * 2.0
+                        * effective_humanize_vel
+                        * (30.0 / 127.0);
                     vel_f = (vel_f + jitter).clamp(0.01, 1.0);
                 }
 
-                let pitch = instruments.instrument(instrument_id)
+                let pitch = instruments
+                    .instrument(instrument_id)
                     .map_or(pitch, |inst| inst.offset_pitch(pitch));
                 // Evict stale entry for same instrument+pitch (voice was already stolen by spawn_voice)
                 active_notes.retain(|n| !(n.0 == instrument_id && n.1 == pitch));
-                let _ = engine.spawn_voice(instrument_id, pitch, vel_f, offset, instruments, session);
+                let _ =
+                    engine.spawn_voice(instrument_id, pitch, vel_f, offset, instruments, session);
                 active_notes.push((instrument_id, pitch, duration));
             }
 
@@ -261,15 +312,21 @@ pub fn tick_playback(
                     continue;
                 }
                 if let Some(value) = lane.value_at(new_playhead) {
-                    if matches!(lane.target, AutomationTarget::Global(imbolc_types::GlobalParameter::Bpm)) {
+                    if matches!(
+                        lane.target,
+                        AutomationTarget::Global(imbolc_types::GlobalParameter::Bpm)
+                    ) {
                         if (piano_roll.bpm - value).abs() > f32::EPSILON {
                             piano_roll.bpm = value;
                             let _ = feedback_tx.send(AudioFeedback::BpmUpdate(value));
                         }
                     } else {
-                        automation_msgs.extend(
-                            engine.collect_automation_messages(&lane.target, value, instruments, session)
-                        );
+                        automation_msgs.extend(engine.collect_automation_messages(
+                            &lane.target,
+                            value,
+                            instruments,
+                            session,
+                        ));
                     }
                 }
             }
@@ -307,8 +364,8 @@ pub fn tick_playback(
 mod tests {
     use super::*;
     use imbolc_types::PianoRollState;
-    use imbolc_types::{InstrumentState, SessionState};
     use imbolc_types::SourceType;
+    use imbolc_types::{InstrumentState, SessionState};
     use std::sync::mpsc;
 
     /// Helper: create minimal fixtures for tick_playback tests.
@@ -385,15 +442,30 @@ mod tests {
         // Advance enough to get tick_delta > 0
         let elapsed = Duration::from_millis(10); // ~9.6 ticks
 
-        do_tick(&mut pr, &mut inst, &session, &mut engine, &tx, elapsed, &mut tick_acc, &mut last_sched);
+        do_tick(
+            &mut pr,
+            &mut inst,
+            &session,
+            &mut engine,
+            &tx,
+            elapsed,
+            &mut tick_acc,
+            &mut last_sched,
+        );
 
         // last_scheduled_tick should be set and ahead of playhead by lookahead_ticks
         assert!(last_sched.is_some(), "last_scheduled_tick should be set");
         let sched = last_sched.unwrap();
-        assert!(sched > pr.playhead, "scheduled tick {} should be ahead of playhead {}", sched, pr.playhead);
+        assert!(
+            sched > pr.playhead,
+            "scheduled tick {} should be ahead of playhead {}",
+            sched,
+            pr.playhead
+        );
 
         // lookahead_ticks = (0.015 * 120 / 60) * 480 = 14.4 → 14
-        let expected_lookahead_ticks = ((engine.schedule_lookahead_secs * 120.0 / 60.0) * 480.0) as u32;
+        let expected_lookahead_ticks =
+            ((engine.schedule_lookahead_secs * 120.0 / 60.0) * 480.0) as u32;
         assert_eq!(sched, pr.playhead + expected_lookahead_ticks);
     }
 
@@ -408,20 +480,42 @@ mod tests {
         let mut last_sched: Option<u32> = None;
 
         // First tick: advance ~9 ticks
-        do_tick(&mut pr, &mut inst, &session, &mut engine, &tx, Duration::from_millis(10), &mut tick_acc, &mut last_sched);
+        do_tick(
+            &mut pr,
+            &mut inst,
+            &session,
+            &mut engine,
+            &tx,
+            Duration::from_millis(10),
+            &mut tick_acc,
+            &mut last_sched,
+        );
 
         let first_sched = last_sched.unwrap();
 
         // Second tick: advance another ~9 ticks
-        do_tick(&mut pr, &mut inst, &session, &mut engine, &tx, Duration::from_millis(10), &mut tick_acc, &mut last_sched);
+        do_tick(
+            &mut pr,
+            &mut inst,
+            &session,
+            &mut engine,
+            &tx,
+            Duration::from_millis(10),
+            &mut tick_acc,
+            &mut last_sched,
+        );
 
         let second_sched = last_sched.unwrap();
 
         // The high-water mark should advance: second scan starts at first_sched
         // so scan window is [first_sched, new_playhead+lookahead)
         // No overlap with [0, first_sched)
-        assert!(second_sched > first_sched,
-            "second scheduled ({}) should be > first ({})", second_sched, first_sched);
+        assert!(
+            second_sched > first_sched,
+            "second scheduled ({}) should be > first ({})",
+            second_sched,
+            first_sched
+        );
 
         // Verify the gap is consistent: second_sched = playhead_2 + lookahead_ticks
         let lookahead_ticks = ((engine.schedule_lookahead_secs * 120.0 / 60.0) * 480.0) as u32;
@@ -439,17 +533,38 @@ mod tests {
         let mut last_sched: Option<u32> = None;
 
         // First tick
-        do_tick(&mut pr, &mut inst, &session, &mut engine, &tx, Duration::from_millis(10), &mut tick_acc, &mut last_sched);
+        do_tick(
+            &mut pr,
+            &mut inst,
+            &session,
+            &mut engine,
+            &tx,
+            Duration::from_millis(10),
+            &mut tick_acc,
+            &mut last_sched,
+        );
         assert!(last_sched.is_some());
 
         // Reset last_scheduled_tick (simulates state invalidation from PianoRollUpdate)
         last_sched = None;
 
         // Second tick: scan_start falls back to old_playhead (= playhead_after_1)
-        do_tick(&mut pr, &mut inst, &session, &mut engine, &tx, Duration::from_millis(10), &mut tick_acc, &mut last_sched);
+        do_tick(
+            &mut pr,
+            &mut inst,
+            &session,
+            &mut engine,
+            &tx,
+            Duration::from_millis(10),
+            &mut tick_acc,
+            &mut last_sched,
+        );
 
         // last_sched should be set again
-        assert!(last_sched.is_some(), "last_scheduled_tick should be restored after reset");
+        assert!(
+            last_sched.is_some(),
+            "last_scheduled_tick should be restored after reset"
+        );
 
         // After reset, scan started from old_playhead instead of the high-water mark
         // So last_sched = new_playhead + lookahead_ticks (standard formula)
@@ -479,18 +594,33 @@ mod tests {
         let mut last_sched: Option<u32> = None;
 
         let elapsed = Duration::from_millis(10);
-        do_tick(&mut pr, &mut inst, &session, &mut engine, &tx, elapsed, &mut tick_acc, &mut last_sched);
+        do_tick(
+            &mut pr,
+            &mut inst,
+            &session,
+            &mut engine,
+            &tx,
+            elapsed,
+            &mut tick_acc,
+            &mut last_sched,
+        );
 
         // effective_scan_end should be in the wrapped region [loop_start, loop_start + overflow)
         let sched = last_sched.unwrap();
         // The overflow wraps to loop_start + (scan_end_raw - loop_end)
         // Since playhead didn't wrap (94 < 100), we're in the "pre-scheduling crosses loop" branch
-        assert!(sched < pr.loop_end,
+        assert!(
+            sched < pr.loop_end,
             "effective_scan_end ({}) should be in wrapped region (< loop_end {})",
-            sched, pr.loop_end);
-        assert!(sched >= pr.loop_start,
+            sched,
+            pr.loop_end
+        );
+        assert!(
+            sched >= pr.loop_start,
             "effective_scan_end ({}) should be >= loop_start ({})",
-            sched, pr.loop_start);
+            sched,
+            pr.loop_start
+        );
     }
 
     #[test]
@@ -501,9 +631,22 @@ mod tests {
         let mut tick_acc = 0.0;
         let mut last_sched: Option<u32> = Some(42);
 
-        do_tick(&mut pr, &mut inst, &session, &mut engine, &tx, Duration::from_millis(10), &mut tick_acc, &mut last_sched);
+        do_tick(
+            &mut pr,
+            &mut inst,
+            &session,
+            &mut engine,
+            &tx,
+            Duration::from_millis(10),
+            &mut tick_acc,
+            &mut last_sched,
+        );
 
-        assert_eq!(last_sched, Some(42), "last_scheduled_tick should not change when not playing");
+        assert_eq!(
+            last_sched,
+            Some(42),
+            "last_scheduled_tick should not change when not playing"
+        );
     }
 
     #[test]
@@ -520,14 +663,23 @@ mod tests {
         let mut last_sched: Option<u32> = None;
 
         let active = do_tick(
-            &mut pr, &mut inst, &session, &mut engine, &tx,
-            Duration::from_millis(10), &mut tick_acc, &mut last_sched,
+            &mut pr,
+            &mut inst,
+            &session,
+            &mut engine,
+            &tx,
+            Duration::from_millis(10),
+            &mut tick_acc,
+            &mut last_sched,
         );
 
         // Should have exactly one active_notes entry for pitch 60 (the second note evicts the first)
         let pitch_60_count = active.iter().filter(|n| n.1 == 60).count();
-        assert_eq!(pitch_60_count, 1,
-            "expected 1 active_notes entry for pitch 60 after retrigger, got {}", pitch_60_count);
+        assert_eq!(
+            pitch_60_count, 1,
+            "expected 1 active_notes entry for pitch 60 after retrigger, got {}",
+            pitch_60_count
+        );
     }
 
     #[test]
@@ -543,12 +695,25 @@ mod tests {
         let mut tick_acc = 0.0;
         let mut last_sched: Option<u32> = None;
 
-        do_tick(&mut pr, &mut inst, &session, &mut engine, &tx, Duration::from_millis(10), &mut tick_acc, &mut last_sched);
+        do_tick(
+            &mut pr,
+            &mut inst,
+            &session,
+            &mut engine,
+            &tx,
+            Duration::from_millis(10),
+            &mut tick_acc,
+            &mut last_sched,
+        );
 
         let sched = last_sched.unwrap();
         // At 200 BPM: lookahead_ticks = (0.015 * 200/60) * 480 = 24
         let expected_lt = ((engine.schedule_lookahead_secs * 200.0 / 60.0) * 480.0) as u32;
         assert_eq!(sched, pr.playhead + expected_lt);
-        assert!(expected_lt > 14, "At 200 BPM, lookahead_ticks ({}) should be > 14 (120 BPM value)", expected_lt);
+        assert!(
+            expected_lt > 14,
+            "At 200 BPM, lookahead_ticks ({}) should be > 14 (120 BPM value)",
+            expected_lt
+        );
     }
 }

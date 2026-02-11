@@ -1,31 +1,70 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 /// Musical key (pitch class)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Key {
-    C, Cs, D, Ds, E, F, Fs, G, Gs, A, As, B,
+    C,
+    Cs,
+    D,
+    Ds,
+    E,
+    F,
+    Fs,
+    G,
+    Gs,
+    A,
+    As,
+    B,
 }
 
 impl Key {
     pub const ALL: [Key; 12] = [
-        Key::C, Key::Cs, Key::D, Key::Ds, Key::E, Key::F,
-        Key::Fs, Key::G, Key::Gs, Key::A, Key::As, Key::B,
+        Key::C,
+        Key::Cs,
+        Key::D,
+        Key::Ds,
+        Key::E,
+        Key::F,
+        Key::Fs,
+        Key::G,
+        Key::Gs,
+        Key::A,
+        Key::As,
+        Key::B,
     ];
 
     pub fn name(&self) -> &'static str {
         match self {
-            Key::C => "C", Key::Cs => "C#", Key::D => "D", Key::Ds => "D#",
-            Key::E => "E", Key::F => "F", Key::Fs => "F#", Key::G => "G",
-            Key::Gs => "G#", Key::A => "A", Key::As => "A#", Key::B => "B",
+            Key::C => "C",
+            Key::Cs => "C#",
+            Key::D => "D",
+            Key::Ds => "D#",
+            Key::E => "E",
+            Key::F => "F",
+            Key::Fs => "F#",
+            Key::G => "G",
+            Key::Gs => "G#",
+            Key::A => "A",
+            Key::As => "A#",
+            Key::B => "B",
         }
     }
 
     /// MIDI note number for this key in octave 0
     pub fn semitone(&self) -> i32 {
         match self {
-            Key::C => 0, Key::Cs => 1, Key::D => 2, Key::Ds => 3,
-            Key::E => 4, Key::F => 5, Key::Fs => 6, Key::G => 7,
-            Key::Gs => 8, Key::A => 9, Key::As => 10, Key::B => 11,
+            Key::C => 0,
+            Key::Cs => 1,
+            Key::D => 2,
+            Key::Ds => 3,
+            Key::E => 4,
+            Key::F => 5,
+            Key::Fs => 6,
+            Key::G => 7,
+            Key::Gs => 8,
+            Key::A => 9,
+            Key::As => 10,
+            Key::B => 11,
         }
     }
 }
@@ -48,9 +87,17 @@ pub enum Scale {
 
 impl Scale {
     pub const ALL: [Scale; 11] = [
-        Scale::Major, Scale::Minor, Scale::Dorian, Scale::Phrygian,
-        Scale::Lydian, Scale::Mixolydian, Scale::Aeolian, Scale::Locrian,
-        Scale::Pentatonic, Scale::Blues, Scale::Chromatic,
+        Scale::Major,
+        Scale::Minor,
+        Scale::Dorian,
+        Scale::Phrygian,
+        Scale::Lydian,
+        Scale::Mixolydian,
+        Scale::Aeolian,
+        Scale::Locrian,
+        Scale::Pentatonic,
+        Scale::Blues,
+        Scale::Chromatic,
     ];
 
     pub fn name(&self) -> &'static str {

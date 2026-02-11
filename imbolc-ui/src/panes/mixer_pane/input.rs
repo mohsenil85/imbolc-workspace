@@ -1,5 +1,7 @@
 use super::{BusDetailSection, DetailTarget, GroupDetailSection, MixerPane, MixerSection};
-use super::{CHANNEL_WIDTH, METER_HEIGHT, NUM_VISIBLE_BUSES, NUM_VISIBLE_CHANNELS, NUM_VISIBLE_GROUPS};
+use super::{
+    CHANNEL_WIDTH, METER_HEIGHT, NUM_VISIBLE_BUSES, NUM_VISIBLE_CHANNELS, NUM_VISIBLE_GROUPS,
+};
 use crate::state::{AppState, InstrumentId, MixerSelection};
 use crate::ui::action_id::{ActionId, MixerActionId};
 use crate::ui::layout_helpers::center_rect;
@@ -100,8 +102,7 @@ impl MixerPane {
                     Action::None
                 }
             }
-            ActionId::Mixer(MixerActionId::ClearSend)
-            | ActionId::Mixer(MixerActionId::Escape) => {
+            ActionId::Mixer(MixerActionId::ClearSend) | ActionId::Mixer(MixerActionId::Escape) => {
                 self.send_target = None;
                 Action::None
             }
@@ -170,9 +171,11 @@ impl MixerPane {
 
         // Calculate scroll offsets (same as render)
         let instrument_scroll = match state.session.mixer.selection {
-            MixerSelection::Instrument(idx) => {
-                Self::calc_scroll_offset(idx, state.instruments.instruments.len(), NUM_VISIBLE_CHANNELS)
-            }
+            MixerSelection::Instrument(idx) => Self::calc_scroll_offset(
+                idx,
+                state.instruments.instruments.len(),
+                NUM_VISIBLE_CHANNELS,
+            ),
             _ => 0,
         };
         let bus_scroll = match state.session.mixer.selection {
@@ -262,8 +265,7 @@ impl MixerPane {
         };
 
         match action {
-            ActionId::Mixer(MixerActionId::Escape)
-            | ActionId::Mixer(MixerActionId::ClearSend) => {
+            ActionId::Mixer(MixerActionId::Escape) | ActionId::Mixer(MixerActionId::ClearSend) => {
                 self.detail_mode = None;
                 self.send_target = None;
                 Action::None
@@ -291,20 +293,17 @@ impl MixerPane {
                 }
                 Action::None
             }
-            ActionId::Mixer(MixerActionId::LevelUpBig)
-            | ActionId::Mixer(MixerActionId::First) => {
+            ActionId::Mixer(MixerActionId::LevelUpBig) | ActionId::Mixer(MixerActionId::First) => {
                 self.adjust_detail_param(state, inst_id, 5.0)
             }
-            ActionId::Mixer(MixerActionId::LevelDownBig)
-            | ActionId::Mixer(MixerActionId::Last) => {
+            ActionId::Mixer(MixerActionId::LevelDownBig) | ActionId::Mixer(MixerActionId::Last) => {
                 self.adjust_detail_param(state, inst_id, -5.0)
             }
             ActionId::Mixer(MixerActionId::Increase)
             | ActionId::Mixer(MixerActionId::FineRight) => {
                 self.adjust_detail_param(state, inst_id, 1.0)
             }
-            ActionId::Mixer(MixerActionId::Decrease)
-            | ActionId::Mixer(MixerActionId::FineLeft) => {
+            ActionId::Mixer(MixerActionId::Decrease) | ActionId::Mixer(MixerActionId::FineLeft) => {
                 self.adjust_detail_param(state, inst_id, -1.0)
             }
             ActionId::Mixer(MixerActionId::Mute) => Action::Mixer(MixerAction::ToggleMute),
@@ -375,18 +374,12 @@ impl MixerPane {
                 }
                 Action::None
             }
-            ActionId::Mixer(MixerActionId::PanLeft) => {
-                Action::Mixer(MixerAction::AdjustPan(-0.05))
-            }
-            ActionId::Mixer(MixerActionId::PanRight) => {
-                Action::Mixer(MixerAction::AdjustPan(0.05))
-            }
-            ActionId::Mixer(MixerActionId::EnterDetail) => {
-                match self.detail_section {
-                    MixerSection::Effects => Action::None,
-                    _ => Action::None,
-                }
-            }
+            ActionId::Mixer(MixerActionId::PanLeft) => Action::Mixer(MixerAction::AdjustPan(-0.05)),
+            ActionId::Mixer(MixerActionId::PanRight) => Action::Mixer(MixerAction::AdjustPan(0.05)),
+            ActionId::Mixer(MixerActionId::EnterDetail) => match self.detail_section {
+                MixerSection::Effects => Action::None,
+                _ => Action::None,
+            },
             ActionId::Mixer(MixerActionId::SendNext) => {
                 if self.detail_section == MixerSection::Sends {
                     let max = self.max_cursor(state);
@@ -397,10 +390,9 @@ impl MixerPane {
                 Action::None
             }
             ActionId::Mixer(MixerActionId::SendPrev) => {
-                if self.detail_section == MixerSection::Sends
-                    && self.detail_cursor > 0 {
-                        self.detail_cursor -= 1;
-                    }
+                if self.detail_section == MixerSection::Sends && self.detail_cursor > 0 {
+                    self.detail_cursor -= 1;
+                }
                 Action::None
             }
             ActionId::Mixer(MixerActionId::SendToggle) => {
@@ -424,8 +416,7 @@ impl MixerPane {
         };
 
         match action {
-            ActionId::Mixer(MixerActionId::Escape)
-            | ActionId::Mixer(MixerActionId::ClearSend) => {
+            ActionId::Mixer(MixerActionId::Escape) | ActionId::Mixer(MixerActionId::ClearSend) => {
                 self.detail_mode = None;
                 self.send_target = None;
                 Action::None
@@ -526,12 +517,8 @@ impl MixerPane {
             }
             ActionId::Mixer(MixerActionId::Mute) => Action::Mixer(MixerAction::ToggleMute),
             ActionId::Mixer(MixerActionId::Solo) => Action::Mixer(MixerAction::ToggleSolo),
-            ActionId::Mixer(MixerActionId::PanLeft) => {
-                Action::Mixer(MixerAction::AdjustPan(-0.05))
-            }
-            ActionId::Mixer(MixerActionId::PanRight) => {
-                Action::Mixer(MixerAction::AdjustPan(0.05))
-            }
+            ActionId::Mixer(MixerActionId::PanLeft) => Action::Mixer(MixerAction::AdjustPan(-0.05)),
+            ActionId::Mixer(MixerActionId::PanRight) => Action::Mixer(MixerAction::AdjustPan(0.05)),
             _ => Action::None,
         }
     }
@@ -543,8 +530,7 @@ impl MixerPane {
         };
 
         match action {
-            ActionId::Mixer(MixerActionId::Escape)
-            | ActionId::Mixer(MixerActionId::ClearSend) => {
+            ActionId::Mixer(MixerActionId::Escape) | ActionId::Mixer(MixerActionId::ClearSend) => {
                 self.detail_mode = None;
                 self.send_target = None;
                 Action::None
@@ -645,12 +631,8 @@ impl MixerPane {
             }
             ActionId::Mixer(MixerActionId::Mute) => Action::Mixer(MixerAction::ToggleMute),
             ActionId::Mixer(MixerActionId::Solo) => Action::Mixer(MixerAction::ToggleSolo),
-            ActionId::Mixer(MixerActionId::PanLeft) => {
-                Action::Mixer(MixerAction::AdjustPan(-0.05))
-            }
-            ActionId::Mixer(MixerActionId::PanRight) => {
-                Action::Mixer(MixerAction::AdjustPan(0.05))
-            }
+            ActionId::Mixer(MixerActionId::PanLeft) => Action::Mixer(MixerAction::AdjustPan(-0.05)),
+            ActionId::Mixer(MixerActionId::PanRight) => Action::Mixer(MixerAction::AdjustPan(0.05)),
             ActionId::Mixer(MixerActionId::Output) => Action::Mixer(MixerAction::CycleOutput),
             ActionId::Mixer(MixerActionId::OutputRev) => {
                 Action::Mixer(MixerAction::CycleOutputReverse)
@@ -665,10 +647,10 @@ impl MixerPane {
                 Action::None
             }
             ActionId::Mixer(MixerActionId::SendPrev) => {
-                if self.group_detail_section == GroupDetailSection::Sends
-                    && self.detail_cursor > 0 {
-                        self.detail_cursor -= 1;
-                    }
+                if self.group_detail_section == GroupDetailSection::Sends && self.detail_cursor > 0
+                {
+                    self.detail_cursor -= 1;
+                }
                 Action::None
             }
             ActionId::Mixer(MixerActionId::SendToggle) => {
@@ -685,12 +667,7 @@ impl MixerPane {
         }
     }
 
-    fn adjust_detail_param(
-        &self,
-        state: &AppState,
-        inst_id: InstrumentId,
-        delta: f32,
-    ) -> Action {
+    fn adjust_detail_param(&self, state: &AppState, inst_id: InstrumentId, delta: f32) -> Action {
         match self.detail_section {
             MixerSection::Effects => {
                 if let Some((ei, Some(pi))) = self.decode_effect_cursor(state) {

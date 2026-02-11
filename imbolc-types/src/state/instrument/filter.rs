@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use super::ModulatedParam;
 use crate::{Param, ParamValue};
@@ -58,20 +58,31 @@ impl FilterType {
     #[allow(dead_code)]
     pub fn all() -> Vec<FilterType> {
         vec![
-            FilterType::Lpf, FilterType::Hpf, FilterType::Bpf,
-            FilterType::Notch, FilterType::Comb, FilterType::Allpass,
-            FilterType::Vowel, FilterType::ResDrive,
+            FilterType::Lpf,
+            FilterType::Hpf,
+            FilterType::Bpf,
+            FilterType::Notch,
+            FilterType::Comb,
+            FilterType::Allpass,
+            FilterType::Vowel,
+            FilterType::ResDrive,
         ]
     }
 
     pub fn default_extra_params(&self) -> Vec<Param> {
         match self {
-            FilterType::Vowel => vec![
-                Param { name: "shape".to_string(), value: ParamValue::Float(0.0), min: 0.0, max: 1.0 },
-            ],
-            FilterType::ResDrive => vec![
-                Param { name: "drive".to_string(), value: ParamValue::Float(1.0), min: 1.0, max: 8.0 },
-            ],
+            FilterType::Vowel => vec![Param {
+                name: "shape".to_string(),
+                value: ParamValue::Float(0.0),
+                min: 0.0,
+                max: 1.0,
+            }],
+            FilterType::ResDrive => vec![Param {
+                name: "drive".to_string(),
+                value: ParamValue::Float(1.0),
+                min: 1.0,
+                max: 8.0,
+            }],
             _ => vec![],
         }
     }
@@ -97,8 +108,18 @@ impl FilterConfig {
         Self {
             extra_params: filter_type.default_extra_params(),
             filter_type,
-            cutoff: ModulatedParam { value: 1000.0, min: 20.0, max: 20000.0, mod_source: None },
-            resonance: ModulatedParam { value: 0.5, min: 0.0, max: 1.0, mod_source: None },
+            cutoff: ModulatedParam {
+                value: 1000.0,
+                min: 20.0,
+                max: 20000.0,
+                mod_source: None,
+            },
+            resonance: ModulatedParam {
+                value: 0.5,
+                min: 0.0,
+                max: 1.0,
+                mod_source: None,
+            },
             enabled: true,
         }
     }
@@ -142,18 +163,90 @@ impl Default for EqConfig {
     fn default() -> Self {
         Self {
             bands: [
-                EqBand { band_type: EqBandType::LowShelf, freq: 40.0,    gain: 0.0, q: 0.7, enabled: true },
-                EqBand { band_type: EqBandType::Peaking,  freq: 80.0,    gain: 0.0, q: 1.0, enabled: true },
-                EqBand { band_type: EqBandType::Peaking,  freq: 160.0,   gain: 0.0, q: 1.0, enabled: true },
-                EqBand { band_type: EqBandType::Peaking,  freq: 320.0,   gain: 0.0, q: 1.0, enabled: true },
-                EqBand { band_type: EqBandType::Peaking,  freq: 640.0,   gain: 0.0, q: 1.0, enabled: true },
-                EqBand { band_type: EqBandType::Peaking,  freq: 1200.0,  gain: 0.0, q: 1.0, enabled: true },
-                EqBand { band_type: EqBandType::Peaking,  freq: 2500.0,  gain: 0.0, q: 1.0, enabled: true },
-                EqBand { band_type: EqBandType::Peaking,  freq: 5000.0,  gain: 0.0, q: 1.0, enabled: true },
-                EqBand { band_type: EqBandType::Peaking,  freq: 8000.0,  gain: 0.0, q: 1.0, enabled: true },
-                EqBand { band_type: EqBandType::Peaking,  freq: 12000.0, gain: 0.0, q: 1.0, enabled: true },
-                EqBand { band_type: EqBandType::Peaking,  freq: 16000.0, gain: 0.0, q: 1.0, enabled: true },
-                EqBand { band_type: EqBandType::HighShelf, freq: 18000.0, gain: 0.0, q: 0.7, enabled: true },
+                EqBand {
+                    band_type: EqBandType::LowShelf,
+                    freq: 40.0,
+                    gain: 0.0,
+                    q: 0.7,
+                    enabled: true,
+                },
+                EqBand {
+                    band_type: EqBandType::Peaking,
+                    freq: 80.0,
+                    gain: 0.0,
+                    q: 1.0,
+                    enabled: true,
+                },
+                EqBand {
+                    band_type: EqBandType::Peaking,
+                    freq: 160.0,
+                    gain: 0.0,
+                    q: 1.0,
+                    enabled: true,
+                },
+                EqBand {
+                    band_type: EqBandType::Peaking,
+                    freq: 320.0,
+                    gain: 0.0,
+                    q: 1.0,
+                    enabled: true,
+                },
+                EqBand {
+                    band_type: EqBandType::Peaking,
+                    freq: 640.0,
+                    gain: 0.0,
+                    q: 1.0,
+                    enabled: true,
+                },
+                EqBand {
+                    band_type: EqBandType::Peaking,
+                    freq: 1200.0,
+                    gain: 0.0,
+                    q: 1.0,
+                    enabled: true,
+                },
+                EqBand {
+                    band_type: EqBandType::Peaking,
+                    freq: 2500.0,
+                    gain: 0.0,
+                    q: 1.0,
+                    enabled: true,
+                },
+                EqBand {
+                    band_type: EqBandType::Peaking,
+                    freq: 5000.0,
+                    gain: 0.0,
+                    q: 1.0,
+                    enabled: true,
+                },
+                EqBand {
+                    band_type: EqBandType::Peaking,
+                    freq: 8000.0,
+                    gain: 0.0,
+                    q: 1.0,
+                    enabled: true,
+                },
+                EqBand {
+                    band_type: EqBandType::Peaking,
+                    freq: 12000.0,
+                    gain: 0.0,
+                    q: 1.0,
+                    enabled: true,
+                },
+                EqBand {
+                    band_type: EqBandType::Peaking,
+                    freq: 16000.0,
+                    gain: 0.0,
+                    q: 1.0,
+                    enabled: true,
+                },
+                EqBand {
+                    band_type: EqBandType::HighShelf,
+                    freq: 18000.0,
+                    gain: 0.0,
+                    q: 0.7,
+                    enabled: true,
+                },
             ],
             enabled: true,
         }
@@ -211,8 +304,19 @@ mod tests {
 
     #[test]
     fn filter_type_default_extra_params_others_empty() {
-        for ft in [FilterType::Lpf, FilterType::Hpf, FilterType::Bpf, FilterType::Notch, FilterType::Comb, FilterType::Allpass] {
-            assert!(ft.default_extra_params().is_empty(), "{:?} should have no extra params", ft);
+        for ft in [
+            FilterType::Lpf,
+            FilterType::Hpf,
+            FilterType::Bpf,
+            FilterType::Notch,
+            FilterType::Comb,
+            FilterType::Allpass,
+        ] {
+            assert!(
+                ft.default_extra_params().is_empty(),
+                "{:?} should have no extra params",
+                ft
+            );
         }
     }
 

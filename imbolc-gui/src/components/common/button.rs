@@ -21,11 +21,7 @@ pub fn Button(
 
 /// A toggle button that shows active state.
 #[component]
-pub fn ToggleButton(
-    label: String,
-    active: bool,
-    onclick: EventHandler<()>,
-) -> Element {
+pub fn ToggleButton(label: String, active: bool, onclick: EventHandler<()>) -> Element {
     rsx! {
         button {
             class: if active { "btn toggle-btn active" } else { "btn toggle-btn" },

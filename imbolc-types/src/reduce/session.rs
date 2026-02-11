@@ -39,7 +39,8 @@ pub(super) fn reduce(
         }
         SessionAction::ImportVstPlugin(ref path, kind) => {
             use crate::state::vst::VstPlugin;
-            let name = path.file_stem()
+            let name = path
+                .file_stem()
                 .map(|s| s.to_string_lossy().to_string())
                 .unwrap_or_else(|| "VST Plugin".to_string());
             let plugin = VstPlugin {

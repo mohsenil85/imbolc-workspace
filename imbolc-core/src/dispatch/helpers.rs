@@ -19,7 +19,10 @@ pub fn maybe_record_automation(
 }
 
 /// Set bus mixer params directly if audio is running.
-pub fn apply_bus_update(audio: &mut imbolc_audio::AudioHandle, update: Option<(imbolc_types::BusId, f32, bool, f32)>) {
+pub fn apply_bus_update(
+    audio: &mut imbolc_audio::AudioHandle,
+    update: Option<(imbolc_types::BusId, f32, bool, f32)>,
+) {
     if let Some((bus_id, level, mute, pan)) = update {
         if audio.is_running() {
             let _ = audio.set_bus_mixer_params(bus_id, level, mute, pan);
@@ -28,7 +31,10 @@ pub fn apply_bus_update(audio: &mut imbolc_audio::AudioHandle, update: Option<(i
 }
 
 /// Set layer group mixer params directly if audio is running.
-pub fn apply_layer_group_update(audio: &mut imbolc_audio::AudioHandle, update: Option<(u32, f32, bool, f32)>) {
+pub fn apply_layer_group_update(
+    audio: &mut imbolc_audio::AudioHandle,
+    update: Option<(u32, f32, bool, f32)>,
+) {
     if let Some((group_id, level, mute, pan)) = update {
         if audio.is_running() {
             let _ = audio.set_layer_group_mixer_params(group_id, level, mute, pan);
@@ -55,16 +61,16 @@ pub fn compute_waveform_peaks(path: &str) -> (Vec<f32>, f32) {
     let samples: Vec<f32> = match spec.sample_format {
         hound::SampleFormat::Int => {
             let max_val = (1i64 << (spec.bits_per_sample - 1)) as f32;
-            reader.into_samples::<i32>()
+            reader
+                .into_samples::<i32>()
                 .filter_map(|s| s.ok())
                 .map(|s| s as f32 / max_val)
                 .collect()
         }
-        hound::SampleFormat::Float => {
-            reader.into_samples::<f32>()
-                .filter_map(|s| s.ok())
-                .collect()
-        }
+        hound::SampleFormat::Float => reader
+            .into_samples::<f32>()
+            .filter_map(|s| s.ok())
+            .collect(),
     };
 
     for chunk in samples.chunks(samples_per_peak) {

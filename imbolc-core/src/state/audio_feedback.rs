@@ -16,6 +16,18 @@ pub struct AudioFeedbackState {
     pub bpm: f32,
     /// Audio-owned playing state
     pub playing: bool,
+    /// Audio thread average tick duration in microseconds (1s window)
+    pub telemetry_avg_tick_us: u32,
+    /// Audio thread max tick duration in microseconds (1s window)
+    pub telemetry_max_tick_us: u32,
+    /// Audio thread p95 tick duration in microseconds (1s window)
+    pub telemetry_p95_tick_us: u32,
+    /// Cumulative tick budget overruns
+    pub telemetry_overruns: u64,
+    /// Dynamic scheduling lookahead in milliseconds
+    pub telemetry_lookahead_ms: f32,
+    /// Current OSC sender queue depth
+    pub telemetry_osc_queue_depth: u16,
 }
 
 impl Default for AudioFeedbackState {
@@ -26,6 +38,12 @@ impl Default for AudioFeedbackState {
             playhead: 0,
             bpm: 120.0,
             playing: false,
+            telemetry_avg_tick_us: 0,
+            telemetry_max_tick_us: 0,
+            telemetry_p95_tick_us: 0,
+            telemetry_overruns: 0,
+            telemetry_lookahead_ms: 0.0,
+            telemetry_osc_queue_depth: 0,
         }
     }
 }

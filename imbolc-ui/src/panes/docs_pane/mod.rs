@@ -318,10 +318,7 @@ impl Pane for DocsPane {
                 DocsMode::Browser => "[Tab] Contextual  [Enter] Select  [Esc] Close",
             };
             let footer_area = Rect::new(inner.x + 1, footer_y, inner.width.saturating_sub(2), 1);
-            buf.draw_line(
-                footer_area,
-                &[(footer, Style::new().fg(Color::DARK_GRAY))],
-            );
+            buf.draw_line(footer_area, &[(footer, Style::new().fg(Color::DARK_GRAY))]);
         }
     }
 
@@ -351,8 +348,7 @@ impl DocsPane {
                     break;
                 }
 
-                let line_area =
-                    Rect::new(inner.x + 1, y, inner.width.saturating_sub(2), 1);
+                let line_area = Rect::new(inner.x + 1, y, inner.width.saturating_sub(2), 1);
                 self.render_line(line, line_area, buf);
             }
 
@@ -372,10 +368,7 @@ impl DocsPane {
                         indicator.len() as u16 + 1,
                         1,
                     );
-                    buf.draw_line(
-                        ind_area,
-                        &[(&indicator, Style::new().fg(Color::DARK_GRAY))],
-                    );
+                    buf.draw_line(ind_area, &[(&indicator, Style::new().fg(Color::DARK_GRAY))]);
                 }
             }
         } else {
@@ -392,7 +385,12 @@ impl DocsPane {
         let content_width = inner.width.saturating_sub(topic_width + 1);
 
         // Draw topic list
-        let topic_area = Rect::new(inner.x, inner.y + 1, topic_width, inner.height.saturating_sub(3));
+        let topic_area = Rect::new(
+            inner.x,
+            inner.y + 1,
+            topic_width,
+            inner.height.saturating_sub(3),
+        );
         let visible_topics = topic_area.height as usize;
 
         // Calculate scroll for topic list
@@ -416,10 +414,7 @@ impl DocsPane {
 
             let is_selected = topic_scroll + i == self.selected_topic;
             let style = if is_selected {
-                Style::new()
-                    .fg(Color::WHITE)
-                    .bg(Color::SELECTION_BG)
-                    .bold()
+                Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG).bold()
             } else {
                 Style::new().fg(Color::GRAY)
             };

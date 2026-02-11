@@ -5,7 +5,8 @@ use crate::state::AppState;
 use crate::ui::action_id::{ActionId, SampleChopperActionId};
 use crate::ui::layout_helpers::center_rect;
 use crate::ui::{
-    Rect, RenderBuf, Action, ChopperAction, Color, FileSelectAction, InputEvent, Keymap, NavAction, Pane, Style,
+    Action, ChopperAction, Color, FileSelectAction, InputEvent, Keymap, NavAction, Pane, Rect,
+    RenderBuf, Style,
 };
 
 pub struct SampleChopperPane {
@@ -25,12 +26,20 @@ impl SampleChopperPane {
         }
     }
 
-    fn selected_drum_sequencer<'a>(&self, state: &'a AppState) -> Option<&'a crate::state::drum_sequencer::DrumSequencerState> {
-        state.instruments.selected_instrument()
+    fn selected_drum_sequencer<'a>(
+        &self,
+        state: &'a AppState,
+    ) -> Option<&'a crate::state::drum_sequencer::DrumSequencerState> {
+        state
+            .instruments
+            .selected_instrument()
             .and_then(|i| i.drum_sequencer())
     }
 
-    fn get_chopper_state<'a>(&self, state: &'a AppState) -> Option<&'a crate::state::drum_sequencer::ChopperState> {
+    fn get_chopper_state<'a>(
+        &self,
+        state: &'a AppState,
+    ) -> Option<&'a crate::state::drum_sequencer::ChopperState> {
         self.selected_drum_sequencer(state)
             .and_then(|d| d.chopper.as_ref())
     }
@@ -70,14 +79,24 @@ impl Pane for SampleChopperPane {
                 self.cursor_pos = (self.cursor_pos + 0.01).min(1.0);
                 Action::Chopper(ChopperAction::MoveCursor(1))
             }
-            ActionId::SampleChopper(SampleChopperActionId::NextSlice) => Action::Chopper(ChopperAction::SelectSlice(1)),
-            ActionId::SampleChopper(SampleChopperActionId::PrevSlice) => Action::Chopper(ChopperAction::SelectSlice(-1)),
-            ActionId::SampleChopper(SampleChopperActionId::NudgeStart) => Action::Chopper(ChopperAction::NudgeSliceStart(-0.005)),
-            ActionId::SampleChopper(SampleChopperActionId::NudgeEnd) => Action::Chopper(ChopperAction::NudgeSliceEnd(0.005)),
+            ActionId::SampleChopper(SampleChopperActionId::NextSlice) => {
+                Action::Chopper(ChopperAction::SelectSlice(1))
+            }
+            ActionId::SampleChopper(SampleChopperActionId::PrevSlice) => {
+                Action::Chopper(ChopperAction::SelectSlice(-1))
+            }
+            ActionId::SampleChopper(SampleChopperActionId::NudgeStart) => {
+                Action::Chopper(ChopperAction::NudgeSliceStart(-0.005))
+            }
+            ActionId::SampleChopper(SampleChopperActionId::NudgeEnd) => {
+                Action::Chopper(ChopperAction::NudgeSliceEnd(0.005))
+            }
             ActionId::SampleChopper(SampleChopperActionId::Chop) => {
                 Action::Chopper(ChopperAction::AddSlice(self.cursor_pos))
             }
-            ActionId::SampleChopper(SampleChopperActionId::Delete) => Action::Chopper(ChopperAction::RemoveSlice),
+            ActionId::SampleChopper(SampleChopperActionId::Delete) => {
+                Action::Chopper(ChopperAction::RemoveSlice)
+            }
             ActionId::SampleChopper(SampleChopperActionId::AutoSlice) => {
                 let n = self.auto_slice_n;
                 self.auto_slice_n = match n {
@@ -88,12 +107,20 @@ impl Pane for SampleChopperPane {
                 };
                 Action::Chopper(ChopperAction::AutoSlice(n))
             }
-            ActionId::SampleChopper(SampleChopperActionId::Commit) => Action::Chopper(ChopperAction::CommitAll),
-            ActionId::SampleChopper(SampleChopperActionId::LoadSample) => Action::Chopper(ChopperAction::LoadSample),
-            ActionId::SampleChopper(SampleChopperActionId::Preview) => Action::Chopper(ChopperAction::PreviewSlice),
+            ActionId::SampleChopper(SampleChopperActionId::Commit) => {
+                Action::Chopper(ChopperAction::CommitAll)
+            }
+            ActionId::SampleChopper(SampleChopperActionId::LoadSample) => {
+                Action::Chopper(ChopperAction::LoadSample)
+            }
+            ActionId::SampleChopper(SampleChopperActionId::Preview) => {
+                Action::Chopper(ChopperAction::PreviewSlice)
+            }
             ActionId::SampleChopper(SampleChopperActionId::Back) => Action::Nav(NavAction::PopPane),
             ActionId::SampleChopper(SampleChopperActionId::AssignToPad(pad_num)) => {
-                Action::Chopper(ChopperAction::AssignToPad(pad_num.saturating_sub(1) as usize))
+                Action::Chopper(ChopperAction::AssignToPad(
+                    pad_num.saturating_sub(1) as usize
+                ))
             }
             _ => Action::None,
         }
@@ -115,7 +142,10 @@ impl Pane for SampleChopperPane {
             let inner = buf.draw_block(rect, " Sample Chopper ", border_style, border_style);
             buf.draw_line(
                 Rect::new(inner.x + 1, inner.y + 1, inner.width.saturating_sub(2), 1),
-                &[("No drum machine instrument selected.", Style::new().fg(Color::DARK_GRAY))],
+                &[(
+                    "No drum machine instrument selected.",
+                    Style::new().fg(Color::DARK_GRAY),
+                )],
             );
             return;
         }
@@ -139,18 +169,35 @@ impl Pane for SampleChopperPane {
         let content_y = rect.y + 2;
 
         // Header info
-        let filename = chopper.path.as_ref()
-            .map(|p| std::path::Path::new(p).file_name().unwrap_or_default().to_string_lossy().to_string())
+        let filename = chopper
+            .path
+            .as_ref()
+            .map(|p| {
+                std::path::Path::new(p)
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .to_string()
+            })
             .unwrap_or_else(|| "No Sample".to_string());
         buf.draw_line(
             Rect::new(content_x, content_y, rect.width.saturating_sub(4), 1),
             &[(&filename, Style::new().fg(Color::CYAN).bold())],
         );
 
-        let info = format!("{:.1}s   {} slices", chopper.duration_secs, chopper.slices.len());
+        let info = format!(
+            "{:.1}s   {} slices",
+            chopper.duration_secs,
+            chopper.slices.len()
+        );
         let info_x = rect.x + rect.width - 2 - info.len() as u16;
         buf.draw_line(
-            Rect::new(info_x, content_y, rect.width.saturating_sub(info_x - rect.x), 1),
+            Rect::new(
+                info_x,
+                content_y,
+                rect.width.saturating_sub(info_x - rect.x),
+                1,
+            ),
             &[(&info, Style::new().fg(Color::DARK_GRAY))],
         );
 
@@ -203,7 +250,9 @@ impl Pane for SampleChopperPane {
             // Highlight selected slice
             if i == chopper.selected_slice {
                 for x in start_x..end_x {
-                    if x >= wave_width as u16 { break; }
+                    if x >= wave_width as u16 {
+                        break;
+                    }
                     buf.set_cell(content_x + x, slice_y_end + 1, ' ', sel_bg_style);
                 }
                 let label = format!("{}", i + 1);
@@ -228,12 +277,19 @@ impl Pane for SampleChopperPane {
         for y in slice_y_start..=slice_y_end {
             buf.set_cell(content_x + cursor_screen_x, y, '┆', yellow_style);
         }
-        buf.set_cell(content_x + cursor_screen_x, slice_y_end + 2, '▲', yellow_style);
+        buf.set_cell(
+            content_x + cursor_screen_x,
+            slice_y_end + 2,
+            '▲',
+            yellow_style,
+        );
 
         // List slices
         let list_y = slice_y_end + 4;
         for i in 0..8 {
-            if i >= chopper.slices.len() { break; }
+            if i >= chopper.slices.len() {
+                break;
+            }
             let slice = &chopper.slices[i];
             let y = list_y + i as u16;
 
@@ -242,9 +298,11 @@ impl Pane for SampleChopperPane {
             }
 
             let text = format!("{:<2} {:.3}-{:.3}", i + 1, slice.start, slice.end);
-            let style = Style::new().fg(
-                if i == chopper.selected_slice { Color::WHITE } else { Color::GRAY }
-            );
+            let style = Style::new().fg(if i == chopper.selected_slice {
+                Color::WHITE
+            } else {
+                Color::GRAY
+            });
             buf.draw_line(
                 Rect::new(content_x + 2, y, text.len() as u16, 1),
                 &[(&text, style)],
@@ -254,9 +312,10 @@ impl Pane for SampleChopperPane {
             if let Some(inst) = state.instruments.selected_instrument() {
                 if let Some(ds) = inst.drum_sequencer() {
                     for (pad_idx, pad) in ds.pads.iter().enumerate() {
-                        if pad.buffer_id == chopper.buffer_id &&
-                           (pad.slice_start - slice.start).abs() < 0.001 &&
-                           (pad.slice_end - slice.end).abs() < 0.001 {
+                        if pad.buffer_id == chopper.buffer_id
+                            && (pad.slice_start - slice.start).abs() < 0.001
+                            && (pad.slice_end - slice.end).abs() < 0.001
+                        {
                             let pad_label = format!("→ Pad {}", pad_idx + 1);
                             buf.draw_line(
                                 Rect::new(content_x + 25, y, pad_label.len() as u16, 1),
@@ -267,13 +326,11 @@ impl Pane for SampleChopperPane {
                 }
             }
         }
-
     }
 
     fn keymap(&self) -> &Keymap {
         &self.keymap
     }
-
 
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
@@ -281,7 +338,8 @@ impl Pane for SampleChopperPane {
 
     fn on_enter(&mut self, state: &AppState) {
         if self.should_show_file_browser(state) {
-            self.file_browser.open_for(FileSelectAction::LoadChopperSample, None);
+            self.file_browser
+                .open_for(FileSelectAction::LoadChopperSample, None);
         }
     }
 }

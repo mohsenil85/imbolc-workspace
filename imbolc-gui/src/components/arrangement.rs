@@ -28,9 +28,9 @@ pub fn Arrangement() -> Element {
             .placements
             .iter()
             .map(|p| {
-                let length = p.length_override.unwrap_or_else(|| {
-                    clip_lengths.get(&p.clip_id).copied().unwrap_or(480)
-                });
+                let length = p
+                    .length_override
+                    .unwrap_or_else(|| clip_lengths.get(&p.clip_id).copied().unwrap_or(480));
                 (p.id, p.instrument_id, p.clip_id, p.start_tick, length)
             })
             .collect();

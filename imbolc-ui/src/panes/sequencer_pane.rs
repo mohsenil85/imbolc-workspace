@@ -2,9 +2,12 @@ use std::any::Any;
 
 use crate::state::drum_sequencer::NUM_PADS;
 use crate::state::AppState;
-use crate::ui::layout_helpers::center_rect;
-use crate::ui::{Rect, RenderBuf, Action, Color, InputEvent, Keymap, MouseEvent, MouseEventKind, MouseButton, NavAction, Pane, PaneId, SequencerAction, Style};
 use crate::ui::action_id::{ActionId, SequencerActionId};
+use crate::ui::layout_helpers::center_rect;
+use crate::ui::{
+    Action, Color, InputEvent, Keymap, MouseButton, MouseEvent, MouseEventKind, NavAction, Pane,
+    PaneId, Rect, RenderBuf, SequencerAction, Style,
+};
 
 pub struct SequencerPane {
     keymap: Keymap,
@@ -42,7 +45,12 @@ impl SequencerPane {
             };
             (p0, p1, s0, s1)
         } else {
-            (self.cursor_pad, self.cursor_pad, self.cursor_step, self.cursor_step)
+            (
+                self.cursor_pad,
+                self.cursor_pad,
+                self.cursor_step,
+                self.cursor_step,
+            )
         }
     }
 
@@ -51,7 +59,6 @@ impl SequencerPane {
         let available = (box_width as usize).saturating_sub(15);
         available / 3
     }
-
 }
 
 impl Default for SequencerPane {
@@ -73,31 +80,17 @@ impl Pane for SequencerPane {
         let pattern_length = seq.pattern().length;
 
         match action {
-            ActionId::Sequencer(SequencerActionId::VelUp) => {
-                Action::Sequencer(SequencerAction::AdjustVelocity(
-                    self.cursor_pad,
-                    self.cursor_step,
-                    10,
-                ))
-            }
-            ActionId::Sequencer(SequencerActionId::VelDown) => {
-                Action::Sequencer(SequencerAction::AdjustVelocity(
-                    self.cursor_pad,
-                    self.cursor_step,
-                    -10,
-                ))
-            }
+            ActionId::Sequencer(SequencerActionId::VelUp) => Action::Sequencer(
+                SequencerAction::AdjustVelocity(self.cursor_pad, self.cursor_step, 10),
+            ),
+            ActionId::Sequencer(SequencerActionId::VelDown) => Action::Sequencer(
+                SequencerAction::AdjustVelocity(self.cursor_pad, self.cursor_step, -10),
+            ),
             ActionId::Sequencer(SequencerActionId::PadLevelDown) => {
-                Action::Sequencer(SequencerAction::AdjustPadLevel(
-                    self.cursor_pad,
-                    -0.05,
-                ))
+                Action::Sequencer(SequencerAction::AdjustPadLevel(self.cursor_pad, -0.05))
             }
             ActionId::Sequencer(SequencerActionId::PadLevelUp) => {
-                Action::Sequencer(SequencerAction::AdjustPadLevel(
-                    self.cursor_pad,
-                    0.05,
-                ))
+                Action::Sequencer(SequencerAction::AdjustPadLevel(self.cursor_pad, 0.05))
             }
             ActionId::Sequencer(SequencerActionId::Up) => {
                 self.selection_anchor = None;
@@ -147,27 +140,54 @@ impl Pane for SequencerPane {
                 self.cursor_step = (self.cursor_step + 1).min(pattern_length - 1);
                 Action::None
             }
-            ActionId::Sequencer(SequencerActionId::Toggle) => Action::Sequencer(SequencerAction::ToggleStep(
-                self.cursor_pad,
-                self.cursor_step,
-            )),
-            ActionId::Sequencer(SequencerActionId::PlayStop) => Action::Sequencer(SequencerAction::PlayStop),
+            ActionId::Sequencer(SequencerActionId::Toggle) => Action::Sequencer(
+                SequencerAction::ToggleStep(self.cursor_pad, self.cursor_step),
+            ),
+            ActionId::Sequencer(SequencerActionId::PlayStop) => {
+                Action::Sequencer(SequencerAction::PlayStop)
+            }
             ActionId::Sequencer(SequencerActionId::LoadSample) => {
                 Action::Sequencer(SequencerAction::LoadSample(self.cursor_pad))
             }
-            ActionId::Sequencer(SequencerActionId::Chopper) => Action::Nav(NavAction::PushPane(PaneId::SampleChopper)),
-            ActionId::Sequencer(SequencerActionId::ClearPad) => Action::Sequencer(SequencerAction::ClearPad(self.cursor_pad)),
-            ActionId::Sequencer(SequencerActionId::ClearPattern) => Action::Sequencer(SequencerAction::ClearPattern),
-            ActionId::Sequencer(SequencerActionId::PrevPattern) => Action::Sequencer(SequencerAction::PrevPattern),
-            ActionId::Sequencer(SequencerActionId::NextPattern) => Action::Sequencer(SequencerAction::NextPattern),
-            ActionId::Sequencer(SequencerActionId::CycleLength) => Action::Sequencer(SequencerAction::CyclePatternLength),
-            ActionId::Sequencer(SequencerActionId::ToggleReverse) => Action::Sequencer(SequencerAction::ToggleReverse(self.cursor_pad)),
-            ActionId::Sequencer(SequencerActionId::PitchUp) => Action::Sequencer(SequencerAction::AdjustPadPitch(self.cursor_pad, 1)),
-            ActionId::Sequencer(SequencerActionId::PitchDown) => Action::Sequencer(SequencerAction::AdjustPadPitch(self.cursor_pad, -1)),
-            ActionId::Sequencer(SequencerActionId::PitchUpOctave) => Action::Sequencer(SequencerAction::AdjustPadPitch(self.cursor_pad, 12)),
-            ActionId::Sequencer(SequencerActionId::PitchDownOctave) => Action::Sequencer(SequencerAction::AdjustPadPitch(self.cursor_pad, -12)),
-            ActionId::Sequencer(SequencerActionId::StepPitchUp) => Action::Sequencer(SequencerAction::AdjustStepPitch(self.cursor_pad, self.cursor_step, 1)),
-            ActionId::Sequencer(SequencerActionId::StepPitchDown) => Action::Sequencer(SequencerAction::AdjustStepPitch(self.cursor_pad, self.cursor_step, -1)),
+            ActionId::Sequencer(SequencerActionId::Chopper) => {
+                Action::Nav(NavAction::PushPane(PaneId::SampleChopper))
+            }
+            ActionId::Sequencer(SequencerActionId::ClearPad) => {
+                Action::Sequencer(SequencerAction::ClearPad(self.cursor_pad))
+            }
+            ActionId::Sequencer(SequencerActionId::ClearPattern) => {
+                Action::Sequencer(SequencerAction::ClearPattern)
+            }
+            ActionId::Sequencer(SequencerActionId::PrevPattern) => {
+                Action::Sequencer(SequencerAction::PrevPattern)
+            }
+            ActionId::Sequencer(SequencerActionId::NextPattern) => {
+                Action::Sequencer(SequencerAction::NextPattern)
+            }
+            ActionId::Sequencer(SequencerActionId::CycleLength) => {
+                Action::Sequencer(SequencerAction::CyclePatternLength)
+            }
+            ActionId::Sequencer(SequencerActionId::ToggleReverse) => {
+                Action::Sequencer(SequencerAction::ToggleReverse(self.cursor_pad))
+            }
+            ActionId::Sequencer(SequencerActionId::PitchUp) => {
+                Action::Sequencer(SequencerAction::AdjustPadPitch(self.cursor_pad, 1))
+            }
+            ActionId::Sequencer(SequencerActionId::PitchDown) => {
+                Action::Sequencer(SequencerAction::AdjustPadPitch(self.cursor_pad, -1))
+            }
+            ActionId::Sequencer(SequencerActionId::PitchUpOctave) => {
+                Action::Sequencer(SequencerAction::AdjustPadPitch(self.cursor_pad, 12))
+            }
+            ActionId::Sequencer(SequencerActionId::PitchDownOctave) => {
+                Action::Sequencer(SequencerAction::AdjustPadPitch(self.cursor_pad, -12))
+            }
+            ActionId::Sequencer(SequencerActionId::StepPitchUp) => Action::Sequencer(
+                SequencerAction::AdjustStepPitch(self.cursor_pad, self.cursor_step, 1),
+            ),
+            ActionId::Sequencer(SequencerActionId::StepPitchDown) => Action::Sequencer(
+                SequencerAction::AdjustStepPitch(self.cursor_pad, self.cursor_step, -1),
+            ),
             ActionId::Sequencer(SequencerActionId::AssignInstrument) => {
                 Action::Sequencer(SequencerAction::OpenInstrumentPicker(self.cursor_pad))
             }
@@ -179,7 +199,10 @@ impl Pane for SequencerPane {
                 if let Some(seq) = state.instruments.selected_drum_sequencer() {
                     if let Some(pad) = seq.pads.get(self.cursor_pad) {
                         let new_freq = pad.trigger_freq * 2.0_f32.powf(1.0 / 12.0);
-                        return Action::Sequencer(SequencerAction::SetPadTriggerFreq(self.cursor_pad, new_freq));
+                        return Action::Sequencer(SequencerAction::SetPadTriggerFreq(
+                            self.cursor_pad,
+                            new_freq,
+                        ));
                     }
                 }
                 Action::None
@@ -189,7 +212,10 @@ impl Pane for SequencerPane {
                 if let Some(seq) = state.instruments.selected_drum_sequencer() {
                     if let Some(pad) = seq.pads.get(self.cursor_pad) {
                         let new_freq = pad.trigger_freq * 2.0_f32.powf(-1.0 / 12.0);
-                        return Action::Sequencer(SequencerAction::SetPadTriggerFreq(self.cursor_pad, new_freq));
+                        return Action::Sequencer(SequencerAction::SetPadTriggerFreq(
+                            self.cursor_pad,
+                            new_freq,
+                        ));
                     }
                 }
                 Action::None
@@ -214,7 +240,10 @@ impl Pane for SequencerPane {
                 let cy = rect.y + rect.height / 2;
                 buf.draw_line(
                     Rect::new(inner.x + 11, cy, inner.width.saturating_sub(12), 1),
-                    &[("No drum machine instrument selected.", Style::new().fg(Color::DARK_GRAY))],
+                    &[(
+                        "No drum machine instrument selected.",
+                        Style::new().fg(Color::DARK_GRAY),
+                    )],
                 );
                 return;
             }
@@ -243,10 +272,18 @@ impl Pane for SequencerPane {
 
         // Header line
         let pattern_label = match seq.current_pattern {
-            0 => "A", 1 => "B", 2 => "C", 3 => "D", _ => "?",
+            0 => "A",
+            1 => "B",
+            2 => "C",
+            3 => "D",
+            _ => "?",
         };
         let play_label = if seq.playing { "PLAY" } else { "STOP" };
-        let play_color = if seq.playing { Color::GREEN } else { Color::GRAY };
+        let play_color = if seq.playing {
+            Color::GREEN
+        } else {
+            Color::GRAY
+        };
         let grid_label = seq.step_resolution.label();
 
         let pat_str = format!("Pattern {}", pattern_label);
@@ -254,13 +291,16 @@ impl Pane for SequencerPane {
         let grid_str = format!("  Grid: {}", grid_label);
         let bpm_str = format!("  BPM: {:.0}", state.audio.bpm);
         let play_str = format!("  {}", play_label);
-        buf.draw_line(Rect::new(cx, cy, rect.width.saturating_sub(4), 1), &[
-            (&pat_str, Style::new().fg(Color::WHITE).bold()),
-            (&len_str, Style::new().fg(Color::DARK_GRAY)),
-            (&grid_str, Style::new().fg(Color::CYAN)),
-            (&bpm_str, Style::new().fg(Color::DARK_GRAY)),
-            (&play_str, Style::new().fg(play_color).bold()),
-        ]);
+        buf.draw_line(
+            Rect::new(cx, cy, rect.width.saturating_sub(4), 1),
+            &[
+                (&pat_str, Style::new().fg(Color::WHITE).bold()),
+                (&len_str, Style::new().fg(Color::DARK_GRAY)),
+                (&grid_str, Style::new().fg(Color::CYAN)),
+                (&bpm_str, Style::new().fg(Color::DARK_GRAY)),
+                (&play_str, Style::new().fg(play_color).bold()),
+            ],
+        );
 
         // Step number header
         let header_y = cy + 2;
@@ -293,7 +333,11 @@ impl Pane for SequencerPane {
             let label = if pad.name.is_empty() {
                 format!("{:>2} ----   ", pad_idx + 1)
             } else {
-                let name = if pad.name.len() > 6 { &pad.name[..6] } else { &pad.name };
+                let name = if pad.name.len() > 6 {
+                    &pad.name[..6]
+                } else {
+                    &pad.name
+                };
                 format!("{:>2} {:<6} ", pad_idx + 1, name)
             };
 
@@ -316,26 +360,40 @@ impl Pane for SequencerPane {
                 let step = &pattern.steps[pad_idx][step_idx];
                 let is_beat = step_idx.is_multiple_of(4);
 
-                let in_selection = self.selection_anchor.is_some_and(|(anchor_pad, anchor_step)| {
-                    let (p0, p1) = if anchor_pad <= self.cursor_pad {
-                        (anchor_pad, self.cursor_pad)
-                    } else {
-                        (self.cursor_pad, anchor_pad)
-                    };
-                    let (s0, s1) = if anchor_step <= self.cursor_step {
-                        (anchor_step, self.cursor_step)
-                    } else {
-                        (self.cursor_step, anchor_step)
-                    };
-                    pad_idx >= p0 && pad_idx <= p1 && step_idx >= s0 && step_idx <= s1
-                });
+                let in_selection =
+                    self.selection_anchor
+                        .is_some_and(|(anchor_pad, anchor_step)| {
+                            let (p0, p1) = if anchor_pad <= self.cursor_pad {
+                                (anchor_pad, self.cursor_pad)
+                            } else {
+                                (self.cursor_pad, anchor_pad)
+                            };
+                            let (s0, s1) = if anchor_step <= self.cursor_step {
+                                (anchor_step, self.cursor_step)
+                            } else {
+                                (self.cursor_step, anchor_step)
+                            };
+                            pad_idx >= p0 && pad_idx <= p1 && step_idx >= s0 && step_idx <= s1
+                        });
 
                 let (fg, bg) = if is_cursor {
-                    if step.active { (Color::BLACK, Color::WHITE) } else { (Color::WHITE, Color::SELECTION_BG) }
+                    if step.active {
+                        (Color::BLACK, Color::WHITE)
+                    } else {
+                        (Color::WHITE, Color::SELECTION_BG)
+                    }
                 } else if in_selection {
-                    if step.active { (Color::BLACK, Color::new(60, 30, 80)) } else { (Color::WHITE, Color::new(60, 30, 80)) }
+                    if step.active {
+                        (Color::BLACK, Color::new(60, 30, 80))
+                    } else {
+                        (Color::WHITE, Color::new(60, 30, 80))
+                    }
                 } else if is_playhead {
-                    if step.active { (Color::BLACK, Color::GREEN) } else { (Color::GREEN, Color::new(20, 50, 20)) }
+                    if step.active {
+                        (Color::BLACK, Color::GREEN)
+                    } else {
+                        (Color::GREEN, Color::new(20, 50, 20))
+                    }
                 } else if step.active {
                     let intensity = (step.velocity as f32 / 127.0 * 200.0) as u8 + 55;
                     (Color::new(intensity, intensity / 3, 0), Color::BLACK)
@@ -361,10 +419,16 @@ impl Pane for SequencerPane {
             let pads = (self.cursor_pad as i32 - anchor_pad as i32).abs() + 1;
             let steps = (self.cursor_step as i32 - anchor_step as i32).abs() + 1;
             let sel_str = format!("Sel: {} pads x {} steps", pads, steps);
-            buf.draw_line(Rect::new(cx, detail_y, 30, 1), &[(&sel_str, Style::new().fg(Color::ORANGE).bold())]);
+            buf.draw_line(
+                Rect::new(cx, detail_y, 30, 1),
+                &[(&sel_str, Style::new().fg(Color::ORANGE).bold())],
+            );
         } else {
             let pad_label = format!("Pad {:>2}", self.cursor_pad + 1);
-            buf.draw_line(Rect::new(cx, detail_y, 8, 1), &[(&pad_label, Style::new().fg(Color::ORANGE).bold())]);
+            buf.draw_line(
+                Rect::new(cx, detail_y, 8, 1),
+                &[(&pad_label, Style::new().fg(Color::ORANGE).bold())],
+            );
 
             // Display either instrument trigger info or sample name
             let (name_display, name_color) = if pad.is_instrument_trigger() {
@@ -385,7 +449,10 @@ impl Pane for SequencerPane {
             } else {
                 (pad.name.clone(), Color::WHITE)
             };
-            buf.draw_line(Rect::new(cx + 8, detail_y, 22, 1), &[(&name_display, Style::new().fg(name_color))]);
+            buf.draw_line(
+                Rect::new(cx + 8, detail_y, 22, 1),
+                &[(&name_display, Style::new().fg(name_color))],
+            );
         }
 
         // Level bar
@@ -409,13 +476,26 @@ impl Pane for SequencerPane {
         // Reverse + Pitch indicators
         let info_x = bar_x + bar_width as u16 + 2;
         let mut info_parts: Vec<String> = Vec::new();
-        if pad.reverse { info_parts.push("REV".to_string()); }
-        if pad.pitch != 0 { info_parts.push(format!("{:+}st", pad.pitch)); }
+        if pad.reverse {
+            info_parts.push("REV".to_string());
+        }
+        if pad.pitch != 0 {
+            info_parts.push(format!("{:+}st", pad.pitch));
+        }
         let info_str = info_parts.join(" ");
         for (j, ch) in info_str.chars().enumerate() {
-            buf.set_cell(info_x + j as u16, detail_y, ch, Style::new().fg(Color::CYAN));
+            buf.set_cell(
+                info_x + j as u16,
+                detail_y,
+                ch,
+                Style::new().fg(Color::CYAN),
+            );
         }
-        let info_offset = if info_str.is_empty() { 0 } else { info_str.len() as u16 + 1 };
+        let info_offset = if info_str.is_empty() {
+            0
+        } else {
+            info_str.len() as u16 + 1
+        };
 
         // Velocity
         let step = &pattern.steps[self.cursor_pad][self.cursor_step];
@@ -430,13 +510,17 @@ impl Pane for SequencerPane {
 
         // Scroll indicator
         if pattern.length > visible {
-            let scroll_str = format!("{}-{}/{}", view_start + 1, view_start + steps_shown, pattern.length);
+            let scroll_str = format!(
+                "{}-{}/{}",
+                view_start + 1,
+                view_start + steps_shown,
+                pattern.length
+            );
             let scroll_x = rect.x + rect.width - 2 - scroll_str.len() as u16;
             for (j, ch) in scroll_str.chars().enumerate() {
                 buf.set_cell(scroll_x + j as u16, detail_y, ch, dark_gray);
             }
         }
-
     }
 
     fn handle_mouse(&mut self, event: &MouseEvent, area: Rect, state: &AppState) -> Action {
@@ -483,7 +567,11 @@ impl Pane for SequencerPane {
                     }
                 }
                 // Click on pad label to select pad
-                if col >= cx && col < step_col_start && row >= grid_y && row < grid_y + NUM_PADS as u16 {
+                if col >= cx
+                    && col < step_col_start
+                    && row >= grid_y
+                    && row < grid_y + NUM_PADS as u16
+                {
                     let pad_idx = (row - grid_y) as usize;
                     if pad_idx < NUM_PADS {
                         self.cursor_pad = pad_idx;
@@ -526,7 +614,11 @@ mod tests {
     fn no_drum_sequencer_returns_none() {
         let state = AppState::new();
         let mut pane = SequencerPane::new(Keymap::new());
-        let action = pane.handle_action(ActionId::Sequencer(SequencerActionId::Toggle), &dummy_event(), &state);
+        let action = pane.handle_action(
+            ActionId::Sequencer(SequencerActionId::Toggle),
+            &dummy_event(),
+            &state,
+        );
         assert!(matches!(action, Action::None));
     }
 
@@ -539,13 +631,25 @@ mod tests {
         pane.cursor_pad = 0;
         pane.cursor_step = 0;
 
-        pane.handle_action(ActionId::Sequencer(SequencerActionId::Down), &dummy_event(), &state);
+        pane.handle_action(
+            ActionId::Sequencer(SequencerActionId::Down),
+            &dummy_event(),
+            &state,
+        );
         assert_eq!(pane.cursor_pad, 1);
 
-        pane.handle_action(ActionId::Sequencer(SequencerActionId::Right), &dummy_event(), &state);
+        pane.handle_action(
+            ActionId::Sequencer(SequencerActionId::Right),
+            &dummy_event(),
+            &state,
+        );
         assert_eq!(pane.cursor_step, 1);
 
-        let action = pane.handle_action(ActionId::Sequencer(SequencerActionId::Toggle), &dummy_event(), &state);
+        let action = pane.handle_action(
+            ActionId::Sequencer(SequencerActionId::Toggle),
+            &dummy_event(),
+            &state,
+        );
         match action {
             Action::Sequencer(SequencerAction::ToggleStep(pad, step)) => {
                 assert_eq!(pad, pane.cursor_pad);
@@ -561,9 +665,15 @@ mod tests {
         state.add_instrument(SourceType::Kit);
         let mut pane = SequencerPane::new(Keymap::new());
 
-        let action = pane.handle_action(ActionId::Sequencer(SequencerActionId::Chopper), &dummy_event(), &state);
+        let action = pane.handle_action(
+            ActionId::Sequencer(SequencerActionId::Chopper),
+            &dummy_event(),
+            &state,
+        );
         match action {
-            Action::Nav(NavAction::PushPane(id)) => assert_eq!(id, crate::ui::PaneId::SampleChopper),
+            Action::Nav(NavAction::PushPane(id)) => {
+                assert_eq!(id, crate::ui::PaneId::SampleChopper)
+            }
             _ => panic!("Expected PushPane(sample_chopper)"),
         }
     }

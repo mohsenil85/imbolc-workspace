@@ -4,7 +4,10 @@ use std::path::PathBuf;
 use crate::state::AppState;
 use crate::ui::layout_helpers::center_rect;
 use crate::ui::widgets::TextInput;
-use crate::ui::{Rect, RenderBuf, Action, Color, InputEvent, KeyCode, Keymap, NavAction, Pane, SessionAction, Style};
+use crate::ui::{
+    Action, Color, InputEvent, KeyCode, Keymap, NavAction, Pane, Rect, RenderBuf, SessionAction,
+    Style,
+};
 
 pub struct SaveAsPane {
     keymap: Keymap,
@@ -48,7 +51,12 @@ impl Pane for SaveAsPane {
         "save_as"
     }
 
-    fn handle_action(&mut self, _action: crate::ui::action_id::ActionId, _event: &InputEvent, _state: &AppState) -> Action {
+    fn handle_action(
+        &mut self,
+        _action: crate::ui::action_id::ActionId,
+        _event: &InputEvent,
+        _state: &AppState,
+    ) -> Action {
         Action::None
     }
 
@@ -65,9 +73,7 @@ impl Pane for SaveAsPane {
                 let path = dir.join(format!("{}.sqlite", name));
                 Action::Session(SessionAction::SaveAs(path))
             }
-            KeyCode::Escape => {
-                Action::Nav(NavAction::PopPane)
-            }
+            KeyCode::Escape => Action::Nav(NavAction::PopPane),
             _ => {
                 // Delegate text editing to rat-widget TextInput
                 self.text_input.handle_input(event);
@@ -87,19 +93,26 @@ impl Pane for SaveAsPane {
 
         // Label
         let label_area = Rect::new(inner.x + 1, inner.y + 1, inner.width.saturating_sub(2), 1);
-        buf.draw_line(label_area, &[("Project name:", Style::new().fg(Color::DARK_GRAY))]);
+        buf.draw_line(
+            label_area,
+            &[("Project name:", Style::new().fg(Color::DARK_GRAY))],
+        );
 
         // Text input field (rat-widget backed)
         let field_y = inner.y + 2;
         let field_width = inner.width.saturating_sub(2);
-        self.text_input.render_buf(buf.raw_buf(), inner.x + 1, field_y, field_width);
+        self.text_input
+            .render_buf(buf.raw_buf(), inner.x + 1, field_y, field_width);
 
         // Error message
         if let Some(ref error) = self.error {
             let err_y = inner.y + 3;
             if err_y < inner.y + inner.height {
                 let err_area = Rect::new(inner.x + 1, err_y, inner.width.saturating_sub(2), 1);
-                buf.draw_line(err_area, &[(error.as_str(), Style::new().fg(Color::MUTE_COLOR))]);
+                buf.draw_line(
+                    err_area,
+                    &[(error.as_str(), Style::new().fg(Color::MUTE_COLOR))],
+                );
             }
         }
 
@@ -107,7 +120,13 @@ impl Pane for SaveAsPane {
         let footer_y = rect.y + rect.height.saturating_sub(2);
         if footer_y < area.y + area.height {
             let footer_area = Rect::new(inner.x + 1, footer_y, inner.width.saturating_sub(2), 1);
-            buf.draw_line(footer_area, &[("[Enter] Save  [Esc] Cancel", Style::new().fg(Color::DARK_GRAY))]);
+            buf.draw_line(
+                footer_area,
+                &[(
+                    "[Enter] Save  [Esc] Cancel",
+                    Style::new().fg(Color::DARK_GRAY),
+                )],
+            );
         }
     }
 

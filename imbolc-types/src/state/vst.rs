@@ -16,9 +16,9 @@ pub enum VstPluginKind {
 /// Specification for a VST parameter
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VstParamSpec {
-    pub index: u32,      // VST param index (0-based)
+    pub index: u32, // VST param index (0-based)
     pub name: String,
-    pub default: f32,    // 0.0-1.0 normalized
+    pub default: f32,          // 0.0-1.0 normalized
     pub label: Option<String>, // unit string from plugin, e.g. "Hz", "dB"
 }
 
@@ -26,8 +26,8 @@ pub struct VstParamSpec {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VstPlugin {
     pub id: VstPluginId,
-    pub name: String,           // display name (from filename)
-    pub plugin_path: PathBuf,   // path to .vst3/.vst bundle
+    pub name: String,         // display name (from filename)
+    pub plugin_path: PathBuf, // path to .vst3/.vst bundle
     pub kind: VstPluginKind,
     pub params: Vec<VstParamSpec>,
 }
@@ -76,11 +76,15 @@ impl VstPluginRegistry {
     }
 
     pub fn instruments(&self) -> impl Iterator<Item = &VstPlugin> {
-        self.plugins.iter().filter(|p| p.kind == VstPluginKind::Instrument)
+        self.plugins
+            .iter()
+            .filter(|p| p.kind == VstPluginKind::Instrument)
     }
 
     pub fn effects(&self) -> impl Iterator<Item = &VstPlugin> {
-        self.plugins.iter().filter(|p| p.kind == VstPluginKind::Effect)
+        self.plugins
+            .iter()
+            .filter(|p| p.kind == VstPluginKind::Effect)
     }
 
     pub fn get_mut(&mut self, id: VstPluginId) -> Option<&mut VstPlugin> {

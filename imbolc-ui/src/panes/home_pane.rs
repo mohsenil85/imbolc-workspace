@@ -3,7 +3,10 @@ use std::any::Any;
 use crate::state::AppState;
 use crate::ui::action_id::{ActionId, HomeActionId};
 use crate::ui::layout_helpers::center_rect;
-use crate::ui::{Rect, RenderBuf, Action, Color, InputEvent, Keymap, MouseEvent, MouseEventKind, MouseButton, NavAction, Pane, PaneId, Style};
+use crate::ui::{
+    Action, Color, InputEvent, Keymap, MouseButton, MouseEvent, MouseEventKind, NavAction, Pane,
+    PaneId, Rect, RenderBuf, Style,
+};
 
 /// Menu item for the home screen
 struct MenuItem {
@@ -57,7 +60,12 @@ impl Pane for HomePane {
         "home"
     }
 
-    fn handle_action(&mut self, action: ActionId, _event: &InputEvent, _state: &AppState) -> Action {
+    fn handle_action(
+        &mut self,
+        action: ActionId,
+        _event: &InputEvent,
+        _state: &AppState,
+    ) -> Action {
         match action {
             ActionId::Home(HomeActionId::Up) => {
                 if self.selected > 0 {
@@ -71,7 +79,9 @@ impl Pane for HomePane {
                 }
                 Action::None
             }
-            ActionId::Home(HomeActionId::Select) => Action::Nav(NavAction::SwitchPane(self.items[self.selected].pane_id)),
+            ActionId::Home(HomeActionId::Select) => {
+                Action::Nav(NavAction::SwitchPane(self.items[self.selected].pane_id))
+            }
             ActionId::Home(HomeActionId::Quit) => Action::QuitIntent,
             _ => Action::None,
         }
@@ -114,7 +124,6 @@ impl Pane for HomePane {
                 buf.draw_line(desc_area, &[(&desc_text, desc_style)]);
             }
         }
-
     }
 
     fn handle_mouse(&mut self, event: &MouseEvent, area: Rect, _state: &AppState) -> Action {
@@ -137,11 +146,15 @@ impl Pane for HomePane {
                 Action::None
             }
             MouseEventKind::ScrollUp => {
-                if self.selected > 0 { self.selected -= 1; }
+                if self.selected > 0 {
+                    self.selected -= 1;
+                }
                 Action::None
             }
             MouseEventKind::ScrollDown => {
-                if self.selected < self.items.len() - 1 { self.selected += 1; }
+                if self.selected < self.items.len() - 1 {
+                    self.selected += 1;
+                }
                 Action::None
             }
             _ => Action::None,

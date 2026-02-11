@@ -1,15 +1,14 @@
 use crate::state::automation::{AutomationTargetExt, CurveType};
 use crate::state::AppState;
 use crate::ui::layout_helpers::center_rect;
-use crate::ui::{Rect, RenderBuf, Color, Style};
+use crate::ui::{Color, Rect, RenderBuf, Style};
 
 use super::{AutomationFocus, AutomationPane, TargetPickerState};
 
 /// Block characters for mini value graph (8 levels)
 #[allow(dead_code)]
 pub(super) const BLOCK_CHARS: [char; 8] = [
-    '\u{2581}', '\u{2582}', '\u{2583}', '\u{2584}',
-    '\u{2585}', '\u{2586}', '\u{2587}', '\u{2588}',
+    '\u{2581}', '\u{2582}', '\u{2583}', '\u{2584}', '\u{2585}', '\u{2586}', '\u{2587}', '\u{2588}',
 ];
 
 impl AutomationPane {
@@ -44,16 +43,23 @@ impl AutomationPane {
         }
 
         // Header
-        let header = format!("{:<6} {:<16} {:>3} {:>2} {:>4} {:<6}", "Lane", "Target", "En", "R", "Pts", "Curve");
+        let header = format!(
+            "{:<6} {:<16} {:>3} {:>2} {:>4} {:<6}",
+            "Lane", "Target", "En", "R", "Pts", "Curve"
+        );
         let header_style = Style::new().fg(Color::DARK_GRAY);
         for (i, ch) in header.chars().enumerate() {
-            if area.x + 1 + i as u16 >= area.x + area.width { break; }
+            if area.x + 1 + i as u16 >= area.x + area.width {
+                break;
+            }
             buf.set_cell(area.x + 1 + i as u16, area.y, ch, header_style);
         }
 
         for (vi, (global_idx, lane)) in visible_lanes.iter().enumerate() {
             let y = area.y + 1 + vi as u16;
-            if y >= area.y + area.height { break; }
+            if y >= area.y + area.height {
+                break;
+            }
 
             let is_selected = automation.selected_lane == Some(*global_idx);
             let in_focus = self.focus == AutomationFocus::LaneList;
@@ -100,7 +106,9 @@ impl AutomationPane {
             let arm_style = Style::new().fg(Color::MUTE_COLOR).bold();
             for (i, ch) in line_text.chars().enumerate() {
                 let x = area.x + i as u16;
-                if x >= area.x + area.width { break; }
+                if x >= area.x + area.width {
+                    break;
+                }
                 let cell_style = if lane.record_armed && i == arm_pos {
                     arm_style
                 } else {
@@ -164,7 +172,11 @@ impl AutomationPane {
         }
 
         // Draw automation curve
-        let curve_color = if lane.enabled { Color::CYAN } else { Color::DARK_GRAY };
+        let curve_color = if lane.enabled {
+            Color::CYAN
+        } else {
+            Color::DARK_GRAY
+        };
         let curve_style = Style::new().fg(curve_color);
         let point_style = Style::new().fg(Color::WHITE).bg(curve_color);
 
@@ -200,7 +212,8 @@ impl AutomationPane {
             } else {
                 0
             };
-            let cursor_row = ((1.0 - self.cursor_value) * (graph_height.saturating_sub(1)) as f32) as u16;
+            let cursor_row =
+                ((1.0 - self.cursor_value) * (graph_height.saturating_sub(1)) as f32) as u16;
 
             if cursor_col < graph_width {
                 let x = area.x + cursor_col;
@@ -210,9 +223,11 @@ impl AutomationPane {
                     let y = graph_y + row;
                     if let Some(cell) = buf.raw_buf().cell_mut((x, y)) {
                         if row == cursor_row {
-                            cell.set_char('◆').set_style(Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG));
+                            cell.set_char('◆')
+                                .set_style(Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG));
                         } else if cell.symbol() == " " {
-                            cell.set_char('│').set_style(Style::new().fg(Color::new(50, 50, 60)));
+                            cell.set_char('│')
+                                .set_style(Style::new().fg(Color::new(50, 50, 60)));
                         }
                     }
                 }
@@ -242,7 +257,8 @@ impl AutomationPane {
         // Status line
         let status_y = graph_y + graph_height + 1;
         if status_y < area.y + area.height {
-            let curve_at_cursor = lane.point_at(self.cursor_tick)
+            let curve_at_cursor = lane
+                .point_at(self.cursor_tick)
                 .map(|p| match p.curve {
                     CurveType::Linear => "Linear",
                     CurveType::Exponential => "Exp",
@@ -251,13 +267,14 @@ impl AutomationPane {
                 })
                 .unwrap_or("—");
 
-            let rec_indicator = if state.recording.automation_recording { " [REC]" } else { "" };
+            let rec_indicator = if state.recording.automation_recording {
+                " [REC]"
+            } else {
+                ""
+            };
             let status = format!(
                 " Tick:{:<6} Val:{:.2}  Curve:{}{}",
-                self.cursor_tick,
-                self.cursor_value,
-                curve_at_cursor,
-                rec_indicator,
+                self.cursor_tick, self.cursor_value, curve_at_cursor, rec_indicator,
             );
 
             let normal_style = Style::new().fg(Color::GRAY);
@@ -266,18 +283,27 @@ impl AutomationPane {
             // Render status text
             for (i, ch) in status.chars().enumerate() {
                 let x = area.x + i as u16;
-                if x >= area.x + graph_width { break; }
+                if x >= area.x + graph_width {
+                    break;
+                }
                 // Use red style for [REC]
-                let is_rec_section = state.recording.automation_recording
-                    && i >= status.len() - 6;
-                let style = if is_rec_section { rec_style } else { normal_style };
+                let is_rec_section = state.recording.automation_recording && i >= status.len() - 6;
+                let style = if is_rec_section {
+                    rec_style
+                } else {
+                    normal_style
+                };
                 buf.set_cell(x, status_y, ch, style);
             }
         }
     }
 
     pub(super) fn render_target_picker(&self, buf: &mut RenderBuf, area: Rect, state: &AppState) {
-        if let TargetPickerState::Active { ref options, cursor } = self.target_picker {
+        if let TargetPickerState::Active {
+            ref options,
+            cursor,
+        } = self.target_picker
+        {
             let picker_width = 40u16.min(area.width.saturating_sub(4));
             let picker_height = (options.len() as u16 + 2).min(area.height.saturating_sub(2));
             let picker_rect = center_rect(area, picker_width, picker_height);
@@ -308,15 +334,13 @@ impl AutomationPane {
             for (vi, target) in options.iter().enumerate().skip(scroll_offset) {
                 let row = vi - scroll_offset;
                 let y = inner.y + row as u16;
-                if y >= inner.y + inner.height { break; }
+                if y >= inner.y + inner.height {
+                    break;
+                }
 
                 let is_selected = vi == cursor;
                 let display_name = target.name_with_context(inst, vst_registry);
-                let text = format!(
-                    "{} {}",
-                    if is_selected { ">" } else { " " },
-                    display_name
-                );
+                let text = format!("{} {}", if is_selected { ">" } else { " " }, display_name);
                 let style = if is_selected {
                     Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG).bold()
                 } else {
@@ -325,7 +349,9 @@ impl AutomationPane {
 
                 for (j, ch) in text.chars().enumerate() {
                     let x = inner.x + j as u16;
-                    if x >= inner.x + inner.width { break; }
+                    if x >= inner.x + inner.width {
+                        break;
+                    }
                     buf.set_cell(x, y, ch, style);
                 }
                 // Fill remaining for selected

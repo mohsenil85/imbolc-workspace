@@ -119,9 +119,8 @@ impl MidiRecordingState {
     /// Add a CC mapping
     pub fn add_cc_mapping(&mut self, mapping: MidiCcMapping) {
         // Remove existing mapping for same CC/channel
-        self.cc_mappings.retain(|m| {
-            !(m.cc_number == mapping.cc_number && m.channel == mapping.channel)
-        });
+        self.cc_mappings
+            .retain(|m| !(m.cc_number == mapping.cc_number && m.channel == mapping.channel));
         self.cc_mappings.push(mapping);
     }
 
@@ -256,7 +255,10 @@ mod tests {
         let mut state = MidiRecordingState::new();
 
         // Add CC mapping
-        state.add_cc_mapping(MidiCcMapping::new(1, AutomationTarget::filter_cutoff(InstrumentId::new(0))));
+        state.add_cc_mapping(MidiCcMapping::new(
+            1,
+            AutomationTarget::filter_cutoff(InstrumentId::new(0)),
+        ));
         assert!(state.find_cc_mapping(1, 0).is_some());
         assert!(state.find_cc_mapping(2, 0).is_none());
 

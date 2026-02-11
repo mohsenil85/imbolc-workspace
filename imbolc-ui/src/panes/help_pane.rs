@@ -3,7 +3,10 @@ use std::any::Any;
 use crate::state::AppState;
 use crate::ui::action_id::{ActionId, HelpActionId};
 use crate::ui::layout_helpers::center_rect;
-use crate::ui::{Rect, RenderBuf, Action, Color, InputEvent, Keymap, MouseEvent, MouseEventKind, MouseButton, NavAction, Pane, Style};
+use crate::ui::{
+    Action, Color, InputEvent, Keymap, MouseButton, MouseEvent, MouseEventKind, NavAction, Pane,
+    Rect, RenderBuf, Style,
+};
 
 pub struct HelpPane {
     keymap: Keymap,
@@ -54,7 +57,12 @@ impl Pane for HelpPane {
         "help"
     }
 
-    fn handle_action(&mut self, action: ActionId, _event: &InputEvent, _state: &AppState) -> Action {
+    fn handle_action(
+        &mut self,
+        action: ActionId,
+        _event: &InputEvent,
+        _state: &AppState,
+    ) -> Action {
         match action {
             ActionId::Help(HelpActionId::Close) => Action::Nav(NavAction::PopPane),
             ActionId::Help(HelpActionId::Up) => {
@@ -93,7 +101,13 @@ impl Pane for HelpPane {
         let key_style = Style::new().fg(Color::CYAN).bold();
         let desc_style = Style::new().fg(Color::WHITE);
 
-        for (i, (key, desc)) in self.display_keymap.iter().skip(scroll).take(visible_lines).enumerate() {
+        for (i, (key, desc)) in self
+            .display_keymap
+            .iter()
+            .skip(scroll)
+            .take(visible_lines)
+            .enumerate()
+        {
             let y = inner.y + 1 + i as u16;
             if y >= inner.y + inner.height {
                 break;
@@ -104,10 +118,10 @@ impl Pane for HelpPane {
             let key_formatted = format!("{:<12}", key);
 
             let line_area = Rect::new(inner.x + 1, y, inner.width.saturating_sub(1), 1);
-            buf.draw_line(line_area, &[
-                (&key_formatted, key_style),
-                (&desc_truncated, desc_style),
-            ]);
+            buf.draw_line(
+                line_area,
+                &[(&key_formatted, key_style), (&desc_truncated, desc_style)],
+            );
         }
 
         // Scroll indicator
@@ -120,17 +134,19 @@ impl Pane for HelpPane {
                     (scroll + visible_lines).min(self.display_keymap.len()),
                     self.display_keymap.len()
                 );
-                let ind_area = Rect::new(inner.x + 1, indicator_y, inner.width.saturating_sub(1), 1);
+                let ind_area =
+                    Rect::new(inner.x + 1, indicator_y, inner.width.saturating_sub(1), 1);
                 buf.draw_line(ind_area, &[(&indicator, Style::new().fg(Color::DARK_GRAY))]);
             }
         }
-
     }
 
     fn handle_mouse(&mut self, event: &MouseEvent, _area: Rect, _state: &AppState) -> Action {
         match event.kind {
             MouseEventKind::ScrollUp => {
-                if self.scroll > 0 { self.scroll -= 1; }
+                if self.scroll > 0 {
+                    self.scroll -= 1;
+                }
                 Action::None
             }
             MouseEventKind::ScrollDown => {

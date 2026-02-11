@@ -226,8 +226,7 @@ mod tests {
 
     #[test]
     fn test_sample_buffer() {
-        let mut buf =
-            SampleBuffer::new(0, "/path/to/sample.wav".to_string(), "sample".to_string());
+        let mut buf = SampleBuffer::new(0, "/path/to/sample.wav".to_string(), "sample".to_string());
         assert_eq!(buf.duration_secs, 0.0);
 
         buf.set_info(44100, 44100, 2);

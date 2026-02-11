@@ -8,8 +8,8 @@
 use std::path::PathBuf;
 use std::sync::mpsc::Sender;
 
-use imbolc_types::VstTarget;
 use imbolc_types::AutomationTarget;
+use imbolc_types::VstTarget;
 use imbolc_types::{BufferId, BusId, EffectId, InstrumentId};
 
 /// Commands sent from the main thread to the audio engine.
@@ -31,6 +31,7 @@ pub enum AudioCmd {
         output_device: Option<String>,
         buffer_size: u32,
         sample_rate: u32,
+        scsynth_args: String,
         reply: Sender<Result<(), String>>,
     },
     StopServer,
@@ -40,6 +41,7 @@ pub enum AudioCmd {
         server_addr: String,
         buffer_size: u32,
         sample_rate: u32,
+        scsynth_args: String,
     },
     CompileSynthDefs {
         scd_path: PathBuf,

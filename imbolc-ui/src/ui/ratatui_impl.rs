@@ -3,13 +3,17 @@ use std::time::Duration;
 
 use crossterm::{
     event::{
-        self, Event, KeyEvent, KeyEventKind, KeyCode as CrosstermKeyCode, KeyModifiers,
-        MouseEvent as CrosstermMouseEvent, MouseEventKind as CrosstermMouseEventKind,
-        MouseButton as CrosstermMouseButton, EnableMouseCapture, DisableMouseCapture,
-        KeyboardEnhancementFlags, PushKeyboardEnhancementFlags, PopKeyboardEnhancementFlags,
+        self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode as CrosstermKeyCode,
+        KeyEvent, KeyEventKind, KeyModifiers, KeyboardEnhancementFlags,
+        MouseButton as CrosstermMouseButton, MouseEvent as CrosstermMouseEvent,
+        MouseEventKind as CrosstermMouseEventKind, PopKeyboardEnhancementFlags,
+        PushKeyboardEnhancementFlags,
     },
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen, supports_keyboard_enhancement},
+    terminal::{
+        disable_raw_mode, enable_raw_mode, supports_keyboard_enhancement, EnterAlternateScreen,
+        LeaveAlternateScreen,
+    },
 };
 use ratatui::{
     backend::CrosstermBackend,
@@ -20,7 +24,9 @@ use ratatui::{
     Terminal,
 };
 
-use super::{AppEvent, InputEvent, InputSource, KeyCode, Modifiers, MouseButton, MouseEvent, MouseEventKind};
+use super::{
+    AppEvent, InputEvent, InputSource, KeyCode, Modifiers, MouseButton, MouseEvent, MouseEventKind,
+};
 
 /// Ratatui-based terminal backend
 pub struct RatatuiBackend {
@@ -54,13 +60,13 @@ impl RatatuiBackend {
                 io::stdout(),
                 PushKeyboardEnhancementFlags(
                     KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
-                    | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
+                        | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
                 )
             )
             .is_ok()
-            {
-                self.keyboard_enhancement_enabled = true;
-            }
+        {
+            self.keyboard_enhancement_enabled = true;
+        }
 
         self.terminal.clear()?;
         Ok(())
@@ -203,7 +209,12 @@ fn convert_key_event(event: KeyEvent) -> InputEvent {
 
     let is_repeat = event.kind == KeyEventKind::Repeat;
 
-    InputEvent { key, modifiers, timestamp: Instant::now(), is_repeat }
+    InputEvent {
+        key,
+        modifiers,
+        timestamp: Instant::now(),
+        is_repeat,
+    }
 }
 
 fn convert_mouse_button(button: CrosstermMouseButton) -> MouseButton {

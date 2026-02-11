@@ -1,10 +1,62 @@
-use super::{ServerPane, ServerPaneFocus, BufferSize};
+use super::{BufferSize, ServerPane, ServerPaneFocus};
 use crate::state::AppState;
-use crate::ui::action_id::{ActionId, ServerActionId};
+use crate::ui::action_id::{ActionId, ModeActionId, ServerActionId};
 use crate::ui::{Action, InputEvent, KeyCode, ServerAction};
 
 impl ServerPane {
-    pub(super) fn handle_action_impl(&mut self, action: ActionId, _event: &InputEvent, _state: &AppState) -> Action {
+    fn begin_scsynth_args_edit(&mut self) -> Action {
+        self.editing_scsynth_args = true;
+        self.scsynth_args_edit = self.scsynth_args.clone();
+        Action::PushLayer("text_edit")
+    }
+
+    fn finish_scsynth_args_edit(&mut self, apply: bool) -> Action {
+        self.editing_scsynth_args = false;
+        if apply {
+            self.scsynth_args = self.scsynth_args_edit.trim().to_string();
+            self.save_config();
+            if self.server_running {
+                return Action::Server(ServerAction::Restart {
+                    input_device: self.selected_input_device(),
+                    output_device: self.selected_output_device(),
+                    buffer_size: self.selected_buffer_size().as_samples(),
+                    sample_rate: self.sample_rate(),
+                    scsynth_args: self.scsynth_args(),
+                });
+            }
+        }
+        Action::None
+    }
+
+    fn handle_scsynth_args_edit_key(&mut self, event: &InputEvent) {
+        match event.key {
+            KeyCode::Char(c) if !event.modifiers.ctrl && !event.modifiers.alt => {
+                self.scsynth_args_edit.push(c);
+            }
+            KeyCode::Backspace => {
+                self.scsynth_args_edit.pop();
+            }
+            KeyCode::Delete => {
+                self.scsynth_args_edit.clear();
+            }
+            _ => {}
+        }
+    }
+
+    pub(super) fn handle_action_impl(
+        &mut self,
+        action: ActionId,
+        _event: &InputEvent,
+        _state: &AppState,
+    ) -> Action {
+        if self.editing_scsynth_args {
+            return match action {
+                ActionId::Mode(ModeActionId::TextConfirm) => self.finish_scsynth_args_edit(true),
+                ActionId::Mode(ModeActionId::TextCancel) => self.finish_scsynth_args_edit(false),
+                _ => Action::None,
+            };
+        }
+
         let ActionId::Server(action) = action else {
             return Action::None;
         };
@@ -15,6 +67,7 @@ impl ServerPane {
                 output_device: self.selected_output_device(),
                 buffer_size: self.selected_buffer_size().as_samples(),
                 sample_rate: self.sample_rate(),
+                scsynth_args: self.scsynth_args(),
             }),
             ServerActionId::Stop => Action::Server(ServerAction::Stop),
             ServerActionId::Connect => Action::Server(ServerAction::Connect),
@@ -33,6 +86,7 @@ impl ServerPane {
                         output_device: self.selected_output_device(),
                         buffer_size: self.selected_buffer_size().as_samples(),
                         sample_rate: self.sample_rate(),
+                        scsynth_args: self.scsynth_args(),
                     })
                 } else {
                     Action::None
@@ -45,7 +99,16 @@ impl ServerPane {
         }
     }
 
-    pub(super) fn handle_raw_input_impl(&mut self, event: &InputEvent, _state: &AppState) -> Action {
+    pub(super) fn handle_raw_input_impl(
+        &mut self,
+        event: &InputEvent,
+        _state: &AppState,
+    ) -> Action {
+        if self.editing_scsynth_args {
+            self.handle_scsynth_args_edit_key(event);
+            return Action::None;
+        }
+
         match self.focus {
             ServerPaneFocus::OutputDevice => {
                 let count = self.output_devices().len() + 1;
@@ -71,6 +134,7 @@ impl ServerPane {
                                 output_device: self.selected_output_device(),
                                 buffer_size: self.selected_buffer_size().as_samples(),
                                 sample_rate: self.sample_rate(),
+                                scsynth_args: self.scsynth_args(),
                             });
                         } else {
                             self.device_config_dirty = true;
@@ -104,6 +168,7 @@ impl ServerPane {
                                 output_device: self.selected_output_device(),
                                 buffer_size: self.selected_buffer_size().as_samples(),
                                 sample_rate: self.sample_rate(),
+                                scsynth_args: self.scsynth_args(),
                             });
                         } else {
                             self.device_config_dirty = true;
@@ -137,6 +202,7 @@ impl ServerPane {
                                 output_device: self.selected_output_device(),
                                 buffer_size: self.selected_buffer_size().as_samples(),
                                 sample_rate: self.sample_rate(),
+                                scsynth_args: self.scsynth_args(),
                             });
                         } else {
                             self.device_config_dirty = true;
@@ -144,6 +210,11 @@ impl ServerPane {
                         }
                     }
                     _ => {}
+                }
+            }
+            ServerPaneFocus::ScsynthArgs => {
+                if let KeyCode::Enter = event.key {
+                    return self.begin_scsynth_args_edit();
                 }
             }
             ServerPaneFocus::Controls => {}

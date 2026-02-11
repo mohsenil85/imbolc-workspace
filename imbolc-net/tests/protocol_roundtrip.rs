@@ -1,7 +1,9 @@
 //! Serialization roundtrip tests for all protocol message types.
 
 use imbolc_net::protocol::*;
-use imbolc_types::{InstrumentAction, InstrumentId, ServerAction, SessionState, InstrumentState, SourceType};
+use imbolc_types::{
+    InstrumentAction, InstrumentId, InstrumentState, ServerAction, SessionState, SourceType,
+};
 use std::collections::HashMap;
 
 fn roundtrip_client(msg: &ClientMessage) -> ClientMessage {
@@ -26,10 +28,13 @@ fn make_network_state() -> NetworkState {
     let mut instruments = InstrumentState::new();
     instruments.add_instrument(SourceType::Saw);
     let mut ownership = HashMap::new();
-    ownership.insert(InstrumentId::new(0), OwnerInfo {
-        client_id: ClientId::new(1),
-        client_name: "Alice".into(),
-    });
+    ownership.insert(
+        InstrumentId::new(0),
+        OwnerInfo {
+            client_id: ClientId::new(1),
+            client_name: "Alice".into(),
+        },
+    );
     NetworkState {
         session: SessionState::new(),
         instruments,
@@ -44,15 +49,31 @@ fn make_network_state() -> NetworkState {
 fn test_roundtrip_client_hello() {
     let msg = ClientMessage::Hello {
         client_name: "Alice".into(),
-        requested_instruments: vec![InstrumentId::new(0), InstrumentId::new(1), InstrumentId::new(2)],
+        requested_instruments: vec![
+            InstrumentId::new(0),
+            InstrumentId::new(1),
+            InstrumentId::new(2),
+        ],
         request_privilege: true,
         reconnect_token: None,
     };
     let rt = roundtrip_client(&msg);
     match rt {
-        ClientMessage::Hello { client_name, requested_instruments, request_privilege, reconnect_token } => {
+        ClientMessage::Hello {
+            client_name,
+            requested_instruments,
+            request_privilege,
+            reconnect_token,
+        } => {
             assert_eq!(client_name, "Alice");
-            assert_eq!(requested_instruments, vec![InstrumentId::new(0), InstrumentId::new(1), InstrumentId::new(2)]);
+            assert_eq!(
+                requested_instruments,
+                vec![
+                    InstrumentId::new(0),
+                    InstrumentId::new(1),
+                    InstrumentId::new(2)
+                ]
+            );
             assert!(request_privilege);
             assert!(reconnect_token.is_none());
         }
@@ -71,7 +92,9 @@ fn test_roundtrip_client_hello_with_token() {
     };
     let rt = roundtrip_client(&msg);
     match rt {
-        ClientMessage::Hello { reconnect_token, .. } => {
+        ClientMessage::Hello {
+            reconnect_token, ..
+        } => {
             assert_eq!(reconnect_token, Some(token));
         }
         _ => panic!("Roundtrip failed"),
@@ -141,9 +164,18 @@ fn test_roundtrip_server_welcome() {
     };
     let rt = roundtrip_server(&msg);
     match rt {
-        ServerMessage::Welcome { client_id, granted_instruments, privilege, session_token, .. } => {
+        ServerMessage::Welcome {
+            client_id,
+            granted_instruments,
+            privilege,
+            session_token,
+            ..
+        } => {
             assert_eq!(client_id, ClientId::new(42));
-            assert_eq!(granted_instruments, vec![InstrumentId::new(0), InstrumentId::new(1)]);
+            assert_eq!(
+                granted_instruments,
+                vec![InstrumentId::new(0), InstrumentId::new(1)]
+            );
             assert_eq!(privilege, PrivilegeLevel::Privileged);
             assert_eq!(session_token, SessionToken("tok-123".into()));
         }
@@ -168,7 +200,11 @@ fn test_roundtrip_server_metering() {
     };
     let rt = roundtrip_server(&msg);
     match rt {
-        ServerMessage::Metering { playhead, bpm, peaks } => {
+        ServerMessage::Metering {
+            playhead,
+            bpm,
+            peaks,
+        } => {
             assert_eq!(playhead, 1024);
             assert!((bpm - 120.5).abs() < 0.01);
             assert!((peaks.0 - 0.8).abs() < 0.01);
@@ -201,7 +237,9 @@ fn test_roundtrip_server_pong() {
 
 #[test]
 fn test_roundtrip_server_error() {
-    let msg = ServerMessage::Error { message: "Something went wrong".into() };
+    let msg = ServerMessage::Error {
+        message: "Something went wrong".into(),
+    };
     let rt = roundtrip_server(&msg);
     match rt {
         ServerMessage::Error { message } => assert_eq!(message, "Something went wrong"),
@@ -211,7 +249,9 @@ fn test_roundtrip_server_error() {
 
 #[test]
 fn test_roundtrip_server_action_rejected() {
-    let msg = ServerMessage::ActionRejected { reason: "No privilege".into() };
+    let msg = ServerMessage::ActionRejected {
+        reason: "No privilege".into(),
+    };
     let rt = roundtrip_server(&msg);
     match rt {
         ServerMessage::ActionRejected { reason } => assert_eq!(reason, "No privilege"),
@@ -228,7 +268,9 @@ fn test_roundtrip_server_privilege_granted() {
 
 #[test]
 fn test_roundtrip_server_privilege_denied() {
-    let msg = ServerMessage::PrivilegeDenied { held_by: "Alice".into() };
+    let msg = ServerMessage::PrivilegeDenied {
+        held_by: "Alice".into(),
+    };
     let rt = roundtrip_server(&msg);
     match rt {
         ServerMessage::PrivilegeDenied { held_by } => assert_eq!(held_by, "Alice"),
@@ -247,14 +289,29 @@ fn test_roundtrip_server_privilege_revoked() {
 fn test_roundtrip_server_reconnect_successful() {
     let msg = ServerMessage::ReconnectSuccessful {
         client_id: ClientId::new(7),
-        restored_instruments: vec![InstrumentId::new(0), InstrumentId::new(2), InstrumentId::new(4)],
+        restored_instruments: vec![
+            InstrumentId::new(0),
+            InstrumentId::new(2),
+            InstrumentId::new(4),
+        ],
         privilege: PrivilegeLevel::Normal,
     };
     let rt = roundtrip_server(&msg);
     match rt {
-        ServerMessage::ReconnectSuccessful { client_id, restored_instruments, privilege } => {
+        ServerMessage::ReconnectSuccessful {
+            client_id,
+            restored_instruments,
+            privilege,
+        } => {
             assert_eq!(client_id, ClientId::new(7));
-            assert_eq!(restored_instruments, vec![InstrumentId::new(0), InstrumentId::new(2), InstrumentId::new(4)]);
+            assert_eq!(
+                restored_instruments,
+                vec![
+                    InstrumentId::new(0),
+                    InstrumentId::new(2),
+                    InstrumentId::new(4)
+                ]
+            );
             assert_eq!(privilege, PrivilegeLevel::Normal);
         }
         _ => panic!("Roundtrip failed"),
@@ -263,7 +320,9 @@ fn test_roundtrip_server_reconnect_successful() {
 
 #[test]
 fn test_roundtrip_server_reconnect_failed() {
-    let msg = ServerMessage::ReconnectFailed { reason: "Token expired".into() };
+    let msg = ServerMessage::ReconnectFailed {
+        reason: "Token expired".into(),
+    };
     let rt = roundtrip_server(&msg);
     match rt {
         ServerMessage::ReconnectFailed { reason } => assert_eq!(reason, "Token expired"),
@@ -328,8 +387,8 @@ fn test_roundtrip_network_action_variants() {
         NetworkAction::Redo,
     ];
     for action in &actions {
-        let bytes = bincode::serde::encode_to_vec(action, bincode::config::standard())
-            .expect("serialize");
+        let bytes =
+            bincode::serde::encode_to_vec(action, bincode::config::standard()).expect("serialize");
         let (rt, _): (NetworkAction, _) =
             bincode::serde::decode_from_slice(&bytes, bincode::config::standard())
                 .expect("deserialize");
@@ -391,7 +450,11 @@ fn test_roundtrip_state_patch_privileged_client_cleared() {
     let bytes = bincode::serde::encode_to_vec(&patch, bincode::config::standard()).unwrap();
     let (rt, _): (StatePatch, _) =
         bincode::serde::decode_from_slice(&bytes, bincode::config::standard()).unwrap();
-    assert_eq!(rt.privileged_client, Some(None), "Some(None) must roundtrip");
+    assert_eq!(
+        rt.privileged_client,
+        Some(None),
+        "Some(None) must roundtrip"
+    );
     assert_eq!(rt.seq, 5);
 }
 
@@ -401,21 +464,58 @@ fn test_roundtrip_state_patch_privileged_client_all_variants() {
     let cfg = bincode::config::standard();
 
     // None = no change
-    let p1 = StatePatch { session: None, piano_roll: None, piano_roll_track_patches: None, arrangement: None, automation: None, automation_lane_patches: None, mixer: None, mixer_bus_patches: None, instruments: None, instrument_patches: None, ownership: None, privileged_client: None, seq: 1 };
+    let p1 = StatePatch {
+        session: None,
+        piano_roll: None,
+        piano_roll_track_patches: None,
+        arrangement: None,
+        automation: None,
+        automation_lane_patches: None,
+        mixer: None,
+        mixer_bus_patches: None,
+        instruments: None,
+        instrument_patches: None,
+        ownership: None,
+        privileged_client: None,
+        seq: 1,
+    };
     let b1 = bincode::serde::encode_to_vec(&p1, cfg).unwrap();
     let (r1, _): (StatePatch, _) = bincode::serde::decode_from_slice(&b1, cfg).unwrap();
     assert_eq!(r1.privileged_client, None);
 
     // Some(None) = changed to nobody
-    let p2 = StatePatch { session: None, piano_roll: None, piano_roll_track_patches: None, arrangement: None, automation: None, automation_lane_patches: None, mixer: None, mixer_bus_patches: None, instruments: None, instrument_patches: None, ownership: None, privileged_client: Some(None), seq: 2 };
+    let p2 = StatePatch {
+        session: None,
+        piano_roll: None,
+        piano_roll_track_patches: None,
+        arrangement: None,
+        automation: None,
+        automation_lane_patches: None,
+        mixer: None,
+        mixer_bus_patches: None,
+        instruments: None,
+        instrument_patches: None,
+        ownership: None,
+        privileged_client: Some(None),
+        seq: 2,
+    };
     let b2 = bincode::serde::encode_to_vec(&p2, cfg).unwrap();
     let (r2, _): (StatePatch, _) = bincode::serde::decode_from_slice(&b2, cfg).unwrap();
     assert_eq!(r2.privileged_client, Some(None));
 
     // Some(Some(...)) = changed to Alice
     let p3 = StatePatch {
-        session: None, piano_roll: None, piano_roll_track_patches: None, arrangement: None, automation: None, automation_lane_patches: None, mixer: None, mixer_bus_patches: None,
-        instruments: None, instrument_patches: None, ownership: None,
+        session: None,
+        piano_roll: None,
+        piano_roll_track_patches: None,
+        arrangement: None,
+        automation: None,
+        automation_lane_patches: None,
+        mixer: None,
+        mixer_bus_patches: None,
+        instruments: None,
+        instrument_patches: None,
+        ownership: None,
         privileged_client: Some(Some((ClientId::new(1), "Alice".into()))),
         seq: 3,
     };
@@ -431,7 +531,10 @@ fn test_roundtrip_state_patch_with_instrument_patches() {
     let mut instruments = InstrumentState::new();
     instruments.add_instrument(SourceType::Saw);
     instruments.add_instrument(SourceType::Saw);
-    let inst = instruments.instrument(InstrumentId::new(0)).unwrap().clone();
+    let inst = instruments
+        .instrument(InstrumentId::new(0))
+        .unwrap()
+        .clone();
 
     let mut patches = HashMap::new();
     patches.insert(InstrumentId::new(0), inst);

@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
+use super::action_id::ActionId;
 use super::keymap::Keymap;
 use super::InputEvent;
-use super::action_id::ActionId;
 
 /// A named layer with a keymap and transparency setting.
 pub struct Layer {
@@ -29,10 +29,7 @@ pub struct LayerStack {
 
 impl LayerStack {
     pub fn new(layers: Vec<Layer>) -> Self {
-        let map: HashMap<&'static str, Layer> = layers
-            .into_iter()
-            .map(|l| (l.name, l))
-            .collect();
+        let map: HashMap<&'static str, Layer> = layers.into_iter().map(|l| (l.name, l)).collect();
         Self {
             layers: map,
             active: Vec::new(),
@@ -102,7 +99,11 @@ impl LayerStack {
             if let Some(layer) = self.layers.get(name) {
                 for binding in layer.keymap.bindings() {
                     if seen.insert(binding.action) {
-                        commands.push((binding.action, binding.description, binding.pattern.display()));
+                        commands.push((
+                            binding.action,
+                            binding.description,
+                            binding.pattern.display(),
+                        ));
                     }
                 }
             }
@@ -198,8 +199,8 @@ mod tests {
             make_layer("pane_a", 'a', true),
             make_layer("pane_b", 'b', true),
         ]);
-        stack.push("global");  // position 0
-        stack.push("pane_a");  // position 1
+        stack.push("global"); // position 0
+        stack.push("pane_a"); // position 1
 
         stack.set_pane_layer("pane_b");
         assert!(stack.has_layer("global"));

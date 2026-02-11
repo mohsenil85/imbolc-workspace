@@ -26,8 +26,10 @@ fn test_automation_lane_interpolation() {
 #[test]
 fn test_automation_lane_step_curve() {
     let mut lane = AutomationLane::new(0, AutomationTarget::level(InstrumentId::new(0)));
-    lane.points.push(AutomationPoint::with_curve(0, 0.0, CurveType::Step));
-    lane.points.push(AutomationPoint::with_curve(100, 1.0, CurveType::Step));
+    lane.points
+        .push(AutomationPoint::with_curve(0, 0.0, CurveType::Step));
+    lane.points
+        .push(AutomationPoint::with_curve(100, 1.0, CurveType::Step));
 
     // Step should hold at previous value
     assert!((lane.value_at(50).unwrap() - 0.0).abs() < 0.01);
@@ -55,7 +57,7 @@ fn test_value_range_mapping() {
     let mut lane = AutomationLane::new(0, AutomationTarget::filter_cutoff(InstrumentId::new(0)));
     // Default range for filter cutoff is 20-20000
 
-    lane.add_point(0, 0.0);   // Maps to 20 Hz
+    lane.add_point(0, 0.0); // Maps to 20 Hz
     lane.add_point(100, 1.0); // Maps to 20000 Hz
 
     let val_at_0 = lane.value_at(0).unwrap();
@@ -67,9 +69,18 @@ fn test_value_range_mapping() {
 
 #[test]
 fn test_new_target_instrument_id() {
-    assert_eq!(AutomationTarget::lfo_rate(InstrumentId::new(5)).instrument_id(), Some(InstrumentId::new(5)));
-    assert_eq!(AutomationTarget::send_level(InstrumentId::new(3), BusId::new(1)).instrument_id(), Some(InstrumentId::new(3)));
-    assert_eq!(AutomationTarget::bus_level(BusId::new(1)).instrument_id(), None);
+    assert_eq!(
+        AutomationTarget::lfo_rate(InstrumentId::new(5)).instrument_id(),
+        Some(InstrumentId::new(5))
+    );
+    assert_eq!(
+        AutomationTarget::send_level(InstrumentId::new(3), BusId::new(1)).instrument_id(),
+        Some(InstrumentId::new(3))
+    );
+    assert_eq!(
+        AutomationTarget::bus_level(BusId::new(1)).instrument_id(),
+        None
+    );
     assert_eq!(AutomationTarget::bpm().instrument_id(), None);
 }
 
@@ -93,7 +104,10 @@ fn test_global_targets_not_removed_by_instrument_cleanup() {
 
     state.remove_lanes_for_instrument(InstrumentId::new(1));
     assert_eq!(state.lanes.len(), 2);
-    assert!(matches!(state.lanes[0].target, AutomationTarget::Global(imbolc_types::GlobalParameter::Bpm)));
+    assert!(matches!(
+        state.lanes[0].target,
+        AutomationTarget::Global(imbolc_types::GlobalParameter::Bpm)
+    ));
     assert!(matches!(state.lanes[1].target, AutomationTarget::Bus(id, _) if id == BusId::new(2)));
 }
 
@@ -109,7 +123,10 @@ fn test_remove_lanes_for_instrument_updates_selection() {
     state.remove_lanes_for_instrument(InstrumentId::new(1));
 
     assert_eq!(state.lanes.len(), 1);
-    assert_eq!(state.lanes[0].target.instrument_id(), Some(InstrumentId::new(2)));
+    assert_eq!(
+        state.lanes[0].target.instrument_id(),
+        Some(InstrumentId::new(2))
+    );
     assert_eq!(state.selected_lane, Some(0));
 }
 
@@ -158,8 +175,10 @@ fn value_at_empty_lane() {
 #[test]
 fn value_at_exponential_curve() {
     let mut lane = AutomationLane::new(0, AutomationTarget::level(InstrumentId::new(0)));
-    lane.points.push(AutomationPoint::with_curve(0, 0.0, CurveType::Exponential));
-    lane.points.push(AutomationPoint::with_curve(100, 1.0, CurveType::Linear));
+    lane.points
+        .push(AutomationPoint::with_curve(0, 0.0, CurveType::Exponential));
+    lane.points
+        .push(AutomationPoint::with_curve(100, 1.0, CurveType::Linear));
     // At midpoint t=0.5, exponential gives t^2 = 0.25 (normalized)
     let val = lane.value_at(50).unwrap();
     // Value should be 0.0 + 0.25 * (1.0 - 0.0) = 0.25, scaled to lane range (0.0-1.0)
@@ -169,8 +188,10 @@ fn value_at_exponential_curve() {
 #[test]
 fn value_at_s_curve() {
     let mut lane = AutomationLane::new(0, AutomationTarget::level(InstrumentId::new(0)));
-    lane.points.push(AutomationPoint::with_curve(0, 0.0, CurveType::SCurve));
-    lane.points.push(AutomationPoint::with_curve(100, 1.0, CurveType::Linear));
+    lane.points
+        .push(AutomationPoint::with_curve(0, 0.0, CurveType::SCurve));
+    lane.points
+        .push(AutomationPoint::with_curve(100, 1.0, CurveType::Linear));
     // At midpoint t=0.5, smoothstep gives 0.5*0.5*(3-2*0.5) = 0.5
     let val = lane.value_at(50).unwrap();
     assert!((val - 0.5).abs() < 0.01);
@@ -191,7 +212,11 @@ fn normalize_value_equal_min_max() {
     // EffectParam has range (0.0, 1.0) so min != max, but let's test the branch
     // by computing manually. If min==max, normalize returns 0.5.
     let (min, max): (f32, f32) = (5.0, 5.0);
-    let result = if max > min { ((0.5 - min) / (max - min)).clamp(0.0, 1.0) } else { 0.5 };
+    let result = if max > min {
+        ((0.5 - min) / (max - min)).clamp(0.0, 1.0)
+    } else {
+        0.5
+    };
     assert!((result - 0.5).abs() < f32::EPSILON);
 }
 
@@ -229,9 +254,9 @@ fn recalculate_next_lane_id() {
 
 #[test]
 fn targets_for_instrument_context_plain_oscillator() {
+    use crate::state::automation::target::AutomationTargetExt;
     use crate::state::instrument::{Instrument, SourceType};
     use crate::state::vst_plugin::VstPluginRegistry;
-    use crate::state::automation::target::AutomationTargetExt;
 
     let inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
     let vst_registry = VstPluginRegistry::new();
@@ -242,9 +267,9 @@ fn targets_for_instrument_context_plain_oscillator() {
 
 #[test]
 fn targets_for_instrument_context_with_effects() {
+    use crate::state::automation::target::AutomationTargetExt;
     use crate::state::instrument::{EffectType, Instrument, SourceType};
     use crate::state::vst_plugin::VstPluginRegistry;
-    use crate::state::automation::target::AutomationTargetExt;
 
     let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
     inst.add_effect(EffectType::Delay); // 3 params: time, feedback, mix
@@ -265,9 +290,9 @@ fn targets_for_instrument_context_with_effects() {
 
 #[test]
 fn targets_for_instrument_context_pitched_sampler() {
+    use crate::state::automation::target::AutomationTargetExt;
     use crate::state::instrument::{Instrument, SourceType};
     use crate::state::vst_plugin::VstPluginRegistry;
-    use crate::state::automation::target::AutomationTargetExt;
 
     let inst = Instrument::new(InstrumentId::new(1), SourceType::PitchedSampler);
     let vst_registry = VstPluginRegistry::new();
@@ -285,9 +310,9 @@ fn targets_for_instrument_context_pitched_sampler() {
 
 #[test]
 fn targets_for_instrument_context_with_eq() {
+    use crate::state::automation::target::AutomationTargetExt;
     use crate::state::instrument::{Instrument, SourceType};
     use crate::state::vst_plugin::VstPluginRegistry;
-    use crate::state::automation::target::AutomationTargetExt;
 
     let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
     inst.toggle_eq(); // adds EQ to processing_chain

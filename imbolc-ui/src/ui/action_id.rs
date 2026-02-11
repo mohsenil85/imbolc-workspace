@@ -842,9 +842,7 @@ pub fn parse_action_id(layer: &str, action: &str) -> Option<ActionId> {
     match layer {
         "global" => GlobalActionId::from_str(action).map(ActionId::Global),
         "instrument" => InstrumentListActionId::from_str(action).map(ActionId::InstrumentList),
-        "instrument_edit" => {
-            InstrumentEditActionId::from_str(action).map(ActionId::InstrumentEdit)
-        }
+        "instrument_edit" => InstrumentEditActionId::from_str(action).map(ActionId::InstrumentEdit),
         "mixer" => MixerActionId::from_str(action).map(ActionId::Mixer),
         "piano_roll" => PianoRollActionId::from_str(action).map(ActionId::PianoRoll),
         "sequencer" => SequencerActionId::from_str(action).map(ActionId::Sequencer),
@@ -855,9 +853,7 @@ pub fn parse_action_id(layer: &str, action: &str) -> Option<ActionId> {
         "docs" => DocsActionId::from_str(action).map(ActionId::Docs),
         "frame_edit" => FrameEditActionId::from_str(action).map(ActionId::FrameEdit),
         "file_browser" => FileBrowserActionId::from_str(action).map(ActionId::FileBrowser),
-        "sample_chopper" => {
-            SampleChopperActionId::from_str(action).map(ActionId::SampleChopper)
-        }
+        "sample_chopper" => SampleChopperActionId::from_str(action).map(ActionId::SampleChopper),
         "automation" => AutomationActionId::from_str(action).map(ActionId::Automation),
         "eq" => EqActionId::from_str(action).map(ActionId::Eq),
         "groove" => GrooveActionId::from_str(action).map(ActionId::Groove),
@@ -867,12 +863,8 @@ pub fn parse_action_id(layer: &str, action: &str) -> Option<ActionId> {
         "waveform" => WaveformActionId::from_str(action).map(ActionId::Waveform),
         "midi_settings" => MidiSettingsActionId::from_str(action).map(ActionId::MidiSettings),
         "confirm" => ConfirmActionId::from_str(action).map(ActionId::Confirm),
-        "project_browser" => {
-            ProjectBrowserActionId::from_str(action).map(ActionId::ProjectBrowser)
-        }
-        "checkpoint_list" => {
-            CheckpointListActionId::from_str(action).map(ActionId::CheckpointList)
-        }
+        "project_browser" => ProjectBrowserActionId::from_str(action).map(ActionId::ProjectBrowser),
+        "checkpoint_list" => CheckpointListActionId::from_str(action).map(ActionId::CheckpointList),
         "piano_mode" | "pad_mode" | "text_edit" | "command_palette" | "pane_switcher" => {
             ModeActionId::from_str(action).map(ActionId::Mode)
         }

@@ -97,13 +97,13 @@ impl Theme {
             success: ThemeColor::new(80, 255, 80),
 
             // Module types
-            osc_color: ThemeColor::new(100, 200, 255),  // Cyan-ish
+            osc_color: ThemeColor::new(100, 200, 255), // Cyan-ish
             filter_color: ThemeColor::new(255, 150, 100), // Orange
-            env_color: ThemeColor::new(150, 255, 150),   // Green
-            lfo_color: ThemeColor::new(255, 100, 255),   // Magenta
-            fx_color: ThemeColor::new(255, 255, 100),    // Yellow
+            env_color: ThemeColor::new(150, 255, 150), // Green
+            lfo_color: ThemeColor::new(255, 100, 255), // Magenta
+            fx_color: ThemeColor::new(255, 255, 100),  // Yellow
             sample_color: ThemeColor::new(100, 255, 200), // Teal
-            midi_color: ThemeColor::new(255, 100, 100),   // Red
+            midi_color: ThemeColor::new(255, 100, 100), // Red
             audio_in_color: ThemeColor::new(200, 100, 255), // Purple
 
             // Meters
@@ -257,9 +257,19 @@ mod tests {
     fn theme_all_colors_non_zero() {
         let theme = Theme::dark();
         // Key semantic colors should have at least one non-zero channel
-        let colors = [theme.error, theme.warning, theme.success, theme.osc_color, theme.filter_color];
+        let colors = [
+            theme.error,
+            theme.warning,
+            theme.success,
+            theme.osc_color,
+            theme.filter_color,
+        ];
         for color in &colors {
-            assert!(color.r > 0 || color.g > 0 || color.b > 0, "Color {:?} is all zeros", color);
+            assert!(
+                color.r > 0 || color.g > 0 || color.b > 0,
+                "Color {:?} is all zeros",
+                color
+            );
         }
     }
 

@@ -1,5 +1,5 @@
-use super::{Color, Rect, RenderBuf, Style};
 use super::status_bar::{StatusBar, StatusLevel};
+use super::{Color, Rect, RenderBuf, Style};
 use crate::audio::ServerStatus;
 use crate::state::AppState;
 
@@ -102,7 +102,10 @@ impl Frame {
         if !Self::is_size_ok(area) {
             let msg = format!(
                 "{}x{} required, got {}x{}",
-                Self::MIN_WIDTH, Self::MIN_HEIGHT, area.width, area.height
+                Self::MIN_WIDTH,
+                Self::MIN_HEIGHT,
+                area.width,
+                area.height
             );
             let x = area.x + area.width.saturating_sub(msg.len() as u16) / 2;
             let y = area.y + area.height / 2;
@@ -122,10 +125,15 @@ impl Frame {
         let dirty_indicator = if state.project.dirty { "*" } else { "" };
         let header = format!(
             " IMBOLC - {}{}  Key: {}  Scale: {}  BPM: {}  {}/{}  Tuning: {}  [Snap: {}] ",
-            self.project_name, dirty_indicator,
-            session.key.name(), session.scale.name(), session.bpm,
-            session.time_signature.0, session.time_signature.1,
-            tuning_str, snap_text,
+            self.project_name,
+            dirty_indicator,
+            session.key.name(),
+            session.scale.name(),
+            session.bpm,
+            session.time_signature.0,
+            session.time_signature.1,
+            tuning_str,
+            snap_text,
         );
         let header_style = Style::new().fg(Color::CYAN).bold();
         buf.draw_line(
@@ -186,7 +194,12 @@ impl Frame {
             if net.is_privileged {
                 let priv_text = " PRIV ";
                 let priv_start = cursor.saturating_sub(priv_text.len() as u16);
-                buf.draw_str(priv_start, area.y, priv_text, Style::new().fg(Color::METER_LOW).bold());
+                buf.draw_str(
+                    priv_start,
+                    area.y,
+                    priv_text,
+                    Style::new().fg(Color::METER_LOW).bold(),
+                );
                 cursor = priv_start;
             }
         }
@@ -194,7 +207,12 @@ impl Frame {
         // Help hint (leftmost right-aligned item)
         let help_hint = " ? ";
         let help_start = cursor.saturating_sub(help_hint.len() as u16);
-        buf.draw_str(help_start, area.y, help_hint, Style::new().fg(Color::DARK_GRAY));
+        buf.draw_str(
+            help_start,
+            area.y,
+            help_hint,
+            Style::new().fg(Color::DARK_GRAY),
+        );
         cursor = help_start;
 
         // Fill gap between header and right-aligned items with border
@@ -241,7 +259,12 @@ impl Frame {
             let x = area.x + 1;
             buf.draw_str(x, bottom_y, &cpu_text, Style::new().fg(cpu_color));
             let x = x + cpu_text.len() as u16;
-            buf.draw_str(x, bottom_y, &audio_lat_text, Style::new().fg(audio_lat_color));
+            buf.draw_str(
+                x,
+                bottom_y,
+                &audio_lat_text,
+                Style::new().fg(audio_lat_color),
+            );
             let x = x + audio_lat_text.len() as u16;
             buf.draw_str(x, bottom_y, &osc_lat_text, Style::new().fg(osc_lat_color));
         }
@@ -324,7 +347,11 @@ impl Frame {
             return;
         }
 
-        let level = if self.master_mute { 0.0 } else { self.peak_display.min(1.0) };
+        let level = if self.master_mute {
+            0.0
+        } else {
+            self.peak_display.min(1.0)
+        };
         let total_sub = meter_height as f32 * 8.0;
         let filled_sub = (level * total_sub) as u16;
 
@@ -350,7 +377,12 @@ impl Frame {
         // Label below meter
         let label_y = meter_top + meter_height;
         if self.master_mute {
-            buf.set_cell(meter_x, label_y, 'M', Style::new().fg(Color::MUTE_COLOR).bold());
+            buf.set_cell(
+                meter_x,
+                label_y,
+                'M',
+                Style::new().fg(Color::MUTE_COLOR).bold(),
+            );
         } else {
             let db = if level <= 0.0 {
                 "-∞".to_string()
@@ -362,5 +394,4 @@ impl Frame {
             buf.draw_str(db_x, label_y, &db, Style::new().fg(Color::DARK_GRAY));
         }
     }
-
 }

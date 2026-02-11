@@ -1,13 +1,13 @@
 use std::any::Any;
 
+use crate::action::{BusAction, LayerGroupAction};
 use crate::state::{AppState, EffectType, EffectTypeExt, VstPluginRegistry};
 use crate::ui::action_id::{ActionId, AddActionId};
 use crate::ui::layout_helpers::center_rect;
 use crate::ui::{
-    Rect, RenderBuf, Action, Color, FileSelectAction, InputEvent, InstrumentAction, Keymap, MouseEvent,
-    MouseEventKind, MouseButton, NavAction, Pane, SessionAction, Style,
+    Action, Color, FileSelectAction, InputEvent, InstrumentAction, Keymap, MouseButton, MouseEvent,
+    MouseEventKind, NavAction, Pane, Rect, RenderBuf, SessionAction, Style,
 };
-use crate::action::{BusAction, LayerGroupAction};
 use imbolc_types::{BusId, VstPluginId};
 
 /// Target for the add-effect modal: which entity receives the new effect.
@@ -144,7 +144,10 @@ impl AddEffectPane {
             self.selected = self.cached_options.len().saturating_sub(1);
         }
         // Ensure selection is not on a separator
-        if matches!(self.cached_options.get(self.selected), Some(AddEffectOption::Separator(_))) {
+        if matches!(
+            self.cached_options.get(self.selected),
+            Some(AddEffectOption::Separator(_))
+        ) {
             self.select_next();
         }
         self.adjust_scroll();
@@ -156,7 +159,10 @@ impl AddEffectPane {
             return;
         }
         let mut next = (self.selected + 1) % len;
-        while matches!(self.cached_options.get(next), Some(AddEffectOption::Separator(_))) {
+        while matches!(
+            self.cached_options.get(next),
+            Some(AddEffectOption::Separator(_))
+        ) {
             next = (next + 1) % len;
         }
         self.selected = next;
@@ -181,9 +187,9 @@ impl AddEffectPane {
                     }
                 }
             },
-            AddEffectOption::ImportVst => {
-                Action::Session(SessionAction::OpenFileBrowser(FileSelectAction::ImportVstEffect))
-            }
+            AddEffectOption::ImportVst => Action::Session(SessionAction::OpenFileBrowser(
+                FileSelectAction::ImportVstEffect,
+            )),
             AddEffectOption::Separator(_) => Action::None,
         }
     }
@@ -193,8 +199,15 @@ impl AddEffectPane {
         if len == 0 {
             return;
         }
-        let mut prev = if self.selected == 0 { len - 1 } else { self.selected - 1 };
-        while matches!(self.cached_options.get(prev), Some(AddEffectOption::Separator(_))) {
+        let mut prev = if self.selected == 0 {
+            len - 1
+        } else {
+            self.selected - 1
+        };
+        while matches!(
+            self.cached_options.get(prev),
+            Some(AddEffectOption::Separator(_))
+        ) {
             prev = if prev == 0 { len - 1 } else { prev - 1 };
         }
         self.selected = prev;
@@ -248,7 +261,10 @@ impl Pane for AddEffectPane {
                     let visual_idx = (row - list_y) as usize;
                     let idx = visual_idx + self.scroll_offset;
                     if idx < self.cached_options.len() {
-                        if matches!(self.cached_options.get(idx), Some(AddEffectOption::Separator(_))) {
+                        if matches!(
+                            self.cached_options.get(idx),
+                            Some(AddEffectOption::Separator(_))
+                        ) {
                             return Action::None;
                         }
                         self.selected = idx;
@@ -283,7 +299,10 @@ impl Pane for AddEffectPane {
         // Title
         buf.draw_line(
             Rect::new(content_x, content_y, inner.width.saturating_sub(2), 1),
-            &[("Select effect type:", Style::new().fg(Color::FX_COLOR).bold())],
+            &[(
+                "Select effect type:",
+                Style::new().fg(Color::FX_COLOR).bold(),
+            )],
         );
 
         let list_y = content_y + 2;
@@ -308,10 +327,19 @@ impl Pane for AddEffectPane {
                 }
                 AddEffectOption::Effect(effect_type) => {
                     if is_selected {
-                        buf.set_cell(content_x, y, '>', Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG).bold());
+                        buf.set_cell(
+                            content_x,
+                            y,
+                            '>',
+                            Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG).bold(),
+                        );
                     }
 
-                    let color = if effect_type.is_vst() { Color::VST_COLOR } else { Color::FX_COLOR };
+                    let color = if effect_type.is_vst() {
+                        Color::VST_COLOR
+                    } else {
+                        Color::FX_COLOR
+                    };
                     let name = effect_type.display_name(vst_registry);
 
                     let name_style = if is_selected {
@@ -335,7 +363,12 @@ impl Pane for AddEffectPane {
                 }
                 AddEffectOption::ImportVst => {
                     if is_selected {
-                        buf.set_cell(content_x, y, '>', Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG).bold());
+                        buf.set_cell(
+                            content_x,
+                            y,
+                            '>',
+                            Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG).bold(),
+                        );
                     }
 
                     let text_style = if is_selected {
@@ -359,7 +392,6 @@ impl Pane for AddEffectPane {
                 }
             }
         }
-
     }
 
     fn keymap(&self) -> &Keymap {

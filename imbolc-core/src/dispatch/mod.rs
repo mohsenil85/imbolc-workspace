@@ -1,6 +1,6 @@
-mod automation;
 mod arrangement;
 mod audio_feedback;
+mod automation;
 mod bus;
 mod helpers;
 mod instrument;
@@ -19,13 +19,15 @@ use std::path::PathBuf;
 use std::sync::mpsc::Sender;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use imbolc_audio::AudioHandle;
-use crate::state::AppState;
-use crate::action::{AudioEffect, ClickAction, DispatchResult, DomainAction, IoFeedback, TunerAction};
+use crate::action::{
+    AudioEffect, ClickAction, DispatchResult, DomainAction, IoFeedback, TunerAction,
+};
 use crate::state::undo::{coalesce_key, is_undoable, undo_scope, UndoScope};
+use crate::state::AppState;
+use imbolc_audio::AudioHandle;
 
-pub use helpers::{compute_waveform_peaks, maybe_record_automation};
 pub use helpers::{apply_bus_update, apply_layer_group_update};
+pub use helpers::{compute_waveform_peaks, maybe_record_automation};
 
 /// Default path for save file
 pub fn default_rack_path() -> PathBuf {
@@ -66,9 +68,16 @@ pub fn dispatch_action(
     // Auto-push undo snapshot for undoable actions (with coalescing for param sweeps)
     if is_undoable(action) {
         let automation_recording = state.recording.automation_recording && state.audio.playing;
-        let scope = undo_scope(action, &state.session, &state.instruments, automation_recording);
+        let scope = undo_scope(
+            action,
+            &state.session,
+            &state.instruments,
+            automation_recording,
+        );
         let key = coalesce_key(action, &state.session, &state.instruments);
-        state.undo_history.push_coalesced(scope, &state.session, &state.instruments, key);
+        state
+            .undo_history
+            .push_coalesced(scope, &state.session, &state.instruments, key);
         state.project.dirty = true;
     }
 
@@ -90,7 +99,10 @@ pub fn dispatch_action(
         DomainAction::Tuner(a) => dispatch_tuner(a, audio),
         DomainAction::AudioFeedback(f) => audio_feedback::dispatch_audio_feedback(f, state, audio),
         DomainAction::Undo => {
-            if let Some(scope) = state.undo_history.undo(&mut state.session, &mut state.instruments) {
+            if let Some(scope) = state
+                .undo_history
+                .undo(&mut state.session, &mut state.instruments)
+            {
                 state.project.dirty = true;
                 let mut r = DispatchResult::none();
                 r.audio_effects = audio_effects_for_undo_scope(scope);
@@ -100,7 +112,10 @@ pub fn dispatch_action(
             }
         }
         DomainAction::Redo => {
-            if let Some(scope) = state.undo_history.redo(&mut state.session, &mut state.instruments) {
+            if let Some(scope) = state
+                .undo_history
+                .redo(&mut state.session, &mut state.instruments)
+            {
                 state.project.dirty = true;
                 let mut r = DispatchResult::none();
                 r.audio_effects = audio_effects_for_undo_scope(scope);
@@ -134,7 +149,11 @@ fn dispatch_tuner(action: &TunerAction, audio: &mut AudioHandle) -> DispatchResu
 }
 
 /// Dispatch click track actions.
-fn dispatch_click(action: &ClickAction, state: &mut AppState, audio: &mut AudioHandle) -> DispatchResult {
+fn dispatch_click(
+    action: &ClickAction,
+    state: &mut AppState,
+    audio: &mut AudioHandle,
+) -> DispatchResult {
     // Delegate pure state mutation to the shared reducer
     imbolc_types::reduce::reduce_action(
         &DomainAction::Click(action.clone()),

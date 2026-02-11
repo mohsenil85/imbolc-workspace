@@ -3,10 +3,10 @@ use std::path::PathBuf;
 
 use serde::Deserialize;
 
+use super::action_id::parse_action_id;
 use super::keymap::{KeyBinding, KeyPattern, Keymap};
 use super::layer::Layer;
 use super::KeyCode;
-use super::action_id::parse_action_id;
 
 /// Raw TOML structure for the v2 keybindings config file
 #[derive(Deserialize)]
@@ -101,7 +101,13 @@ fn parse_named_key(s: &str) -> Option<KeyCode> {
 const DEFAULT_KEYBINDINGS: &str = include_str!("../../keybindings.toml");
 
 /// Mode layer names that are not pane layers
-const MODE_LAYERS: &[&str] = &["global", "piano_mode", "pad_mode", "text_edit", "command_palette"];
+const MODE_LAYERS: &[&str] = &[
+    "global",
+    "piano_mode",
+    "pad_mode",
+    "text_edit",
+    "command_palette",
+];
 
 /// Load keybindings: embedded default, optionally merged with user override.
 /// Returns (Vec<Layer> for LayerStack, pane keymaps for pane construction).
@@ -210,8 +216,14 @@ mod tests {
     fn test_parse_key_modifiers() {
         assert_eq!(parse_key("Ctrl+s"), Some(KeyPattern::Ctrl('s')));
         assert_eq!(parse_key("Alt+x"), Some(KeyPattern::Alt('x')));
-        assert_eq!(parse_key("Ctrl+Left"), Some(KeyPattern::CtrlKey(KeyCode::Left)));
-        assert_eq!(parse_key("Shift+Right"), Some(KeyPattern::ShiftKey(KeyCode::Right)));
+        assert_eq!(
+            parse_key("Ctrl+Left"),
+            Some(KeyPattern::CtrlKey(KeyCode::Left))
+        );
+        assert_eq!(
+            parse_key("Shift+Right"),
+            Some(KeyPattern::ShiftKey(KeyCode::Right))
+        );
     }
 
     #[test]

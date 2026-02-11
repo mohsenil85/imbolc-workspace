@@ -1,11 +1,11 @@
 use std::path::PathBuf;
 
-use imbolc_types::BusId;
+use super::{load_project, save_project, temp_db_path};
 use crate::state::instrument::{EffectType, FilterType, SourceType};
 use crate::state::instrument_state::InstrumentState;
 use crate::state::param::ParamValue;
 use crate::state::session::SessionState;
-use super::{save_project, load_project, temp_db_path};
+use imbolc_types::BusId;
 
 #[test]
 fn round_trip_bus_effects() {
@@ -13,7 +13,10 @@ fn round_trip_bus_effects() {
     let instruments = InstrumentState::new();
 
     // session.mixer.buses should already have default buses (1 and 2)
-    assert!(session.mixer.buses.len() >= 2, "expected at least 2 default buses");
+    assert!(
+        session.mixer.buses.len() >= 2,
+        "expected at least 2 default buses"
+    );
 
     // Add effects to bus 1
     let bus = session.mixer.bus_mut(BusId::new(1)).unwrap();
@@ -39,9 +42,17 @@ fn round_trip_bus_effects() {
     let (loaded_session, _) = load_project(&path).expect("load");
 
     // Bus 1 should have 2 effects
-    let loaded_bus = loaded_session.mixer.buses.iter().find(|b| b.id == BusId::new(1)).unwrap();
+    let loaded_bus = loaded_session
+        .mixer
+        .buses
+        .iter()
+        .find(|b| b.id == BusId::new(1))
+        .unwrap();
     assert_eq!(loaded_bus.effect_chain.effects.len(), 2);
-    assert_eq!(loaded_bus.effect_chain.next_effect_id, imbolc_types::EffectId::new(2));
+    assert_eq!(
+        loaded_bus.effect_chain.next_effect_id,
+        imbolc_types::EffectId::new(2)
+    );
 
     // Reverb (id=0)
     let loaded_reverb = loaded_bus.effect_chain.effect_by_id(reverb_id).unwrap();
@@ -56,13 +67,27 @@ fn round_trip_bus_effects() {
     let loaded_delay = loaded_bus.effect_chain.effect_by_id(delay_id).unwrap();
     assert_eq!(loaded_delay.effect_type, EffectType::Delay);
     assert!(!loaded_delay.enabled);
-    assert_eq!(loaded_delay.vst_state_path.as_deref(), Some(std::path::Path::new("/tmp/delay.vststate")));
+    assert_eq!(
+        loaded_delay.vst_state_path.as_deref(),
+        Some(std::path::Path::new("/tmp/delay.vststate"))
+    );
     assert_eq!(loaded_delay.vst_param_values.len(), 2);
-    assert!(loaded_delay.vst_param_values.iter().any(|&(k, v)| k == 0 && (v - 0.42).abs() < 0.01));
-    assert!(loaded_delay.vst_param_values.iter().any(|&(k, v)| k == 3 && (v - 0.88).abs() < 0.01));
+    assert!(loaded_delay
+        .vst_param_values
+        .iter()
+        .any(|&(k, v)| k == 0 && (v - 0.42).abs() < 0.01));
+    assert!(loaded_delay
+        .vst_param_values
+        .iter()
+        .any(|&(k, v)| k == 3 && (v - 0.88).abs() < 0.01));
 
     // Bus 2 should have no effects
-    let loaded_bus2 = loaded_session.mixer.buses.iter().find(|b| b.id == BusId::new(2)).unwrap();
+    let loaded_bus2 = loaded_session
+        .mixer
+        .buses
+        .iter()
+        .find(|b| b.id == BusId::new(2))
+        .unwrap();
     assert!(loaded_bus2.effect_chain.effects.is_empty());
 
     std::fs::remove_file(&path).ok();
@@ -101,9 +126,17 @@ fn round_trip_layer_group_effects() {
     save_project(&path, &session, &instruments).expect("save");
     let (loaded_session, _) = load_project(&path).expect("load");
 
-    let loaded_gm = loaded_session.mixer.layer_group_mixers.iter().find(|g| g.group_id == 1).unwrap();
+    let loaded_gm = loaded_session
+        .mixer
+        .layer_group_mixers
+        .iter()
+        .find(|g| g.group_id == 1)
+        .unwrap();
     assert_eq!(loaded_gm.effect_chain.effects.len(), 2);
-    assert_eq!(loaded_gm.effect_chain.next_effect_id, imbolc_types::EffectId::new(2));
+    assert_eq!(
+        loaded_gm.effect_chain.next_effect_id,
+        imbolc_types::EffectId::new(2)
+    );
 
     let loaded_comp = loaded_gm.effect_chain.effect_by_id(comp_id).unwrap();
     assert_eq!(loaded_comp.effect_type, EffectType::TapeComp);
@@ -154,7 +187,12 @@ fn round_trip_layer_group_eq() {
     save_project(&path, &session, &instruments).expect("save");
     let (loaded_session, _) = load_project(&path).expect("load");
 
-    let loaded_gm = loaded_session.mixer.layer_group_mixers.iter().find(|g| g.group_id == 1).unwrap();
+    let loaded_gm = loaded_session
+        .mixer
+        .layer_group_mixers
+        .iter()
+        .find(|g| g.group_id == 1)
+        .unwrap();
     let loaded_eq = loaded_gm.eq().expect("EQ should be present after load");
     assert_eq!(loaded_eq.bands.len(), 12);
 
@@ -200,8 +238,16 @@ fn round_trip_layer_group_eq_disabled() {
     save_project(&path, &session, &instruments).expect("save");
     let (loaded_session, _) = load_project(&path).expect("load");
 
-    let loaded_gm = loaded_session.mixer.layer_group_mixers.iter().find(|g| g.group_id == 1).unwrap();
-    assert!(loaded_gm.eq().is_none(), "EQ should be None after load when toggled off");
+    let loaded_gm = loaded_session
+        .mixer
+        .layer_group_mixers
+        .iter()
+        .find(|g| g.group_id == 1)
+        .unwrap();
+    assert!(
+        loaded_gm.eq().is_none(),
+        "EQ should be None after load when toggled off"
+    );
 
     std::fs::remove_file(&path).ok();
 }
@@ -241,11 +287,24 @@ fn round_trip_processing_chain_order() {
     save_project(&path, &session, &instruments).expect("save");
     let (_, loaded_inst) = load_project(&path).expect("load");
 
-    let loaded = loaded_inst.instruments.iter().find(|i| i.id == inst_id).unwrap();
+    let loaded = loaded_inst
+        .instruments
+        .iter()
+        .find(|i| i.id == inst_id)
+        .unwrap();
     assert_eq!(loaded.processing_chain.len(), 3);
-    assert!(loaded.processing_chain[0].is_effect(), "expected Effect at position 0");
-    assert!(loaded.processing_chain[1].is_filter(), "expected Filter at position 1");
-    assert!(loaded.processing_chain[2].is_eq(), "expected EQ at position 2");
+    assert!(
+        loaded.processing_chain[0].is_effect(),
+        "expected Effect at position 0"
+    );
+    assert!(
+        loaded.processing_chain[1].is_filter(),
+        "expected Filter at position 1"
+    );
+    assert!(
+        loaded.processing_chain[2].is_eq(),
+        "expected EQ at position 2"
+    );
 
     // Verify effect data
     if let ProcessingStage::Effect(e) = &loaded.processing_chain[0] {
@@ -293,12 +352,25 @@ fn round_trip_processing_chain_interleaved() {
     save_project(&path, &session, &instruments).expect("save");
     let (_, loaded_inst) = load_project(&path).expect("load");
 
-    let loaded = loaded_inst.instruments.iter().find(|i| i.id == inst_id).unwrap();
+    let loaded = loaded_inst
+        .instruments
+        .iter()
+        .find(|i| i.id == inst_id)
+        .unwrap();
     assert_eq!(loaded.processing_chain.len(), 4);
-    assert!(loaded.processing_chain[0].is_filter(), "expected Filter at 0");
-    assert!(loaded.processing_chain[1].is_effect(), "expected Effect at 1");
+    assert!(
+        loaded.processing_chain[0].is_filter(),
+        "expected Filter at 0"
+    );
+    assert!(
+        loaded.processing_chain[1].is_effect(),
+        "expected Effect at 1"
+    );
     assert!(loaded.processing_chain[2].is_eq(), "expected EQ at 2");
-    assert!(loaded.processing_chain[3].is_effect(), "expected Effect at 3");
+    assert!(
+        loaded.processing_chain[3].is_effect(),
+        "expected Effect at 3"
+    );
 
     // Verify effect identities
     if let ProcessingStage::Effect(e) = &loaded.processing_chain[1] {

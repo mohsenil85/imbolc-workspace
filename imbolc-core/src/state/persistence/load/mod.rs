@@ -59,23 +59,30 @@ pub(super) fn load_params(
         table, id_col
     );
     let mut stmt = conn.prepare(&sql)?;
-    let params: Vec<Param> = stmt.query_map(params![id], |row| {
-        let name: String = row.get(0)?;
-        let vtype: String = row.get(1)?;
-        let vf: Option<f64> = row.get(2)?;
-        let vi: Option<i64> = row.get(3)?;
-        let vb: Option<i32> = row.get(4)?;
-        let min: f32 = row.get(5)?;
-        let max: f32 = row.get(6)?;
+    let params: Vec<Param> = stmt
+        .query_map(params![id], |row| {
+            let name: String = row.get(0)?;
+            let vtype: String = row.get(1)?;
+            let vf: Option<f64> = row.get(2)?;
+            let vi: Option<i64> = row.get(3)?;
+            let vb: Option<i32> = row.get(4)?;
+            let min: f32 = row.get(5)?;
+            let max: f32 = row.get(6)?;
 
-        let value = match vtype.as_str() {
-            "Int" => ParamValue::Int(vi.unwrap_or(0) as i32),
-            "Bool" => ParamValue::Bool(vb.unwrap_or(0) != 0),
-            _ => ParamValue::Float(vf.unwrap_or(0.0) as f32),
-        };
+            let value = match vtype.as_str() {
+                "Int" => ParamValue::Int(vi.unwrap_or(0) as i32),
+                "Bool" => ParamValue::Bool(vb.unwrap_or(0) != 0),
+                _ => ParamValue::Float(vf.unwrap_or(0.0) as f32),
+            };
 
-        Ok(Param { name, value, min, max })
-    })?.collect::<SqlResult<_>>()?;
+            Ok(Param {
+                name,
+                value,
+                min,
+                max,
+            })
+        })?
+        .collect::<SqlResult<_>>()?;
 
     Ok(params)
 }
@@ -95,9 +102,11 @@ pub(super) fn load_effects_from(
         effects_table, owner_col
     );
     let mut stmt = conn.prepare(&sql)?;
-    let effect_rows: Vec<(u32, String, i32, Option<String>)> = stmt.query_map(params![owner_id], |row| {
-        Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
-    })?.collect::<SqlResult<_>>()?;
+    let effect_rows: Vec<(u32, String, i32, Option<String>)> = stmt
+        .query_map(params![owner_id], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+        })?
+        .collect::<SqlResult<_>>()?;
 
     let mut effects = Vec::new();
     for (effect_id, effect_type_str, enabled, vst_state) in effect_rows {
@@ -115,9 +124,11 @@ pub(super) fn load_effects_from(
             vst_table, owner_col
         );
         let mut vst_stmt = conn.prepare(&vst_sql)?;
-        slot.vst_param_values = vst_stmt.query_map(params![owner_id, effect_id], |row| {
-            Ok((row.get::<_, u32>(0)?, row.get::<_, f32>(1)?))
-        })?.collect::<SqlResult<_>>()?;
+        slot.vst_param_values = vst_stmt
+            .query_map(params![owner_id, effect_id], |row| {
+                Ok((row.get::<_, u32>(0)?, row.get::<_, f32>(1)?))
+            })?
+            .collect::<SqlResult<_>>()?;
 
         effects.push(slot);
     }
@@ -140,23 +151,30 @@ pub(super) fn load_effect_params_from(
         table, owner_col
     );
     let mut stmt = conn.prepare(&sql)?;
-    let params: Vec<Param> = stmt.query_map(params![owner_id, effect_id], |row| {
-        let name: String = row.get(0)?;
-        let vtype: String = row.get(1)?;
-        let vf: Option<f64> = row.get(2)?;
-        let vi: Option<i64> = row.get(3)?;
-        let vb: Option<i32> = row.get(4)?;
-        let min: f32 = row.get(5)?;
-        let max: f32 = row.get(6)?;
+    let params: Vec<Param> = stmt
+        .query_map(params![owner_id, effect_id], |row| {
+            let name: String = row.get(0)?;
+            let vtype: String = row.get(1)?;
+            let vf: Option<f64> = row.get(2)?;
+            let vi: Option<i64> = row.get(3)?;
+            let vb: Option<i32> = row.get(4)?;
+            let min: f32 = row.get(5)?;
+            let max: f32 = row.get(6)?;
 
-        let value = match vtype.as_str() {
-            "Int" => ParamValue::Int(vi.unwrap_or(0) as i32),
-            "Bool" => ParamValue::Bool(vb.unwrap_or(0) != 0),
-            _ => ParamValue::Float(vf.unwrap_or(0.0) as f32),
-        };
+            let value = match vtype.as_str() {
+                "Int" => ParamValue::Int(vi.unwrap_or(0) as i32),
+                "Bool" => ParamValue::Bool(vb.unwrap_or(0) != 0),
+                _ => ParamValue::Float(vf.unwrap_or(0.0) as f32),
+            };
 
-        Ok(Param { name, value, min, max })
-    })?.collect::<SqlResult<_>>()?;
+            Ok(Param {
+                name,
+                value,
+                min,
+                max,
+            })
+        })?
+        .collect::<SqlResult<_>>()?;
 
     Ok(params)
 }

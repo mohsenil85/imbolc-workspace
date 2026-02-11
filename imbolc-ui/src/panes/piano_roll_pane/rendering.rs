@@ -1,12 +1,14 @@
 use crate::state::AppState;
 use crate::ui::layout_helpers::center_rect;
-use crate::ui::{Rect, RenderBuf, Color, Style};
+use crate::ui::{Color, Rect, RenderBuf, Style};
 
 use super::PianoRollPane;
 
 /// MIDI note name for a given pitch (0-127)
 pub(super) fn note_name(pitch: u8) -> String {
-    let names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+    let names = [
+        "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
+    ];
     let octave = (pitch / 12) as i8 - 1;
     let name = names[(pitch % 12) as usize];
     format!("{}{}", name, octave)
@@ -19,8 +21,7 @@ pub(super) fn is_black_key(pitch: u8) -> bool {
 
 /// Block characters for value graph (8 levels, bottom to top)
 pub(super) const AUTOMATION_BLOCKS: [char; 8] = [
-    '\u{2581}', '\u{2582}', '\u{2583}', '\u{2584}',
-    '\u{2585}', '\u{2586}', '\u{2587}', '\u{2588}',
+    '\u{2581}', '\u{2582}', '\u{2583}', '\u{2584}', '\u{2585}', '\u{2586}', '\u{2587}', '\u{2588}',
 ];
 
 impl PianoRollPane {
@@ -42,12 +43,17 @@ impl PianoRollPane {
         } else {
             // Default: show first lane for current instrument
             inst_id.and_then(|id| {
-                automation.lanes.iter().find(|l| l.target.instrument_id() == Some(id))
+                automation
+                    .lanes
+                    .iter()
+                    .find(|l| l.target.instrument_id() == Some(id))
             })
         };
 
         let overlay_height = overlay_area.height;
-        if overlay_height == 0 { return; }
+        if overlay_height == 0 {
+            return;
+        }
 
         // Separator line
         let sep_style = Style::new().fg(Color::new(50, 40, 60));
@@ -56,13 +62,13 @@ impl PianoRollPane {
         }
 
         // Lane name on left edge
-        let lane_name = lane
-            .map(|l| l.target.short_name())
-            .unwrap_or("—");
+        let lane_name = lane.map(|l| l.target.short_name()).unwrap_or("—");
         let label_style = Style::new().fg(Color::CYAN);
         for (i, ch) in lane_name.chars().enumerate() {
             let x = overlay_area.x + i as u16;
-            if x >= grid_x { break; }
+            if x >= grid_x {
+                break;
+            }
             let y = overlay_area.y + 1;
             if y < overlay_area.y + overlay_height {
                 buf.set_cell(x, y, ch, label_style);
@@ -82,14 +88,24 @@ impl PianoRollPane {
             }
         }
 
-        let Some(lane) = lane else { return; };
-        if lane.points.is_empty() { return; }
+        let Some(lane) = lane else {
+            return;
+        };
+        if lane.points.is_empty() {
+            return;
+        }
 
         let tpc = self.ticks_per_cell();
         let graph_rows = overlay_height.saturating_sub(1); // Minus separator row
-        if graph_rows == 0 { return; }
+        if graph_rows == 0 {
+            return;
+        }
 
-        let curve_color = if lane.enabled { Color::CYAN } else { Color::DARK_GRAY };
+        let curve_color = if lane.enabled {
+            Color::CYAN
+        } else {
+            Color::DARK_GRAY
+        };
         let curve_style = Style::new().fg(curve_color);
 
         for col in 0..grid_width {
@@ -97,7 +113,8 @@ impl PianoRollPane {
             if let Some(raw_value) = lane.value_at(tick) {
                 // Normalize to 0-1
                 let normalized = if lane.max_value > lane.min_value {
-                    ((raw_value - lane.min_value) / (lane.max_value - lane.min_value)).clamp(0.0, 1.0)
+                    ((raw_value - lane.min_value) / (lane.max_value - lane.min_value))
+                        .clamp(0.0, 1.0)
                 } else {
                     0.5
                 };
@@ -114,10 +131,14 @@ impl PianoRollPane {
 
                 // For taller overlays, fill upward with full blocks
                 if graph_rows > 1 {
-                    let filled_rows = ((normalized * (graph_rows - 1) as f32) as u16).min(graph_rows - 1);
+                    let filled_rows =
+                        ((normalized * (graph_rows - 1) as f32) as u16).min(graph_rows - 1);
                     for r in 1..filled_rows {
                         let y = overlay_area.y + graph_rows - r;
-                        if y > overlay_area.y && y < overlay_area.y + overlay_height && x < overlay_area.x + overlay_area.width {
+                        if y > overlay_area.y
+                            && y < overlay_area.y + overlay_height
+                            && x < overlay_area.x + overlay_area.width
+                        {
                             buf.set_cell(x, y, '▁', curve_style);
                         }
                     }
@@ -138,12 +159,18 @@ impl PianoRollPane {
         let grid_x = rect.x + key_col_width;
         let grid_y = rect.y + header_height;
         let grid_width = rect.width.saturating_sub(key_col_width + 1);
-        let grid_height = rect.height.saturating_sub(header_height + footer_height + 1);
+        let grid_height = rect
+            .height
+            .saturating_sub(header_height + footer_height + 1);
 
         // Border
         let track_label = if let Some(ref ctx) = state.session.arrangement.editing_clip {
-            let clip_name = state.session.arrangement.clip(ctx.clip_id)
-                .map(|c| c.name.as_str()).unwrap_or("?");
+            let clip_name = state
+                .session
+                .arrangement
+                .clip(ctx.clip_id)
+                .map(|c| c.name.as_str())
+                .unwrap_or("?");
             format!(" Piano Roll - Editing: {} ", clip_name)
         } else if let Some(track) = piano_roll.track_at(self.current_track) {
             let mode = if track.polyphonic { "POLY" } else { "MONO" };
@@ -170,8 +197,10 @@ impl PianoRollPane {
             loop_icon,
             piano_roll.tick_to_beat(state.audio.playhead),
         );
-        buf.draw_line(Rect::new(rect.x + 1, header_y, rect.width.saturating_sub(2), 1),
-            &[(&header_text, Style::new().fg(Color::WHITE))]);
+        buf.draw_line(
+            Rect::new(rect.x + 1, header_y, rect.width.saturating_sub(2), 1),
+            &[(&header_text, Style::new().fg(Color::WHITE))],
+        );
 
         // Loop range indicator
         if piano_roll.looping {
@@ -181,18 +210,30 @@ impl PianoRollPane {
                 piano_roll.tick_to_beat(piano_roll.loop_end),
             );
             let loop_x = rect.x + rect.width - loop_info.len() as u16 - 2;
-            buf.draw_line(Rect::new(loop_x, header_y, rect.width.saturating_sub(loop_x - rect.x), 1),
-                &[(&loop_info, Style::new().fg(Color::YELLOW))]);
+            buf.draw_line(
+                Rect::new(
+                    loop_x,
+                    header_y,
+                    rect.width.saturating_sub(loop_x - rect.x),
+                    1,
+                ),
+                &[(&loop_info, Style::new().fg(Color::YELLOW))],
+            );
         }
 
         // Rendering indicator
         if let Some(render) = &state.io.pending_render {
-            if let Some(track_inst_id) = state.session.piano_roll.track_order.get(self.current_track) {
+            if let Some(track_inst_id) =
+                state.session.piano_roll.track_order.get(self.current_track)
+            {
                 if render.instrument_id == *track_inst_id {
                     let label = " RENDERING ";
                     let style = Style::new().fg(Color::WHITE).bg(Color::RED);
                     let x = rect.x + rect.width - label.len() as u16 - 2;
-                    buf.draw_line(Rect::new(x, header_y, label.len() as u16, 1), &[(label, style)]);
+                    buf.draw_line(
+                        Rect::new(x, header_y, label.len() as u16, 1),
+                        &[(label, style)],
+                    );
                 }
             }
         }
@@ -216,12 +257,17 @@ impl PianoRollPane {
             );
             let style = Style::new().fg(Color::WHITE).bg(Color::new(200, 120, 0));
             let x = rect.x + rect.width - text.len() as u16 - 2;
-            buf.draw_line(Rect::new(x, header_y, text.len() as u16, 1), &[(&text, style)]);
+            buf.draw_line(
+                Rect::new(x, header_y, text.len() as u16, 1),
+                &[(&text, style)],
+            );
         }
 
         // Piano keys column + grid rows
         for row in 0..grid_height {
-            let pitch = self.view_bottom_pitch.saturating_add((grid_height - 1 - row) as u8);
+            let pitch = self
+                .view_bottom_pitch
+                .saturating_add((grid_height - 1 - row) as u8);
             if pitch > 127 {
                 continue;
             }
@@ -243,22 +289,34 @@ impl PianoRollPane {
             }
 
             // Separator
-            buf.set_cell(rect.x + key_col_width - 1, y, '|', Style::new().fg(Color::GRAY));
+            buf.set_cell(
+                rect.x + key_col_width - 1,
+                y,
+                '|',
+                Style::new().fg(Color::GRAY),
+            );
 
             // Grid cells
             for col in 0..grid_width {
                 let tick = self.view_start_tick + col as u32 * self.ticks_per_cell();
                 let x = grid_x + col;
 
-                let has_note = piano_roll.track_at(self.current_track).is_some_and(|track| {
-                    track.notes.iter().any(|n| {
-                        n.pitch == pitch && tick >= n.tick && tick < n.tick + n.duration
-                    })
-                });
+                let has_note = piano_roll
+                    .track_at(self.current_track)
+                    .is_some_and(|track| {
+                        track.notes.iter().any(|n| {
+                            n.pitch == pitch && tick >= n.tick && tick < n.tick + n.duration
+                        })
+                    });
 
-                let is_note_start = piano_roll.track_at(self.current_track).is_some_and(|track| {
-                    track.notes.iter().any(|n| n.pitch == pitch && n.tick == tick)
-                });
+                let is_note_start = piano_roll
+                    .track_at(self.current_track)
+                    .is_some_and(|track| {
+                        track
+                            .notes
+                            .iter()
+                            .any(|n| n.pitch == pitch && n.tick == tick)
+                    });
 
                 let is_cursor = pitch == self.cursor_pitch && tick == self.cursor_tick;
                 let is_playhead = state.audio.playing
@@ -270,19 +328,21 @@ impl PianoRollPane {
                 let is_bar_line = tick.is_multiple_of(tpbar);
                 let is_beat_line = tick.is_multiple_of(tpb);
 
-                let in_selection = self.selection_anchor.is_some_and(|(anchor_tick, anchor_pitch)| {
-                    let (t0, t1) = if anchor_tick <= self.cursor_tick {
-                        (anchor_tick, self.cursor_tick + self.ticks_per_cell())
-                    } else {
-                        (self.cursor_tick, anchor_tick + self.ticks_per_cell())
-                    };
-                    let (p0, p1) = if anchor_pitch <= self.cursor_pitch {
-                        (anchor_pitch, self.cursor_pitch)
-                    } else {
-                        (self.cursor_pitch, anchor_pitch)
-                    };
-                    tick >= t0 && tick < t1 && pitch >= p0 && pitch <= p1
-                });
+                let in_selection =
+                    self.selection_anchor
+                        .is_some_and(|(anchor_tick, anchor_pitch)| {
+                            let (t0, t1) = if anchor_tick <= self.cursor_tick {
+                                (anchor_tick, self.cursor_tick + self.ticks_per_cell())
+                            } else {
+                                (self.cursor_tick, anchor_tick + self.ticks_per_cell())
+                            };
+                            let (p0, p1) = if anchor_pitch <= self.cursor_pitch {
+                                (anchor_pitch, self.cursor_pitch)
+                            } else {
+                                (self.cursor_pitch, anchor_pitch)
+                            };
+                            tick >= t0 && tick < t1 && pitch >= p0 && pitch <= p1
+                        });
 
                 let (ch, style) = if is_cursor {
                     if has_note {
@@ -292,7 +352,10 @@ impl PianoRollPane {
                     }
                 } else if in_selection && has_note {
                     // Selected note
-                    ('█', Style::new().fg(Color::WHITE).bg(Color::new(60, 30, 80)))
+                    (
+                        '█',
+                        Style::new().fg(Color::WHITE).bg(Color::new(60, 30, 80)),
+                    )
                 } else if in_selection {
                     // Selection region background
                     ('░', Style::new().fg(Color::new(60, 30, 80)))
@@ -341,9 +404,14 @@ impl PianoRollPane {
         // Status line
         let status_y = footer_y + 1;
         let vel_str = if let Some((anchor_tick, anchor_pitch)) = self.selection_anchor {
-            let t_diff = (self.cursor_tick as i64 - anchor_tick as i64).unsigned_abs() as u32 + self.ticks_per_cell();
+            let t_diff = (self.cursor_tick as i64 - anchor_tick as i64).unsigned_abs() as u32
+                + self.ticks_per_cell();
             let p_diff = (self.cursor_pitch as i16 - anchor_pitch as i16).abs() + 1;
-            format!("Sel: {:.1} beats x {} pitches", t_diff as f32 / piano_roll.ticks_per_beat as f32, p_diff)
+            format!(
+                "Sel: {:.1} beats x {} pitches",
+                t_diff as f32 / piano_roll.ticks_per_beat as f32,
+                p_diff
+            )
         } else {
             format!(
                 "Note:{} Tick:{} Vel:{} Dur:{}",
@@ -353,8 +421,10 @@ impl PianoRollPane {
                 self.default_duration,
             )
         };
-        buf.draw_line(Rect::new(rect.x + 1, status_y, rect.width.saturating_sub(2), 1),
-            &[(&vel_str, Style::new().fg(Color::GRAY))]);
+        buf.draw_line(
+            Rect::new(rect.x + 1, status_y, rect.width.saturating_sub(2), 1),
+            &[(&vel_str, Style::new().fg(Color::GRAY))],
+        );
 
         // Piano mode indicator
         if self.piano.is_active() {

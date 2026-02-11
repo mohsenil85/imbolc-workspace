@@ -1,13 +1,13 @@
 use std::collections::VecDeque;
 use std::time::Instant;
 
+use super::instrument::Instrument;
 use super::{InstrumentState, SessionState};
 use crate::action::{
     BusAction, DomainAction, InstrumentAction, MixerAction, SequencerAction, SessionAction,
     VstParamAction,
 };
 use imbolc_types::InstrumentId;
-use super::instrument::Instrument;
 
 /// What scope of state an undo entry covers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -89,12 +89,8 @@ impl UndoHistory {
                     None => UndoEntry::Instruments(Box::new(instruments.clone())),
                 }
             }
-            UndoScope::Instruments => {
-                UndoEntry::Instruments(Box::new(instruments.clone()))
-            }
-            UndoScope::Session => {
-                UndoEntry::Session(Box::new(session.clone()))
-            }
+            UndoScope::Instruments => UndoEntry::Instruments(Box::new(instruments.clone())),
+            UndoScope::Session => UndoEntry::Session(Box::new(session.clone())),
             UndoScope::Full => UndoEntry::Full {
                 session: Box::new(session.clone()),
                 instruments: Box::new(instruments.clone()),
@@ -225,12 +221,8 @@ fn create_inverse(
                 None => UndoEntry::Instruments(Box::new(instruments.clone())),
             }
         }
-        UndoEntry::Instruments(_) => {
-            UndoEntry::Instruments(Box::new(instruments.clone()))
-        }
-        UndoEntry::Session(_) => {
-            UndoEntry::Session(Box::new(session.clone()))
-        }
+        UndoEntry::Instruments(_) => UndoEntry::Instruments(Box::new(instruments.clone())),
+        UndoEntry::Session(_) => UndoEntry::Session(Box::new(session.clone())),
         UndoEntry::Full { .. } => UndoEntry::Full {
             session: Box::new(session.clone()),
             instruments: Box::new(instruments.clone()),
@@ -239,11 +231,7 @@ fn create_inverse(
 }
 
 /// Apply a stored entry onto the live state.
-fn apply_entry(
-    entry: UndoEntry,
-    session: &mut SessionState,
-    instruments: &mut InstrumentState,
-) {
+fn apply_entry(entry: UndoEntry, session: &mut SessionState, instruments: &mut InstrumentState) {
     match entry {
         UndoEntry::SingleInstrument { id, instrument } => {
             if let Some(live) = instruments.instrument_mut(id) {
@@ -274,7 +262,12 @@ fn apply_entry(
 /// `automation_recording` should be true only when automation is actively being
 /// recorded during playback — this escalates param tweaks to Full scope so the
 /// automation lane changes are also captured.
-pub fn undo_scope(action: &DomainAction, session: &SessionState, instruments: &InstrumentState, automation_recording: bool) -> UndoScope {
+pub fn undo_scope(
+    action: &DomainAction,
+    session: &SessionState,
+    instruments: &InstrumentState,
+    automation_recording: bool,
+) -> UndoScope {
     let recording = automation_recording;
 
     match action {
@@ -311,9 +304,7 @@ pub fn undo_scope(action: &DomainAction, session: &SessionState, instruments: &I
         }
 
         // Mixer actions: depends on what's selected
-        DomainAction::Mixer(a) => {
-            mixer_scope(a, session, instruments, recording)
-        }
+        DomainAction::Mixer(a) => mixer_scope(a, session, instruments, recording),
 
         // Session-only domains
         DomainAction::PianoRoll(_)
@@ -363,18 +354,16 @@ fn mixer_scope(
     recording: bool,
 ) -> UndoScope {
     match session.mixer.selection {
-        super::session::MixerSelection::Instrument(idx) => {
-            match instruments.instruments.get(idx) {
-                Some(inst) => {
-                    if recording {
-                        UndoScope::Full
-                    } else {
-                        UndoScope::SingleInstrument(inst.id)
-                    }
+        super::session::MixerSelection::Instrument(idx) => match instruments.instruments.get(idx) {
+            Some(inst) => {
+                if recording {
+                    UndoScope::Full
+                } else {
+                    UndoScope::SingleInstrument(inst.id)
                 }
-                None => UndoScope::Full,
             }
-        }
+            None => UndoScope::Full,
+        },
         // Bus, LayerGroup, Master selections all live in SessionState
         super::session::MixerSelection::Bus(_)
         | super::session::MixerSelection::LayerGroup(_)
@@ -390,7 +379,11 @@ fn mixer_scope(
 
 /// Map an action to a coalesce key. Actions with the same key that arrive
 /// within `COALESCE_WINDOW` share a single undo snapshot.
-pub fn coalesce_key(action: &DomainAction, session: &SessionState, instruments: &InstrumentState) -> CoalesceKey {
+pub fn coalesce_key(
+    action: &DomainAction,
+    session: &SessionState,
+    instruments: &InstrumentState,
+) -> CoalesceKey {
     match action {
         // Instrument parameter tweaks — coalesce by instrument ID
         DomainAction::Instrument(
@@ -416,23 +409,20 @@ pub fn coalesce_key(action: &DomainAction, session: &SessionState, instruments: 
         // Mixer level/pan/send — coalesce by mixer selection target
         DomainAction::Mixer(
             MixerAction::AdjustLevel(_) | MixerAction::AdjustPan(_) | MixerAction::AdjustSend(_, _),
-        ) => {
-            match session.mixer.selection {
-                super::session::MixerSelection::Instrument(idx) => {
-                    match instruments.instruments.get(idx) {
-                        Some(inst) => CoalesceKey::InstrumentParam(inst.id),
-                        None => CoalesceKey::None,
-                    }
+        ) => match session.mixer.selection {
+            super::session::MixerSelection::Instrument(idx) => {
+                match instruments.instruments.get(idx) {
+                    Some(inst) => CoalesceKey::InstrumentParam(inst.id),
+                    None => CoalesceKey::None,
                 }
-                _ => CoalesceKey::SessionParam,
             }
-        }
+            _ => CoalesceKey::SessionParam,
+        },
         DomainAction::Mixer(_) => CoalesceKey::None,
 
         // VST param tweaks
         DomainAction::VstParam(
-            VstParamAction::SetParam(id, _, _, _)
-            | VstParamAction::AdjustParam(id, _, _, _),
+            VstParamAction::SetParam(id, _, _, _) | VstParamAction::AdjustParam(id, _, _, _),
         ) => CoalesceKey::InstrumentParam(*id),
         DomainAction::VstParam(_) => CoalesceKey::None,
 
@@ -444,18 +434,15 @@ pub fn coalesce_key(action: &DomainAction, session: &SessionState, instruments: 
             | SequencerAction::AdjustProbability(_, _, _)
             | SequencerAction::AdjustPadPitch(_, _)
             | SequencerAction::AdjustStepPitch(_, _, _),
-        ) => {
-            match instruments.selected_instrument() {
-                Some(inst) => CoalesceKey::InstrumentParam(inst.id),
-                None => CoalesceKey::None,
-            }
-        }
+        ) => match instruments.selected_instrument() {
+            Some(inst) => CoalesceKey::InstrumentParam(inst.id),
+            None => CoalesceKey::None,
+        },
         DomainAction::Sequencer(_) => CoalesceKey::None,
 
         // Session-level adjustments
         DomainAction::Session(
-            SessionAction::AdjustHumanizeVelocity(_)
-            | SessionAction::AdjustHumanizeTiming(_),
+            SessionAction::AdjustHumanizeVelocity(_) | SessionAction::AdjustHumanizeTiming(_),
         ) => CoalesceKey::SessionParam,
         DomainAction::Session(_) => CoalesceKey::None,
 
@@ -466,72 +453,91 @@ pub fn coalesce_key(action: &DomainAction, session: &SessionState, instruments: 
 
 pub fn is_undoable(action: &DomainAction) -> bool {
     match action {
-        DomainAction::Instrument(a) => !matches!(a,
+        DomainAction::Instrument(a) => !matches!(
+            a,
             InstrumentAction::PlayNote(_, _)
-            | InstrumentAction::PlayNotes(_, _)
-            | InstrumentAction::PlayDrumPad(_)
-            | InstrumentAction::Select(_)
-            | InstrumentAction::SelectNext
-            | InstrumentAction::SelectPrev
-            | InstrumentAction::SelectFirst
-            | InstrumentAction::SelectLast
-            | InstrumentAction::Edit(_)
-            | InstrumentAction::OpenVstEffectParams(_, _)),
-        DomainAction::Mixer(a) => !matches!(a,
+                | InstrumentAction::PlayNotes(_, _)
+                | InstrumentAction::PlayDrumPad(_)
+                | InstrumentAction::Select(_)
+                | InstrumentAction::SelectNext
+                | InstrumentAction::SelectPrev
+                | InstrumentAction::SelectFirst
+                | InstrumentAction::SelectLast
+                | InstrumentAction::Edit(_)
+                | InstrumentAction::OpenVstEffectParams(_, _)
+        ),
+        DomainAction::Mixer(a) => !matches!(
+            a,
             MixerAction::Move(_)
-            | MixerAction::Jump(_)
-            | MixerAction::SelectAt(_)
-            | MixerAction::CycleSection),
-        DomainAction::PianoRoll(a) => matches!(a,
+                | MixerAction::Jump(_)
+                | MixerAction::SelectAt(_)
+                | MixerAction::CycleSection
+        ),
+        DomainAction::PianoRoll(a) => matches!(
+            a,
             crate::action::PianoRollAction::ToggleNote { .. }
-            | crate::action::PianoRollAction::ToggleLoop
-            | crate::action::PianoRollAction::SetLoopStart(_)
-            | crate::action::PianoRollAction::SetLoopEnd(_)
-            | crate::action::PianoRollAction::CycleTimeSig
-            | crate::action::PianoRollAction::TogglePolyMode(_)
-            | crate::action::PianoRollAction::AdjustSwing(_)
-            | crate::action::PianoRollAction::DeleteNotesInRegion { .. }
-            | crate::action::PianoRollAction::PasteNotes { .. }),
-        DomainAction::Session(a) => !matches!(a,
+                | crate::action::PianoRollAction::ToggleLoop
+                | crate::action::PianoRollAction::SetLoopStart(_)
+                | crate::action::PianoRollAction::SetLoopEnd(_)
+                | crate::action::PianoRollAction::CycleTimeSig
+                | crate::action::PianoRollAction::TogglePolyMode(_)
+                | crate::action::PianoRollAction::AdjustSwing(_)
+                | crate::action::PianoRollAction::DeleteNotesInRegion { .. }
+                | crate::action::PianoRollAction::PasteNotes { .. }
+        ),
+        DomainAction::Session(a) => !matches!(
+            a,
             SessionAction::Save
-            | SessionAction::SaveAs(_)
-            | SessionAction::Load
-            | SessionAction::LoadFrom(_)
-            | SessionAction::NewProject
-            | SessionAction::OpenFileBrowser(_)),
-        DomainAction::Sequencer(a) => !matches!(a,
+                | SessionAction::SaveAs(_)
+                | SessionAction::Load
+                | SessionAction::LoadFrom(_)
+                | SessionAction::NewProject
+                | SessionAction::OpenFileBrowser(_)
+        ),
+        DomainAction::Sequencer(a) => !matches!(
+            a,
             SequencerAction::PlayStop
-            | SequencerAction::LoadSample(_)
-            | SequencerAction::LoadSampleResult(_, _)
-            | SequencerAction::CopySteps { .. }),
-        DomainAction::Chopper(a) => !matches!(a,
+                | SequencerAction::LoadSample(_)
+                | SequencerAction::LoadSampleResult(_, _)
+                | SequencerAction::CopySteps { .. }
+        ),
+        DomainAction::Chopper(a) => !matches!(
+            a,
             crate::action::ChopperAction::LoadSample
-            | crate::action::ChopperAction::LoadSampleResult(_)
-            | crate::action::ChopperAction::PreviewSlice
-            | crate::action::ChopperAction::SelectSlice(_)
-            | crate::action::ChopperAction::MoveCursor(_)),
-        DomainAction::Automation(a) => !matches!(a,
+                | crate::action::ChopperAction::LoadSampleResult(_)
+                | crate::action::ChopperAction::PreviewSlice
+                | crate::action::ChopperAction::SelectSlice(_)
+                | crate::action::ChopperAction::MoveCursor(_)
+        ),
+        DomainAction::Automation(a) => !matches!(
+            a,
             crate::action::AutomationAction::SelectLane(_)
-            | crate::action::AutomationAction::ToggleRecording
-            | crate::action::AutomationAction::ToggleLaneArm(_)
-            | crate::action::AutomationAction::ArmAllLanes
-            | crate::action::AutomationAction::DisarmAllLanes
-            | crate::action::AutomationAction::RecordValue(_, _)
-            | crate::action::AutomationAction::CopyPoints(_, _, _)),
-        DomainAction::Midi(a) => !matches!(a,
-            crate::action::MidiAction::ConnectPort(_)
-            | crate::action::MidiAction::DisconnectPort),
-        DomainAction::Arrangement(a) => !matches!(a,
+                | crate::action::AutomationAction::ToggleRecording
+                | crate::action::AutomationAction::ToggleLaneArm(_)
+                | crate::action::AutomationAction::ArmAllLanes
+                | crate::action::AutomationAction::DisarmAllLanes
+                | crate::action::AutomationAction::RecordValue(_, _)
+                | crate::action::AutomationAction::CopyPoints(_, _, _)
+        ),
+        DomainAction::Midi(a) => !matches!(
+            a,
+            crate::action::MidiAction::ConnectPort(_) | crate::action::MidiAction::DisconnectPort
+        ),
+        DomainAction::Arrangement(a) => !matches!(
+            a,
             crate::action::ArrangementAction::TogglePlayMode
-            | crate::action::ArrangementAction::SelectPlacement(_)
-            | crate::action::ArrangementAction::SelectLane(_)
-            | crate::action::ArrangementAction::MoveCursor(_)
-            | crate::action::ArrangementAction::ScrollView(_)
-            | crate::action::ArrangementAction::PlayStop),
-        DomainAction::VstParam(a) => matches!(a,
+                | crate::action::ArrangementAction::SelectPlacement(_)
+                | crate::action::ArrangementAction::SelectLane(_)
+                | crate::action::ArrangementAction::MoveCursor(_)
+                | crate::action::ArrangementAction::ScrollView(_)
+                | crate::action::ArrangementAction::PlayStop
+        ),
+        DomainAction::VstParam(a) => matches!(
+            a,
             VstParamAction::SetParam(_, _, _, _)
-            | VstParamAction::AdjustParam(_, _, _, _)
-            | VstParamAction::ResetParam(_, _, _)),
+                | VstParamAction::AdjustParam(_, _, _, _)
+                | VstParamAction::ResetParam(_, _, _)
+        ),
         DomainAction::Undo | DomainAction::Redo => false,
         _ => false,
     }
@@ -540,8 +546,8 @@ pub fn is_undoable(action: &DomainAction) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::state::SessionState;
     use crate::state::InstrumentState;
+    use crate::state::SessionState;
     use imbolc_types::{BusId, SourceType};
 
     #[test]
@@ -680,11 +686,7 @@ mod tests {
         let id2 = instruments.add_instrument(SourceType::Sin);
 
         // Snapshot instrument 1 before modifying
-        history.push_scoped(
-            UndoScope::SingleInstrument(id1),
-            &session,
-            &instruments,
-        );
+        history.push_scoped(UndoScope::SingleInstrument(id1), &session, &instruments);
 
         // Modify instrument 1's level
         instruments.instrument_mut(id1).unwrap().mixer.level = 0.3;
@@ -746,11 +748,17 @@ mod tests {
 
         // Instrument Add => Full
         let action = DomainAction::Instrument(InstrumentAction::Add(SourceType::Saw));
-        assert_eq!(undo_scope(&action, &session, &instruments, false), UndoScope::Full);
+        assert_eq!(
+            undo_scope(&action, &session, &instruments, false),
+            UndoScope::Full
+        );
 
         // Instrument Delete => Full
         let action = DomainAction::Instrument(InstrumentAction::Delete(id1));
-        assert_eq!(undo_scope(&action, &session, &instruments, false), UndoScope::Full);
+        assert_eq!(
+            undo_scope(&action, &session, &instruments, false),
+            UndoScope::Full
+        );
 
         // Instrument param tweak => SingleInstrument (no automation recording)
         let action = DomainAction::Instrument(InstrumentAction::AdjustFilterCutoff(id1, 0.1));
@@ -767,15 +775,24 @@ mod tests {
 
         // PianoRoll => Session
         let action = DomainAction::PianoRoll(crate::action::PianoRollAction::ToggleLoop);
-        assert_eq!(undo_scope(&action, &session, &instruments, false), UndoScope::Session);
+        assert_eq!(
+            undo_scope(&action, &session, &instruments, false),
+            UndoScope::Session
+        );
 
         // Bus Add => Full
         let action = DomainAction::Bus(BusAction::Add);
-        assert_eq!(undo_scope(&action, &session, &instruments, false), UndoScope::Full);
+        assert_eq!(
+            undo_scope(&action, &session, &instruments, false),
+            UndoScope::Full
+        );
 
         // Bus Rename => Session
         let action = DomainAction::Bus(BusAction::Rename(BusId::new(1), "Test".to_string()));
-        assert_eq!(undo_scope(&action, &session, &instruments, false), UndoScope::Session);
+        assert_eq!(
+            undo_scope(&action, &session, &instruments, false),
+            UndoScope::Session
+        );
 
         // Sequencer (with selected instrument) => SingleInstrument
         instruments.selected = Some(0);

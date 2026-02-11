@@ -1,5 +1,5 @@
-use crate::state::AppState;
 use crate::action::{AudioEffect, DispatchResult};
+use crate::state::AppState;
 use crate::state::InstrumentId;
 use imbolc_types::{DomainAction, InstrumentAction};
 
@@ -23,11 +23,12 @@ pub(super) fn handle_link_layer(
     result
 }
 
-pub(super) fn handle_unlink_layer(
-    state: &mut AppState,
-    id: InstrumentId,
-) -> DispatchResult {
-    let had_group = state.instruments.instrument(id).and_then(|i| i.layer.group).is_some();
+pub(super) fn handle_unlink_layer(state: &mut AppState, id: InstrumentId) -> DispatchResult {
+    let had_group = state
+        .instruments
+        .instrument(id)
+        .and_then(|i| i.layer.group)
+        .is_some();
     imbolc_types::reduce::reduce_action(
         &DomainAction::Instrument(InstrumentAction::UnlinkLayer(id)),
         &mut state.instruments,
@@ -64,13 +65,37 @@ mod tests {
     fn adjust_layer_octave_offset_increments() {
         let mut state = AppState::new();
         let id = state.add_instrument(SourceType::Saw);
-        assert_eq!(state.instruments.instrument(id).unwrap().layer.octave_offset, 0);
+        assert_eq!(
+            state
+                .instruments
+                .instrument(id)
+                .unwrap()
+                .layer
+                .octave_offset,
+            0
+        );
 
         handle_adjust_layer_octave_offset(&mut state, id, 1);
-        assert_eq!(state.instruments.instrument(id).unwrap().layer.octave_offset, 1);
+        assert_eq!(
+            state
+                .instruments
+                .instrument(id)
+                .unwrap()
+                .layer
+                .octave_offset,
+            1
+        );
 
         handle_adjust_layer_octave_offset(&mut state, id, 1);
-        assert_eq!(state.instruments.instrument(id).unwrap().layer.octave_offset, 2);
+        assert_eq!(
+            state
+                .instruments
+                .instrument(id)
+                .unwrap()
+                .layer
+                .octave_offset,
+            2
+        );
     }
 
     #[test]
@@ -79,7 +104,15 @@ mod tests {
         let id = state.add_instrument(SourceType::Saw);
 
         handle_adjust_layer_octave_offset(&mut state, id, -1);
-        assert_eq!(state.instruments.instrument(id).unwrap().layer.octave_offset, -1);
+        assert_eq!(
+            state
+                .instruments
+                .instrument(id)
+                .unwrap()
+                .layer
+                .octave_offset,
+            -1
+        );
     }
 
     #[test]
@@ -90,7 +123,15 @@ mod tests {
         for _ in 0..10 {
             handle_adjust_layer_octave_offset(&mut state, id, 1);
         }
-        assert_eq!(state.instruments.instrument(id).unwrap().layer.octave_offset, 4);
+        assert_eq!(
+            state
+                .instruments
+                .instrument(id)
+                .unwrap()
+                .layer
+                .octave_offset,
+            4
+        );
     }
 
     #[test]
@@ -101,7 +142,15 @@ mod tests {
         for _ in 0..10 {
             handle_adjust_layer_octave_offset(&mut state, id, -1);
         }
-        assert_eq!(state.instruments.instrument(id).unwrap().layer.octave_offset, -4);
+        assert_eq!(
+            state
+                .instruments
+                .instrument(id)
+                .unwrap()
+                .layer
+                .octave_offset,
+            -4
+        );
     }
 
     #[test]
@@ -110,7 +159,9 @@ mod tests {
         let id = state.add_instrument(SourceType::Saw);
 
         let result = handle_adjust_layer_octave_offset(&mut state, id, 1);
-        assert!(!result.audio_effects.contains(&AudioEffect::RebuildInstruments));
+        assert!(!result
+            .audio_effects
+            .contains(&AudioEffect::RebuildInstruments));
         assert!(!result.audio_effects.contains(&AudioEffect::RebuildRouting));
     }
 }

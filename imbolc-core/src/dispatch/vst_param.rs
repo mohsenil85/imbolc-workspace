@@ -1,39 +1,58 @@
 use std::path::PathBuf;
 
-use imbolc_audio::AudioHandle;
-use imbolc_audio::commands::AudioCmd;
-use crate::state::AppState;
-use crate::state::automation::AutomationTarget;
 use crate::action::{DispatchResult, VstParamAction, VstTarget};
-use crate::state::instrument::Instrument;
-use imbolc_types::SourceExtra;
-use crate::state::vst_plugin::VstPluginId;
 use crate::dispatch::automation::record_automation_point;
+use crate::state::automation::AutomationTarget;
+use crate::state::instrument::Instrument;
+use crate::state::vst_plugin::VstPluginId;
+use crate::state::AppState;
+use imbolc_audio::commands::AudioCmd;
+use imbolc_audio::AudioHandle;
+use imbolc_types::SourceExtra;
 
 /// Compute VST state file path for an instrument source
 fn vst_state_path(instrument_id: imbolc_types::InstrumentId, plugin_name: &str) -> PathBuf {
-    let config_dir = dirs::config_dir()
-        .unwrap_or_else(|| PathBuf::from("."));
-    let sanitized: String = plugin_name.chars()
-        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+    let config_dir = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
+    let sanitized: String = plugin_name
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect();
-    config_dir
-        .join("imbolc")
-        .join("vst_states")
-        .join(format!("instrument_{}_{}.fxp", instrument_id.get(), sanitized))
+    config_dir.join("imbolc").join("vst_states").join(format!(
+        "instrument_{}_{}.fxp",
+        instrument_id.get(),
+        sanitized
+    ))
 }
 
 /// Compute VST state file path for an effect slot
-fn vst_effect_state_path(instrument_id: imbolc_types::InstrumentId, effect_id: imbolc_types::EffectId, plugin_name: &str) -> PathBuf {
-    let config_dir = dirs::config_dir()
-        .unwrap_or_else(|| PathBuf::from("."));
-    let sanitized: String = plugin_name.chars()
-        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+fn vst_effect_state_path(
+    instrument_id: imbolc_types::InstrumentId,
+    effect_id: imbolc_types::EffectId,
+    plugin_name: &str,
+) -> PathBuf {
+    let config_dir = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
+    let sanitized: String = plugin_name
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect();
-    config_dir
-        .join("imbolc")
-        .join("vst_states")
-        .join(format!("instrument_{}_fx_{}_{}.fxp", instrument_id.get(), effect_id.get(), sanitized))
+    config_dir.join("imbolc").join("vst_states").join(format!(
+        "instrument_{}_fx_{}_{}.fxp",
+        instrument_id.get(),
+        effect_id.get(),
+        sanitized
+    ))
 }
 
 /// Get the VstPluginId for a given instrument and target
@@ -46,15 +65,13 @@ fn get_vst_plugin_id(instrument: &Instrument, target: VstTarget) -> Option<VstPl
                 None
             }
         }
-        VstTarget::Effect(effect_id) => {
-            instrument.effect_by_id(effect_id).and_then(|e| {
-                if let crate::state::EffectType::Vst(id) = e.effect_type {
-                    Some(id)
-                } else {
-                    None
-                }
-            })
-        }
+        VstTarget::Effect(effect_id) => instrument.effect_by_id(effect_id).and_then(|e| {
+            if let crate::state::EffectType::Vst(id) = e.effect_type {
+                Some(id)
+            } else {
+                None
+            }
+        }),
     }
 }
 
@@ -62,11 +79,10 @@ fn get_vst_plugin_id(instrument: &Instrument, target: VstTarget) -> Option<VstPl
 fn get_param_values(instrument: &Instrument, target: VstTarget) -> &[(u32, f32)] {
     match target {
         VstTarget::Source => instrument.vst_source_params(),
-        VstTarget::Effect(effect_id) => {
-            instrument.effect_by_id(effect_id)
-                .map(|e| e.vst_param_values.as_slice())
-                .unwrap_or(&[])
-        }
+        VstTarget::Effect(effect_id) => instrument
+            .effect_by_id(effect_id)
+            .map(|e| e.vst_param_values.as_slice())
+            .unwrap_or(&[]),
     }
 }
 
@@ -115,10 +131,14 @@ pub(super) fn dispatch_vst_param(
             reduce(state, action);
 
             // Read back the new value after mutation for side effects
-            let new_value = state.instruments.instrument(*instrument_id)
+            let new_value = state
+                .instruments
+                .instrument(*instrument_id)
                 .map(|inst| {
                     let values = get_param_values(inst, *target);
-                    values.iter().find(|(idx, _)| *idx == *param_index)
+                    values
+                        .iter()
+                        .find(|(idx, _)| *idx == *param_index)
                         .map(|(_, v)| *v)
                         .unwrap_or(0.5)
                 })
@@ -148,10 +168,14 @@ pub(super) fn dispatch_vst_param(
             reduce(state, action);
 
             // Read back the new value after mutation for side effects
-            let new_value = state.instruments.instrument(*instrument_id)
+            let new_value = state
+                .instruments
+                .instrument(*instrument_id)
                 .map(|inst| {
                     let values = get_param_values(inst, *target);
-                    values.iter().find(|(idx, _)| *idx == *param_index)
+                    values
+                        .iter()
+                        .find(|(idx, _)| *idx == *param_index)
                         .map(|(_, v)| *v)
                         .unwrap_or(0.5)
                 })
@@ -171,7 +195,9 @@ pub(super) fn dispatch_vst_param(
         }
         VstParamAction::DiscoverParams(instrument_id, target) => {
             // Try VST3 probe first — direct binary probing gives real param names
-            let probed = state.instruments.instrument(*instrument_id)
+            let probed = state
+                .instruments
+                .instrument(*instrument_id)
                 .and_then(|inst| {
                     let plugin_id = get_vst_plugin_id(inst, *target)?;
                     let plugin = state.session.vst_plugins.get(plugin_id)?;
@@ -190,12 +216,19 @@ pub(super) fn dispatch_vst_param(
                 // Update the plugin registry with probed params
                 use crate::state::vst_plugin::VstParamSpec;
                 if let Some(plugin) = state.session.vst_plugins.get_mut(plugin_id) {
-                    plugin.params = probed_params.iter().map(|p| VstParamSpec {
-                        index: p.index as u32,
-                        name: p.name.clone(),
-                        default: p.default_normalized as f32,
-                        label: if p.units.is_empty() { None } else { Some(p.units.clone()) },
-                    }).collect();
+                    plugin.params = probed_params
+                        .iter()
+                        .map(|p| VstParamSpec {
+                            index: p.index as u32,
+                            name: p.name.clone(),
+                            default: p.default_normalized as f32,
+                            label: if p.units.is_empty() {
+                                None
+                            } else {
+                                Some(p.units.clone())
+                            },
+                        })
+                        .collect();
                 }
             } else {
                 // Fall back to OSC discovery
@@ -222,7 +255,9 @@ pub(super) fn dispatch_vst_param(
                 };
                 let path = match *target {
                     VstTarget::Source => vst_state_path(*instrument_id, &plugin_name),
-                    VstTarget::Effect(effect_id) => vst_effect_state_path(*instrument_id, effect_id, &plugin_name),
+                    VstTarget::Effect(effect_id) => {
+                        vst_effect_state_path(*instrument_id, effect_id, &plugin_name)
+                    }
                 };
                 if let Some(parent) = path.parent() {
                     let _ = std::fs::create_dir_all(parent);
@@ -231,7 +266,10 @@ pub(super) fn dispatch_vst_param(
                 if let Some(instrument) = state.instruments.instrument_mut(*instrument_id) {
                     match *target {
                         VstTarget::Source => {
-                            if let SourceExtra::Vst { ref mut state_path, .. } = instrument.source_extra {
+                            if let SourceExtra::Vst {
+                                ref mut state_path, ..
+                            } = instrument.source_extra
+                            {
                                 *state_path = Some(path.clone());
                             }
                         }
@@ -272,7 +310,9 @@ mod tests {
     #[test]
     fn set_param_records_when_recording() {
         let (mut state, mut audio) = setup();
-        let id = state.instruments.add_instrument(SourceType::Vst(VstPluginId::new(0)));
+        let id = state
+            .instruments
+            .add_instrument(SourceType::Vst(VstPluginId::new(0)));
         state.recording.automation_recording = true;
         state.session.piano_roll.playing = true;
         state.audio.playing = true;
@@ -293,7 +333,9 @@ mod tests {
     #[test]
     fn set_param_no_record_when_not_recording() {
         let (mut state, mut audio) = setup();
-        let id = state.instruments.add_instrument(SourceType::Vst(VstPluginId::new(0)));
+        let id = state
+            .instruments
+            .add_instrument(SourceType::Vst(VstPluginId::new(0)));
         state.recording.automation_recording = false;
         state.session.piano_roll.playing = true;
         state.audio.playing = true;
@@ -311,7 +353,9 @@ mod tests {
     #[test]
     fn set_param_updates_state_regardless() {
         let (mut state, mut audio) = setup();
-        let id = state.instruments.add_instrument(SourceType::Vst(VstPluginId::new(0)));
+        let id = state
+            .instruments
+            .add_instrument(SourceType::Vst(VstPluginId::new(0)));
         state.recording.automation_recording = false;
 
         dispatch_vst_param(

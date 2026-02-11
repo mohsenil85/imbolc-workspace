@@ -43,7 +43,9 @@ pub fn App() -> Element {
         if let Some(action) = kb.lookup(&evt.data()) {
             match action {
                 GuiAction::TogglePlay => {
-                    shared_state.write().dispatch(Action::Arrangement(ArrangementAction::PlayStop));
+                    shared_state
+                        .write()
+                        .dispatch(Action::Arrangement(ArrangementAction::PlayStop));
                 }
                 GuiAction::Stop => {
                     // Stop and reset playhead
@@ -70,24 +72,32 @@ pub fn App() -> Element {
                 }
                 GuiAction::NewProject => {
                     log::info!("New project requested");
-                    shared_state.write().dispatch(Action::Session(SessionAction::NewProject));
+                    shared_state
+                        .write()
+                        .dispatch(Action::Session(SessionAction::NewProject));
                 }
                 GuiAction::OpenProject => {
                     spawn(async move {
                         if let Some(path) = file_ops::open_project_dialog().await {
                             log::info!("Opening project: {:?}", path);
-                            shared_state.write().dispatch(Action::Session(SessionAction::LoadFrom(path)));
+                            shared_state
+                                .write()
+                                .dispatch(Action::Session(SessionAction::LoadFrom(path)));
                         }
                     });
                 }
                 GuiAction::SaveProject => {
-                    shared_state.write().dispatch(Action::Session(SessionAction::Save));
+                    shared_state
+                        .write()
+                        .dispatch(Action::Session(SessionAction::Save));
                 }
                 GuiAction::SaveProjectAs => {
                     spawn(async move {
                         if let Some(path) = file_ops::save_project_dialog().await {
                             log::info!("Saving project as: {:?}", path);
-                            shared_state.write().dispatch(Action::Session(SessionAction::SaveAs(path)));
+                            shared_state
+                                .write()
+                                .dispatch(Action::Session(SessionAction::SaveAs(path)));
                         }
                     });
                 }
@@ -101,10 +111,14 @@ pub fn App() -> Element {
                     log::info!("Delete requested");
                 }
                 GuiAction::ToggleMute => {
-                    shared_state.write().dispatch(Action::Mixer(MixerAction::ToggleMute));
+                    shared_state
+                        .write()
+                        .dispatch(Action::Mixer(MixerAction::ToggleMute));
                 }
                 GuiAction::ToggleSolo => {
-                    shared_state.write().dispatch(Action::Mixer(MixerAction::ToggleSolo));
+                    shared_state
+                        .write()
+                        .dispatch(Action::Mixer(MixerAction::ToggleSolo));
                 }
             }
         }

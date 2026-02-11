@@ -1,13 +1,13 @@
-use std::path::PathBuf;
-use std::sync::mpsc::Sender;
-use imbolc_audio::AudioHandle;
-use imbolc_types::DomainAction;
+use crate::action::{AudioEffect, DispatchResult, IoFeedback, NavIntent, PaneId, SessionAction};
 use crate::scd_parser;
 use crate::state::{AppState, CustomSynthDef, ParamSpec};
-use crate::action::{AudioEffect, DispatchResult, IoFeedback, NavIntent, PaneId, SessionAction};
+use imbolc_audio::AudioHandle;
+use imbolc_types::DomainAction;
+use std::path::PathBuf;
+use std::sync::mpsc::Sender;
 
-use super::server::compile_synthdef;
 use super::default_rack_path;
+use super::server::compile_synthdef;
 
 fn dispatch_save(
     path: PathBuf,
@@ -40,7 +40,11 @@ fn dispatch_save(
             })
             .map_err(|e| e.to_string());
 
-        let _ = tx.send(IoFeedback::SaveComplete { id: save_id, path, result: res });
+        let _ = tx.send(IoFeedback::SaveComplete {
+            id: save_id,
+            path,
+            result: res,
+        });
     });
 
     result.push_status(audio.status(), "Saving...");
@@ -64,7 +68,8 @@ fn dispatch_load(
         let res = if path.exists() {
             crate::state::persistence::load_project(&path)
                 .map(|(session, instruments)| {
-                    let name = path.file_stem()
+                    let name = path
+                        .file_stem()
                         .and_then(|s| s.to_str())
                         .unwrap_or("default")
                         .to_string();
@@ -75,7 +80,11 @@ fn dispatch_load(
             Err("Project file not found".to_string())
         };
 
-        let _ = tx.send(IoFeedback::LoadComplete { id: load_id, path, result: res });
+        let _ = tx.send(IoFeedback::LoadComplete {
+            id: load_id,
+            path,
+            result: res,
+        });
     });
 
     result.push_status(audio.status(), "Loading...");
@@ -113,7 +122,10 @@ pub(super) fn dispatch_session(
         }
         SessionAction::NewProject => {
             let defaults = state.project.default_settings.clone();
-            state.session = crate::state::SessionState::new_with_defaults(defaults, crate::state::session::DEFAULT_BUS_COUNT);
+            state.session = crate::state::SessionState::new_with_defaults(
+                defaults,
+                crate::state::session::DEFAULT_BUS_COUNT,
+            );
             state.instruments = crate::state::InstrumentState::new();
             state.project.path = None;
             state.project.dirty = false;
@@ -156,7 +168,7 @@ pub(super) fn dispatch_session(
             let path = path.clone();
             let tx = io_tx.clone();
             let import_id = state.io.generation.next_import_synthdef();
-            
+
             std::thread::spawn(move || {
                 // Read and parse the .scd file
                 let res = match std::fs::read_to_string(&path) {
@@ -210,8 +222,11 @@ pub(super) fn dispatch_session(
                     }
                     Err(e) => Err(format!("Failed to read .scd file: {}", e)),
                 };
-                
-                let _ = tx.send(IoFeedback::ImportSynthDefComplete { id: import_id, result: res });
+
+                let _ = tx.send(IoFeedback::ImportSynthDefComplete {
+                    id: import_id,
+                    result: res,
+                });
             });
 
             result.push_status(audio.status(), "Importing SynthDef...");
@@ -234,24 +249,32 @@ pub(super) fn dispatch_session(
             result.audio_effects.push(AudioEffect::RebuildSession);
         }
         SessionAction::ImportVstPlugin(ref path, kind) => {
-            use crate::state::vst_plugin::{VstPlugin, VstParamSpec};
+            use crate::state::vst_plugin::{VstParamSpec, VstPlugin};
 
             let kind = *kind;
 
             // Extract display name from filename
-            let name = path.file_stem()
+            let name = path
+                .file_stem()
                 .map(|s| s.to_string_lossy().to_string())
                 .unwrap_or_else(|| "VST Plugin".to_string());
 
             // Probe the VST3 binary for parameter metadata
             let params = if path.extension().and_then(|e| e.to_str()) == Some("vst3") {
                 match crate::vst3_probe::probe_vst3_params(path) {
-                    Ok(probed) => probed.iter().map(|p| VstParamSpec {
-                        index: p.index as u32,
-                        name: p.name.clone(),
-                        default: p.default_normalized as f32,
-                        label: if p.units.is_empty() { None } else { Some(p.units.clone()) },
-                    }).collect(),
+                    Ok(probed) => probed
+                        .iter()
+                        .map(|p| VstParamSpec {
+                            index: p.index as u32,
+                            name: p.name.clone(),
+                            default: p.default_normalized as f32,
+                            label: if p.units.is_empty() {
+                                None
+                            } else {
+                                Some(p.units.clone())
+                            },
+                        })
+                        .collect(),
                     Err(_) => vec![], // Probe failed — will discover via OSC later
                 }
             } else {
@@ -294,7 +317,10 @@ pub(super) fn dispatch_session(
                 &mut state.instruments,
                 &mut state.session,
             );
-            result.push_status(audio.status(), format!("Theme: {}", state.session.theme.name));
+            result.push_status(
+                audio.status(),
+                format!("Theme: {}", state.session.theme.name),
+            );
         }
         SessionAction::CreateCheckpoint(ref label) => {
             let path = state.project.path.clone().unwrap_or_else(default_rack_path);
@@ -305,7 +331,10 @@ pub(super) fn dispatch_session(
                 &state.instruments,
             ) {
                 Ok(id) => {
-                    result.push_status(audio.status(), format!("Checkpoint '{}' created ({})", label, id));
+                    result.push_status(
+                        audio.status(),
+                        format!("Checkpoint '{}' created ({})", label, id),
+                    );
                 }
                 Err(e) => {
                     result.push_status(audio.status(), format!("Checkpoint failed: {}", e));

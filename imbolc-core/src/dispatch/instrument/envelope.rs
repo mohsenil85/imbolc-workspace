@@ -28,7 +28,9 @@ pub(super) fn handle_adjust_envelope_attack(
     reduce(state, &InstrumentAction::AdjustEnvelopeAttack(id, delta));
     let mut result = DispatchResult::none();
     result.audio_effects.push(AudioEffect::RebuildInstruments);
-    result.audio_effects.push(AudioEffect::RebuildRoutingForInstrument(id));
+    result
+        .audio_effects
+        .push(AudioEffect::RebuildRoutingForInstrument(id));
     if let Some(inst) = state.instruments.instrument(id) {
         let v = inst.modulation.amp_envelope.attack;
         let normalized = (v - ATTACK_MIN) / (ATTACK_MAX - ATTACK_MIN);
@@ -45,7 +47,9 @@ pub(super) fn handle_adjust_envelope_decay(
     reduce(state, &InstrumentAction::AdjustEnvelopeDecay(id, delta));
     let mut result = DispatchResult::none();
     result.audio_effects.push(AudioEffect::RebuildInstruments);
-    result.audio_effects.push(AudioEffect::RebuildRoutingForInstrument(id));
+    result
+        .audio_effects
+        .push(AudioEffect::RebuildRoutingForInstrument(id));
     if let Some(inst) = state.instruments.instrument(id) {
         let v = inst.modulation.amp_envelope.decay;
         let normalized = (v - DECAY_MIN) / (DECAY_MAX - DECAY_MIN);
@@ -62,7 +66,9 @@ pub(super) fn handle_adjust_envelope_sustain(
     reduce(state, &InstrumentAction::AdjustEnvelopeSustain(id, delta));
     let mut result = DispatchResult::none();
     result.audio_effects.push(AudioEffect::RebuildInstruments);
-    result.audio_effects.push(AudioEffect::RebuildRoutingForInstrument(id));
+    result
+        .audio_effects
+        .push(AudioEffect::RebuildRoutingForInstrument(id));
     if let Some(inst) = state.instruments.instrument(id) {
         let v = inst.modulation.amp_envelope.sustain;
         maybe_record_automation(state, &mut result, AutomationTarget::sustain(id), v);
@@ -78,11 +84,18 @@ pub(super) fn handle_adjust_envelope_release(
     reduce(state, &InstrumentAction::AdjustEnvelopeRelease(id, delta));
     let mut result = DispatchResult::none();
     result.audio_effects.push(AudioEffect::RebuildInstruments);
-    result.audio_effects.push(AudioEffect::RebuildRoutingForInstrument(id));
+    result
+        .audio_effects
+        .push(AudioEffect::RebuildRoutingForInstrument(id));
     if let Some(inst) = state.instruments.instrument(id) {
         let v = inst.modulation.amp_envelope.release;
         let normalized = (v - RELEASE_MIN) / (RELEASE_MAX - RELEASE_MIN);
-        maybe_record_automation(state, &mut result, AutomationTarget::release(id), normalized);
+        maybe_record_automation(
+            state,
+            &mut result,
+            AutomationTarget::release(id),
+            normalized,
+        );
     }
     result
 }

@@ -9,10 +9,8 @@ use dioxus::prelude::*;
 #[component]
 pub fn WaveformView(
     clip_id: u32,
-    #[props(default = 0)]
-    _start_tick: u32,
-    #[props(default = 0)]
-    _length_ticks: u32,
+    #[props(default = 0)] _start_tick: u32,
+    #[props(default = 0)] _length_ticks: u32,
 ) -> Element {
     rsx! {
         div { class: "waveform-view",

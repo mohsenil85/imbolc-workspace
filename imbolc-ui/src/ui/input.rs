@@ -104,7 +104,12 @@ impl Eq for InputEvent {}
 
 impl InputEvent {
     pub fn new(key: KeyCode, modifiers: Modifiers) -> Self {
-        Self { key, modifiers, timestamp: Instant::now(), is_repeat: false }
+        Self {
+            key,
+            modifiers,
+            timestamp: Instant::now(),
+            is_repeat: false,
+        }
     }
 
     #[allow(dead_code)]

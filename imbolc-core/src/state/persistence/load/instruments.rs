@@ -1,21 +1,26 @@
 use std::path::PathBuf;
 
-use rusqlite::{params, Connection, Result as SqlResult, OptionalExtension};
+use rusqlite::{params, Connection, OptionalExtension, Result as SqlResult};
 
-use imbolc_types::BusId;
-use crate::state::instrument_state::InstrumentState;
-use super::{table_exists, load_params, load_effects_from};
 use super::decoders::*;
+use super::{load_effects_from, load_params, table_exists};
+use crate::state::instrument_state::InstrumentState;
+use imbolc_types::BusId;
 
-pub(super) fn load_instruments(conn: &Connection, instruments: &mut InstrumentState) -> SqlResult<()> {
-    use crate::state::instrument::*;
+pub(super) fn load_instruments(
+    conn: &Connection,
+    instruments: &mut InstrumentState,
+) -> SqlResult<()> {
     use crate::state::arpeggiator::ArpeggiatorConfig;
-    use imbolc_types::ProcessingStage;
+    use crate::state::instrument::*;
     use imbolc_types::state::groove::GrooveConfig;
+    use imbolc_types::ProcessingStage;
 
     instruments.instruments.clear();
 
-    let has_layer_octave_offset = conn.prepare("SELECT layer_octave_offset FROM instruments LIMIT 0").is_ok();
+    let has_layer_octave_offset = conn
+        .prepare("SELECT layer_octave_offset FROM instruments LIMIT 0")
+        .is_ok();
 
     let mut stmt = conn.prepare(
         "SELECT id, name, source_type,
@@ -32,59 +37,61 @@ pub(super) fn load_instruments(conn: &Connection, instruments: &mut InstrumentSt
             groove_swing_amount, groove_swing_grid,
             groove_humanize_velocity, groove_humanize_timing,
             groove_timing_offset_ms, groove_time_sig_num, groove_time_sig_denom
-         FROM instruments ORDER BY position"
+         FROM instruments ORDER BY position",
     )?;
 
-    let rows: Vec<InstrumentRow> = stmt.query_map([], |row| {
-        Ok(InstrumentRow {
-            id: row.get(0)?,
-            name: row.get(1)?,
-            source_type: row.get(2)?,
-            filter_type: row.get(3)?,
-            filter_cutoff: row.get(4)?,
-            filter_cutoff_min: row.get(5)?,
-            filter_cutoff_max: row.get(6)?,
-            filter_resonance: row.get(7)?,
-            filter_resonance_min: row.get(8)?,
-            filter_resonance_max: row.get(9)?,
-            filter_enabled: row.get(10)?,
-            lfo_enabled: row.get(11)?,
-            lfo_rate: row.get(12)?,
-            lfo_depth: row.get(13)?,
-            lfo_shape: row.get(14)?,
-            lfo_target: row.get(15)?,
-            amp_attack: row.get(16)?,
-            amp_decay: row.get(17)?,
-            amp_sustain: row.get(18)?,
-            amp_release: row.get(19)?,
-            polyphonic: row.get(20)?,
-            level: row.get(21)?,
-            pan: row.get(22)?,
-            mute: row.get(23)?,
-            solo: row.get(24)?,
-            active: row.get(25)?,
-            output_target: row.get(26)?,
-            channel_config: row.get(27)?,
-            convolution_ir_path: row.get(28)?,
-            layer_group: row.get(29)?,
-            next_effect_id: row.get(30)?,
-            eq_enabled: row.get(31)?,
-            arp_enabled: row.get(32)?,
-            arp_direction: row.get(33)?,
-            arp_rate: row.get(34)?,
-            arp_octaves: row.get(35)?,
-            arp_gate: row.get(36)?,
-            chord_shape: row.get(37)?,
-            vst_state_path: row.get(38)?,
-            groove_swing_amount: row.get(39)?,
-            groove_swing_grid: row.get(40)?,
-            groove_humanize_velocity: row.get(41)?,
-            groove_humanize_timing: row.get(42)?,
-            groove_timing_offset_ms: row.get(43)?,
-            groove_time_sig_num: row.get(44)?,
-            groove_time_sig_denom: row.get(45)?,
-        })
-    })?.collect::<SqlResult<_>>()?;
+    let rows: Vec<InstrumentRow> = stmt
+        .query_map([], |row| {
+            Ok(InstrumentRow {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                source_type: row.get(2)?,
+                filter_type: row.get(3)?,
+                filter_cutoff: row.get(4)?,
+                filter_cutoff_min: row.get(5)?,
+                filter_cutoff_max: row.get(6)?,
+                filter_resonance: row.get(7)?,
+                filter_resonance_min: row.get(8)?,
+                filter_resonance_max: row.get(9)?,
+                filter_enabled: row.get(10)?,
+                lfo_enabled: row.get(11)?,
+                lfo_rate: row.get(12)?,
+                lfo_depth: row.get(13)?,
+                lfo_shape: row.get(14)?,
+                lfo_target: row.get(15)?,
+                amp_attack: row.get(16)?,
+                amp_decay: row.get(17)?,
+                amp_sustain: row.get(18)?,
+                amp_release: row.get(19)?,
+                polyphonic: row.get(20)?,
+                level: row.get(21)?,
+                pan: row.get(22)?,
+                mute: row.get(23)?,
+                solo: row.get(24)?,
+                active: row.get(25)?,
+                output_target: row.get(26)?,
+                channel_config: row.get(27)?,
+                convolution_ir_path: row.get(28)?,
+                layer_group: row.get(29)?,
+                next_effect_id: row.get(30)?,
+                eq_enabled: row.get(31)?,
+                arp_enabled: row.get(32)?,
+                arp_direction: row.get(33)?,
+                arp_rate: row.get(34)?,
+                arp_octaves: row.get(35)?,
+                arp_gate: row.get(36)?,
+                chord_shape: row.get(37)?,
+                vst_state_path: row.get(38)?,
+                groove_swing_amount: row.get(39)?,
+                groove_swing_grid: row.get(40)?,
+                groove_humanize_velocity: row.get(41)?,
+                groove_humanize_timing: row.get(42)?,
+                groove_timing_offset_ms: row.get(43)?,
+                groove_time_sig_num: row.get(44)?,
+                groove_time_sig_denom: row.get(45)?,
+            })
+        })?
+        .collect::<SqlResult<_>>()?;
 
     for r in rows {
         let source = decode_source_type(&r.source_type);
@@ -93,12 +100,24 @@ pub(super) fn load_instruments(conn: &Connection, instruments: &mut InstrumentSt
         let filter = if let Some(ref ft) = r.filter_type {
             let filter_type = decode_filter_type(ft);
             let mut fc = FilterConfig::new(filter_type);
-            if let Some(v) = r.filter_cutoff { fc.cutoff.value = v; }
-            if let Some(v) = r.filter_cutoff_min { fc.cutoff.min = v; }
-            if let Some(v) = r.filter_cutoff_max { fc.cutoff.max = v; }
-            if let Some(v) = r.filter_resonance { fc.resonance.value = v; }
-            if let Some(v) = r.filter_resonance_min { fc.resonance.min = v; }
-            if let Some(v) = r.filter_resonance_max { fc.resonance.max = v; }
+            if let Some(v) = r.filter_cutoff {
+                fc.cutoff.value = v;
+            }
+            if let Some(v) = r.filter_cutoff_min {
+                fc.cutoff.min = v;
+            }
+            if let Some(v) = r.filter_cutoff_max {
+                fc.cutoff.max = v;
+            }
+            if let Some(v) = r.filter_resonance {
+                fc.resonance.value = v;
+            }
+            if let Some(v) = r.filter_resonance_min {
+                fc.resonance.min = v;
+            }
+            if let Some(v) = r.filter_resonance_max {
+                fc.resonance.max = v;
+            }
             fc.enabled = r.filter_enabled != Some(0);
 
             // Load filter modulations
@@ -106,7 +125,12 @@ pub(super) fn load_instruments(conn: &Connection, instruments: &mut InstrumentSt
             load_modulation(conn, r.id, "resonance", &mut fc.resonance.mod_source)?;
 
             // Load filter extra params
-            fc.extra_params = load_params(conn, "instrument_filter_extra_params", "instrument_id", r.id)?;
+            fc.extra_params = load_params(
+                conn,
+                "instrument_filter_extra_params",
+                "instrument_id",
+                r.id,
+            )?;
 
             Some(fc)
         } else {
@@ -115,21 +139,26 @@ pub(super) fn load_instruments(conn: &Connection, instruments: &mut InstrumentSt
 
         // Build EQ
         let eq = if let Some(eq_enabled) = r.eq_enabled {
-            let mut eq_config = crate::state::instrument::EqConfig { enabled: eq_enabled != 0, ..Default::default() };
+            let mut eq_config = crate::state::instrument::EqConfig {
+                enabled: eq_enabled != 0,
+                ..Default::default()
+            };
 
             let mut eq_stmt = conn.prepare(
                 "SELECT band_index, band_type, freq, gain, q, enabled FROM instrument_eq_bands WHERE instrument_id = ?1 ORDER BY band_index"
             )?;
-            let bands: Vec<(usize, String, f32, f32, f32, bool)> = eq_stmt.query_map(params![r.id], |row| {
-                Ok((
-                    row.get::<_, i32>(0)? as usize,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, f32>(2)?,
-                    row.get::<_, f32>(3)?,
-                    row.get::<_, f32>(4)?,
-                    row.get::<_, i32>(5)? != 0,
-                ))
-            })?.collect::<SqlResult<_>>()?;
+            let bands: Vec<(usize, String, f32, f32, f32, bool)> = eq_stmt
+                .query_map(params![r.id], |row| {
+                    Ok((
+                        row.get::<_, i32>(0)? as usize,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, f32>(2)?,
+                        row.get::<_, f32>(3)?,
+                        row.get::<_, f32>(4)?,
+                        row.get::<_, i32>(5)? != 0,
+                    ))
+                })?
+                .collect::<SqlResult<_>>()?;
 
             for (idx, band_type, freq, gain, q, enabled) in bands {
                 if idx < eq_config.bands.len() {
@@ -150,7 +179,9 @@ pub(super) fn load_instruments(conn: &Connection, instruments: &mut InstrumentSt
             rate: r.lfo_rate.unwrap_or(2.0),
             depth: r.lfo_depth.unwrap_or(0.5),
             shape: decode_lfo_shape(&r.lfo_shape.unwrap_or_else(|| "Sine".to_string())),
-            target: decode_parameter_target(&r.lfo_target.unwrap_or_else(|| "FilterCutoff".to_string())),
+            target: decode_parameter_target(
+                &r.lfo_target.unwrap_or_else(|| "FilterCutoff".to_string()),
+            ),
         };
 
         let amp_envelope = crate::state::instrument::EnvConfig {
@@ -200,18 +231,23 @@ pub(super) fn load_instruments(conn: &Connection, instruments: &mut InstrumentSt
         inst.next_effect_id = imbolc_types::EffectId::new(r.next_effect_id);
         inst.note_input.arpeggiator = arpeggiator;
         inst.note_input.chord_shape = chord_shape;
-        if let SourceExtra::Vst { ref mut state_path, .. } = inst.source_extra {
+        if let SourceExtra::Vst {
+            ref mut state_path, ..
+        } = inst.source_extra
+        {
             *state_path = r.vst_state_path.map(PathBuf::from);
         }
         inst.groove = groove;
 
         // Layer octave offset (backward compat: column may not exist in old databases)
         if has_layer_octave_offset {
-            let offset: i32 = conn.query_row(
-                "SELECT layer_octave_offset FROM instruments WHERE id = ?1",
-                params![r.id],
-                |row| row.get(0),
-            ).unwrap_or(0);
+            let offset: i32 = conn
+                .query_row(
+                    "SELECT layer_octave_offset FROM instruments WHERE id = ?1",
+                    params![r.id],
+                    |row| row.get(0),
+                )
+                .unwrap_or(0);
             inst.layer.octave_offset = offset.clamp(-4, 4) as i8;
         }
 
@@ -228,11 +264,13 @@ pub(super) fn load_instruments(conn: &Connection, instruments: &mut InstrumentSt
         if table_exists(conn, "instrument_processing_chain")? {
             let mut ord_stmt = conn.prepare(
                 "SELECT stage_type, effect_id FROM instrument_processing_chain \
-                 WHERE instrument_id = ?1 ORDER BY position"
+                 WHERE instrument_id = ?1 ORDER BY position",
             )?;
-            let ordering: Vec<(String, Option<u32>)> = ord_stmt.query_map(params![r.id], |row| {
-                Ok((row.get::<_, String>(0)?, row.get::<_, Option<u32>>(1)?))
-            })?.collect::<SqlResult<_>>()?;
+            let ordering: Vec<(String, Option<u32>)> = ord_stmt
+                .query_map(params![r.id], |row| {
+                    Ok((row.get::<_, String>(0)?, row.get::<_, Option<u32>>(1)?))
+                })?
+                .collect::<SqlResult<_>>()?;
 
             if ordering.is_empty() {
                 // No chain rows — use legacy order (filter → eq → effects)
@@ -257,10 +295,12 @@ pub(super) fn load_instruments(conn: &Connection, instruments: &mut InstrumentSt
                         }
                         "effect" => {
                             if let Some(eid) = eff_id {
-                                if let Some(idx) = effects.iter().position(|e| e.id == imbolc_types::EffectId::new(*eid)) {
-                                    inst.processing_chain.push(
-                                        ProcessingStage::Effect(effects.remove(idx))
-                                    );
+                                if let Some(idx) = effects
+                                    .iter()
+                                    .position(|e| e.id == imbolc_types::EffectId::new(*eid))
+                                {
+                                    inst.processing_chain
+                                        .push(ProcessingStage::Effect(effects.remove(idx)));
                                 }
                             }
                         }
@@ -286,7 +326,11 @@ pub(super) fn load_instruments(conn: &Connection, instruments: &mut InstrumentSt
         inst.mixer.sends = load_sends(conn, r.id)?;
 
         // VST param values
-        if let SourceExtra::Vst { ref mut param_values, .. } = inst.source_extra {
+        if let SourceExtra::Vst {
+            ref mut param_values,
+            ..
+        } = inst.source_extra
+        {
             *param_values = load_vst_param_values(conn, r.id)?;
         }
 
@@ -356,35 +400,52 @@ struct InstrumentRow {
     groove_time_sig_denom: Option<i32>,
 }
 
-fn load_effects(conn: &Connection, instrument_id: u32) -> SqlResult<Vec<crate::state::instrument::EffectSlot>> {
-    load_effects_from(conn, "instrument_effects", "instrument_effect_params", "effect_vst_params", "instrument_id", instrument_id)
+fn load_effects(
+    conn: &Connection,
+    instrument_id: u32,
+) -> SqlResult<Vec<crate::state::instrument::EffectSlot>> {
+    load_effects_from(
+        conn,
+        "instrument_effects",
+        "instrument_effect_params",
+        "effect_vst_params",
+        "instrument_id",
+        instrument_id,
+    )
 }
 
-fn load_sends(conn: &Connection, instrument_id: u32) -> SqlResult<std::collections::BTreeMap<BusId, crate::state::instrument::MixerSend>> {
+fn load_sends(
+    conn: &Connection,
+    instrument_id: u32,
+) -> SqlResult<std::collections::BTreeMap<BusId, crate::state::instrument::MixerSend>> {
     use crate::state::instrument::MixerSend;
 
     // Try with tap_point column first; fall back for old schemas
-    let has_tap_point = conn.prepare("SELECT tap_point FROM instrument_sends LIMIT 0").is_ok();
+    let has_tap_point = conn
+        .prepare("SELECT tap_point FROM instrument_sends LIMIT 0")
+        .is_ok();
     let query = if has_tap_point {
         "SELECT bus_id, level, enabled, tap_point FROM instrument_sends WHERE instrument_id = ?1 ORDER BY bus_id"
     } else {
         "SELECT bus_id, level, enabled FROM instrument_sends WHERE instrument_id = ?1 ORDER BY bus_id"
     };
     let mut stmt = conn.prepare(query)?;
-    let sends = stmt.query_map(params![instrument_id], |row| {
-        let tap_point = if has_tap_point {
-            decode_tap_point(&row.get::<_, String>(3)?)
-        } else {
-            Default::default()
-        };
-        let send = MixerSend {
-            bus_id: BusId::new(row.get::<_, i32>(0)? as u8),
-            level: row.get(1)?,
-            enabled: row.get::<_, i32>(2)? != 0,
-            tap_point,
-        };
-        Ok((send.bus_id, send))
-    })?.collect::<SqlResult<_>>()?;
+    let sends = stmt
+        .query_map(params![instrument_id], |row| {
+            let tap_point = if has_tap_point {
+                decode_tap_point(&row.get::<_, String>(3)?)
+            } else {
+                Default::default()
+            };
+            let send = MixerSend {
+                bus_id: BusId::new(row.get::<_, i32>(0)? as u8),
+                level: row.get(1)?,
+                enabled: row.get::<_, i32>(2)? != 0,
+                tap_point,
+            };
+            Ok((send.bus_id, send))
+        })?
+        .collect::<SqlResult<_>>()?;
 
     Ok(sends)
 }
@@ -393,9 +454,9 @@ fn load_vst_param_values(conn: &Connection, instrument_id: u32) -> SqlResult<Vec
     let mut stmt = conn.prepare(
         "SELECT param_index, value FROM instrument_vst_params WHERE instrument_id = ?1 ORDER BY param_index"
     )?;
-    let values: Vec<(u32, f32)> = stmt.query_map(params![instrument_id], |row| {
-        Ok((row.get(0)?, row.get(1)?))
-    })?.collect::<SqlResult<_>>()?;
+    let values: Vec<(u32, f32)> = stmt
+        .query_map(params![instrument_id], |row| Ok((row.get(0)?, row.get(1)?)))?
+        .collect::<SqlResult<_>>()?;
     Ok(values)
 }
 
@@ -405,41 +466,58 @@ fn load_modulation(
     target_param: &str,
     mod_source: &mut Option<crate::state::instrument::ModSource>,
 ) -> SqlResult<()> {
-    use crate::state::instrument::{ModSource, LfoConfig, EnvConfig};
+    use crate::state::instrument::{EnvConfig, LfoConfig, ModSource};
 
-    let result = conn.query_row(
-        "SELECT mod_type, lfo_enabled, lfo_rate, lfo_depth, lfo_shape, lfo_target,
+    let result = conn
+        .query_row(
+            "SELECT mod_type, lfo_enabled, lfo_rate, lfo_depth, lfo_shape, lfo_target,
                 env_attack, env_decay, env_sustain, env_release,
                 source_instrument_id, source_param_name
          FROM instrument_modulations WHERE instrument_id = ?1 AND target_param = ?2",
-        params![instrument_id, target_param],
-        |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, Option<i32>>(1)?,
-                row.get::<_, Option<f32>>(2)?,
-                row.get::<_, Option<f32>>(3)?,
-                row.get::<_, Option<String>>(4)?,
-                row.get::<_, Option<String>>(5)?,
-                row.get::<_, Option<f32>>(6)?,
-                row.get::<_, Option<f32>>(7)?,
-                row.get::<_, Option<f32>>(8)?,
-                row.get::<_, Option<f32>>(9)?,
-                row.get::<_, Option<u32>>(10)?,
-                row.get::<_, Option<String>>(11)?,
-            ))
-        },
-    ).optional()?;
+            params![instrument_id, target_param],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, Option<i32>>(1)?,
+                    row.get::<_, Option<f32>>(2)?,
+                    row.get::<_, Option<f32>>(3)?,
+                    row.get::<_, Option<String>>(4)?,
+                    row.get::<_, Option<String>>(5)?,
+                    row.get::<_, Option<f32>>(6)?,
+                    row.get::<_, Option<f32>>(7)?,
+                    row.get::<_, Option<f32>>(8)?,
+                    row.get::<_, Option<f32>>(9)?,
+                    row.get::<_, Option<u32>>(10)?,
+                    row.get::<_, Option<String>>(11)?,
+                ))
+            },
+        )
+        .optional()?;
 
-    if let Some((mod_type, lfo_en, lfo_rate, lfo_depth, lfo_shape, lfo_target,
-                 env_a, env_d, env_s, env_r, src_id, src_param)) = result {
+    if let Some((
+        mod_type,
+        lfo_en,
+        lfo_rate,
+        lfo_depth,
+        lfo_shape,
+        lfo_target,
+        env_a,
+        env_d,
+        env_s,
+        env_r,
+        src_id,
+        src_param,
+    )) = result
+    {
         *mod_source = match mod_type.as_str() {
             "Lfo" => Some(ModSource::Lfo(LfoConfig {
                 enabled: lfo_en.unwrap_or(0) != 0,
                 rate: lfo_rate.unwrap_or(2.0),
                 depth: lfo_depth.unwrap_or(0.5),
                 shape: decode_lfo_shape(&lfo_shape.unwrap_or_else(|| "Sine".to_string())),
-                target: decode_parameter_target(&lfo_target.unwrap_or_else(|| "FilterCutoff".to_string())),
+                target: decode_parameter_target(
+                    &lfo_target.unwrap_or_else(|| "FilterCutoff".to_string()),
+                ),
             })),
             "Envelope" => Some(ModSource::Envelope(EnvConfig {
                 attack: env_a.unwrap_or(0.01),
@@ -449,7 +527,10 @@ fn load_modulation(
             })),
             "InstrumentParam" => {
                 if let (Some(id), Some(param)) = (src_id, src_param) {
-                    Some(ModSource::InstrumentParam(imbolc_types::InstrumentId::new(id), param))
+                    Some(ModSource::InstrumentParam(
+                        imbolc_types::InstrumentId::new(id),
+                        param,
+                    ))
                 } else {
                     None
                 }
@@ -482,7 +563,9 @@ fn load_sampler_config(
         },
     ).optional()?;
 
-    let Some((buffer_id, sample_name, loop_mode, pitch_tracking, next_slice_id, selected_slice)) = result else {
+    let Some((buffer_id, sample_name, loop_mode, pitch_tracking, next_slice_id, selected_slice)) =
+        result
+    else {
         return Ok(None);
     };
 
@@ -498,12 +581,14 @@ fn load_sampler_config(
     let mut stmt = conn.prepare(
         "SELECT slice_id, start_pos, end_pos, name, root_note FROM sampler_slices WHERE instrument_id = ?1 ORDER BY position"
     )?;
-    config.slices = stmt.query_map(params![instrument_id], |row| {
-        let mut s = Slice::new(row.get::<_, u32>(0)?, row.get(1)?, row.get(2)?);
-        s.name = row.get(3)?;
-        s.root_note = row.get::<_, i32>(4)? as u8;
-        Ok(s)
-    })?.collect::<SqlResult<_>>()?;
+    config.slices = stmt
+        .query_map(params![instrument_id], |row| {
+            let mut s = Slice::new(row.get::<_, u32>(0)?, row.get(1)?, row.get(2)?);
+            s.name = row.get(3)?;
+            s.root_note = row.get::<_, i32>(4)? as u8;
+            Ok(s)
+        })?
+        .collect::<SqlResult<_>>()?;
 
     Ok(Some(config))
 }
@@ -514,22 +599,26 @@ fn load_drum_sequencer(
 ) -> SqlResult<Option<crate::state::drum_sequencer::DrumSequencerState>> {
     use crate::state::drum_sequencer::*;
 
-    let result = conn.query_row(
-        "SELECT current_pattern, next_buffer_id, swing_amount, chain_enabled, step_resolution
+    let result = conn
+        .query_row(
+            "SELECT current_pattern, next_buffer_id, swing_amount, chain_enabled, step_resolution
          FROM drum_sequencer_state WHERE instrument_id = ?1",
-        params![instrument_id],
-        |row| {
-            Ok((
-                row.get::<_, i32>(0)?,
-                row.get::<_, u32>(1)?,
-                row.get::<_, f32>(2)?,
-                row.get::<_, i32>(3)?,
-                row.get::<_, String>(4)?,
-            ))
-        },
-    ).optional()?;
+            params![instrument_id],
+            |row| {
+                Ok((
+                    row.get::<_, i32>(0)?,
+                    row.get::<_, u32>(1)?,
+                    row.get::<_, f32>(2)?,
+                    row.get::<_, i32>(3)?,
+                    row.get::<_, String>(4)?,
+                ))
+            },
+        )
+        .optional()?;
 
-    let Some((current_pattern, next_buffer_id, swing_amount, chain_enabled, step_resolution_str)) = result else {
+    let Some((current_pattern, next_buffer_id, swing_amount, chain_enabled, step_resolution_str)) =
+        result
+    else {
         return Ok(None);
     };
 
@@ -542,11 +631,13 @@ fn load_drum_sequencer(
 
     // Chain
     let mut chain_stmt = conn.prepare(
-        "SELECT pattern_index FROM drum_sequencer_chain WHERE instrument_id = ?1 ORDER BY position"
+        "SELECT pattern_index FROM drum_sequencer_chain WHERE instrument_id = ?1 ORDER BY position",
     )?;
-    seq.chain = chain_stmt.query_map(params![instrument_id], |row| {
-        Ok(row.get::<_, i32>(0)? as usize)
-    })?.collect::<SqlResult<_>>()?;
+    seq.chain = chain_stmt
+        .query_map(params![instrument_id], |row| {
+            Ok(row.get::<_, i32>(0)? as usize)
+        })?
+        .collect::<SqlResult<_>>()?;
 
     // Pads
     let mut pad_stmt = conn.prepare(
@@ -554,8 +645,20 @@ fn load_drum_sequencer(
          FROM drum_pads WHERE instrument_id = ?1 ORDER BY pad_index"
     )?;
     #[allow(clippy::type_complexity)]
-    let pads: Vec<(usize, Option<i64>, Option<String>, String, f32, f32, f32, i32, i32, Option<i64>, f32)> =
-        pad_stmt.query_map(params![instrument_id], |row| {
+    let pads: Vec<(
+        usize,
+        Option<i64>,
+        Option<String>,
+        String,
+        f32,
+        f32,
+        f32,
+        i32,
+        i32,
+        Option<i64>,
+        f32,
+    )> = pad_stmt
+        .query_map(params![instrument_id], |row| {
             Ok((
                 row.get::<_, i32>(0)? as usize,
                 row.get(1)?,
@@ -569,9 +672,23 @@ fn load_drum_sequencer(
                 row.get(9)?,
                 row.get(10)?,
             ))
-        })?.collect::<SqlResult<_>>()?;
+        })?
+        .collect::<SqlResult<_>>()?;
 
-    for (idx, buffer_id, path, name, level, slice_start, slice_end, reverse, pitch, trigger_inst, trigger_freq) in pads {
+    for (
+        idx,
+        buffer_id,
+        path,
+        name,
+        level,
+        slice_start,
+        slice_end,
+        reverse,
+        pitch,
+        trigger_inst,
+        trigger_freq,
+    ) in pads
+    {
         if idx < seq.pads.len() {
             seq.pads[idx].buffer_id = buffer_id.map(|id| id as u32);
             seq.pads[idx].path = path;
@@ -581,7 +698,8 @@ fn load_drum_sequencer(
             seq.pads[idx].slice_end = slice_end;
             seq.pads[idx].reverse = reverse != 0;
             seq.pads[idx].pitch = pitch as i8;
-            seq.pads[idx].instrument_id = trigger_inst.map(|id| imbolc_types::InstrumentId::new(id as u32));
+            seq.pads[idx].instrument_id =
+                trigger_inst.map(|id| imbolc_types::InstrumentId::new(id as u32));
             seq.pads[idx].trigger_freq = trigger_freq;
         }
     }
@@ -590,9 +708,14 @@ fn load_drum_sequencer(
     let mut pat_stmt = conn.prepare(
         "SELECT pattern_index, length FROM drum_patterns WHERE instrument_id = ?1 ORDER BY pattern_index"
     )?;
-    let patterns: Vec<(usize, usize)> = pat_stmt.query_map(params![instrument_id], |row| {
-        Ok((row.get::<_, i32>(0)? as usize, row.get::<_, i32>(1)? as usize))
-    })?.collect::<SqlResult<_>>()?;
+    let patterns: Vec<(usize, usize)> = pat_stmt
+        .query_map(params![instrument_id], |row| {
+            Ok((
+                row.get::<_, i32>(0)? as usize,
+                row.get::<_, i32>(1)? as usize,
+            ))
+        })?
+        .collect::<SqlResult<_>>()?;
 
     for (pat_idx, length) in patterns {
         if pat_idx < seq.patterns.len() {
@@ -607,18 +730,20 @@ fn load_drum_sequencer(
     // Steps (only active ones were saved)
     let mut step_stmt = conn.prepare(
         "SELECT pattern_index, pad_index, step_index, velocity, probability, pitch_offset
-         FROM drum_steps WHERE instrument_id = ?1"
+         FROM drum_steps WHERE instrument_id = ?1",
     )?;
-    let steps: Vec<(usize, usize, usize, u8, f32, i8)> = step_stmt.query_map(params![instrument_id], |row| {
-        Ok((
-            row.get::<_, i32>(0)? as usize,
-            row.get::<_, i32>(1)? as usize,
-            row.get::<_, i32>(2)? as usize,
-            row.get::<_, i32>(3)? as u8,
-            row.get::<_, f32>(4)?,
-            row.get::<_, i32>(5)? as i8,
-        ))
-    })?.collect::<SqlResult<_>>()?;
+    let steps: Vec<(usize, usize, usize, u8, f32, i8)> = step_stmt
+        .query_map(params![instrument_id], |row| {
+            Ok((
+                row.get::<_, i32>(0)? as usize,
+                row.get::<_, i32>(1)? as usize,
+                row.get::<_, i32>(2)? as usize,
+                row.get::<_, i32>(3)? as u8,
+                row.get::<_, f32>(4)?,
+                row.get::<_, i32>(5)? as i8,
+            ))
+        })?
+        .collect::<SqlResult<_>>()?;
 
     for (pat_idx, pad_idx, step_idx, velocity, probability, pitch_offset) in steps {
         if pat_idx < seq.patterns.len()
@@ -664,14 +789,17 @@ fn load_chopper(
         },
     ).optional()?;
 
-    let Some((buffer_id, path, name, selected_slice, next_slice_id, duration_secs, peaks_blob)) = result else {
+    let Some((buffer_id, path, name, selected_slice, next_slice_id, duration_secs, peaks_blob)) =
+        result
+    else {
         return Ok(None);
     };
 
     let waveform_peaks = if let Some(bytes) = peaks_blob {
-        bytes.chunks_exact(4).map(|chunk| {
-            f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]])
-        }).collect()
+        bytes
+            .chunks_exact(4)
+            .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+            .collect()
     } else {
         Vec::new()
     };
@@ -679,12 +807,14 @@ fn load_chopper(
     let mut slices_stmt = conn.prepare(
         "SELECT slice_id, start_pos, end_pos, name, root_note FROM chopper_slices WHERE instrument_id = ?1 ORDER BY position"
     )?;
-    let slices: Vec<Slice> = slices_stmt.query_map(params![instrument_id], |row| {
-        let mut s = Slice::new(row.get::<_, u32>(0)?, row.get(1)?, row.get(2)?);
-        s.name = row.get(3)?;
-        s.root_note = row.get::<_, i32>(4)? as u8;
-        Ok(s)
-    })?.collect::<SqlResult<_>>()?;
+    let slices: Vec<Slice> = slices_stmt
+        .query_map(params![instrument_id], |row| {
+            let mut s = Slice::new(row.get::<_, u32>(0)?, row.get(1)?, row.get(2)?);
+            s.name = row.get(3)?;
+            s.root_note = row.get::<_, i32>(4)? as u8;
+            Ok(s)
+        })?
+        .collect::<SqlResult<_>>()?;
 
     Ok(Some(ChopperState {
         buffer_id: buffer_id.map(|id| id as u32),

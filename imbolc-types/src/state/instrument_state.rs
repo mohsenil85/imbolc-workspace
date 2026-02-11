@@ -160,8 +160,7 @@ impl InstrumentState {
     }
 
     pub fn selected_drum_sequencer(&self) -> Option<&DrumSequencerState> {
-        self.selected_instrument()
-            .and_then(|s| s.drum_sequencer())
+        self.selected_instrument().and_then(|s| s.drum_sequencer())
     }
 
     pub fn selected_drum_sequencer_mut(&mut self) -> Option<&mut DrumSequencerState> {
@@ -214,7 +213,6 @@ impl Default for InstrumentState {
 fn default_sampler_buffer_id() -> u32 {
     20000
 }
-
 
 #[cfg(test)]
 mod tests {

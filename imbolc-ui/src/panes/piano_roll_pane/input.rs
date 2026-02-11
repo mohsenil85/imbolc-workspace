@@ -1,8 +1,10 @@
-
 use crate::state::AppState;
+use crate::ui::action_id::{ActionId, ModeActionId, PianoRollActionId};
 use crate::ui::layout_helpers::center_rect;
-use crate::ui::{Rect, Action, InputEvent, KeyCode, MouseButton, MouseEvent, MouseEventKind, PianoRollAction, translate_key};
-use crate::ui::action_id::{ActionId, PianoRollActionId, ModeActionId};
+use crate::ui::{
+    translate_key, Action, InputEvent, KeyCode, MouseButton, MouseEvent, MouseEventKind,
+    PianoRollAction, Rect,
+};
 use imbolc_types::InstrumentId;
 
 use super::PianoRollPane;
@@ -10,7 +12,10 @@ use super::PianoRollPane;
 impl PianoRollPane {
     /// Get the instrument ID for the current track from state
     fn current_instrument_id(&self, state: &AppState) -> InstrumentId {
-        state.session.piano_roll.track_order
+        state
+            .session
+            .piano_roll
+            .track_order
             .get(self.current_track)
             .copied()
             .unwrap_or(InstrumentId::new(0))
@@ -18,7 +23,12 @@ impl PianoRollPane {
 }
 
 impl PianoRollPane {
-    pub(super) fn handle_action_impl(&mut self, action: ActionId, event: &InputEvent, state: &AppState) -> Action {
+    pub(super) fn handle_action_impl(
+        &mut self,
+        action: ActionId,
+        event: &InputEvent,
+        state: &AppState,
+    ) -> Action {
         match action {
             // Piano mode actions (from piano layer)
             ActionId::Mode(ModeActionId::PianoEscape) => {
@@ -37,23 +47,36 @@ impl PianoRollPane {
                 }
                 Action::None
             }
-            ActionId::Mode(ModeActionId::PianoSpace) => Action::PianoRoll(PianoRollAction::PlayStopRecord),
+            ActionId::Mode(ModeActionId::PianoSpace) => {
+                Action::PianoRoll(PianoRollAction::PlayStopRecord)
+            }
             ActionId::Mode(ModeActionId::PianoKey) => {
                 if let KeyCode::Char(c) = event.key {
                     let c = translate_key(c, state.keyboard_layout);
                     if let Some(pitches) = self.piano.key_to_pitches(c) {
                         // Check if this is a new press or key repeat (sustain)
-                        if let Some(new_pitches) = self.piano.key_pressed(c, pitches.clone(), event.timestamp, event.is_repeat) {
+                        if let Some(new_pitches) = self.piano.key_pressed(
+                            c,
+                            pitches.clone(),
+                            event.timestamp,
+                            event.is_repeat,
+                        ) {
                             // NEW press - spawn voice(s)
                             let instrument_id = self.current_instrument_id(state);
                             let track = self.current_track;
                             if new_pitches.len() == 1 {
                                 return Action::PianoRoll(PianoRollAction::PlayNote {
-                                    pitch: new_pitches[0], velocity: 100, instrument_id, track,
+                                    pitch: new_pitches[0],
+                                    velocity: 100,
+                                    instrument_id,
+                                    track,
                                 });
                             } else {
                                 return Action::PianoRoll(PianoRollAction::PlayNotes {
-                                    pitches: new_pitches, velocity: 100, instrument_id, track,
+                                    pitches: new_pitches,
+                                    velocity: 100,
+                                    instrument_id,
+                                    track,
                                 });
                             }
                         }
@@ -129,13 +152,15 @@ impl PianoRollPane {
                 self.scroll_to_cursor();
                 Action::None
             }
-            ActionId::PianoRoll(PianoRollActionId::ToggleNote) => Action::PianoRoll(PianoRollAction::ToggleNote {
-                pitch: self.cursor_pitch,
-                tick: self.cursor_tick,
-                duration: self.default_duration,
-                velocity: self.default_velocity,
-                track: self.current_track,
-            }),
+            ActionId::PianoRoll(PianoRollActionId::ToggleNote) => {
+                Action::PianoRoll(PianoRollAction::ToggleNote {
+                    pitch: self.cursor_pitch,
+                    tick: self.cursor_tick,
+                    duration: self.default_duration,
+                    velocity: self.default_velocity,
+                    track: self.current_track,
+                })
+            }
             ActionId::PianoRoll(PianoRollActionId::GrowDuration) => {
                 self.adjust_default_duration(self.ticks_per_cell() as i32);
                 Action::None
@@ -152,10 +177,18 @@ impl PianoRollPane {
                 self.adjust_default_velocity(-10);
                 Action::None
             }
-            ActionId::PianoRoll(PianoRollActionId::PlayStop) => Action::PianoRoll(PianoRollAction::PlayStop),
-            ActionId::PianoRoll(PianoRollActionId::Loop) => Action::PianoRoll(PianoRollAction::ToggleLoop),
-            ActionId::PianoRoll(PianoRollActionId::LoopStart) => Action::PianoRoll(PianoRollAction::SetLoopStart(self.cursor_tick)),
-            ActionId::PianoRoll(PianoRollActionId::LoopEnd) => Action::PianoRoll(PianoRollAction::SetLoopEnd(self.cursor_tick)),
+            ActionId::PianoRoll(PianoRollActionId::PlayStop) => {
+                Action::PianoRoll(PianoRollAction::PlayStop)
+            }
+            ActionId::PianoRoll(PianoRollActionId::Loop) => {
+                Action::PianoRoll(PianoRollAction::ToggleLoop)
+            }
+            ActionId::PianoRoll(PianoRollActionId::LoopStart) => {
+                Action::PianoRoll(PianoRollAction::SetLoopStart(self.cursor_tick))
+            }
+            ActionId::PianoRoll(PianoRollActionId::LoopEnd) => {
+                Action::PianoRoll(PianoRollAction::SetLoopEnd(self.cursor_tick))
+            }
             ActionId::PianoRoll(PianoRollActionId::OctaveUp) => {
                 self.selection_anchor = None;
                 self.cursor_pitch = (self.cursor_pitch as i16 + 12).min(127) as u8;
@@ -195,9 +228,15 @@ impl PianoRollPane {
                 }
                 Action::None
             }
-            ActionId::PianoRoll(PianoRollActionId::TimeSig) => Action::PianoRoll(PianoRollAction::CycleTimeSig),
-            ActionId::PianoRoll(PianoRollActionId::TogglePoly) => Action::PianoRoll(PianoRollAction::TogglePolyMode(self.current_track)),
-            ActionId::PianoRoll(PianoRollActionId::RenderToWav) => Action::PianoRoll(PianoRollAction::RenderToWav(self.current_instrument_id(state))),
+            ActionId::PianoRoll(PianoRollActionId::TimeSig) => {
+                Action::PianoRoll(PianoRollAction::CycleTimeSig)
+            }
+            ActionId::PianoRoll(PianoRollActionId::TogglePoly) => {
+                Action::PianoRoll(PianoRollAction::TogglePolyMode(self.current_track))
+            }
+            ActionId::PianoRoll(PianoRollActionId::RenderToWav) => Action::PianoRoll(
+                PianoRollAction::RenderToWav(self.current_instrument_id(state)),
+            ),
             ActionId::PianoRoll(PianoRollActionId::BounceToWav) => {
                 if state.io.pending_export.is_some() {
                     Action::PianoRoll(PianoRollAction::CancelExport)
@@ -242,7 +281,12 @@ impl PianoRollPane {
         }
     }
 
-    pub(super) fn handle_mouse_impl(&mut self, event: &MouseEvent, area: Rect, _state: &AppState) -> Action {
+    pub(super) fn handle_mouse_impl(
+        &mut self,
+        event: &MouseEvent,
+        area: Rect,
+        _state: &AppState,
+    ) -> Action {
         let rect = center_rect(area, 97, 29);
         let key_col_width: u16 = 5;
         let header_height: u16 = 2;
@@ -250,7 +294,9 @@ impl PianoRollPane {
         let grid_x = rect.x + key_col_width;
         let grid_y = rect.y + header_height;
         let grid_width = rect.width.saturating_sub(key_col_width + 1);
-        let grid_height = rect.height.saturating_sub(header_height + footer_height + 1);
+        let grid_height = rect
+            .height
+            .saturating_sub(header_height + footer_height + 1);
 
         let col = event.column;
         let row = event.row;
@@ -259,12 +305,16 @@ impl PianoRollPane {
             MouseEventKind::Down(MouseButton::Left) => {
                 self.selection_anchor = None;
                 // Click on the grid area
-                if col >= grid_x && col < grid_x + grid_width
-                    && row >= grid_y && row < grid_y + grid_height
+                if col >= grid_x
+                    && col < grid_x + grid_width
+                    && row >= grid_y
+                    && row < grid_y + grid_height
                 {
                     let grid_col = col - grid_x;
                     let grid_row = row - grid_y;
-                    let pitch = self.view_bottom_pitch.saturating_add((grid_height - 1 - grid_row) as u8);
+                    let pitch = self
+                        .view_bottom_pitch
+                        .saturating_add((grid_height - 1 - grid_row) as u8);
                     let tick = self.view_start_tick + grid_col as u32 * self.ticks_per_cell();
 
                     if pitch <= 127 {
@@ -282,7 +332,9 @@ impl PianoRollPane {
                 // Click on piano key column to set pitch
                 if col >= rect.x && col < grid_x && row >= grid_y && row < grid_y + grid_height {
                     let grid_row = row - grid_y;
-                    let pitch = self.view_bottom_pitch.saturating_add((grid_height - 1 - grid_row) as u8);
+                    let pitch = self
+                        .view_bottom_pitch
+                        .saturating_add((grid_height - 1 - grid_row) as u8);
                     if pitch <= 127 {
                         self.cursor_pitch = pitch;
                     }
@@ -291,12 +343,16 @@ impl PianoRollPane {
             }
             MouseEventKind::Down(MouseButton::Right) => {
                 // Right-click on grid: just move cursor (no toggle)
-                if col >= grid_x && col < grid_x + grid_width
-                    && row >= grid_y && row < grid_y + grid_height
+                if col >= grid_x
+                    && col < grid_x + grid_width
+                    && row >= grid_y
+                    && row < grid_y + grid_height
                 {
                     let grid_col = col - grid_x;
                     let grid_row = row - grid_y;
-                    let pitch = self.view_bottom_pitch.saturating_add((grid_height - 1 - grid_row) as u8);
+                    let pitch = self
+                        .view_bottom_pitch
+                        .saturating_add((grid_height - 1 - grid_row) as u8);
                     let tick = self.view_start_tick + grid_col as u32 * self.ticks_per_cell();
                     if pitch <= 127 {
                         self.cursor_pitch = pitch;

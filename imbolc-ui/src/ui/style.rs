@@ -43,40 +43,40 @@ impl Color {
 
     // Module type colors
     #[allow(dead_code)]
-    pub const MIDI_COLOR: Color = Color::new(255, 100, 160);   // Magenta - MIDI/note source
-    pub const OSC_COLOR: Color = Color::new(100, 180, 255);    // Blue - oscillators
-    pub const FILTER_COLOR: Color = Color::new(255, 140, 90);  // Orange - filters
-    pub const ENV_COLOR: Color = Color::new(180, 130, 255);    // Purple - envelopes
+    pub const MIDI_COLOR: Color = Color::new(255, 100, 160); // Magenta - MIDI/note source
+    pub const OSC_COLOR: Color = Color::new(100, 180, 255); // Blue - oscillators
+    pub const FILTER_COLOR: Color = Color::new(255, 140, 90); // Orange - filters
+    pub const ENV_COLOR: Color = Color::new(180, 130, 255); // Purple - envelopes
     #[allow(dead_code)]
-    pub const LFO_COLOR: Color = Color::new(130, 255, 180);    // Mint - LFOs
-    pub const FX_COLOR: Color = Color::new(255, 180, 220);     // Pink - effects
-    pub const EQ_COLOR: Color = Color::new(100, 200, 255);     // Light blue - EQ
+    pub const LFO_COLOR: Color = Color::new(130, 255, 180); // Mint - LFOs
+    pub const FX_COLOR: Color = Color::new(255, 180, 220); // Pink - effects
+    pub const EQ_COLOR: Color = Color::new(100, 200, 255); // Light blue - EQ
     #[allow(dead_code)]
     pub const OUTPUT_COLOR: Color = Color::new(255, 220, 100); // Gold - output
     pub const AUDIO_IN_COLOR: Color = Color::new(100, 255, 200); // Teal/Cyan - audio input
     pub const SAMPLE_COLOR: Color = Color::new(255, 200, 100); // Warm orange - sample
     pub const CUSTOM_COLOR: Color = Color::new(200, 150, 255); // Light purple - custom synthdef
-    pub const KIT_COLOR: Color = Color::new(255, 165, 0);    // Orange - kit
+    pub const KIT_COLOR: Color = Color::new(255, 165, 0); // Orange - kit
     pub const BUS_IN_COLOR: Color = Color::new(180, 220, 100); // Yellow-green - bus input
-    pub const VST_COLOR: Color = Color::new(255, 120, 200);    // Hot pink - VST plugins
+    pub const VST_COLOR: Color = Color::new(255, 120, 200); // Hot pink - VST plugins
 
     // Port type colors
     #[allow(dead_code)]
-    pub const AUDIO_PORT: Color = Color::new(80, 200, 255);    // Cyan - audio
+    pub const AUDIO_PORT: Color = Color::new(80, 200, 255); // Cyan - audio
     #[allow(dead_code)]
     pub const CONTROL_PORT: Color = Color::new(100, 255, 150); // Green - control
     #[allow(dead_code)]
-    pub const GATE_PORT: Color = Color::new(255, 230, 80);     // Yellow - gate
+    pub const GATE_PORT: Color = Color::new(255, 230, 80); // Yellow - gate
 
     // Meter colors
-    pub const METER_LOW: Color = Color::new(80, 220, 100);     // Green
-    pub const METER_MID: Color = Color::new(255, 220, 50);     // Yellow
-    pub const METER_HIGH: Color = Color::new(255, 80, 80);     // Red
+    pub const METER_LOW: Color = Color::new(80, 220, 100); // Green
+    pub const METER_MID: Color = Color::new(255, 220, 50); // Yellow
+    pub const METER_HIGH: Color = Color::new(255, 80, 80); // Red
 
     // UI colors
-    pub const SELECTION_BG: Color = Color::new(60, 100, 180);  // Selection highlight
-    pub const MUTE_COLOR: Color = Color::new(255, 100, 100);   // Muted state
-    pub const SOLO_COLOR: Color = Color::new(255, 220, 80);    // Solo state
+    pub const SELECTION_BG: Color = Color::new(60, 100, 180); // Selection highlight
+    pub const MUTE_COLOR: Color = Color::new(255, 100, 100); // Muted state
+    pub const SOLO_COLOR: Color = Color::new(255, 220, 80); // Solo state
 }
 
 impl From<ThemeColor> for Color {
@@ -256,7 +256,6 @@ pub struct Style {
     pub bold: bool,
     pub underline: bool,
 }
-
 
 impl Style {
     pub const fn new() -> Self {

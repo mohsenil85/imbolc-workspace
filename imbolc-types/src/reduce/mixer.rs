@@ -1,6 +1,5 @@
 use crate::{
-    BusId, InstrumentState, MixerAction, MixerSelection, MixerSend,
-    OutputTarget, SessionState,
+    BusId, InstrumentState, MixerAction, MixerSelection, MixerSend, OutputTarget, SessionState,
 };
 
 pub(super) fn reduce(
@@ -18,14 +17,22 @@ pub(super) fn reduce(
                     MixerSelection::Instrument(new_idx)
                 }
                 MixerSelection::LayerGroup(current_id) => {
-                    let group_ids: Vec<u32> = session.mixer.layer_group_mixers.iter()
-                        .map(|g| g.group_id).collect();
+                    let group_ids: Vec<u32> = session
+                        .mixer
+                        .layer_group_mixers
+                        .iter()
+                        .map(|g| g.group_id)
+                        .collect();
                     if group_ids.is_empty() {
                         return true;
                     }
-                    let current_pos = group_ids.iter().position(|&id| id == current_id).unwrap_or(0);
+                    let current_pos = group_ids
+                        .iter()
+                        .position(|&id| id == current_id)
+                        .unwrap_or(0);
                     let new_pos = (current_pos as i32 + *delta as i32)
-                        .clamp(0, group_ids.len().saturating_sub(1) as i32) as usize;
+                        .clamp(0, group_ids.len().saturating_sub(1) as i32)
+                        as usize;
                     MixerSelection::LayerGroup(group_ids[new_pos])
                 }
                 MixerSelection::Bus(current_id) => {
@@ -35,7 +42,8 @@ pub(super) fn reduce(
                     }
                     let current_pos = bus_ids.iter().position(|&id| id == current_id).unwrap_or(0);
                     let new_pos = (current_pos as i32 + *delta as i32)
-                        .clamp(0, bus_ids.len().saturating_sub(1) as i32) as usize;
+                        .clamp(0, bus_ids.len().saturating_sub(1) as i32)
+                        as usize;
                     MixerSelection::Bus(bus_ids[new_pos])
                 }
                 MixerSelection::Master => MixerSelection::Master,
@@ -55,8 +63,12 @@ pub(super) fn reduce(
                     }
                 }
                 MixerSelection::LayerGroup(_) => {
-                    let group_ids: Vec<u32> = session.mixer.layer_group_mixers.iter()
-                        .map(|g| g.group_id).collect();
+                    let group_ids: Vec<u32> = session
+                        .mixer
+                        .layer_group_mixers
+                        .iter()
+                        .map(|g| g.group_id)
+                        .collect();
                     if group_ids.is_empty() {
                         return true;
                     }
@@ -109,7 +121,8 @@ pub(super) fn reduce(
                     }
                 }
                 MixerSelection::Master => {
-                    session.mixer.master_level = (session.mixer.master_level + delta).clamp(0.0, 1.0);
+                    session.mixer.master_level =
+                        (session.mixer.master_level + delta).clamp(0.0, 1.0);
                 }
             }
             true
@@ -173,14 +186,16 @@ pub(super) fn reduce(
                 MixerSelection::Instrument(idx) => {
                     if let Some(inst) = instruments.instruments.get_mut(idx) {
                         inst.mixer.output_target = match inst.mixer.output_target {
-                            OutputTarget::Master => {
-                                bus_ids.first().map(|&id| OutputTarget::Bus(id))
-                                    .unwrap_or(OutputTarget::Master)
-                            }
+                            OutputTarget::Master => bus_ids
+                                .first()
+                                .map(|&id| OutputTarget::Bus(id))
+                                .unwrap_or(OutputTarget::Master),
                             OutputTarget::Bus(current_id) => {
                                 let pos = bus_ids.iter().position(|&id| id == current_id);
                                 match pos {
-                                    Some(p) if p + 1 < bus_ids.len() => OutputTarget::Bus(bus_ids[p + 1]),
+                                    Some(p) if p + 1 < bus_ids.len() => {
+                                        OutputTarget::Bus(bus_ids[p + 1])
+                                    }
                                     _ => OutputTarget::Master,
                                 }
                             }
@@ -190,14 +205,16 @@ pub(super) fn reduce(
                 MixerSelection::LayerGroup(group_id) => {
                     if let Some(gm) = session.mixer.layer_group_mixer_mut(group_id) {
                         gm.output_target = match gm.output_target {
-                            OutputTarget::Master => {
-                                bus_ids.first().map(|&id| OutputTarget::Bus(id))
-                                    .unwrap_or(OutputTarget::Master)
-                            }
+                            OutputTarget::Master => bus_ids
+                                .first()
+                                .map(|&id| OutputTarget::Bus(id))
+                                .unwrap_or(OutputTarget::Master),
                             OutputTarget::Bus(current_id) => {
                                 let pos = bus_ids.iter().position(|&id| id == current_id);
                                 match pos {
-                                    Some(p) if p + 1 < bus_ids.len() => OutputTarget::Bus(bus_ids[p + 1]),
+                                    Some(p) if p + 1 < bus_ids.len() => {
+                                        OutputTarget::Bus(bus_ids[p + 1])
+                                    }
                                     _ => OutputTarget::Master,
                                 }
                             }
@@ -214,10 +231,10 @@ pub(super) fn reduce(
                 MixerSelection::Instrument(idx) => {
                     if let Some(inst) = instruments.instruments.get_mut(idx) {
                         inst.mixer.output_target = match inst.mixer.output_target {
-                            OutputTarget::Master => {
-                                bus_ids.last().map(|&id| OutputTarget::Bus(id))
-                                    .unwrap_or(OutputTarget::Master)
-                            }
+                            OutputTarget::Master => bus_ids
+                                .last()
+                                .map(|&id| OutputTarget::Bus(id))
+                                .unwrap_or(OutputTarget::Master),
                             OutputTarget::Bus(current_id) => {
                                 let pos = bus_ids.iter().position(|&id| id == current_id);
                                 match pos {
@@ -231,10 +248,10 @@ pub(super) fn reduce(
                 MixerSelection::LayerGroup(group_id) => {
                     if let Some(gm) = session.mixer.layer_group_mixer_mut(group_id) {
                         gm.output_target = match gm.output_target {
-                            OutputTarget::Master => {
-                                bus_ids.last().map(|&id| OutputTarget::Bus(id))
-                                    .unwrap_or(OutputTarget::Master)
-                            }
+                            OutputTarget::Master => bus_ids
+                                .last()
+                                .map(|&id| OutputTarget::Bus(id))
+                                .unwrap_or(OutputTarget::Master),
                             OutputTarget::Bus(current_id) => {
                                 let pos = bus_ids.iter().position(|&id| id == current_id);
                                 match pos {
@@ -273,7 +290,11 @@ pub(super) fn reduce(
             match session.mixer.selection {
                 MixerSelection::Instrument(idx) => {
                     if let Some(instrument) = instruments.instruments.get_mut(idx) {
-                        let send = instrument.mixer.sends.entry(*bus_id).or_insert_with(|| MixerSend::new(*bus_id));
+                        let send = instrument
+                            .mixer
+                            .sends
+                            .entry(*bus_id)
+                            .or_insert_with(|| MixerSend::new(*bus_id));
                         send.enabled = !send.enabled;
                         if send.enabled && send.level <= 0.0 {
                             send.level = 0.5;
@@ -282,7 +303,10 @@ pub(super) fn reduce(
                 }
                 MixerSelection::LayerGroup(group_id) => {
                     if let Some(gm) = session.mixer.layer_group_mixer_mut(group_id) {
-                        let send = gm.sends.entry(*bus_id).or_insert_with(|| MixerSend::new(*bus_id));
+                        let send = gm
+                            .sends
+                            .entry(*bus_id)
+                            .or_insert_with(|| MixerSend::new(*bus_id));
                         send.enabled = !send.enabled;
                         if send.enabled && send.level <= 0.0 {
                             send.level = 0.5;

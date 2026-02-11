@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::state::persistence::{save_project, load_project};
+use crate::state::persistence::{load_project, save_project};
 
 mod arrangement;
 mod basic;

@@ -1,12 +1,14 @@
 use std::any::Any;
 
-use crate::state::{AppState, CustomSynthDefRegistry, SourceType, SourceTypeExt, VstPluginRegistry};
+use crate::state::{
+    AppState, CustomSynthDefRegistry, SourceType, SourceTypeExt, VstPluginRegistry,
+};
 use crate::ui::action_id::{ActionId, AddActionId};
 use crate::ui::layout_helpers::center_rect;
 use crate::ui::{
     Action, Color, FileSelectAction, InputEvent, InstrumentAction, Keymap, ListSelector,
-    MouseButton, MouseEvent, MouseEventKind, NavAction, Pane, PaneId, Rect, RenderBuf, SessionAction,
-    Style,
+    MouseButton, MouseEvent, MouseEventKind, NavAction, Pane, PaneId, Rect, RenderBuf,
+    SessionAction, Style,
 };
 
 /// Options available in the Add Instrument menu
@@ -33,7 +35,6 @@ impl AddPane {
             cached_options: Self::build_options_static(),
         }
     }
-
 
     /// Base source options shared by all builds
     fn base_source_options() -> Vec<AddOption> {
@@ -129,7 +130,11 @@ impl AddPane {
     }
 
     /// Build options with custom synthdefs and VST plugins from registries
-    fn build_options(&self, custom_registry: &CustomSynthDefRegistry, vst_registry: &VstPluginRegistry) -> Vec<AddOption> {
+    fn build_options(
+        &self,
+        custom_registry: &CustomSynthDefRegistry,
+        vst_registry: &VstPluginRegistry,
+    ) -> Vec<AddOption> {
         let mut options = Self::base_source_options();
 
         // Custom section
@@ -150,12 +155,19 @@ impl AddPane {
     }
 
     /// Update cached options from registries
-    pub fn update_options(&mut self, custom_registry: &CustomSynthDefRegistry, vst_registry: &VstPluginRegistry) {
+    pub fn update_options(
+        &mut self,
+        custom_registry: &CustomSynthDefRegistry,
+        vst_registry: &VstPluginRegistry,
+    ) {
         self.cached_options = self.build_options(custom_registry, vst_registry);
         self.selector.scroll_offset = 0;
         self.selector.clamp(self.cached_options.len());
         // Skip separator if we landed on one
-        if matches!(self.cached_options.get(self.selector.selected), Some(AddOption::Separator(_))) {
+        if matches!(
+            self.cached_options.get(self.selector.selected),
+            Some(AddOption::Separator(_))
+        ) {
             self.select_next();
         }
     }
@@ -164,7 +176,9 @@ impl AddPane {
     fn select_next(&mut self) {
         let len = self.cached_options.len();
         let opts = &self.cached_options;
-        self.selector.select_next(len, |i| matches!(opts.get(i), Some(AddOption::Separator(_))));
+        self.selector.select_next(len, |i| {
+            matches!(opts.get(i), Some(AddOption::Separator(_)))
+        });
         self.selector.adjust_scroll(22); // Conservative visible rows estimate
     }
 
@@ -172,12 +186,12 @@ impl AddPane {
     fn selected_option_action(&self) -> Action {
         match self.cached_options.get(self.selector.selected) {
             Some(AddOption::Source(source)) => Action::Instrument(InstrumentAction::Add(*source)),
-            Some(AddOption::ImportCustom) => {
-                Action::Session(SessionAction::OpenFileBrowser(FileSelectAction::ImportCustomSynthDef))
-            }
-            Some(AddOption::ImportVst) => {
-                Action::Session(SessionAction::OpenFileBrowser(FileSelectAction::ImportVstInstrument))
-            }
+            Some(AddOption::ImportCustom) => Action::Session(SessionAction::OpenFileBrowser(
+                FileSelectAction::ImportCustomSynthDef,
+            )),
+            Some(AddOption::ImportVst) => Action::Session(SessionAction::OpenFileBrowser(
+                FileSelectAction::ImportVstInstrument,
+            )),
             Some(AddOption::Separator(_)) | None => Action::None,
         }
     }
@@ -186,12 +200,20 @@ impl AddPane {
     fn select_prev(&mut self) {
         let len = self.cached_options.len();
         let opts = &self.cached_options;
-        self.selector.select_prev(len, |i| matches!(opts.get(i), Some(AddOption::Separator(_))));
+        self.selector.select_prev(len, |i| {
+            matches!(opts.get(i), Some(AddOption::Separator(_)))
+        });
         self.selector.adjust_scroll(22);
     }
 
     /// Render with registries for custom synthdef and VST plugin names
-    fn render_buf_with_registries(&self, area: Rect, buf: &mut RenderBuf, registry: &CustomSynthDefRegistry, vst_registry: &VstPluginRegistry) {
+    fn render_buf_with_registries(
+        &self,
+        area: Rect,
+        buf: &mut RenderBuf,
+        registry: &CustomSynthDefRegistry,
+        vst_registry: &VstPluginRegistry,
+    ) {
         let rect = center_rect(area, 97, 29);
 
         let border_style = Style::new().fg(Color::LIME);
@@ -227,7 +249,13 @@ impl AddPane {
             }
         }
 
-        for (i, option) in self.cached_options.iter().skip(eff_scroll).take(visible_rows).enumerate() {
+        for (i, option) in self
+            .cached_options
+            .iter()
+            .skip(eff_scroll)
+            .take(visible_rows)
+            .enumerate()
+        {
             let y = list_y + i as u16;
             let is_selected = eff_scroll + i == self.selector.selected;
 
@@ -241,7 +269,12 @@ impl AddPane {
                 AddOption::Source(source) => {
                     // Indicator
                     if is_selected {
-                        buf.set_cell(content_x, y, '>', Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG).bold());
+                        buf.set_cell(
+                            content_x,
+                            y,
+                            '>',
+                            Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG).bold(),
+                        );
                     }
 
                     let color = match source {
@@ -284,7 +317,12 @@ impl AddPane {
                 }
                 AddOption::ImportCustom => {
                     if is_selected {
-                        buf.set_cell(content_x, y, '>', Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG).bold());
+                        buf.set_cell(
+                            content_x,
+                            y,
+                            '>',
+                            Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG).bold(),
+                        );
                     }
 
                     let text_style = if is_selected {
@@ -307,7 +345,12 @@ impl AddPane {
                 }
                 AddOption::ImportVst => {
                     if is_selected {
-                        buf.set_cell(content_x, y, '>', Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG).bold());
+                        buf.set_cell(
+                            content_x,
+                            y,
+                            '>',
+                            Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG).bold(),
+                        );
                     }
 
                     let text_style = if is_selected {
@@ -339,9 +382,7 @@ impl AddPane {
                 buf.set_cell(arrow_x, arrow_y, '▼', Style::new().fg(Color::DARK_GRAY));
             }
         }
-
     }
-
 }
 
 impl Default for AddPane {
@@ -382,7 +423,9 @@ impl Pane for AddPane {
         let inner_y = rect.y + 2;
         let content_y = inner_y + 1;
         let list_y = content_y + 2;
-        let visible_rows = (rect.y + rect.height).saturating_sub(1).saturating_sub(list_y) as usize;
+        let visible_rows = (rect.y + rect.height)
+            .saturating_sub(1)
+            .saturating_sub(list_y) as usize;
 
         match event.kind {
             MouseEventKind::Down(MouseButton::Left) => {
@@ -412,7 +455,12 @@ impl Pane for AddPane {
     }
 
     fn render(&mut self, area: Rect, buf: &mut RenderBuf, state: &AppState) {
-        self.render_buf_with_registries(area, buf, &state.session.custom_synthdefs, &state.session.vst_plugins);
+        self.render_buf_with_registries(
+            area,
+            buf,
+            &state.session.custom_synthdefs,
+            &state.session.vst_plugins,
+        );
     }
 
     fn keymap(&self) -> &Keymap {

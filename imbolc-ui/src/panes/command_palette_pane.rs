@@ -4,7 +4,9 @@ use crate::state::AppState;
 use crate::ui::action_id::{ActionId, ModeActionId};
 use crate::ui::filterable_list::{FilterableItem, FilterableList};
 use crate::ui::layout_helpers::center_rect;
-use crate::ui::{Rect, RenderBuf, Action, Color, InputEvent, KeyCode, Keymap, NavAction, Pane, Style};
+use crate::ui::{
+    Action, Color, InputEvent, KeyCode, Keymap, NavAction, Pane, Rect, RenderBuf, Style,
+};
 
 struct CommandEntry {
     action: ActionId,
@@ -13,8 +15,12 @@ struct CommandEntry {
 }
 
 impl FilterableItem for CommandEntry {
-    fn primary_text(&self) -> &str { self.action.as_str() }
-    fn secondary_text(&self) -> &str { &self.description }
+    fn primary_text(&self) -> &str {
+        self.action.as_str()
+    }
+    fn secondary_text(&self) -> &str {
+        &self.description
+    }
 }
 
 pub struct CommandPalettePane {
@@ -57,7 +63,12 @@ impl Pane for CommandPalettePane {
         "command_palette"
     }
 
-    fn handle_action(&mut self, action: ActionId, _event: &InputEvent, _state: &AppState) -> Action {
+    fn handle_action(
+        &mut self,
+        action: ActionId,
+        _event: &InputEvent,
+        _state: &AppState,
+    ) -> Action {
         match action {
             ActionId::Mode(ModeActionId::PaletteConfirm) => {
                 if let Some(entry) = self.list.selected_item() {
@@ -107,14 +118,25 @@ impl Pane for CommandPalettePane {
 
         // Prompt line: render ": " prefix then TextInput
         let prompt_y = inner.y;
-        buf.draw_line(Rect::new(inner.x, prompt_y, 2, 1), &[(": ", Style::new().fg(Color::CYAN).bold())]);
-        self.list.text_input.render_buf(buf.raw_buf(), inner.x + 2, prompt_y, inner.width.saturating_sub(2));
+        buf.draw_line(
+            Rect::new(inner.x, prompt_y, 2, 1),
+            &[(": ", Style::new().fg(Color::CYAN).bold())],
+        );
+        self.list.text_input.render_buf(
+            buf.raw_buf(),
+            inner.x + 2,
+            prompt_y,
+            inner.width.saturating_sub(2),
+        );
 
         // Divider
         if inner.height > 1 {
             let div_y = inner.y + 1;
             let divider = "\u{2500}".repeat(inner.width as usize);
-            buf.draw_line(Rect::new(inner.x, div_y, inner.width, 1), &[(&divider, Style::new().fg(Color::DARK_GRAY))]);
+            buf.draw_line(
+                Rect::new(inner.x, div_y, inner.width, 1),
+                &[(&divider, Style::new().fg(Color::DARK_GRAY))],
+            );
         }
 
         // Filtered list
@@ -123,8 +145,12 @@ impl Pane for CommandPalettePane {
 
         if self.list.filtered().is_empty() {
             if available_rows > 0 {
-                let no_match_area = Rect::new(inner.x + 1, list_start_y, inner.width.saturating_sub(2), 1);
-                buf.draw_line(no_match_area, &[("No matches", Style::new().fg(Color::DARK_GRAY))]);
+                let no_match_area =
+                    Rect::new(inner.x + 1, list_start_y, inner.width.saturating_sub(2), 1);
+                buf.draw_line(
+                    no_match_area,
+                    &[("No matches", Style::new().fg(Color::DARK_GRAY))],
+                );
             }
             return;
         }
@@ -184,12 +210,15 @@ impl Pane for CommandPalettePane {
             let pad_len = w.saturating_sub(action_len + desc_len + key_len);
 
             let padding = " ".repeat(pad_len);
-            buf.draw_line(row_area, &[
-                (&action_display[..action_len], action_style),
-                (&desc_display[..desc_len], desc_style),
-                (&padding, desc_style),
-                (&key_display, key_style),
-            ]);
+            buf.draw_line(
+                row_area,
+                &[
+                    (&action_display[..action_len], action_style),
+                    (&desc_display[..desc_len], desc_style),
+                    (&padding, desc_style),
+                    (&key_display, key_style),
+                ],
+            );
         }
     }
 

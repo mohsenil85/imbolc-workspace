@@ -1,6 +1,6 @@
-use imbolc_audio::AudioHandle;
-use crate::state::AppState;
 use crate::action::DispatchResult;
+use crate::state::AppState;
+use imbolc_audio::AudioHandle;
 
 pub(super) fn handle_play_note(
     state: &mut AppState,
@@ -16,7 +16,9 @@ pub(super) fn handle_play_note(
             let vel_f = velocity as f32 / 127.0;
             for &target_id in &targets {
                 if let Some(inst) = state.instruments.instrument(target_id) {
-                    if state.effective_instrument_mute(inst) { continue; }
+                    if state.effective_instrument_mute(inst) {
+                        continue;
+                    }
                     let pitches = match inst.note_input.chord_shape {
                         Some(shape) => shape.expand(pitch),
                         None => vec![pitch],
@@ -29,7 +31,10 @@ pub(super) fn handle_play_note(
                 }
             }
         } else {
-            return DispatchResult::with_status(imbolc_audio::ServerStatus::Stopped, "Audio engine not running");
+            return DispatchResult::with_status(
+                imbolc_audio::ServerStatus::Stopped,
+                "Audio engine not running",
+            );
         }
     }
     DispatchResult::none()
@@ -49,7 +54,9 @@ pub(super) fn handle_play_notes(
             let vel_f = velocity as f32 / 127.0;
             for &target_id in &targets {
                 if let Some(inst) = state.instruments.instrument(target_id) {
-                    if state.effective_instrument_mute(inst) { continue; }
+                    if state.effective_instrument_mute(inst) {
+                        continue;
+                    }
                     for &pitch in pitches {
                         let expanded = match inst.note_input.chord_shape {
                             Some(shape) => shape.expand(pitch),
@@ -64,7 +71,10 @@ pub(super) fn handle_play_notes(
                 }
             }
         } else {
-            return DispatchResult::with_status(imbolc_audio::ServerStatus::Stopped, "Audio engine not running");
+            return DispatchResult::with_status(
+                imbolc_audio::ServerStatus::Stopped,
+                "Audio engine not running",
+            );
         }
     }
     DispatchResult::none()
@@ -83,9 +93,20 @@ pub(super) fn handle_play_drum_pad(
                     let pitch_rate = 2.0_f32.powf(pad.pitch as f32 / 12.0);
                     let rate = if pad.reverse { -pitch_rate } else { pitch_rate };
                     if audio.is_running() {
-                        let _ = audio.play_drum_hit_to_instrument(buffer_id, amp, instrument_id, pad.slice_start, pad.slice_end, rate, 0.0);
+                        let _ = audio.play_drum_hit_to_instrument(
+                            buffer_id,
+                            amp,
+                            instrument_id,
+                            pad.slice_start,
+                            pad.slice_end,
+                            rate,
+                            0.0,
+                        );
                     } else {
-                        return DispatchResult::with_status(imbolc_audio::ServerStatus::Stopped, "Audio engine not running");
+                        return DispatchResult::with_status(
+                            imbolc_audio::ServerStatus::Stopped,
+                            "Audio engine not running",
+                        );
                     }
                 }
             }

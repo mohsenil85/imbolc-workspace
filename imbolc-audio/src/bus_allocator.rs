@@ -72,13 +72,17 @@ impl BusAllocator {
 
     /// Get an existing audio bus without allocating
     pub fn get_audio_bus(&self, module_id: ModuleId, port_name: &str) -> Option<i32> {
-        self.audio_buses.get(&(module_id, port_name.to_string())).copied()
+        self.audio_buses
+            .get(&(module_id, port_name.to_string()))
+            .copied()
     }
 
     /// Get an existing control bus without allocating
     #[allow(dead_code)]
     pub fn get_control_bus(&self, module_id: ModuleId, port_name: &str) -> Option<i32> {
-        self.control_buses.get(&(module_id, port_name.to_string())).copied()
+        self.control_buses
+            .get(&(module_id, port_name.to_string()))
+            .copied()
     }
 
     /// Free all buses allocated for a module

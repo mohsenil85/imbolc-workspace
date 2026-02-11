@@ -11,7 +11,10 @@ pub fn synthdefs_dir() -> PathBuf {
         return PathBuf::from(dir);
     }
 
-    let compile_time = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../imbolc-core/synthdefs"));
+    let compile_time = PathBuf::from(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../imbolc-core/synthdefs"
+    ));
     if compile_time.exists() {
         return compile_time;
     }

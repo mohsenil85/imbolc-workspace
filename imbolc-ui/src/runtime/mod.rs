@@ -19,11 +19,11 @@ use crate::audio::AudioHandle;
 use crate::config;
 use crate::dispatch::LocalDispatcher;
 use crate::global_actions::{apply_status_events, InstrumentSelectMode};
-use imbolc_core::interaction_log::InteractionLog;
 use crate::midi;
 use crate::setup;
 use crate::state::{self, AppState};
-use crate::ui::{Frame, LayerStack, PaneId, PaneManager, RatatuiBackend, keybindings};
+use crate::ui::{keybindings, Frame, LayerStack, PaneId, PaneManager, RatatuiBackend};
+use imbolc_core::interaction_log::InteractionLog;
 
 /// Top-level runtime that owns all application state and drives the event loop.
 pub struct AppRuntime {
@@ -78,8 +78,11 @@ impl AppRuntime {
         if !midi_input.list_ports().is_empty() {
             let _ = midi_input.connect(0);
         }
-        dispatcher.state_mut().midi.port_names =
-            midi_input.list_ports().iter().map(|p| p.name.clone()).collect();
+        dispatcher.state_mut().midi.port_names = midi_input
+            .list_ports()
+            .iter()
+            .map(|p| p.name.clone())
+            .collect();
         dispatcher.state_mut().midi.connected_port =
             midi_input.connected_port_name().map(|s| s.to_string());
 
@@ -92,9 +95,7 @@ impl AppRuntime {
         if let Some(arg) = project_arg {
             let load_path = std::path::PathBuf::from(&arg);
             if load_path.exists() {
-                if let Ok((session, instruments)) =
-                    state::persistence::load_project(&load_path)
-                {
+                if let Ok((session, instruments)) = state::persistence::load_project(&load_path) {
                     let name = load_path
                         .file_stem()
                         .and_then(|s| s.to_str())
@@ -186,11 +187,14 @@ pub fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
 
     // Propagate keyboard enhancement flag to all piano keyboards
     if backend.keyboard_enhancement_enabled() {
-        use crate::panes::{InstrumentPane, InstrumentEditPane, PianoRollPane};
+        use crate::panes::{InstrumentEditPane, InstrumentPane, PianoRollPane};
         if let Some(p) = runtime.panes.get_pane_mut::<InstrumentPane>("instrument") {
             p.set_enhanced_keyboard(true);
         }
-        if let Some(p) = runtime.panes.get_pane_mut::<InstrumentEditPane>("instrument_edit") {
+        if let Some(p) = runtime
+            .panes
+            .get_pane_mut::<InstrumentEditPane>("instrument_edit")
+        {
             p.set_enhanced_keyboard(true);
         }
         if let Some(p) = runtime.panes.get_pane_mut::<PianoRollPane>("piano_roll") {

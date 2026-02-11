@@ -1,7 +1,9 @@
-use crate::action::{AudioEffect, BusAction, DispatchResult, EqParamKind, LayerGroupAction, NavIntent};
+use crate::action::{
+    AudioEffect, BusAction, DispatchResult, EqParamKind, LayerGroupAction, NavIntent,
+};
+use crate::state::AppState;
 use imbolc_audio::AudioHandle;
 use imbolc_types::DomainAction;
-use crate::state::AppState;
 
 fn reduce(state: &mut AppState, action: &BusAction) {
     imbolc_types::reduce::reduce_action(
@@ -64,12 +66,16 @@ pub fn dispatch_bus(action: &BusAction, state: &mut AppState) -> DispatchResult 
         BusAction::AdjustEffectParam(bus_id, effect_id, param_idx, _delta) => {
             result.audio_effects.push(AudioEffect::RebuildSession);
             // Read back the param value after reducer mutation for targeted audio update
-            let targeted_value = state.session.bus(*bus_id)
+            let targeted_value = state
+                .session
+                .bus(*bus_id)
                 .and_then(|bus| bus.effect_chain.effect_by_id(*effect_id))
                 .and_then(|effect| effect.params.get(param_idx.get()))
                 .map(|param| param.value.to_f32());
             if let Some(value) = targeted_value {
-                result.audio_effects.push(AudioEffect::SetBusEffectParam(*bus_id, *effect_id, *param_idx, value));
+                result.audio_effects.push(AudioEffect::SetBusEffectParam(
+                    *bus_id, *effect_id, *param_idx, value,
+                ));
             }
         }
     }
@@ -122,12 +128,19 @@ pub fn dispatch_layer_group(
         LayerGroupAction::AdjustEffectParam(group_id, effect_id, param_idx, _delta) => {
             result.audio_effects.push(AudioEffect::RebuildSession);
             // Read back the param value after reducer mutation for targeted audio update
-            let targeted_value = state.session.mixer.layer_group_mixer(*group_id)
+            let targeted_value = state
+                .session
+                .mixer
+                .layer_group_mixer(*group_id)
                 .and_then(|gm| gm.effect_chain.effect_by_id(*effect_id))
                 .and_then(|effect| effect.params.get(param_idx.get()))
                 .map(|param| param.value.to_f32());
             if let Some(value) = targeted_value {
-                result.audio_effects.push(AudioEffect::SetLayerGroupEffectParam(*group_id, *effect_id, *param_idx, value));
+                result
+                    .audio_effects
+                    .push(AudioEffect::SetLayerGroupEffectParam(
+                        *group_id, *effect_id, *param_idx, value,
+                    ));
             }
         }
 
@@ -140,7 +153,11 @@ pub fn dispatch_layer_group(
             // Send real-time param update to audio engine
             if audio.is_running() {
                 let sc_param = format!("b{}_{}", band_idx, param.as_str());
-                let sc_value = if *param == EqParamKind::Q { 1.0 / value } else { *value };
+                let sc_value = if *param == EqParamKind::Q {
+                    1.0 / value
+                } else {
+                    *value
+                };
                 let _ = audio.set_layer_group_eq_param(*group_id, &sc_param, sc_value);
             }
             result.audio_effects.push(AudioEffect::RebuildSession);
@@ -153,9 +170,9 @@ pub fn dispatch_layer_group(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use imbolc_types::{BusId, OutputTarget, ParamIndex};
-    use crate::state::SourceType;
     use crate::state::automation::AutomationTarget;
+    use crate::state::SourceType;
+    use imbolc_types::{BusId, OutputTarget, ParamIndex};
 
     fn setup() -> AppState {
         AppState::new()
@@ -192,7 +209,10 @@ mod tests {
 
         dispatch_bus(&BusAction::Remove(BusId::new(3)), &mut state);
 
-        assert_eq!(state.instruments.instruments[0].mixer.output_target, OutputTarget::Master);
+        assert_eq!(
+            state.instruments.instruments[0].mixer.output_target,
+            OutputTarget::Master
+        );
     }
 
     #[test]
@@ -203,13 +223,21 @@ mod tests {
         // Insert and enable a send to bus 3
         state.instruments.instruments[0].mixer.sends.insert(
             BusId::new(3),
-            MixerSend { bus_id: BusId::new(3), level: 0.5, enabled: true, tap_point: Default::default() },
+            MixerSend {
+                bus_id: BusId::new(3),
+                level: 0.5,
+                enabled: true,
+                tap_point: Default::default(),
+            },
         );
 
         dispatch_bus(&BusAction::Remove(BusId::new(3)), &mut state);
 
         // Send should be disabled but still exist
-        let send = state.instruments.instruments[0].mixer.sends.get(&BusId::new(3));
+        let send = state.instruments.instruments[0]
+            .mixer
+            .sends
+            .get(&BusId::new(3));
         assert!(send.is_some());
         assert!(!send.unwrap().enabled);
     }
@@ -217,7 +245,10 @@ mod tests {
     #[test]
     fn remove_bus_clears_automation() {
         let mut state = setup();
-        state.session.automation.add_lane(AutomationTarget::bus_level(BusId::new(3)));
+        state
+            .session
+            .automation
+            .add_lane(AutomationTarget::bus_level(BusId::new(3)));
         assert!(!state.session.automation.lanes.is_empty());
 
         dispatch_bus(&BusAction::Remove(BusId::new(3)), &mut state);
@@ -229,7 +260,10 @@ mod tests {
     fn rename_bus() {
         let mut state = setup();
 
-        dispatch_bus(&BusAction::Rename(BusId::new(1), "Drums".to_string()), &mut state);
+        dispatch_bus(
+            &BusAction::Rename(BusId::new(1), "Drums".to_string()),
+            &mut state,
+        );
 
         assert_eq!(state.session.bus(BusId::new(1)).unwrap().name, "Drums");
     }
@@ -242,32 +276,69 @@ mod tests {
     fn bus_add_effect_dispatch() {
         use crate::state::EffectType;
         let mut state = setup();
-        let result = dispatch_bus(&BusAction::AddEffect(BusId::new(1), EffectType::Reverb), &mut state);
+        let result = dispatch_bus(
+            &BusAction::AddEffect(BusId::new(1), EffectType::Reverb),
+            &mut state,
+        );
         let bus = state.session.bus(BusId::new(1)).unwrap();
         assert_eq!(bus.effect_chain.effects.len(), 1);
         assert_eq!(bus.effect_chain.effects[0].effect_type, EffectType::Reverb);
-        assert!(result.audio_effects.contains(&AudioEffect::RebuildBusProcessing));
+        assert!(result
+            .audio_effects
+            .contains(&AudioEffect::RebuildBusProcessing));
     }
 
     #[test]
     fn bus_remove_effect_dispatch() {
         use crate::state::EffectType;
         let mut state = setup();
-        dispatch_bus(&BusAction::AddEffect(BusId::new(1), EffectType::Reverb), &mut state);
-        let effect_id = state.session.bus(BusId::new(1)).unwrap().effect_chain.effects[0].id;
+        dispatch_bus(
+            &BusAction::AddEffect(BusId::new(1), EffectType::Reverb),
+            &mut state,
+        );
+        let effect_id = state
+            .session
+            .bus(BusId::new(1))
+            .unwrap()
+            .effect_chain
+            .effects[0]
+            .id;
 
-        let result = dispatch_bus(&BusAction::RemoveEffect(BusId::new(1), effect_id), &mut state);
-        assert!(state.session.bus(BusId::new(1)).unwrap().effect_chain.effects.is_empty());
-        assert!(result.audio_effects.contains(&AudioEffect::RebuildBusProcessing));
+        let result = dispatch_bus(
+            &BusAction::RemoveEffect(BusId::new(1), effect_id),
+            &mut state,
+        );
+        assert!(state
+            .session
+            .bus(BusId::new(1))
+            .unwrap()
+            .effect_chain
+            .effects
+            .is_empty());
+        assert!(result
+            .audio_effects
+            .contains(&AudioEffect::RebuildBusProcessing));
     }
 
     #[test]
     fn bus_move_effect_dispatch() {
         use crate::state::EffectType;
         let mut state = setup();
-        dispatch_bus(&BusAction::AddEffect(BusId::new(1), EffectType::Reverb), &mut state);
-        dispatch_bus(&BusAction::AddEffect(BusId::new(1), EffectType::Delay), &mut state);
-        let id0 = state.session.bus(BusId::new(1)).unwrap().effect_chain.effects[0].id;
+        dispatch_bus(
+            &BusAction::AddEffect(BusId::new(1), EffectType::Reverb),
+            &mut state,
+        );
+        dispatch_bus(
+            &BusAction::AddEffect(BusId::new(1), EffectType::Delay),
+            &mut state,
+        );
+        let id0 = state
+            .session
+            .bus(BusId::new(1))
+            .unwrap()
+            .effect_chain
+            .effects[0]
+            .id;
 
         dispatch_bus(&BusAction::MoveEffect(BusId::new(1), id0, 1), &mut state);
         let bus = state.session.bus(BusId::new(1)).unwrap();
@@ -278,32 +349,91 @@ mod tests {
     fn bus_toggle_effect_bypass_dispatch() {
         use crate::state::EffectType;
         let mut state = setup();
-        dispatch_bus(&BusAction::AddEffect(BusId::new(1), EffectType::Reverb), &mut state);
-        let effect_id = state.session.bus(BusId::new(1)).unwrap().effect_chain.effects[0].id;
-        assert!(state.session.bus(BusId::new(1)).unwrap().effect_chain.effects[0].enabled);
+        dispatch_bus(
+            &BusAction::AddEffect(BusId::new(1), EffectType::Reverb),
+            &mut state,
+        );
+        let effect_id = state
+            .session
+            .bus(BusId::new(1))
+            .unwrap()
+            .effect_chain
+            .effects[0]
+            .id;
+        assert!(
+            state
+                .session
+                .bus(BusId::new(1))
+                .unwrap()
+                .effect_chain
+                .effects[0]
+                .enabled
+        );
 
-        dispatch_bus(&BusAction::ToggleEffectBypass(BusId::new(1), effect_id), &mut state);
-        assert!(!state.session.bus(BusId::new(1)).unwrap().effect_chain.effects[0].enabled);
+        dispatch_bus(
+            &BusAction::ToggleEffectBypass(BusId::new(1), effect_id),
+            &mut state,
+        );
+        assert!(
+            !state
+                .session
+                .bus(BusId::new(1))
+                .unwrap()
+                .effect_chain
+                .effects[0]
+                .enabled
+        );
     }
 
     #[test]
     fn bus_adjust_effect_param_dispatch() {
         use crate::state::EffectType;
         let mut state = setup();
-        dispatch_bus(&BusAction::AddEffect(BusId::new(1), EffectType::Reverb), &mut state);
-        let effect_id = state.session.bus(BusId::new(1)).unwrap().effect_chain.effects[0].id;
-        let initial_val = match &state.session.bus(BusId::new(1)).unwrap().effect_chain.effects[0].params[0].value {
+        dispatch_bus(
+            &BusAction::AddEffect(BusId::new(1), EffectType::Reverb),
+            &mut state,
+        );
+        let effect_id = state
+            .session
+            .bus(BusId::new(1))
+            .unwrap()
+            .effect_chain
+            .effects[0]
+            .id;
+        let initial_val = match &state
+            .session
+            .bus(BusId::new(1))
+            .unwrap()
+            .effect_chain
+            .effects[0]
+            .params[0]
+            .value
+        {
             crate::state::ParamValue::Float(v) => *v,
             _ => panic!("expected float"),
         };
 
-        let result = dispatch_bus(&BusAction::AdjustEffectParam(BusId::new(1), effect_id, ParamIndex::new(0), 1.0), &mut state);
-        let new_val = match &state.session.bus(BusId::new(1)).unwrap().effect_chain.effects[0].params[0].value {
+        let result = dispatch_bus(
+            &BusAction::AdjustEffectParam(BusId::new(1), effect_id, ParamIndex::new(0), 1.0),
+            &mut state,
+        );
+        let new_val = match &state
+            .session
+            .bus(BusId::new(1))
+            .unwrap()
+            .effect_chain
+            .effects[0]
+            .params[0]
+            .value
+        {
             crate::state::ParamValue::Float(v) => *v,
             _ => panic!("expected float"),
         };
         assert_ne!(initial_val, new_val);
-        assert!(result.audio_effects.iter().any(|e| matches!(e, AudioEffect::SetBusEffectParam(..))));
+        assert!(result
+            .audio_effects
+            .iter()
+            .any(|e| matches!(e, AudioEffect::SetBusEffectParam(..))));
     }
 
     // ========================================================================
@@ -320,13 +450,22 @@ mod tests {
     fn layer_group_add_effect_dispatch() {
         use crate::state::EffectType;
         let (mut state, mut audio) = setup_with_audio();
-        state.session.mixer.add_layer_group_mixer(1, &[BusId::new(1), BusId::new(2)]);
+        state
+            .session
+            .mixer
+            .add_layer_group_mixer(1, &[BusId::new(1), BusId::new(2)]);
 
-        let result = dispatch_layer_group(&LayerGroupAction::AddEffect(1, EffectType::TapeComp), &mut state, &mut audio);
+        let result = dispatch_layer_group(
+            &LayerGroupAction::AddEffect(1, EffectType::TapeComp),
+            &mut state,
+            &mut audio,
+        );
         let gm = state.session.mixer.layer_group_mixer(1).unwrap();
         assert_eq!(gm.effect_chain.effects.len(), 1);
         assert_eq!(gm.effect_chain.effects[0].effect_type, EffectType::TapeComp);
-        assert!(result.audio_effects.contains(&AudioEffect::RebuildBusProcessing));
+        assert!(result
+            .audio_effects
+            .contains(&AudioEffect::RebuildBusProcessing));
     }
 
     #[test]
@@ -334,11 +473,35 @@ mod tests {
         use crate::state::EffectType;
         let (mut state, mut audio) = setup_with_audio();
         state.session.mixer.add_layer_group_mixer(1, &[]);
-        state.session.mixer.layer_group_mixer_mut(1).unwrap().effect_chain.add_effect(EffectType::Limiter);
-        let effect_id = state.session.mixer.layer_group_mixer(1).unwrap().effect_chain.effects[0].id;
+        state
+            .session
+            .mixer
+            .layer_group_mixer_mut(1)
+            .unwrap()
+            .effect_chain
+            .add_effect(EffectType::Limiter);
+        let effect_id = state
+            .session
+            .mixer
+            .layer_group_mixer(1)
+            .unwrap()
+            .effect_chain
+            .effects[0]
+            .id;
 
-        dispatch_layer_group(&LayerGroupAction::RemoveEffect(1, effect_id), &mut state, &mut audio);
-        assert!(state.session.mixer.layer_group_mixer(1).unwrap().effect_chain.effects.is_empty());
+        dispatch_layer_group(
+            &LayerGroupAction::RemoveEffect(1, effect_id),
+            &mut state,
+            &mut audio,
+        );
+        assert!(state
+            .session
+            .mixer
+            .layer_group_mixer(1)
+            .unwrap()
+            .effect_chain
+            .effects
+            .is_empty());
     }
 
     #[test]
@@ -346,26 +509,72 @@ mod tests {
         use crate::state::EffectType;
         let (mut state, mut audio) = setup_with_audio();
         state.session.mixer.add_layer_group_mixer(1, &[]);
-        state.session.mixer.layer_group_mixer_mut(1).unwrap().effect_chain.add_effect(EffectType::Reverb);
-        let effect_id = state.session.mixer.layer_group_mixer(1).unwrap().effect_chain.effects[0].id;
+        state
+            .session
+            .mixer
+            .layer_group_mixer_mut(1)
+            .unwrap()
+            .effect_chain
+            .add_effect(EffectType::Reverb);
+        let effect_id = state
+            .session
+            .mixer
+            .layer_group_mixer(1)
+            .unwrap()
+            .effect_chain
+            .effects[0]
+            .id;
 
-        dispatch_layer_group(&LayerGroupAction::ToggleEffectBypass(1, effect_id), &mut state, &mut audio);
-        assert!(!state.session.mixer.layer_group_mixer(1).unwrap().effect_chain.effects[0].enabled);
+        dispatch_layer_group(
+            &LayerGroupAction::ToggleEffectBypass(1, effect_id),
+            &mut state,
+            &mut audio,
+        );
+        assert!(
+            !state
+                .session
+                .mixer
+                .layer_group_mixer(1)
+                .unwrap()
+                .effect_chain
+                .effects[0]
+                .enabled
+        );
     }
 
     #[test]
     fn layer_group_toggle_eq_dispatch() {
         let (mut state, mut audio) = setup_with_audio();
         state.session.mixer.add_layer_group_mixer(1, &[]);
-        assert!(state.session.mixer.layer_group_mixer(1).unwrap().eq().is_some());
+        assert!(state
+            .session
+            .mixer
+            .layer_group_mixer(1)
+            .unwrap()
+            .eq()
+            .is_some());
 
         let result = dispatch_layer_group(&LayerGroupAction::ToggleEq(1), &mut state, &mut audio);
-        assert!(state.session.mixer.layer_group_mixer(1).unwrap().eq().is_none());
-        assert!(result.audio_effects.contains(&AudioEffect::RebuildBusProcessing));
+        assert!(state
+            .session
+            .mixer
+            .layer_group_mixer(1)
+            .unwrap()
+            .eq()
+            .is_none());
+        assert!(result
+            .audio_effects
+            .contains(&AudioEffect::RebuildBusProcessing));
         assert!(result.audio_effects.contains(&AudioEffect::RebuildSession));
 
         dispatch_layer_group(&LayerGroupAction::ToggleEq(1), &mut state, &mut audio);
-        assert!(state.session.mixer.layer_group_mixer(1).unwrap().eq().is_some());
+        assert!(state
+            .session
+            .mixer
+            .layer_group_mixer(1)
+            .unwrap()
+            .eq()
+            .is_some());
     }
 
     #[test]
@@ -375,9 +584,16 @@ mod tests {
 
         let result = dispatch_layer_group(
             &LayerGroupAction::SetEqParam(1, 0, EqParamKind::Gain, 6.0),
-            &mut state, &mut audio,
+            &mut state,
+            &mut audio,
         );
-        let eq = state.session.mixer.layer_group_mixer(1).unwrap().eq().unwrap();
+        let eq = state
+            .session
+            .mixer
+            .layer_group_mixer(1)
+            .unwrap()
+            .eq()
+            .unwrap();
         assert_eq!(eq.bands[0].gain, 6.0);
         assert!(result.audio_effects.contains(&AudioEffect::RebuildSession));
     }

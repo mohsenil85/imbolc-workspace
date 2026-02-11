@@ -3,7 +3,9 @@ use std::any::Any;
 use crate::state::AppState;
 use crate::ui::action_id::ActionId;
 use crate::ui::layout_helpers::center_rect;
-use crate::ui::{Rect, RenderBuf, Action, Color, InputEvent, KeyCode, Keymap, NavAction, Pane, Style};
+use crate::ui::{
+    Action, Color, InputEvent, KeyCode, Keymap, NavAction, Pane, Rect, RenderBuf, Style,
+};
 
 /// Which button is selected in the quit prompt
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -32,7 +34,12 @@ impl Pane for QuitPromptPane {
         "quit_prompt"
     }
 
-    fn handle_action(&mut self, _action: ActionId, _event: &InputEvent, _state: &AppState) -> Action {
+    fn handle_action(
+        &mut self,
+        _action: ActionId,
+        _event: &InputEvent,
+        _state: &AppState,
+    ) -> Action {
         Action::None
     }
 
@@ -85,7 +92,13 @@ impl Pane for QuitPromptPane {
 
         // Message
         let msg_area = Rect::new(inner.x + 1, inner.y + 1, inner.width.saturating_sub(2), 1);
-        buf.draw_line(msg_area, &[("Save changes before quitting?", Style::new().fg(Color::WHITE))]);
+        buf.draw_line(
+            msg_area,
+            &[(
+                "Save changes before quitting?",
+                Style::new().fg(Color::WHITE),
+            )],
+        );
 
         // Buttons: [S]ave  [D]on't Save  [C]ancel
         let active_style = |sel: QuitSelection| {
@@ -99,13 +112,16 @@ impl Pane for QuitPromptPane {
         let btn_y = inner.y + 3;
         if btn_y < inner.y + inner.height {
             let btn_area = Rect::new(inner.x + 1, btn_y, inner.width.saturating_sub(2), 1);
-            buf.draw_line(btn_area, &[
-                (" [S]ave ", active_style(QuitSelection::Save)),
-                ("  ", Style::new()),
-                (" [D]on't Save ", active_style(QuitSelection::DontSave)),
-                ("  ", Style::new()),
-                (" [C]ancel ", active_style(QuitSelection::Cancel)),
-            ]);
+            buf.draw_line(
+                btn_area,
+                &[
+                    (" [S]ave ", active_style(QuitSelection::Save)),
+                    ("  ", Style::new()),
+                    (" [D]on't Save ", active_style(QuitSelection::DontSave)),
+                    ("  ", Style::new()),
+                    (" [C]ancel ", active_style(QuitSelection::Cancel)),
+                ],
+            );
         }
     }
 

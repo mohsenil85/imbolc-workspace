@@ -162,7 +162,9 @@ impl AppRuntime {
             // Bridge mixer detail context to add_effect pane
             if matches!(
                 &routed_action,
-                RoutedAction::Ui(UiAction::Nav(action::NavAction::PushPane(action::PaneId::AddEffect)))
+                RoutedAction::Ui(UiAction::Nav(action::NavAction::PushPane(
+                    action::PaneId::AddEffect
+                )))
             ) && self.panes.active().id() == "mixer"
             {
                 if let Some(mixer) = self.panes.get_pane_mut::<MixerPane>("mixer") {
@@ -249,9 +251,8 @@ impl AppRuntime {
                                     sync_pane_layer(&mut self.panes, &mut self.layer_stack);
                                 }
                                 RoutedAction::Domain(ref domain) => {
-                                    let mut r = self
-                                        .dispatcher
-                                        .dispatch_domain(domain, &mut self.audio);
+                                    let mut r =
+                                        self.dispatcher.dispatch_domain(domain, &mut self.audio);
                                     if r.quit {
                                         should_quit = true;
                                         break 'events;

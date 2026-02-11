@@ -1,5 +1,5 @@
-use super::{InputEvent, KeyCode};
 use super::action_id::ActionId;
+use super::{InputEvent, KeyCode};
 
 /// Pattern for matching key inputs
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -31,7 +31,10 @@ impl KeyPattern {
                     && !event.modifiers.alt
             }
             KeyPattern::Key(code) => {
-                event.key == *code && !event.modifiers.ctrl && !event.modifiers.alt && !event.modifiers.shift
+                event.key == *code
+                    && !event.modifiers.ctrl
+                    && !event.modifiers.alt
+                    && !event.modifiers.shift
             }
             KeyPattern::Ctrl(ch) => {
                 matches!(event.key, KeyCode::Char(c) if c == *ch) && event.modifiers.ctrl
@@ -105,12 +108,7 @@ impl Keymap {
 
     /// Add a special key binding
     #[allow(dead_code)]
-    pub fn bind_key(
-        mut self,
-        key: KeyCode,
-        action: ActionId,
-        description: &'static str,
-    ) -> Self {
+    pub fn bind_key(mut self, key: KeyCode, action: ActionId, description: &'static str) -> Self {
         self.bindings.push(KeyBinding {
             pattern: KeyPattern::Key(key),
             action,
@@ -190,13 +188,12 @@ impl Keymap {
     pub fn bindings(&self) -> &[KeyBinding] {
         &self.bindings
     }
-
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::action_id::{ActionId, GlobalActionId};
+    use super::*;
     use crate::ui::Modifiers;
 
     #[test]
@@ -226,10 +223,16 @@ mod tests {
             .bind_ctrl('s', ActionId::Global(GlobalActionId::Save), "Save");
 
         let q_event = InputEvent::new(KeyCode::Char('q'), Modifiers::none());
-        assert_eq!(keymap.lookup(&q_event), Some(ActionId::Global(GlobalActionId::Quit)));
+        assert_eq!(
+            keymap.lookup(&q_event),
+            Some(ActionId::Global(GlobalActionId::Quit))
+        );
 
         let ctrl_s_event = InputEvent::new(KeyCode::Char('s'), Modifiers::ctrl());
-        assert_eq!(keymap.lookup(&ctrl_s_event), Some(ActionId::Global(GlobalActionId::Save)));
+        assert_eq!(
+            keymap.lookup(&ctrl_s_event),
+            Some(ActionId::Global(GlobalActionId::Save))
+        );
 
         let unknown_event = InputEvent::new(KeyCode::Char('x'), Modifiers::none());
         assert_eq!(keymap.lookup(&unknown_event), None);

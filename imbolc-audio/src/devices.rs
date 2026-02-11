@@ -1,6 +1,6 @@
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::process::Command;
-use serde::{Deserialize, Serialize};
 
 /// Audio buffer size options for scsynth
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -54,6 +54,8 @@ pub struct AudioDeviceConfig {
     pub output_device: Option<String>, // None = system default
     pub buffer_size: BufferSize,       // default 512
     pub sample_rate: u32,              // default 44100
+    /// Optional extra command-line arguments appended when spawning scsynth.
+    pub scsynth_args: String,
 }
 
 impl Default for AudioDeviceConfig {
@@ -63,6 +65,7 @@ impl Default for AudioDeviceConfig {
             output_device: None,
             buffer_size: BufferSize::default(),
             sample_rate: 44100,
+            scsynth_args: String::new(),
         }
     }
 }
@@ -102,11 +105,7 @@ pub fn enumerate_devices() -> Vec<AudioDevice> {
         .and_then(|v| v.as_array());
 
     // If nested _items structure doesn't work, try flat array
-    let items = items.or_else(|| {
-        parsed
-            .get("SPAudioDataType")
-            .and_then(|v| v.as_array())
-    });
+    let items = items.or_else(|| parsed.get("SPAudioDataType").and_then(|v| v.as_array()));
 
     if let Some(items) = items {
         for item in items {
@@ -136,22 +135,18 @@ pub fn enumerate_devices() -> Vec<AudioDevice> {
             let output_channels = item
                 .get("coreaudio_output_source")
                 .and_then(|v| v.as_str())
-                .and_then(|s| {
-                    s.split_whitespace().next().and_then(|n| n.parse().ok())
-                })
+                .and_then(|s| s.split_whitespace().next().and_then(|n| n.parse().ok()))
                 .or_else(|| {
                     item.get("coreaudio_device_output")
                         .and_then(|v| v.as_u64())
                         .map(|v| v as u32)
                 });
 
-            let sample_rate = item
-                .get("coreaudio_device_srate")
-                .and_then(|v| {
-                    v.as_u64().map(|n| n as u32).or_else(|| {
-                        v.as_str().and_then(|s| s.parse().ok())
-                    })
-                });
+            let sample_rate = item.get("coreaudio_device_srate").and_then(|v| {
+                v.as_u64()
+                    .map(|n| n as u32)
+                    .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+            });
 
             let is_default_output = item
                 .get("coreaudio_default_audio_output_device")
@@ -195,10 +190,12 @@ fn is_blacklisted_device(name: &str) -> bool {
 /// problematic devices.
 pub fn default_device_names() -> (Option<String>, Option<String>) {
     let devices = enumerate_devices();
-    let output = devices.iter()
+    let output = devices
+        .iter()
         .find(|d| d.is_default_output)
         .map(|d| d.name.clone());
-    let input = devices.iter()
+    let input = devices
+        .iter()
         .find(|d| d.is_default_input)
         .map(|d| d.name.clone());
     (output, input)
@@ -259,6 +256,11 @@ pub fn load_device_config() -> AudioDeviceConfig {
             .map(|s| s.to_string()),
         buffer_size,
         sample_rate,
+        scsynth_args: parsed
+            .get("scsynth_args")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .unwrap_or_default(),
     }
 }
 
@@ -273,6 +275,10 @@ pub fn save_device_config(config: &AudioDeviceConfig) {
         "output_device": config.output_device,
         "buffer_size": config.buffer_size.as_samples(),
         "sample_rate": config.sample_rate,
+        "scsynth_args": config.scsynth_args,
     });
-    let _ = std::fs::write(&path, serde_json::to_string_pretty(&obj).unwrap_or_default());
+    let _ = std::fs::write(
+        &path,
+        serde_json::to_string_pretty(&obj).unwrap_or_default(),
+    );
 }

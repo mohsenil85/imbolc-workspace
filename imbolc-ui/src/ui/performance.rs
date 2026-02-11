@@ -1,8 +1,8 @@
 use std::time::Instant;
 
 use super::pad_keyboard::PadKeyboard;
-use super::piano_keyboard::PianoKeyboard;
 use super::pane::ToggleResult;
+use super::piano_keyboard::PianoKeyboard;
 use crate::ui::{Action, PianoRollAction};
 use imbolc_types::InstrumentId;
 
@@ -49,12 +49,16 @@ impl PerformanceController {
     }
 
     pub fn activate_piano(&mut self) {
-        if !self.piano.is_active() { self.piano.activate(); }
+        if !self.piano.is_active() {
+            self.piano.activate();
+        }
         self.pad.deactivate();
     }
 
     pub fn activate_pad(&mut self) {
-        if !self.pad.is_active() { self.pad.activate(); }
+        if !self.pad.is_active() {
+            self.pad.activate();
+        }
         self.piano.deactivate();
     }
 
@@ -74,7 +78,8 @@ impl PerformanceController {
         if released.is_empty() {
             return vec![];
         }
-        released.into_iter()
+        released
+            .into_iter()
             .map(|(_, pitches)| {
                 if pitches.len() == 1 {
                     Action::PianoRoll(PianoRollAction::ReleaseNote {

@@ -1,7 +1,7 @@
 use std::any::Any;
 
-use super::{InputEvent, Keymap, MouseEvent, Rect, RenderBuf};
 use super::action_id::ActionId;
+use super::{InputEvent, Keymap, MouseEvent, Rect, RenderBuf};
 use crate::state::AppState;
 
 // Re-export all action types from the core crate
@@ -44,7 +44,9 @@ pub trait Pane {
 
     /// Called each frame to check for time-based state changes (e.g., key release).
     /// Returns actions to dispatch (default: empty).
-    fn tick(&mut self, _state: &AppState) -> Vec<Action> { vec![] }
+    fn tick(&mut self, _state: &AppState) -> Vec<Action> {
+        vec![]
+    }
 
     /// Toggle performance mode (piano/pad keyboard). Returns what happened.
     fn toggle_performance_mode(&mut self, _state: &AppState) -> ToggleResult {
@@ -162,9 +164,15 @@ impl PaneManager {
     pub fn process_nav_intents(&mut self, intents: &[NavIntent], state: &AppState) {
         for intent in intents {
             match intent {
-                NavIntent::SwitchTo(id) => { self.switch_to(*id, state); }
-                NavIntent::PushTo(id) => { self.push_to(*id, state); }
-                NavIntent::Pop => { self.pop(state); }
+                NavIntent::SwitchTo(id) => {
+                    self.switch_to(*id, state);
+                }
+                NavIntent::PushTo(id) => {
+                    self.push_to(*id, state);
+                }
+                NavIntent::Pop => {
+                    self.pop(state);
+                }
                 NavIntent::ConditionalPop(pane_id) => {
                     if self.active().id() == pane_id.as_str() {
                         self.pop(state);

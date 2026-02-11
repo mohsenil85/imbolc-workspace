@@ -83,7 +83,10 @@ mod tests {
 
     #[test]
     fn max_cap_evicts_oldest() {
-        let mut bar = StatusBar { messages: Vec::new(), max: 2 };
+        let mut bar = StatusBar {
+            messages: Vec::new(),
+            max: 2,
+        };
         bar.push("a", StatusLevel::Info);
         bar.push("b", StatusLevel::Info);
         bar.push("c", StatusLevel::Info);

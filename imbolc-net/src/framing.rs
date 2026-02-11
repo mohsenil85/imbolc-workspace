@@ -59,9 +59,8 @@ pub fn read_message<R: Read, T: DeserializeOwned>(reader: &mut R) -> io::Result<
     let mut payload = vec![0u8; len];
     reader.read_exact(&mut payload)?;
 
-    let (msg, _): (T, _) =
-        bincode::serde::decode_from_slice(&payload, bincode::config::standard())
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    let (msg, _): (T, _) = bincode::serde::decode_from_slice(&payload, bincode::config::standard())
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
     Ok(msg)
 }
 

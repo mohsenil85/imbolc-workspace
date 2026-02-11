@@ -1,9 +1,9 @@
 mod common;
 
-use std::time::Duration;
-use imbolc_net::server::NetServer;
 use imbolc_net::protocol::{ClientMessage, NetworkAction, PrivilegeLevel, ServerMessage};
+use imbolc_net::server::NetServer;
 use imbolc_types::ServerAction;
+use std::time::Duration;
 
 #[test]
 fn test_reject_unprivileged_transport() {
@@ -18,15 +18,21 @@ fn test_reject_unprivileged_transport() {
     let _welcome = alice.recv().unwrap();
 
     // Alice sends a server action (requires privilege)
-    alice.send(&ClientMessage::Action(
-        NetworkAction::Server(ServerAction::RecordMaster),
-    )).unwrap();
+    alice
+        .send(&ClientMessage::Action(NetworkAction::Server(
+            ServerAction::RecordMaster,
+        )))
+        .unwrap();
 
     // Drive server to process the action
     std::thread::sleep(Duration::from_millis(50));
     let state = common::make_test_state(&server);
-    let actions = common::drive_and_collect_actions(&mut server, &state, Duration::from_millis(200));
-    assert!(actions.is_empty(), "Unprivileged server action should be rejected");
+    let actions =
+        common::drive_and_collect_actions(&mut server, &state, Duration::from_millis(200));
+    assert!(
+        actions.is_empty(),
+        "Unprivileged server action should be rejected"
+    );
 
     // Wait for writer thread to deliver the rejection
     server.flush_writer();
@@ -35,7 +41,11 @@ fn test_reject_unprivileged_transport() {
     let msg = alice.recv().unwrap();
     match msg {
         ServerMessage::ActionRejected { reason } => {
-            assert!(reason.contains("privilege"), "Rejection reason should mention privilege: {}", reason);
+            assert!(
+                reason.contains("privilege"),
+                "Rejection reason should mention privilege: {}",
+                reason
+            );
         }
         other => panic!("Expected ActionRejected, got {:?}", other),
     }

@@ -36,9 +36,9 @@ impl StepResolution {
     /// Tick duration for each step (at 480 TPB)
     pub fn ticks_per_step(&self) -> u32 {
         match self {
-            Self::Quarter => 480,  // 1 beat
-            Self::Eighth => 240,   // 1/2 beat
-            Self::Sixteenth => 120, // 1/4 beat
+            Self::Quarter => 480,     // 1 beat
+            Self::Eighth => 240,      // 1/2 beat
+            Self::Sixteenth => 120,   // 1/4 beat
             Self::ThirtySecond => 60, // 1/8 beat
         }
     }

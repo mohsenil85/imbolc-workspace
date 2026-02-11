@@ -1,6 +1,6 @@
 use crate::action::{DispatchResult, MidiAction};
-use crate::state::AppState;
 use crate::state::midi_recording::MidiCcMapping;
+use crate::state::AppState;
 
 pub(super) fn dispatch_midi(action: &MidiAction, state: &mut AppState) -> DispatchResult {
     match action {
@@ -13,14 +13,21 @@ pub(super) fn dispatch_midi(action: &MidiAction, state: &mut AppState) -> Dispat
             state.midi.connected_port = None;
             DispatchResult::none()
         }
-        MidiAction::AddCcMapping { cc, channel, target } => {
+        MidiAction::AddCcMapping {
+            cc,
+            channel,
+            target,
+        } => {
             let mut mapping = MidiCcMapping::new(*cc, target.clone());
             mapping.channel = *channel;
             state.session.midi_recording.add_cc_mapping(mapping);
             DispatchResult::none()
         }
         MidiAction::RemoveCcMapping { cc, channel } => {
-            state.session.midi_recording.remove_cc_mapping(*cc, *channel);
+            state
+                .session
+                .midi_recording
+                .remove_cc_mapping(*cc, *channel);
             DispatchResult::none()
         }
         MidiAction::SetChannelFilter(channel) => {
@@ -32,7 +39,8 @@ pub(super) fn dispatch_midi(action: &MidiAction, state: &mut AppState) -> Dispat
             DispatchResult::none()
         }
         MidiAction::ToggleNotePassthrough => {
-            state.session.midi_recording.note_passthrough = !state.session.midi_recording.note_passthrough;
+            state.session.midi_recording.note_passthrough =
+                !state.session.midi_recording.note_passthrough;
             DispatchResult::none()
         }
     }

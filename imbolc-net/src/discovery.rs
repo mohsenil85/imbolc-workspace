@@ -7,10 +7,10 @@ use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::thread;
 use std::time::Duration;
 
-use log::{error, info, warn};
-use mdns_sd::{ServiceDaemon, ServiceEvent, ServiceInfo};
 #[allow(unused_imports)]
 use flume;
+use log::{error, info, warn};
+use mdns_sd::{ServiceDaemon, ServiceEvent, ServiceInfo};
 
 /// Service type for Imbolc mDNS discovery.
 pub const SERVICE_TYPE: &str = "_imbolc._tcp.local.";
@@ -44,13 +44,11 @@ pub struct DiscoveryServer {
 impl DiscoveryServer {
     /// Create and register a new discovery server.
     pub fn new(session_name: &str, port: u16) -> Result<Self, String> {
-        let daemon = ServiceDaemon::new()
-            .map_err(|e| format!("Failed to create mDNS daemon: {}", e))?;
+        let daemon =
+            ServiceDaemon::new().map_err(|e| format!("Failed to create mDNS daemon: {}", e))?;
 
         // Get hostname for instance name
-        let hostname = gethostname::gethostname()
-            .to_string_lossy()
-            .to_string();
+        let hostname = gethostname::gethostname().to_string_lossy().to_string();
 
         let instance_name = format!("{}-{}", hostname, port);
 
@@ -68,11 +66,13 @@ impl DiscoveryServer {
             (),
             port,
             properties,
-        ).map_err(|e| format!("Failed to create service info: {}", e))?;
+        )
+        .map_err(|e| format!("Failed to create service info: {}", e))?;
 
         let fullname = service.get_fullname().to_string();
 
-        daemon.register(service)
+        daemon
+            .register(service)
             .map_err(|e| format!("Failed to register service: {}", e))?;
 
         info!(
@@ -90,9 +90,7 @@ impl DiscoveryServer {
 
     /// Update the client count in the TXT record.
     pub fn update_client_count(&self, count: usize) {
-        let hostname = gethostname::gethostname()
-            .to_string_lossy()
-            .to_string();
+        let hostname = gethostname::gethostname().to_string_lossy().to_string();
 
         let instance_name = format!("{}-{}", hostname, self.port);
 
@@ -193,10 +191,11 @@ impl Drop for DiscoveryClient {
 
 /// Background thread that browses for services.
 fn browse_services(tx: Sender<DiscoveredServer>, stop_rx: Receiver<()>) -> Result<(), String> {
-    let daemon = ServiceDaemon::new()
-        .map_err(|e| format!("Failed to create mDNS daemon: {}", e))?;
+    let daemon =
+        ServiceDaemon::new().map_err(|e| format!("Failed to create mDNS daemon: {}", e))?;
 
-    let receiver = daemon.browse(SERVICE_TYPE)
+    let receiver = daemon
+        .browse(SERVICE_TYPE)
         .map_err(|e| format!("Failed to browse: {}", e))?;
 
     info!("mDNS browser started for {}", SERVICE_TYPE);
@@ -213,7 +212,10 @@ fn browse_services(tx: Sender<DiscoveredServer>, stop_rx: Receiver<()>) -> Resul
                 if let ServiceEvent::ServiceResolved(info) = event {
                     let server = service_to_discovered(&info);
                     if let Some(server) = server {
-                        info!("Discovered server: {} at {}", server.session_name, server.address);
+                        info!(
+                            "Discovered server: {} at {}",
+                            server.session_name, server.address
+                        );
                         if tx.send(server).is_err() {
                             break;
                         }
@@ -243,15 +245,18 @@ fn service_to_discovered(info: &ServiceInfo) -> Option<DiscoveredServer> {
         return None;
     }
 
-    let session_name = properties.get_property_val_str("name")
+    let session_name = properties
+        .get_property_val_str("name")
         .unwrap_or("untitled")
         .to_string();
 
-    let client_count: usize = properties.get_property_val_str("clients")
+    let client_count: usize = properties
+        .get_property_val_str("clients")
         .and_then(|s| s.parse().ok())
         .unwrap_or(0);
 
-    let host = properties.get_property_val_str("host")
+    let host = properties
+        .get_property_val_str("host")
         .unwrap_or_else(|| info.get_hostname())
         .to_string();
 

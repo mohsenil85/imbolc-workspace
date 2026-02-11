@@ -1,8 +1,8 @@
 use crate::action::{AudioEffect, DispatchResult, NavIntent, PaneId, VstTarget};
-use imbolc_types::SourceExtra;
+use crate::state::AppState;
 use imbolc_audio::commands::AudioFeedback;
 use imbolc_audio::AudioHandle;
-use crate::state::AppState;
+use imbolc_types::SourceExtra;
 
 pub fn dispatch_audio_feedback(
     feedback: &AudioFeedback,
@@ -21,7 +21,10 @@ pub fn dispatch_audio_feedback(
         AudioFeedback::PlayingChanged(playing) => {
             state.audio.playing = *playing;
         }
-        AudioFeedback::DrumSequencerStep { instrument_id, step } => {
+        AudioFeedback::DrumSequencerStep {
+            instrument_id,
+            step,
+        } => {
             if let Some(inst) = state.instruments.instrument_mut(*instrument_id) {
                 if let Some(seq) = inst.drum_sequencer_mut() {
                     seq.current_step = *step;
@@ -29,17 +32,27 @@ pub fn dispatch_audio_feedback(
                 }
             }
         }
-        AudioFeedback::ServerStatus { status, message, server_running } => {
+        AudioFeedback::ServerStatus {
+            status,
+            message,
+            server_running,
+        } => {
             result.push_status_with_running(*status, message.clone(), *server_running);
         }
-        AudioFeedback::RecordingState { is_recording, elapsed_secs } => {
+        AudioFeedback::RecordingState {
+            is_recording,
+            elapsed_secs,
+        } => {
             state.recording.recording = *is_recording;
             state.recording.recording_secs = *elapsed_secs;
         }
         AudioFeedback::RecordingStopped(path) => {
             state.recording.pending_recording_path = Some(path.clone());
         }
-        AudioFeedback::RenderComplete { instrument_id, path } => {
+        AudioFeedback::RenderComplete {
+            instrument_id,
+            path,
+        } => {
             // Stop playback and restore looping
             state.session.piano_roll.playing = false;
             state.audio.playing = false;
@@ -57,7 +70,7 @@ pub fn dispatch_audio_feedback(
             let _ = audio.load_sample(buffer_id, &path_str);
 
             if let Some(inst) = state.instruments.instrument_mut(*instrument_id) {
-                use crate::state::{SourceType, ParamValue};
+                use crate::state::{ParamValue, SourceType};
                 inst.source = SourceType::PitchedSampler;
                 inst.source_params = SourceType::PitchedSampler.default_params();
                 // Override buffer param with our rendered WAV
@@ -67,15 +80,15 @@ pub fn dispatch_audio_feedback(
             }
 
             result.audio_effects.push(AudioEffect::RebuildInstruments);
-            result.audio_effects.push(AudioEffect::RebuildRoutingForInstrument(*instrument_id));
+            result
+                .audio_effects
+                .push(AudioEffect::RebuildRoutingForInstrument(*instrument_id));
             result.push_status(audio.status(), "Render complete".to_string());
         }
-        AudioFeedback::CompileResult(res) | AudioFeedback::LoadResult(res) => {
-            match res {
-                Ok(msg) => result.push_status(audio.status(), msg.clone().to_string()),
-                Err(e) => result.push_status(audio.status(), e.clone().to_string()),
-            }
-        }
+        AudioFeedback::CompileResult(res) | AudioFeedback::LoadResult(res) => match res {
+            Ok(msg) => result.push_status(audio.status(), msg.clone().to_string()),
+            Err(e) => result.push_status(audio.status(), e.clone().to_string()),
+        },
         AudioFeedback::PendingBufferFreed => {
             if let Some(path) = state.recording.pending_recording_path.take() {
                 let (peaks, _) = super::helpers::compute_waveform_peaks(&path.to_string_lossy());
@@ -85,7 +98,12 @@ pub fn dispatch_audio_feedback(
                 }
             }
         }
-        AudioFeedback::VstParamsDiscovered { instrument_id, target, vst_plugin_id, params } => {
+        AudioFeedback::VstParamsDiscovered {
+            instrument_id,
+            target,
+            vst_plugin_id,
+            params,
+        } => {
             // Update plugin registry with discovered param specs
             if let Some(plugin) = state.session.vst_plugins.get_mut(*vst_plugin_id) {
                 plugin.params.clear();
@@ -102,7 +120,11 @@ pub fn dispatch_audio_feedback(
             if let Some(instrument) = state.instruments.instrument_mut(*instrument_id) {
                 match target {
                     VstTarget::Source => {
-                        if let SourceExtra::Vst { ref mut param_values, .. } = instrument.source_extra {
+                        if let SourceExtra::Vst {
+                            ref mut param_values,
+                            ..
+                        } = instrument.source_extra
+                        {
                             param_values.clear();
                             for (index, _, _, default) in params {
                                 param_values.push((*index, *default));
@@ -133,7 +155,13 @@ pub fn dispatch_audio_feedback(
 
             let message = match kind {
                 imbolc_audio::commands::ExportKind::MasterBounce => {
-                    format!("Bounce complete: {}", paths.first().map(|p| p.display().to_string()).unwrap_or_default())
+                    format!(
+                        "Bounce complete: {}",
+                        paths
+                            .first()
+                            .map(|p| p.display().to_string())
+                            .unwrap_or_default()
+                    )
                 }
                 imbolc_audio::commands::ExportKind::StemExport => {
                     format!("Stem export complete: {} files", paths.len())
@@ -144,11 +172,18 @@ pub fn dispatch_audio_feedback(
         AudioFeedback::ExportProgress { progress } => {
             state.io.export_progress = *progress;
         }
-        AudioFeedback::VstStateSaved { instrument_id, target, path } => {
+        AudioFeedback::VstStateSaved {
+            instrument_id,
+            target,
+            path,
+        } => {
             if let Some(instrument) = state.instruments.instrument_mut(*instrument_id) {
                 match target {
                     VstTarget::Source => {
-                        if let SourceExtra::Vst { ref mut state_path, .. } = instrument.source_extra {
+                        if let SourceExtra::Vst {
+                            ref mut state_path, ..
+                        } = instrument.source_extra
+                        {
                             *state_path = Some(path.clone());
                         }
                     }
@@ -161,12 +196,28 @@ pub fn dispatch_audio_feedback(
             }
         }
         AudioFeedback::ServerCrashed { message } => {
-            result.push_status(imbolc_audio::ServerStatus::Error, format!("SERVER CRASHED: {}", message));
+            result.push_status(
+                imbolc_audio::ServerStatus::Error,
+                format!("SERVER CRASHED: {}", message),
+            );
             state.session.piano_roll.playing = false;
             state.audio.playing = false;
             result.stop_playback = true;
         }
-        AudioFeedback::TelemetrySummary { avg_tick_us, max_tick_us, p95_tick_us, overruns, schedule_lookahead_ms, osc_send_queue_depth } => {
+        AudioFeedback::TelemetrySummary {
+            avg_tick_us,
+            max_tick_us,
+            p95_tick_us,
+            overruns,
+            schedule_lookahead_ms,
+            osc_send_queue_depth,
+        } => {
+            state.audio.telemetry_avg_tick_us = *avg_tick_us;
+            state.audio.telemetry_max_tick_us = *max_tick_us;
+            state.audio.telemetry_p95_tick_us = *p95_tick_us;
+            state.audio.telemetry_overruns = *overruns;
+            state.audio.telemetry_lookahead_ms = *schedule_lookahead_ms;
+            state.audio.telemetry_osc_queue_depth = *osc_send_queue_depth;
             log::debug!(target: "audio",
                 "Telemetry: avg={}us max={}us p95={}us overruns={} lookahead={:.1}ms osc_q={}",
                 avg_tick_us, max_tick_us, p95_tick_us, overruns, schedule_lookahead_ms, osc_send_queue_depth

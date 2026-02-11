@@ -121,7 +121,10 @@ mod tests {
     fn effective_values_use_global_when_none() {
         let config = GrooveConfig::default();
         assert_eq!(config.effective_swing(0.5), 0.5);
-        assert_eq!(config.effective_swing_grid(SwingGrid::Sixteenths), SwingGrid::Sixteenths);
+        assert_eq!(
+            config.effective_swing_grid(SwingGrid::Sixteenths),
+            SwingGrid::Sixteenths
+        );
         assert_eq!(config.effective_humanize_velocity(0.3), 0.3);
         assert_eq!(config.effective_humanize_timing(0.2), 0.2);
     }
@@ -138,7 +141,10 @@ mod tests {
         };
         assert!(config.has_overrides());
         assert_eq!(config.effective_swing(0.5), 0.7);
-        assert_eq!(config.effective_swing_grid(SwingGrid::Eighths), SwingGrid::Both);
+        assert_eq!(
+            config.effective_swing_grid(SwingGrid::Eighths),
+            SwingGrid::Both
+        );
         assert_eq!(config.effective_humanize_velocity(0.3), 0.4);
         assert_eq!(config.effective_humanize_timing(0.2), 0.1);
         assert_eq!(config.effective_time_signature((4, 4)), (3, 4));

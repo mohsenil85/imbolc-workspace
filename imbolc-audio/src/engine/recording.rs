@@ -73,7 +73,8 @@ impl AudioEngine {
                 ],
             },
         ];
-        backend.send_bundle(messages, BUNDLE_IMMEDIATE)
+        backend
+            .send_bundle(messages, BUNDLE_IMMEDIATE)
             .map_err(|e| e.to_string())?;
 
         self.recording = Some(RecordingState {
@@ -157,11 +158,7 @@ impl AudioEngine {
         let messages = vec![
             BackendMessage {
                 addr: "/b_alloc".to_string(),
-                args: vec![
-                    RawArg::Int(bufnum),
-                    RawArg::Int(131072),
-                    RawArg::Int(2),
-                ],
+                args: vec![RawArg::Int(bufnum), RawArg::Int(131072), RawArg::Int(2)],
             },
             BackendMessage {
                 addr: "/b_write".to_string(),
@@ -189,7 +186,8 @@ impl AudioEngine {
                 ],
             },
         ];
-        backend.send_bundle(messages, BUNDLE_IMMEDIATE)
+        backend
+            .send_bundle(messages, BUNDLE_IMMEDIATE)
             .map_err(|e| e.to_string())?;
 
         self.export_state = Some(ExportRecordingState {
@@ -231,11 +229,7 @@ impl AudioEngine {
 
             messages.push(BackendMessage {
                 addr: "/b_alloc".to_string(),
-                args: vec![
-                    RawArg::Int(bufnum),
-                    RawArg::Int(131072),
-                    RawArg::Int(2),
-                ],
+                args: vec![RawArg::Int(bufnum), RawArg::Int(131072), RawArg::Int(2)],
             });
             messages.push(BackendMessage {
                 addr: "/b_write".to_string(),
@@ -271,7 +265,8 @@ impl AudioEngine {
             });
         }
 
-        backend.send_bundle(messages, BUNDLE_IMMEDIATE)
+        backend
+            .send_bundle(messages, BUNDLE_IMMEDIATE)
             .map_err(|e| e.to_string())?;
 
         self.export_state = Some(ExportRecordingState { recordings });
@@ -299,7 +294,8 @@ impl AudioEngine {
                     },
                 ];
                 let _ = backend.send_bundle(messages, BUNDLE_IMMEDIATE);
-                self.pending_export_buffer_frees.push((rec.bufnum, Instant::now()));
+                self.pending_export_buffer_frees
+                    .push((rec.bufnum, Instant::now()));
                 paths.push(rec.path);
             }
         }

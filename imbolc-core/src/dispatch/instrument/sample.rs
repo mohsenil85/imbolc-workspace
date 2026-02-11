@@ -1,6 +1,6 @@
-use imbolc_audio::AudioHandle;
-use crate::state::AppState;
 use crate::action::{AudioEffect, DispatchResult, NavIntent};
+use crate::state::AppState;
+use imbolc_audio::AudioHandle;
 
 pub(super) fn handle_load_sample_result(
     state: &mut AppState,
@@ -9,8 +9,7 @@ pub(super) fn handle_load_sample_result(
     path: &std::path::Path,
 ) -> DispatchResult {
     let path_str = path.to_string_lossy().to_string();
-    let sample_name = path.file_stem()
-        .map(|s| s.to_string_lossy().to_string());
+    let sample_name = path.file_stem().map(|s| s.to_string_lossy().to_string());
 
     let buffer_id = state.instruments.next_sampler_buffer_id;
     state.instruments.next_sampler_buffer_id += 1;

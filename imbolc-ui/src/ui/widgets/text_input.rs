@@ -81,8 +81,8 @@ impl TextInput {
     /// TextInput StatefulWidget for the actual input field.
     pub fn render_buf(&mut self, buf: &mut Buffer, x: u16, y: u16, width: u16) -> u16 {
         // Draw label manually
-        let label_style = ratatui::style::Style::default()
-            .fg(ratatui::style::Color::from(Color::WHITE));
+        let label_style =
+            ratatui::style::Style::default().fg(ratatui::style::Color::from(Color::WHITE));
         for (j, ch) in self.label.chars().enumerate() {
             if let Some(cell) = buf.cell_mut((x + j as u16, y)) {
                 cell.set_char(ch).set_style(label_style);

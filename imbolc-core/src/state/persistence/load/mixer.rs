@@ -1,9 +1,9 @@
-use rusqlite::{params, Connection, Result as SqlResult, OptionalExtension};
+use rusqlite::{params, Connection, OptionalExtension, Result as SqlResult};
 
-use imbolc_types::BusId;
-use crate::state::session::SessionState;
-use super::{table_exists, load_effects_from};
 use super::decoders::*;
+use super::{load_effects_from, table_exists};
+use crate::state::session::SessionState;
+use imbolc_types::BusId;
 
 pub(super) fn load_mixer(conn: &Connection, session: &mut SessionState) -> SqlResult<()> {
     use imbolc_types::MixerBus;
@@ -12,7 +12,8 @@ pub(super) fn load_mixer(conn: &Connection, session: &mut SessionState) -> SqlRe
 
     let has_bus_effects = table_exists(conn, "bus_effects")?;
 
-    let mut stmt = conn.prepare("SELECT id, name, level, pan, mute, solo FROM mixer_buses ORDER BY id")?;
+    let mut stmt =
+        conn.prepare("SELECT id, name, level, pan, mute, solo FROM mixer_buses ORDER BY id")?;
     let buses = stmt.query_map([], |row| {
         Ok(MixerBus {
             id: BusId::new(row.get::<_, i32>(0)? as u8),
@@ -28,18 +29,27 @@ pub(super) fn load_mixer(conn: &Connection, session: &mut SessionState) -> SqlRe
     for bus in buses {
         let mut bus = bus?;
         if has_bus_effects {
-            bus.effect_chain.effects = load_effects_from(conn, "bus_effects", "bus_effect_params", "bus_effect_vst_params", "bus_id", bus.id.get() as u32)?;
+            bus.effect_chain.effects = load_effects_from(
+                conn,
+                "bus_effects",
+                "bus_effect_params",
+                "bus_effect_vst_params",
+                "bus_id",
+                bus.id.get() as u32,
+            )?;
             bus.effect_chain.recalculate_next_effect_id();
         }
         session.mixer.buses.push(bus);
     }
 
     // Master
-    let result: Option<(f32, i32)> = conn.query_row(
-        "SELECT level, mute FROM mixer_master WHERE id = 1",
-        [],
-        |row| Ok((row.get(0)?, row.get(1)?)),
-    ).optional()?;
+    let result: Option<(f32, i32)> = conn
+        .query_row(
+            "SELECT level, mute FROM mixer_master WHERE id = 1",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()?;
 
     if let Some((level, mute)) = result {
         session.mixer.master_level = level;
@@ -49,9 +59,12 @@ pub(super) fn load_mixer(conn: &Connection, session: &mut SessionState) -> SqlRe
     Ok(())
 }
 
-pub(super) fn load_layer_group_mixers(conn: &Connection, session: &mut SessionState) -> SqlResult<()> {
-    use imbolc_types::LayerGroupMixer;
+pub(super) fn load_layer_group_mixers(
+    conn: &Connection,
+    session: &mut SessionState,
+) -> SqlResult<()> {
     use crate::state::instrument::MixerSend;
+    use imbolc_types::LayerGroupMixer;
 
     session.mixer.layer_group_mixers.clear();
 
@@ -60,43 +73,49 @@ pub(super) fn load_layer_group_mixers(conn: &Connection, session: &mut SessionSt
     let mut stmt = conn.prepare(
         "SELECT group_id, name, level, pan, mute, solo, output_target FROM layer_group_mixers ORDER BY group_id"
     )?;
-    let rows: Vec<(u32, String, f32, f32, i32, i32, String)> = stmt.query_map([], |row| {
-        Ok((
-            row.get::<_, i32>(0)? as u32,
-            row.get(1)?,
-            row.get(2)?,
-            row.get(3)?,
-            row.get(4)?,
-            row.get(5)?,
-            row.get(6)?,
-        ))
-    })?.collect::<SqlResult<_>>()?;
+    let rows: Vec<(u32, String, f32, f32, i32, i32, String)> = stmt
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, i32>(0)? as u32,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+                row.get(5)?,
+                row.get(6)?,
+            ))
+        })?
+        .collect::<SqlResult<_>>()?;
 
     for (group_id, name, level, pan, mute, solo, output_target_str) in rows {
         let output_target = decode_output_target(&output_target_str);
 
         // Load sends
-        let has_group_tap_point = conn.prepare("SELECT tap_point FROM layer_group_sends LIMIT 0").is_ok();
+        let has_group_tap_point = conn
+            .prepare("SELECT tap_point FROM layer_group_sends LIMIT 0")
+            .is_ok();
         let group_send_query = if has_group_tap_point {
             "SELECT bus_id, level, enabled, tap_point FROM layer_group_sends WHERE group_id = ?1 ORDER BY bus_id"
         } else {
             "SELECT bus_id, level, enabled FROM layer_group_sends WHERE group_id = ?1 ORDER BY bus_id"
         };
         let mut send_stmt = conn.prepare(group_send_query)?;
-        let sends: std::collections::BTreeMap<BusId, MixerSend> = send_stmt.query_map(params![group_id as i32], |row| {
-            let tap_point = if has_group_tap_point {
-                decode_tap_point(&row.get::<_, String>(3)?)
-            } else {
-                Default::default()
-            };
-            let send = MixerSend {
-                bus_id: BusId::new(row.get::<_, i32>(0)? as u8),
-                level: row.get(1)?,
-                enabled: row.get::<_, i32>(2)? != 0,
-                tap_point,
-            };
-            Ok((send.bus_id, send))
-        })?.collect::<SqlResult<_>>()?;
+        let sends: std::collections::BTreeMap<BusId, MixerSend> = send_stmt
+            .query_map(params![group_id as i32], |row| {
+                let tap_point = if has_group_tap_point {
+                    decode_tap_point(&row.get::<_, String>(3)?)
+                } else {
+                    Default::default()
+                };
+                let send = MixerSend {
+                    bus_id: BusId::new(row.get::<_, i32>(0)? as u8),
+                    level: row.get(1)?,
+                    enabled: row.get::<_, i32>(2)? != 0,
+                    tap_point,
+                };
+                Ok((send.bus_id, send))
+            })?
+            .collect::<SqlResult<_>>()?;
 
         let mut gm = LayerGroupMixer {
             group_id,
@@ -112,30 +131,41 @@ pub(super) fn load_layer_group_mixers(conn: &Connection, session: &mut SessionSt
         };
 
         if has_group_effects {
-            gm.effect_chain.effects = load_effects_from(conn, "layer_group_effects", "layer_group_effect_params", "layer_group_effect_vst_params", "group_id", group_id)?;
+            gm.effect_chain.effects = load_effects_from(
+                conn,
+                "layer_group_effects",
+                "layer_group_effect_params",
+                "layer_group_effect_vst_params",
+                "group_id",
+                group_id,
+            )?;
             gm.effect_chain.recalculate_next_effect_id();
         }
 
         // Load EQ if the table exists
         if table_exists(conn, "layer_group_eq_bands")? {
-            let eq_enabled: i32 = conn.query_row(
-                "SELECT eq_enabled FROM layer_group_mixers WHERE group_id = ?1",
-                [group_id],
-                |row| row.get(0),
-            ).unwrap_or(0);
+            let eq_enabled: i32 = conn
+                .query_row(
+                    "SELECT eq_enabled FROM layer_group_mixers WHERE group_id = ?1",
+                    [group_id],
+                    |row| row.get(0),
+                )
+                .unwrap_or(0);
             if eq_enabled != 0 {
                 let mut eq = crate::state::instrument::EqConfig::default();
                 let mut band_stmt = conn.prepare(
                     "SELECT band_index, freq, gain, q, enabled FROM layer_group_eq_bands WHERE group_id = ?1 ORDER BY band_index"
                 )?;
-                let bands = band_stmt.query_map([group_id], |row| {
-                    let band_index: usize = row.get::<_, i32>(0)? as usize;
-                    let freq: f32 = row.get(1)?;
-                    let gain: f32 = row.get(2)?;
-                    let q: f32 = row.get(3)?;
-                    let enabled: bool = row.get::<_, i32>(4)? != 0;
-                    Ok((band_index, freq, gain, q, enabled))
-                })?.collect::<SqlResult<Vec<_>>>()?;
+                let bands = band_stmt
+                    .query_map([group_id], |row| {
+                        let band_index: usize = row.get::<_, i32>(0)? as usize;
+                        let freq: f32 = row.get(1)?;
+                        let gain: f32 = row.get(2)?;
+                        let q: f32 = row.get(3)?;
+                        let enabled: bool = row.get::<_, i32>(4)? != 0;
+                        Ok((band_index, freq, gain, q, enabled))
+                    })?
+                    .collect::<SqlResult<Vec<_>>>()?;
                 for (band_index, freq, gain, q, enabled) in bands {
                     if band_index < eq.bands.len() {
                         eq.bands[band_index].freq = freq;

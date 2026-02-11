@@ -34,7 +34,9 @@ impl MixerState {
 
     pub fn new_with_bus_count(bus_count: u8) -> Self {
         let bus_count = bus_count.min(MAX_BUSES);
-        let buses: Vec<MixerBus> = (1..=bus_count).map(|i| MixerBus::new(BusId::new(i))).collect();
+        let buses: Vec<MixerBus> = (1..=bus_count)
+            .map(|i| MixerBus::new(BusId::new(i)))
+            .collect();
         let next_bus_id = bus_count + 1;
         Self {
             buses,
@@ -123,17 +125,27 @@ impl MixerState {
 
     /// Recompute next_bus_id from current buses (call after loading from persistence)
     pub fn recompute_next_bus_id(&mut self) {
-        self.next_bus_id = self.buses.iter().map(|b| b.id.get()).max().unwrap_or(0).saturating_add(1);
+        self.next_bus_id = self
+            .buses
+            .iter()
+            .map(|b| b.id.get())
+            .max()
+            .unwrap_or(0)
+            .saturating_add(1);
     }
 
     /// Get a layer group mixer by group ID
     pub fn layer_group_mixer(&self, group_id: u32) -> Option<&LayerGroupMixer> {
-        self.layer_group_mixers.iter().find(|g| g.group_id == group_id)
+        self.layer_group_mixers
+            .iter()
+            .find(|g| g.group_id == group_id)
     }
 
     /// Get a mutable layer group mixer by group ID
     pub fn layer_group_mixer_mut(&mut self, group_id: u32) -> Option<&mut LayerGroupMixer> {
-        self.layer_group_mixers.iter_mut().find(|g| g.group_id == group_id)
+        self.layer_group_mixers
+            .iter_mut()
+            .find(|g| g.group_id == group_id)
     }
 
     /// Add a layer group mixer. Returns false if it already exists.
@@ -141,13 +153,18 @@ impl MixerState {
         if self.layer_group_mixer(group_id).is_some() {
             return false;
         }
-        self.layer_group_mixers.push(LayerGroupMixer::new(group_id, bus_ids));
+        self.layer_group_mixers
+            .push(LayerGroupMixer::new(group_id, bus_ids));
         true
     }
 
     /// Remove a layer group mixer by group ID. Returns true if found and removed.
     pub fn remove_layer_group_mixer(&mut self, group_id: u32) -> bool {
-        if let Some(idx) = self.layer_group_mixers.iter().position(|g| g.group_id == group_id) {
+        if let Some(idx) = self
+            .layer_group_mixers
+            .iter()
+            .position(|g| g.group_id == group_id)
+        {
             self.layer_group_mixers.remove(idx);
             true
         } else {
@@ -314,7 +331,10 @@ mod tests {
         let mut bus = MixerBus::new(BusId::new(1));
         let id = bus.effect_chain.add_effect(EffectType::Reverb);
         assert!(bus.effect_chain.effect_by_id(id).is_some());
-        assert_eq!(bus.effect_chain.effect_by_id(id).unwrap().effect_type, EffectType::Reverb);
+        assert_eq!(
+            bus.effect_chain.effect_by_id(id).unwrap().effect_type,
+            EffectType::Reverb
+        );
         assert!(bus.effect_chain.effect_by_id(EffectId::new(999)).is_none());
     }
 

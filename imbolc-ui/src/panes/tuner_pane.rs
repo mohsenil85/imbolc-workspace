@@ -1,9 +1,9 @@
 use std::any::Any;
 
+use crate::action::TunerAction;
 use crate::state::AppState;
 use crate::ui::action_id::{ActionId, TunerActionId};
 use crate::ui::layout_helpers::center_rect;
-use crate::action::TunerAction;
 use crate::ui::{Action, Color, InputEvent, Keymap, Pane, Rect, RenderBuf, Style};
 
 // ── Instrument presets ──────────────────────────────────────────────────
@@ -16,7 +16,14 @@ struct TunerPreset {
 const PRESETS: &[TunerPreset] = &[
     TunerPreset {
         name: "Guitar",
-        strings: &[("E4", 64), ("B3", 59), ("G3", 55), ("D3", 50), ("A2", 45), ("E2", 40)],
+        strings: &[
+            ("E4", 64),
+            ("B3", 59),
+            ("G3", 55),
+            ("D3", 50),
+            ("A2", 45),
+            ("E2", 40),
+        ],
     },
     TunerPreset {
         name: "Bass",
@@ -28,7 +35,14 @@ const PRESETS: &[TunerPreset] = &[
     },
     TunerPreset {
         name: "Guitulele",
-        strings: &[("A4", 69), ("E4", 64), ("C4", 60), ("G3", 55), ("D3", 50), ("A2", 45)],
+        strings: &[
+            ("A4", 69),
+            ("E4", 64),
+            ("C4", 60),
+            ("G3", 55),
+            ("D3", 50),
+            ("A2", 45),
+        ],
     },
 ];
 
@@ -166,13 +180,23 @@ impl Pane for TunerPane {
         // Instrument selector
         let inst_line = format!("<  {}  >", preset.name);
         let ix = inner.x + (inner.width.saturating_sub(inst_line.len() as u16)) / 2;
-        buf.draw_str(ix, y, &inst_line, Style::new().fg(Color::new(255, 200, 100)).bg(bg));
+        buf.draw_str(
+            ix,
+            y,
+            &inst_line,
+            Style::new().fg(Color::new(255, 200, 100)).bg(bg),
+        );
         y += 1;
 
         // A4 tuning value
         let a4_line = format!("A4 = {:.1} Hz", state.session.tuning_a4);
         let ax = inner.x + (inner.width.saturating_sub(a4_line.len() as u16)) / 2;
-        buf.draw_str(ax, y, &a4_line, Style::new().fg(Color::new(120, 120, 140)).bg(bg));
+        buf.draw_str(
+            ax,
+            y,
+            &a4_line,
+            Style::new().fg(Color::new(120, 120, 140)).bg(bg),
+        );
         y += 2;
 
         // String list
@@ -200,7 +224,6 @@ impl Pane for TunerPane {
             buf.draw_str(sx, y, &line, style);
             y += 1;
         }
-
     }
 
     fn keymap(&self) -> &Keymap {
@@ -256,13 +279,29 @@ mod tests {
         let event = make_event();
 
         assert_eq!(pane.instrument_idx, 0); // Guitar
-        pane.handle_action(ActionId::Tuner(TunerActionId::NextInstrument), &event, &state);
+        pane.handle_action(
+            ActionId::Tuner(TunerActionId::NextInstrument),
+            &event,
+            &state,
+        );
         assert_eq!(pane.instrument_idx, 1); // Bass
-        pane.handle_action(ActionId::Tuner(TunerActionId::NextInstrument), &event, &state);
+        pane.handle_action(
+            ActionId::Tuner(TunerActionId::NextInstrument),
+            &event,
+            &state,
+        );
         assert_eq!(pane.instrument_idx, 2); // Ukulele
-        pane.handle_action(ActionId::Tuner(TunerActionId::NextInstrument), &event, &state);
+        pane.handle_action(
+            ActionId::Tuner(TunerActionId::NextInstrument),
+            &event,
+            &state,
+        );
         assert_eq!(pane.instrument_idx, 3); // Guitulele
-        pane.handle_action(ActionId::Tuner(TunerActionId::NextInstrument), &event, &state);
+        pane.handle_action(
+            ActionId::Tuner(TunerActionId::NextInstrument),
+            &event,
+            &state,
+        );
         assert_eq!(pane.instrument_idx, 0); // Wraps to Guitar
     }
 
@@ -273,7 +312,11 @@ mod tests {
         let event = make_event();
 
         assert_eq!(pane.instrument_idx, 0);
-        pane.handle_action(ActionId::Tuner(TunerActionId::PrevInstrument), &event, &state);
+        pane.handle_action(
+            ActionId::Tuner(TunerActionId::PrevInstrument),
+            &event,
+            &state,
+        );
         assert_eq!(pane.instrument_idx, PRESETS.len() - 1);
     }
 
@@ -303,7 +346,11 @@ mod tests {
 
         pane.string_idx = 3;
         pane.playing = true;
-        let action = pane.handle_action(ActionId::Tuner(TunerActionId::NextInstrument), &event, &state);
+        let action = pane.handle_action(
+            ActionId::Tuner(TunerActionId::NextInstrument),
+            &event,
+            &state,
+        );
         assert_eq!(pane.string_idx, 0);
         assert!(!pane.playing);
         assert!(matches!(action, Action::Tuner(TunerAction::StopTone)));

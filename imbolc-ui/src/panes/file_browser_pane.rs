@@ -3,12 +3,13 @@ use std::fs;
 use std::path::PathBuf;
 
 use crate::state::AppState;
+use crate::state::VstPluginKind;
 use crate::ui::action_id::{ActionId, FileBrowserActionId};
 use crate::ui::layout_helpers::center_rect;
-use crate::state::VstPluginKind;
 use crate::ui::{
-    Rect, RenderBuf, Action, ChopperAction, Color, FileSelectAction, InputEvent, InstrumentAction, Keymap, MouseEvent,
-    MouseEventKind, MouseButton, NavAction, Pane, SequencerAction, SessionAction, Style,
+    Action, ChopperAction, Color, FileSelectAction, InputEvent, InstrumentAction, Keymap,
+    MouseButton, MouseEvent, MouseEventKind, NavAction, Pane, Rect, RenderBuf, SequencerAction,
+    SessionAction, Style,
 };
 
 struct DirEntry {
@@ -32,9 +33,8 @@ pub struct FileBrowserPane {
 
 impl FileBrowserPane {
     pub fn new(keymap: Keymap) -> Self {
-        let start_dir = std::env::current_dir().unwrap_or_else(|_| {
-            dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"))
-        });
+        let start_dir = std::env::current_dir()
+            .unwrap_or_else(|_| dirs::home_dir().unwrap_or_else(|| PathBuf::from("/")));
         let mut pane = Self {
             keymap,
             current_dir: start_dir,
@@ -60,23 +60,31 @@ impl FileBrowserPane {
                 self.bundle_extensions = Some(vec!["vst3".to_string(), "vst".to_string()]);
                 Some(vec!["vst3".to_string(), "vst".to_string()])
             }
-            FileSelectAction::LoadDrumSample(_) | FileSelectAction::LoadChopperSample | FileSelectAction::LoadPitchedSample(_) | FileSelectAction::LoadImpulseResponse(_, _) => {
-                Some(vec!["wav".to_string(), "aiff".to_string(), "aif".to_string()])
-            }
+            FileSelectAction::LoadDrumSample(_)
+            | FileSelectAction::LoadChopperSample
+            | FileSelectAction::LoadPitchedSample(_)
+            | FileSelectAction::LoadImpulseResponse(_, _) => Some(vec![
+                "wav".to_string(),
+                "aiff".to_string(),
+                "aif".to_string(),
+            ]),
             FileSelectAction::ImportProject => Some(vec!["sqlite".to_string()]),
         };
         let default_dir = match &self.on_select_action {
             FileSelectAction::ImportVstInstrument | FileSelectAction::ImportVstEffect => {
                 let vst3_dir = PathBuf::from("/Library/Audio/Plug-Ins/VST3");
-                if vst3_dir.exists() { Some(vst3_dir) } else { None }
+                if vst3_dir.exists() {
+                    Some(vst3_dir)
+                } else {
+                    None
+                }
             }
             FileSelectAction::ImportProject => dirs::home_dir(),
             _ => None,
         };
         self.current_dir = start_dir.or(default_dir).unwrap_or_else(|| {
-            std::env::current_dir().unwrap_or_else(|_| {
-                dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"))
-            })
+            std::env::current_dir()
+                .unwrap_or_else(|_| dirs::home_dir().unwrap_or_else(|| PathBuf::from("/")))
         });
         self.selected = 0;
         self.scroll_offset = 0;
@@ -104,7 +112,8 @@ impl FileBrowserPane {
                 // Treat bundle directories (e.g. .vst3, .vst) as selectable files
                 if is_dir {
                     if let Some(ref bundles) = self.bundle_extensions {
-                        if path.extension()
+                        if path
+                            .extension()
                             .is_some_and(|e| bundles.iter().any(|ext| e == ext.as_str()))
                         {
                             is_dir = false; // Treat as file
@@ -145,7 +154,6 @@ impl FileBrowserPane {
             self.selected = self.entries.len() - 1;
         }
     }
-
 }
 
 impl Default for FileBrowserPane {
@@ -159,7 +167,12 @@ impl Pane for FileBrowserPane {
         "file_browser"
     }
 
-    fn handle_action(&mut self, action: ActionId, _event: &InputEvent, _state: &AppState) -> Action {
+    fn handle_action(
+        &mut self,
+        action: ActionId,
+        _event: &InputEvent,
+        _state: &AppState,
+    ) -> Action {
         match action {
             ActionId::FileBrowser(FileBrowserActionId::Select) => {
                 if let Some(entry) = self.entries.get(self.selected) {
@@ -172,26 +185,36 @@ impl Pane for FileBrowserPane {
                     } else {
                         // File selected
                         match self.on_select_action {
-                            FileSelectAction::ImportCustomSynthDef => {
-                                Action::Session(SessionAction::ImportCustomSynthDef(entry.path.clone()))
-                            }
+                            FileSelectAction::ImportCustomSynthDef => Action::Session(
+                                SessionAction::ImportCustomSynthDef(entry.path.clone()),
+                            ),
                             FileSelectAction::ImportVstInstrument => {
-                                Action::Session(SessionAction::ImportVstPlugin(entry.path.clone(), VstPluginKind::Instrument))
+                                Action::Session(SessionAction::ImportVstPlugin(
+                                    entry.path.clone(),
+                                    VstPluginKind::Instrument,
+                                ))
                             }
                             FileSelectAction::ImportVstEffect => {
-                                Action::Session(SessionAction::ImportVstPlugin(entry.path.clone(), VstPluginKind::Effect))
+                                Action::Session(SessionAction::ImportVstPlugin(
+                                    entry.path.clone(),
+                                    VstPluginKind::Effect,
+                                ))
                             }
-                            FileSelectAction::LoadDrumSample(pad_idx) => {
-                                Action::Sequencer(SequencerAction::LoadSampleResult(pad_idx, entry.path.clone()))
-                            }
+                            FileSelectAction::LoadDrumSample(pad_idx) => Action::Sequencer(
+                                SequencerAction::LoadSampleResult(pad_idx, entry.path.clone()),
+                            ),
                             FileSelectAction::LoadChopperSample => {
                                 Action::Chopper(ChopperAction::LoadSampleResult(entry.path.clone()))
                             }
-                            FileSelectAction::LoadPitchedSample(id) => {
-                                Action::Instrument(InstrumentAction::LoadSampleResult(id, entry.path.clone()))
-                            }
+                            FileSelectAction::LoadPitchedSample(id) => Action::Instrument(
+                                InstrumentAction::LoadSampleResult(id, entry.path.clone()),
+                            ),
                             FileSelectAction::LoadImpulseResponse(id, fx_idx) => {
-                                Action::Instrument(InstrumentAction::LoadIRResult(id, fx_idx, entry.path.clone()))
+                                Action::Instrument(InstrumentAction::LoadIRResult(
+                                    id,
+                                    fx_idx,
+                                    entry.path.clone(),
+                                ))
                             }
                             FileSelectAction::ImportProject => {
                                 Action::Session(SessionAction::LoadFrom(entry.path.clone()))
@@ -260,7 +283,9 @@ impl Pane for FileBrowserPane {
             FileSelectAction::ImportCustomSynthDef => " Import Custom SynthDef ",
             FileSelectAction::ImportVstInstrument => " Import VST Instrument ",
             FileSelectAction::ImportVstEffect => " Import VST Effect ",
-            FileSelectAction::LoadDrumSample(_) | FileSelectAction::LoadChopperSample => " Load Sample ",
+            FileSelectAction::LoadDrumSample(_) | FileSelectAction::LoadChopperSample => {
+                " Load Sample "
+            }
             FileSelectAction::LoadPitchedSample(_) => " Load Sample ",
             FileSelectAction::LoadImpulseResponse(_, _) => " Load Impulse Response ",
             FileSelectAction::ImportProject => " Import Project ",
@@ -313,7 +338,12 @@ impl Pane for FileBrowserPane {
                 &[(&empty_msg, Style::new().fg(Color::DARK_GRAY))],
             );
         } else {
-            for (i, entry) in entries.iter().skip(eff_scroll).take(visible_height).enumerate() {
+            for (i, entry) in entries
+                .iter()
+                .skip(eff_scroll)
+                .take(visible_height)
+                .enumerate()
+            {
                 let y = list_y + i as u16;
                 if y >= inner.y + inner.height {
                     break;
@@ -325,7 +355,12 @@ impl Pane for FileBrowserPane {
                     for x in content_x..(inner.x + inner.width) {
                         buf.set_cell(x, y, ' ', sel_bg);
                     }
-                    buf.set_cell(content_x, y, '>', Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG).bold());
+                    buf.set_cell(
+                        content_x,
+                        y,
+                        '>',
+                        Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG).bold(),
+                    );
                 }
 
                 let (icon, icon_color) = if entry.is_dir {
@@ -347,7 +382,11 @@ impl Pane for FileBrowserPane {
                     entry.name.clone()
                 };
 
-                let name_color = if entry.is_dir { Color::CYAN } else { Color::WHITE };
+                let name_color = if entry.is_dir {
+                    Color::CYAN
+                } else {
+                    Color::WHITE
+                };
                 let name_style = if is_selected {
                     Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG)
                 } else {
@@ -371,12 +410,16 @@ impl Pane for FileBrowserPane {
             }
             if eff_scroll + visible_height < entries.len() {
                 buf.draw_line(
-                    Rect::new(rect.x + rect.width - 5, list_y + visible_height as u16 - 1, 3, 1),
+                    Rect::new(
+                        rect.x + rect.width - 5,
+                        list_y + visible_height as u16 - 1,
+                        3,
+                        1,
+                    ),
                     &[("...", scroll_style)],
                 );
             }
         }
-
     }
 
     fn handle_mouse(&mut self, event: &MouseEvent, area: Rect, _state: &AppState) -> Action {
@@ -411,15 +454,19 @@ impl Pane for FileBrowserPane {
                             } else {
                                 match self.on_select_action {
                                     FileSelectAction::ImportCustomSynthDef => {
-                                        return Action::Session(SessionAction::ImportCustomSynthDef(
-                                            self.entries[clicked_idx].path.clone(),
-                                        ));
+                                        return Action::Session(
+                                            SessionAction::ImportCustomSynthDef(
+                                                self.entries[clicked_idx].path.clone(),
+                                            ),
+                                        );
                                     }
                                     FileSelectAction::LoadDrumSample(pad_idx) => {
-                                        return Action::Sequencer(SequencerAction::LoadSampleResult(
-                                            pad_idx,
-                                            self.entries[clicked_idx].path.clone(),
-                                        ));
+                                        return Action::Sequencer(
+                                            SequencerAction::LoadSampleResult(
+                                                pad_idx,
+                                                self.entries[clicked_idx].path.clone(),
+                                            ),
+                                        );
                                     }
                                     FileSelectAction::LoadChopperSample => {
                                         return Action::Chopper(ChopperAction::LoadSampleResult(
@@ -427,10 +474,12 @@ impl Pane for FileBrowserPane {
                                         ));
                                     }
                                     FileSelectAction::LoadPitchedSample(id) => {
-                                        return Action::Instrument(InstrumentAction::LoadSampleResult(
-                                            id,
-                                            self.entries[clicked_idx].path.clone(),
-                                        ));
+                                        return Action::Instrument(
+                                            InstrumentAction::LoadSampleResult(
+                                                id,
+                                                self.entries[clicked_idx].path.clone(),
+                                            ),
+                                        );
                                     }
                                     FileSelectAction::ImportVstInstrument => {
                                         return Action::Session(SessionAction::ImportVstPlugin(
@@ -529,11 +578,19 @@ mod tests {
 
         use crate::ui::action_id::{ActionId, FileBrowserActionId};
         pane.selected = pane.entries.len() - 1;
-        pane.handle_action(ActionId::FileBrowser(FileBrowserActionId::Next), &dummy_event(), &state);
+        pane.handle_action(
+            ActionId::FileBrowser(FileBrowserActionId::Next),
+            &dummy_event(),
+            &state,
+        );
         assert_eq!(pane.selected, 0);
 
         pane.selected = 0;
-        pane.handle_action(ActionId::FileBrowser(FileBrowserActionId::Prev), &dummy_event(), &state);
+        pane.handle_action(
+            ActionId::FileBrowser(FileBrowserActionId::Prev),
+            &dummy_event(),
+            &state,
+        );
         assert_eq!(pane.selected, pane.entries.len() - 1);
 
         std::fs::remove_dir_all(&dir).ok();

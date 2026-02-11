@@ -43,7 +43,6 @@ impl PadKeyboard {
         }
     }
 
-
     /// Status label for rendering
     pub fn status_label(&self) -> String {
         " PADS ".to_string()

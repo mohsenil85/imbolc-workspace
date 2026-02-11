@@ -1,29 +1,57 @@
 use std::path::Path;
 
-use rusqlite::{params, Connection, DatabaseName, Result as SqlResult};
 use rusqlite::session::Session;
+use rusqlite::{params, Connection, DatabaseName, Result as SqlResult};
 
 use super::blob;
-use super::schema;
 use super::save;
+use super::schema;
 use crate::state::instrument_state::InstrumentState;
 use crate::state::session::SessionState;
 
 /// Data tables to include in session diffs (all tables except metadata/checkpoint tables).
 const DIFF_TABLES: &[&str] = &[
-    "session", "theme", "instruments", "instrument_source_params",
-    "instrument_effects", "instrument_effect_params", "instrument_sends",
-    "instrument_modulations", "instrument_filter_extra_params",
-    "instrument_eq_bands", "instrument_vst_params", "effect_vst_params",
-    "mixer_buses", "mixer_master", "musical_settings", "piano_roll_tracks",
-    "piano_roll_notes", "sampler_configs", "sampler_slices", "vst_plugins",
-    "vst_plugin_params", "automation_lanes", "automation_points",
-    "custom_synthdefs", "custom_synthdef_params", "drum_sequencer_state",
-    "drum_sequencer_chain", "drum_pads", "drum_patterns", "drum_steps",
-    "chopper_states", "chopper_slices", "midi_recording_settings",
-    "midi_cc_mappings", "midi_pitch_bend_configs", "arrangement_state",
-    "arrangement_clips", "arrangement_clip_notes", "arrangement_placements",
-    "arrangement_clip_automation_lanes", "arrangement_clip_automation_points",
+    "session",
+    "theme",
+    "instruments",
+    "instrument_source_params",
+    "instrument_effects",
+    "instrument_effect_params",
+    "instrument_sends",
+    "instrument_modulations",
+    "instrument_filter_extra_params",
+    "instrument_eq_bands",
+    "instrument_vst_params",
+    "effect_vst_params",
+    "mixer_buses",
+    "mixer_master",
+    "musical_settings",
+    "piano_roll_tracks",
+    "piano_roll_notes",
+    "sampler_configs",
+    "sampler_slices",
+    "vst_plugins",
+    "vst_plugin_params",
+    "automation_lanes",
+    "automation_points",
+    "custom_synthdefs",
+    "custom_synthdef_params",
+    "drum_sequencer_state",
+    "drum_sequencer_chain",
+    "drum_pads",
+    "drum_patterns",
+    "drum_steps",
+    "chopper_states",
+    "chopper_slices",
+    "midi_recording_settings",
+    "midi_cc_mappings",
+    "midi_pitch_bend_configs",
+    "arrangement_state",
+    "arrangement_clips",
+    "arrangement_clip_notes",
+    "arrangement_placements",
+    "arrangement_clip_automation_lanes",
+    "arrangement_clip_automation_points",
 ];
 
 /// Metadata for a checkpoint, returned by list operations.
@@ -195,9 +223,8 @@ pub fn list_checkpoints(path: &Path) -> SqlResult<Vec<CheckpointInfo>> {
         return Ok(vec![]);
     }
 
-    let mut stmt = conn.prepare(
-        "SELECT id, label, created_at, parent_id FROM checkpoints ORDER BY id DESC",
-    )?;
+    let mut stmt =
+        conn.prepare("SELECT id, label, created_at, parent_id FROM checkpoints ORDER BY id DESC")?;
 
     let rows = stmt.query_map([], |row| {
         Ok(CheckpointInfo {
@@ -332,7 +359,8 @@ mod tests {
         let path = tmp.path();
         // Create a bare SQLite DB without our schema
         let conn = Connection::open(path).unwrap();
-        conn.execute("CREATE TABLE dummy (id INTEGER PRIMARY KEY)", []).unwrap();
+        conn.execute("CREATE TABLE dummy (id INTEGER PRIMARY KEY)", [])
+            .unwrap();
         drop(conn);
 
         let list = list_checkpoints(path).unwrap();
@@ -359,11 +387,13 @@ mod tests {
 
         // Verify changeset row exists
         let conn = Connection::open(path).unwrap();
-        let count: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM checkpoint_changesets WHERE checkpoint_id = ?1",
-            params![id_b],
-            |row| row.get(0),
-        ).unwrap();
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM checkpoint_changesets WHERE checkpoint_id = ?1",
+                params![id_b],
+                |row| row.get(0),
+            )
+            .unwrap();
         assert_eq!(count, 1, "Expected changeset to be stored for checkpoint B");
     }
 
@@ -381,11 +411,13 @@ mod tests {
 
         // Verify NO changeset row — identical states
         let conn = Connection::open(path).unwrap();
-        let count: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM checkpoint_changesets WHERE checkpoint_id = ?1",
-            params![id2],
-            |row| row.get(0),
-        ).unwrap();
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM checkpoint_changesets WHERE checkpoint_id = ?1",
+                params![id2],
+                |row| row.get(0),
+            )
+            .unwrap();
         assert_eq!(count, 0, "Expected no changeset for identical states");
     }
 
@@ -410,11 +442,16 @@ mod tests {
 
         // Verify changeset blob is non-empty
         let conn = Connection::open(path).unwrap();
-        let changeset_blob: Vec<u8> = conn.query_row(
-            "SELECT changeset FROM checkpoint_changesets WHERE checkpoint_id = ?1",
-            params![id_b],
-            |row| row.get(0),
-        ).unwrap();
-        assert!(!changeset_blob.is_empty(), "Changeset should contain diff data");
+        let changeset_blob: Vec<u8> = conn
+            .query_row(
+                "SELECT changeset FROM checkpoint_changesets WHERE checkpoint_id = ?1",
+                params![id_b],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(
+            !changeset_blob.is_empty(),
+            "Changeset should contain diff data"
+        );
     }
 }

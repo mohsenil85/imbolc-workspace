@@ -1,8 +1,8 @@
-use imbolc_audio::AudioHandle;
-use imbolc_types::{DomainAction, PianoRollAction};
+use crate::action::{AudioEffect, DispatchResult};
 use crate::state::AppState;
 use crate::state::{ClipboardContents, ClipboardNote};
-use crate::action::{AudioEffect, DispatchResult};
+use imbolc_audio::AudioHandle;
+use imbolc_types::{DomainAction, PianoRollAction};
 
 fn reduce(action: &PianoRollAction, state: &mut AppState) {
     imbolc_types::reduce::reduce_action(
@@ -97,7 +97,12 @@ pub(super) fn dispatch_piano_roll(
             result.audio_effects.push(AudioEffect::UpdatePianoRoll);
             result
         }
-        PianoRollAction::PlayNote { pitch, velocity, instrument_id, track } => {
+        PianoRollAction::PlayNote {
+            pitch,
+            velocity,
+            instrument_id,
+            track,
+        } => {
             let pitch = *pitch;
             let velocity = *velocity;
             let instrument_id = *instrument_id;
@@ -110,7 +115,9 @@ pub(super) fn dispatch_piano_roll(
                 let vel_f = velocity as f32 / 127.0;
                 for &target_id in &targets {
                     if let Some(inst) = state.instruments.instrument(target_id) {
-                        if state.effective_instrument_mute(inst) { continue; }
+                        if state.effective_instrument_mute(inst) {
+                            continue;
+                        }
                         let expanded: Vec<u8> = match inst.note_input.chord_shape {
                             Some(shape) => shape.expand(pitch),
                             None => vec![pitch],
@@ -123,12 +130,17 @@ pub(super) fn dispatch_piano_roll(
                     }
                 }
             } else if !state.session.piano_roll.recording {
-                return DispatchResult::with_status(imbolc_audio::ServerStatus::Stopped, "Audio engine not running");
+                return DispatchResult::with_status(
+                    imbolc_audio::ServerStatus::Stopped,
+                    "Audio engine not running",
+                );
             }
 
             // Record note only on the original track (not siblings)
             if state.session.piano_roll.recording {
-                let chord_shape = state.instruments.instrument(instrument_id)
+                let chord_shape = state
+                    .instruments
+                    .instrument(instrument_id)
                     .and_then(|inst| inst.note_input.chord_shape);
                 let record_pitches: Vec<u8> = match chord_shape {
                     Some(shape) => shape.expand(pitch),
@@ -137,7 +149,10 @@ pub(super) fn dispatch_piano_roll(
                 let playhead = state.audio.playhead;
                 let duration = 480; // One beat for live recording
                 for &p in &record_pitches {
-                    state.session.piano_roll.toggle_note(track, p, playhead, duration, velocity);
+                    state
+                        .session
+                        .piano_roll
+                        .toggle_note(track, p, playhead, duration, velocity);
                 }
                 let mut result = DispatchResult::none();
                 result.audio_effects.push(AudioEffect::UpdatePianoRoll);
@@ -145,7 +160,12 @@ pub(super) fn dispatch_piano_roll(
             }
             DispatchResult::none()
         }
-        PianoRollAction::PlayNotes { pitches, velocity, instrument_id, track } => {
+        PianoRollAction::PlayNotes {
+            pitches,
+            velocity,
+            instrument_id,
+            track,
+        } => {
             let velocity = *velocity;
             let instrument_id = *instrument_id;
             let track = *track;
@@ -157,7 +177,9 @@ pub(super) fn dispatch_piano_roll(
                 let vel_f = velocity as f32 / 127.0;
                 for &target_id in &targets {
                     if let Some(inst) = state.instruments.instrument(target_id) {
-                        if state.effective_instrument_mute(inst) { continue; }
+                        if state.effective_instrument_mute(inst) {
+                            continue;
+                        }
                         for &pitch in pitches {
                             let expanded: Vec<u8> = match inst.note_input.chord_shape {
                                 Some(shape) => shape.expand(pitch),
@@ -172,23 +194,32 @@ pub(super) fn dispatch_piano_roll(
                     }
                 }
             } else if !state.session.piano_roll.recording {
-                return DispatchResult::with_status(imbolc_audio::ServerStatus::Stopped, "Audio engine not running");
+                return DispatchResult::with_status(
+                    imbolc_audio::ServerStatus::Stopped,
+                    "Audio engine not running",
+                );
             }
 
             // Record chord notes only on the original track (not siblings)
             if state.session.piano_roll.recording {
-                let chord_shape = state.instruments.instrument(instrument_id)
+                let chord_shape = state
+                    .instruments
+                    .instrument(instrument_id)
                     .and_then(|inst| inst.note_input.chord_shape);
-                let all_pitches: Vec<u8> = pitches.iter().flat_map(|&pitch| {
-                    match chord_shape {
+                let all_pitches: Vec<u8> = pitches
+                    .iter()
+                    .flat_map(|&pitch| match chord_shape {
                         Some(shape) => shape.expand(pitch),
                         None => vec![pitch],
-                    }
-                }).collect();
+                    })
+                    .collect();
                 let playhead = state.audio.playhead;
                 let duration = 480; // One beat for live recording
                 for &p in &all_pitches {
-                    state.session.piano_roll.toggle_note(track, p, playhead, duration, velocity);
+                    state
+                        .session
+                        .piano_roll
+                        .toggle_note(track, p, playhead, duration, velocity);
                 }
                 let mut result = DispatchResult::none();
                 result.audio_effects.push(AudioEffect::UpdatePianoRoll);
@@ -205,10 +236,16 @@ pub(super) fn dispatch_piano_roll(
         PianoRollAction::RenderToWav(instrument_id) => {
             let instrument_id = *instrument_id;
             if state.io.pending_render.is_some() || state.io.pending_export.is_some() {
-                return DispatchResult::with_status(imbolc_audio::ServerStatus::Running, "Already rendering or exporting");
+                return DispatchResult::with_status(
+                    imbolc_audio::ServerStatus::Running,
+                    "Already rendering or exporting",
+                );
             }
             if !audio.is_running() {
-                return DispatchResult::with_status(imbolc_audio::ServerStatus::Stopped, "Audio engine not running");
+                return DispatchResult::with_status(
+                    imbolc_audio::ServerStatus::Stopped,
+                    "Audio engine not running",
+                );
             }
 
             let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
@@ -234,7 +271,8 @@ pub(super) fn dispatch_piano_roll(
 
             let _ = audio.start_instrument_render(instrument_id, &path);
 
-            let mut result = DispatchResult::with_status(imbolc_audio::ServerStatus::Running, "Rendering...");
+            let mut result =
+                DispatchResult::with_status(imbolc_audio::ServerStatus::Running, "Rendering...");
             result.audio_effects.push(AudioEffect::UpdatePianoRoll);
             result
         }
@@ -252,13 +290,22 @@ pub(super) fn dispatch_piano_roll(
         }
         PianoRollAction::BounceToWav => {
             if state.io.pending_render.is_some() || state.io.pending_export.is_some() {
-                return DispatchResult::with_status(imbolc_audio::ServerStatus::Running, "Already rendering or exporting");
+                return DispatchResult::with_status(
+                    imbolc_audio::ServerStatus::Running,
+                    "Already rendering or exporting",
+                );
             }
             if !audio.is_running() {
-                return DispatchResult::with_status(imbolc_audio::ServerStatus::Stopped, "Audio engine not running");
+                return DispatchResult::with_status(
+                    imbolc_audio::ServerStatus::Stopped,
+                    "Audio engine not running",
+                );
             }
             if state.instruments.instruments.is_empty() {
-                return DispatchResult::with_status(imbolc_audio::ServerStatus::Stopped, "No instruments");
+                return DispatchResult::with_status(
+                    imbolc_audio::ServerStatus::Stopped,
+                    "No instruments",
+                );
             }
 
             let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
@@ -293,13 +340,22 @@ pub(super) fn dispatch_piano_roll(
         }
         PianoRollAction::ExportStems => {
             if state.io.pending_render.is_some() || state.io.pending_export.is_some() {
-                return DispatchResult::with_status(imbolc_audio::ServerStatus::Running, "Already rendering or exporting");
+                return DispatchResult::with_status(
+                    imbolc_audio::ServerStatus::Running,
+                    "Already rendering or exporting",
+                );
             }
             if !audio.is_running() {
-                return DispatchResult::with_status(imbolc_audio::ServerStatus::Stopped, "Audio engine not running");
+                return DispatchResult::with_status(
+                    imbolc_audio::ServerStatus::Stopped,
+                    "Audio engine not running",
+                );
             }
             if state.instruments.instruments.is_empty() {
-                return DispatchResult::with_status(imbolc_audio::ServerStatus::Stopped, "No instruments");
+                return DispatchResult::with_status(
+                    imbolc_audio::ServerStatus::Stopped,
+                    "No instruments",
+                );
             }
 
             let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
@@ -366,12 +422,20 @@ pub(super) fn dispatch_piano_roll(
             }
             DispatchResult::none()
         }
-        PianoRollAction::CopyNotes { track, start_tick, end_tick, start_pitch, end_pitch } => {
+        PianoRollAction::CopyNotes {
+            track,
+            start_tick,
+            end_tick,
+            start_pitch,
+            end_pitch,
+        } => {
             if let Some(t) = state.session.piano_roll.track_at(*track) {
                 let mut notes = Vec::new();
                 for note in &t.notes {
-                    if note.tick >= *start_tick && note.tick < *end_tick
-                        && note.pitch >= *start_pitch && note.pitch <= *end_pitch
+                    if note.tick >= *start_tick
+                        && note.tick < *end_tick
+                        && note.pitch >= *start_pitch
+                        && note.pitch <= *end_pitch
                     {
                         notes.push(ClipboardNote {
                             tick_offset: note.tick - start_tick,
@@ -388,7 +452,10 @@ pub(super) fn dispatch_piano_roll(
             }
             DispatchResult::none()
         }
-        PianoRollAction::ReleaseNote { pitch, instrument_id } => {
+        PianoRollAction::ReleaseNote {
+            pitch,
+            instrument_id,
+        } => {
             // Fan-out to layer group members
             let targets = state.instruments.layer_group_members(*instrument_id);
 
@@ -401,7 +468,10 @@ pub(super) fn dispatch_piano_roll(
             }
             DispatchResult::none()
         }
-        PianoRollAction::ReleaseNotes { pitches, instrument_id } => {
+        PianoRollAction::ReleaseNotes {
+            pitches,
+            instrument_id,
+        } => {
             // Fan-out to layer group members
             let targets = state.instruments.layer_group_members(*instrument_id);
 
@@ -422,8 +492,8 @@ pub(super) fn dispatch_piano_roll(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use imbolc_audio::AudioHandle;
     use crate::state::ClipboardContents;
+    use imbolc_audio::AudioHandle;
 
     fn setup() -> (AppState, AudioHandle) {
         let state = AppState::new();
@@ -449,7 +519,13 @@ mod tests {
         // Toggle again removes
         let result = dispatch_piano_roll(&action, &mut state, &mut audio);
         assert!(result.audio_effects.contains(&AudioEffect::UpdatePianoRoll));
-        assert!(state.session.piano_roll.track_at(0).unwrap().notes.is_empty());
+        assert!(state
+            .session
+            .piano_roll
+            .track_at(0)
+            .unwrap()
+            .notes
+            .is_empty());
     }
 
     #[test]
@@ -541,9 +617,27 @@ mod tests {
         state.session.piano_roll.toggle_note(0, 60, 0, 480, 100);
 
         let clipboard_notes = vec![
-            ClipboardNote { tick_offset: 0, pitch_offset: 0, duration: 480, velocity: 100, probability: 1.0 },
-            ClipboardNote { tick_offset: 480, pitch_offset: -200, duration: 480, velocity: 100, probability: 1.0 }, // out of range
-            ClipboardNote { tick_offset: 480, pitch_offset: 2, duration: 480, velocity: 100, probability: 1.0 },
+            ClipboardNote {
+                tick_offset: 0,
+                pitch_offset: 0,
+                duration: 480,
+                velocity: 100,
+                probability: 1.0,
+            },
+            ClipboardNote {
+                tick_offset: 480,
+                pitch_offset: -200,
+                duration: 480,
+                velocity: 100,
+                probability: 1.0,
+            }, // out of range
+            ClipboardNote {
+                tick_offset: 480,
+                pitch_offset: 2,
+                duration: 480,
+                velocity: 100,
+                probability: 1.0,
+            },
         ];
         let action = PianoRollAction::PasteNotes {
             track: 0,

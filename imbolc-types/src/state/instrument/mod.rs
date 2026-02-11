@@ -325,7 +325,10 @@ impl ProcessingStage {
 
 /// Decode an effect cursor position into (EffectId, Option<param_index>).
 /// Returns None if cursor is out of range. Used by Instrument, MixerBus, and LayerGroupMixer.
-pub fn decode_effect_cursor_from_slice(effects: &[EffectSlot], cursor: usize) -> Option<(EffectId, Option<ParamIndex>)> {
+pub fn decode_effect_cursor_from_slice(
+    effects: &[EffectSlot],
+    cursor: usize,
+) -> Option<(EffectId, Option<ParamIndex>)> {
     let mut pos = 0;
     for effect in effects {
         if cursor == pos {
@@ -480,7 +483,10 @@ impl Instrument {
         } else if source.is_kit() {
             SourceExtra::Kit(DrumSequencerState::new())
         } else if source.is_vst() {
-            SourceExtra::Vst { param_values: Vec::new(), state_path: None }
+            SourceExtra::Vst {
+                param_values: Vec::new(),
+                state_path: None,
+            }
         } else {
             SourceExtra::None
         };
@@ -610,7 +616,9 @@ impl Instrument {
 
     /// Chain index of an effect by its EffectId.
     pub fn effect_chain_index(&self, id: EffectId) -> Option<usize> {
-        self.processing_chain.iter().position(|s| matches!(s, ProcessingStage::Effect(e) if e.id == id))
+        self.processing_chain
+            .iter()
+            .position(|s| matches!(s, ProcessingStage::Effect(e) if e.id == id))
     }
 
     // --- Mutation helpers ---
@@ -620,7 +628,10 @@ impl Instrument {
         if let Some(idx) = self.filter_chain_index() {
             self.processing_chain.remove(idx);
         } else {
-            self.processing_chain.insert(0, ProcessingStage::Filter(FilterConfig::new(FilterType::Lpf)));
+            self.processing_chain.insert(
+                0,
+                ProcessingStage::Filter(FilterConfig::new(FilterType::Lpf)),
+            );
         }
     }
 
@@ -636,7 +647,8 @@ impl Instrument {
                 if let Some(idx) = self.filter_chain_index() {
                     self.processing_chain[idx] = ProcessingStage::Filter(FilterConfig::new(ft));
                 } else {
-                    self.processing_chain.insert(0, ProcessingStage::Filter(FilterConfig::new(ft)));
+                    self.processing_chain
+                        .insert(0, ProcessingStage::Filter(FilterConfig::new(ft)));
                 }
             }
         }
@@ -648,11 +660,14 @@ impl Instrument {
             self.processing_chain.remove(idx);
         } else {
             // Insert after the last filter, or at index 0 if no filters
-            let insert_at = self.processing_chain.iter()
+            let insert_at = self
+                .processing_chain
+                .iter()
                 .rposition(|s| s.is_filter())
                 .map(|i| i + 1)
                 .unwrap_or(0);
-            self.processing_chain.insert(insert_at, ProcessingStage::Eq(EqConfig::default()));
+            self.processing_chain
+                .insert(insert_at, ProcessingStage::Eq(EqConfig::default()));
         }
     }
 
@@ -660,14 +675,16 @@ impl Instrument {
     pub fn add_effect(&mut self, effect_type: EffectType) -> EffectId {
         let id = self.next_effect_id;
         self.next_effect_id = EffectId::new(self.next_effect_id.get() + 1);
-        self.processing_chain.push(ProcessingStage::Effect(EffectSlot::new(id, effect_type)));
+        self.processing_chain
+            .push(ProcessingStage::Effect(EffectSlot::new(id, effect_type)));
         id
     }
 
     /// Remove an effect by its EffectId. Returns true if removed.
     pub fn remove_effect(&mut self, id: EffectId) -> bool {
         if let Some(idx) = self.effect_chain_index(id) {
-            if matches!(&self.processing_chain[idx], ProcessingStage::Effect(e) if e.effect_type == EffectType::ConvolutionReverb) {
+            if matches!(&self.processing_chain[idx], ProcessingStage::Effect(e) if e.effect_type == EffectType::ConvolutionReverb)
+            {
                 self.convolution_ir_path = None;
             }
             self.processing_chain.remove(idx);
@@ -795,7 +812,8 @@ impl Instrument {
     }
 
     pub fn has_convolution_reverb(&self) -> bool {
-        self.effects().any(|e| e.effect_type == EffectType::ConvolutionReverb)
+        self.effects()
+            .any(|e| e.effect_type == EffectType::ConvolutionReverb)
     }
 
     pub fn convolution_ir(&self) -> Option<&str> {
@@ -823,7 +841,10 @@ where
             formatter.write_str("a map or sequence of mixer sends")
         }
 
-        fn visit_map<A: serde::de::MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+        fn visit_map<A: serde::de::MapAccess<'de>>(
+            self,
+            mut map: A,
+        ) -> Result<Self::Value, A::Error> {
             let mut result = BTreeMap::new();
             while let Some((key, value)) = map.next_entry::<BusId, MixerSend>()? {
                 result.insert(key, value);
@@ -831,7 +852,10 @@ where
             Ok(result)
         }
 
-        fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+        fn visit_seq<A: serde::de::SeqAccess<'de>>(
+            self,
+            mut seq: A,
+        ) -> Result<Self::Value, A::Error> {
             let mut result = BTreeMap::new();
             while let Some(send) = seq.next_element::<MixerSend>()? {
                 result.insert(send.bus_id, send);
@@ -1006,11 +1030,20 @@ mod tests {
         let effects: Vec<_> = inst.effects().cloned().collect();
         let params1 = effects[0].params.len();
 
-        assert_eq!(decode_effect_cursor_from_slice(&effects, 0), Some((id1, None)));
+        assert_eq!(
+            decode_effect_cursor_from_slice(&effects, 0),
+            Some((id1, None))
+        );
         if params1 > 0 {
-            assert_eq!(decode_effect_cursor_from_slice(&effects, 1), Some((id1, Some(ParamIndex::new(0)))));
+            assert_eq!(
+                decode_effect_cursor_from_slice(&effects, 1),
+                Some((id1, Some(ParamIndex::new(0))))
+            );
         }
-        assert_eq!(decode_effect_cursor_from_slice(&effects, 1 + params1), Some((id2, None)));
+        assert_eq!(
+            decode_effect_cursor_from_slice(&effects, 1 + params1),
+            Some((id2, None))
+        );
         let total: usize = effects.iter().map(|e| 1 + e.params.len()).sum();
         assert_eq!(decode_effect_cursor_from_slice(&effects, total), None);
     }
@@ -1130,7 +1163,10 @@ mod tests {
         let delay_params = EffectType::Delay.default_params().len();
         assert_eq!(delay.row_count(), 1 + delay_params);
 
-        let vst = ProcessingStage::Effect(EffectSlot::new(EffectId::new(1), EffectType::Vst(VstPluginId::new(0))));
+        let vst = ProcessingStage::Effect(EffectSlot::new(
+            EffectId::new(1),
+            EffectType::Vst(VstPluginId::new(0)),
+        ));
         assert_eq!(vst.row_count(), 1);
     }
 
@@ -1142,7 +1178,8 @@ mod tests {
         assert!(inst.filter().is_none());
         assert_eq!(inst.filters().count(), 0);
 
-        inst.processing_chain.push(ProcessingStage::Filter(FilterConfig::new(FilterType::Hpf)));
+        inst.processing_chain
+            .push(ProcessingStage::Filter(FilterConfig::new(FilterType::Hpf)));
         assert_eq!(inst.filter().unwrap().filter_type, FilterType::Hpf);
         assert_eq!(inst.filters().count(), 1);
 
@@ -1156,7 +1193,8 @@ mod tests {
         assert!(inst.eq().is_none());
         assert!(!inst.has_eq());
 
-        inst.processing_chain.push(ProcessingStage::Eq(EqConfig::default()));
+        inst.processing_chain
+            .push(ProcessingStage::Eq(EqConfig::default()));
         assert!(inst.eq().is_some());
         assert!(inst.has_eq());
 
@@ -1181,11 +1219,16 @@ mod tests {
     #[test]
     fn effect_by_id_through_mixed_chain() {
         let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
-        inst.processing_chain.push(ProcessingStage::Filter(FilterConfig::new(FilterType::Lpf)));
+        inst.processing_chain
+            .push(ProcessingStage::Filter(FilterConfig::new(FilterType::Lpf)));
         let id = inst.add_effect(EffectType::Delay);
-        inst.processing_chain.push(ProcessingStage::Eq(EqConfig::default()));
+        inst.processing_chain
+            .push(ProcessingStage::Eq(EqConfig::default()));
         assert!(inst.effect_by_id(id).is_some());
-        assert_eq!(inst.effect_by_id(id).unwrap().effect_type, EffectType::Delay);
+        assert_eq!(
+            inst.effect_by_id(id).unwrap().effect_type,
+            EffectType::Delay
+        );
     }
 
     // --- Toggle/set operation tests ---
@@ -1216,7 +1259,8 @@ mod tests {
     #[test]
     fn toggle_eq_single_instance_and_position() {
         let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
-        inst.processing_chain.push(ProcessingStage::Filter(FilterConfig::new(FilterType::Lpf)));
+        inst.processing_chain
+            .push(ProcessingStage::Filter(FilterConfig::new(FilterType::Lpf)));
         inst.add_effect(EffectType::Delay);
         inst.toggle_eq();
         assert!(inst.has_eq());
@@ -1228,7 +1272,8 @@ mod tests {
     #[test]
     fn add_remove_effect_chain_integrity() {
         let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
-        inst.processing_chain.push(ProcessingStage::Filter(FilterConfig::new(FilterType::Lpf)));
+        inst.processing_chain
+            .push(ProcessingStage::Filter(FilterConfig::new(FilterType::Lpf)));
         let id1 = inst.add_effect(EffectType::Delay);
         let id2 = inst.add_effect(EffectType::Reverb);
         assert_eq!(inst.processing_chain.len(), 3);
@@ -1244,7 +1289,10 @@ mod tests {
     fn move_stage_reorder() {
         let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
         let id = inst.add_effect(EffectType::Delay);
-        inst.processing_chain.insert(0, ProcessingStage::Filter(FilterConfig::new(FilterType::Lpf)));
+        inst.processing_chain.insert(
+            0,
+            ProcessingStage::Filter(FilterConfig::new(FilterType::Lpf)),
+        );
         assert!(inst.processing_chain[0].is_filter());
         assert!(inst.move_stage(0, 1));
         assert!(inst.processing_chain[0].is_effect());
@@ -1303,8 +1351,10 @@ mod tests {
     fn nav_mixed_order_effect_filter_eq() {
         let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
         inst.add_effect(EffectType::Delay);
-        inst.processing_chain.push(ProcessingStage::Filter(FilterConfig::new(FilterType::Lpf)));
-        inst.processing_chain.push(ProcessingStage::Eq(EqConfig::default()));
+        inst.processing_chain
+            .push(ProcessingStage::Filter(FilterConfig::new(FilterType::Lpf)));
+        inst.processing_chain
+            .push(ProcessingStage::Eq(EqConfig::default()));
 
         let source_rows = inst.source_params.len().max(1);
         let delay_rows = 1 + EffectType::Delay.default_params().len();
@@ -1324,8 +1374,15 @@ mod tests {
     #[test]
     fn nav_different_stage_sizes() {
         let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
-        inst.processing_chain.push(ProcessingStage::Filter(FilterConfig::new(FilterType::Vowel)));
-        inst.processing_chain.push(ProcessingStage::Effect(EffectSlot::new(EffectId::new(0), EffectType::Vst(VstPluginId::new(0)))));
+        inst.processing_chain
+            .push(ProcessingStage::Filter(FilterConfig::new(
+                FilterType::Vowel,
+            )));
+        inst.processing_chain
+            .push(ProcessingStage::Effect(EffectSlot::new(
+                EffectId::new(0),
+                EffectType::Vst(VstPluginId::new(0)),
+            )));
 
         let source_rows = inst.source_params.len().max(1);
         let vowel_rows = 4;
@@ -1382,8 +1439,12 @@ mod tests {
     fn chain_index_queries() {
         let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
         let id = inst.add_effect(EffectType::Delay);
-        inst.processing_chain.insert(0, ProcessingStage::Filter(FilterConfig::new(FilterType::Lpf)));
-        inst.processing_chain.insert(1, ProcessingStage::Eq(EqConfig::default()));
+        inst.processing_chain.insert(
+            0,
+            ProcessingStage::Filter(FilterConfig::new(FilterType::Lpf)),
+        );
+        inst.processing_chain
+            .insert(1, ProcessingStage::Eq(EqConfig::default()));
         assert_eq!(inst.filter_chain_index(), Some(0));
         assert_eq!(inst.eq_chain_index(), Some(1));
         assert_eq!(inst.effect_chain_index(id), Some(2));
@@ -1456,7 +1517,11 @@ mod tests {
     #[test]
     fn vst_source_params_returns_values_for_vst() {
         let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Vst(VstPluginId::new(0)));
-        if let SourceExtra::Vst { ref mut param_values, .. } = inst.source_extra {
+        if let SourceExtra::Vst {
+            ref mut param_values,
+            ..
+        } = inst.source_extra
+        {
             param_values.push((0, 0.5));
             param_values.push((1, 0.8));
         }

@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
-use imbolc_audio::AudioHandle;
-use crate::state::AppState;
 use crate::action::{AudioEffect, DispatchResult, ServerAction};
+use crate::state::AppState;
+use imbolc_audio::AudioHandle;
 
 pub(super) fn dispatch_server(
     action: &ServerAction,
@@ -20,8 +20,20 @@ pub(super) fn dispatch_server(
             let _ = audio.disconnect_async();
             result.push_status(audio.status(), "Disconnecting...");
         }
-        ServerAction::Start { input_device, output_device, buffer_size, sample_rate } => {
-            let _ = audio.start_server_async(input_device.as_deref(), output_device.as_deref(), *buffer_size, *sample_rate);
+        ServerAction::Start {
+            input_device,
+            output_device,
+            buffer_size,
+            sample_rate,
+            scsynth_args,
+        } => {
+            let _ = audio.start_server_async(
+                input_device.as_deref(),
+                output_device.as_deref(),
+                *buffer_size,
+                *sample_rate,
+                scsynth_args,
+            );
             result.push_status(audio.status(), "Starting server...");
         }
         ServerAction::Stop => {
@@ -77,12 +89,12 @@ pub(super) fn dispatch_server(
                 }
                 let path = super::recording_path("master");
                 let _ = audio.start_recording(0, &path);
-                result.push_status(
-                    audio.status(),
-                    format!("Recording to {}", path.display()),
-                );
+                result.push_status(audio.status(), format!("Recording to {}", path.display()));
             } else {
-                result.push_status(imbolc_audio::ServerStatus::Stopped, "Audio engine not running");
+                result.push_status(
+                    imbolc_audio::ServerStatus::Stopped,
+                    "Audio engine not running",
+                );
             }
         }
         ServerAction::RecordInput => {
@@ -116,17 +128,30 @@ pub(super) fn dispatch_server(
                     // Bus 0 is hardware out; for instrument recording we use bus 0
                     // since instruments route through output to bus 0
                     let _ = audio.start_recording(0, &path);
-                    result.push_status(
-                        audio.status(),
-                        format!("Recording to {}", path.display()),
-                    );
+                    result.push_status(audio.status(), format!("Recording to {}", path.display()));
                 }
             } else {
-                result.push_status(imbolc_audio::ServerStatus::Stopped, "Audio engine not running");
+                result.push_status(
+                    imbolc_audio::ServerStatus::Stopped,
+                    "Audio engine not running",
+                );
             }
         }
-        ServerAction::Restart { input_device, output_device, buffer_size, sample_rate } => {
-            let _ = audio.restart_server_async(input_device.as_deref(), output_device.as_deref(), "127.0.0.1:57110", *buffer_size, *sample_rate);
+        ServerAction::Restart {
+            input_device,
+            output_device,
+            buffer_size,
+            sample_rate,
+            scsynth_args,
+        } => {
+            let _ = audio.restart_server_async(
+                input_device.as_deref(),
+                output_device.as_deref(),
+                "127.0.0.1:57110",
+                *buffer_size,
+                *sample_rate,
+                scsynth_args,
+            );
             result.audio_effects.push(AudioEffect::RebuildInstruments);
             result.audio_effects.push(AudioEffect::RebuildSession);
             result.audio_effects.push(AudioEffect::RebuildRouting);
@@ -185,14 +210,14 @@ pub fn compile_synthdef(
     // Handle both patterns: `dir ? thisProcess...` and just `thisProcess...`
     let output_dir_str = format!("\"{}\"", output_dir.display());
     let modified_content = scd_content
-        .replace("dir ? thisProcess.nowExecutingPath.dirname", &output_dir_str)
+        .replace(
+            "dir ? thisProcess.nowExecutingPath.dirname",
+            &output_dir_str,
+        )
         .replace("thisProcess.nowExecutingPath.dirname", &output_dir_str);
 
     // Wrap in a block that exits when done
-    let compile_script = format!(
-        "(\n{}\n\"SUCCESS\".postln;\n0.exit;\n)",
-        modified_content
-    );
+    let compile_script = format!("(\n{}\n\"SUCCESS\".postln;\n0.exit;\n)", modified_content);
 
     // Write temp compile script
     let temp_script = std::env::temp_dir().join("imbolc_compile_custom.scd");
@@ -225,7 +250,8 @@ pub fn compile_synthdef(
         }
     }
 
-    let output = child.wait_with_output()
+    let output = child
+        .wait_with_output()
         .map_err(|e| format!("Failed to get sclang output: {}", e))?;
 
     // Check for errors (but ignore common non-error messages)
@@ -233,11 +259,12 @@ pub fn compile_synthdef(
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     // Look for actual errors, not just any "ERROR" in output
-    let has_error = stderr.lines().any(|line| {
-        line.contains("ERROR:") || line.contains("FAILURE")
-    }) || stdout.lines().any(|line| {
-        line.starts_with("ERROR:") || line.contains("FAILURE")
-    });
+    let has_error = stderr
+        .lines()
+        .any(|line| line.contains("ERROR:") || line.contains("FAILURE"))
+        || stdout
+            .lines()
+            .any(|line| line.starts_with("ERROR:") || line.contains("FAILURE"));
 
     if has_error {
         return Err(format!("sclang error: {}{}", stdout, stderr));

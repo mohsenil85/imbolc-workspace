@@ -1,10 +1,14 @@
 use std::any::Any;
 
 use crate::state::{AppState, OwnershipDisplayStatus, SourceType};
-use crate::ui::layout_helpers::center_rect;
-use crate::ui::{Rect, RenderBuf, Action, NavAction, InstrumentAction, SessionAction, Color, InputEvent, KeyCode, Keymap, MouseEvent, MouseEventKind, MouseButton, Pane, PaneId, Style, ToggleResult, translate_key};
-use crate::ui::performance::PerformanceController;
 use crate::ui::action_id::{ActionId, InstrumentListActionId, ModeActionId};
+use crate::ui::layout_helpers::center_rect;
+use crate::ui::performance::PerformanceController;
+use crate::ui::{
+    translate_key, Action, Color, InputEvent, InstrumentAction, KeyCode, Keymap, MouseButton,
+    MouseEvent, MouseEventKind, NavAction, Pane, PaneId, Rect, RenderBuf, SessionAction, Style,
+    ToggleResult,
+};
 use imbolc_types::InstrumentId;
 
 fn source_color(source: SourceType) -> Color {
@@ -66,7 +70,11 @@ impl InstrumentPane {
     }
 
     fn format_eq(instrument: &crate::state::instrument::Instrument) -> &'static str {
-        if instrument.eq().is_some() { "[EQ]" } else { "" }
+        if instrument.eq().is_some() {
+            "[EQ]"
+        } else {
+            ""
+        }
     }
 
     fn format_effects(instrument: &crate::state::instrument::Instrument) -> String {
@@ -74,7 +82,8 @@ impl InstrumentPane {
         if effects.is_empty() {
             return "---".to_string();
         }
-        effects.iter()
+        effects
+            .iter()
             .map(|e| e.effect_type.name())
             .collect::<Vec<_>>()
             .join(", ")
@@ -108,7 +117,9 @@ impl Pane for InstrumentPane {
                     if let Some(target) = state.instruments.selected_instrument() {
                         let target_id = target.id;
                         if target_id != from_id {
-                            return Action::Instrument(InstrumentAction::LinkLayer(from_id, target_id));
+                            return Action::Instrument(InstrumentAction::LinkLayer(
+                                from_id, target_id,
+                            ));
                         }
                     }
                     return Action::None;
@@ -129,11 +140,21 @@ impl Pane for InstrumentPane {
 
         match action {
             ActionId::InstrumentList(InstrumentListActionId::Quit) => Action::QuitIntent,
-            ActionId::InstrumentList(InstrumentListActionId::Next) => Action::Instrument(InstrumentAction::SelectNext),
-            ActionId::InstrumentList(InstrumentListActionId::Prev) => Action::Instrument(InstrumentAction::SelectPrev),
-            ActionId::InstrumentList(InstrumentListActionId::GotoTop) => Action::Instrument(InstrumentAction::SelectFirst),
-            ActionId::InstrumentList(InstrumentListActionId::GotoBottom) => Action::Instrument(InstrumentAction::SelectLast),
-            ActionId::InstrumentList(InstrumentListActionId::Add) => Action::Nav(NavAction::SwitchPane(PaneId::Add)),
+            ActionId::InstrumentList(InstrumentListActionId::Next) => {
+                Action::Instrument(InstrumentAction::SelectNext)
+            }
+            ActionId::InstrumentList(InstrumentListActionId::Prev) => {
+                Action::Instrument(InstrumentAction::SelectPrev)
+            }
+            ActionId::InstrumentList(InstrumentListActionId::GotoTop) => {
+                Action::Instrument(InstrumentAction::SelectFirst)
+            }
+            ActionId::InstrumentList(InstrumentListActionId::GotoBottom) => {
+                Action::Instrument(InstrumentAction::SelectLast)
+            }
+            ActionId::InstrumentList(InstrumentListActionId::Add) => {
+                Action::Nav(NavAction::SwitchPane(PaneId::Add))
+            }
             ActionId::InstrumentList(InstrumentListActionId::Delete) => {
                 if let Some(instrument) = state.instruments.selected_instrument() {
                     Action::Instrument(InstrumentAction::Delete(instrument.id))
@@ -148,8 +169,12 @@ impl Pane for InstrumentPane {
                     Action::None
                 }
             }
-            ActionId::InstrumentList(InstrumentListActionId::Save) => Action::Session(SessionAction::Save),
-            ActionId::InstrumentList(InstrumentListActionId::Load) => Action::Session(SessionAction::Load),
+            ActionId::InstrumentList(InstrumentListActionId::Save) => {
+                Action::Session(SessionAction::Save)
+            }
+            ActionId::InstrumentList(InstrumentListActionId::Load) => {
+                Action::Session(SessionAction::Load)
+            }
             ActionId::InstrumentList(InstrumentListActionId::LinkLayer) => {
                 if let Some(instrument) = state.instruments.selected_instrument() {
                     self.linking_from = Some(instrument.id);
@@ -188,19 +213,36 @@ impl Pane for InstrumentPane {
                     Action::None
                 }
             }
-            ActionId::Mode(ModeActionId::PianoOctaveDown) => { self.perf.piano.octave_down(); Action::None }
-            ActionId::Mode(ModeActionId::PianoOctaveUp) => { self.perf.piano.octave_up(); Action::None }
+            ActionId::Mode(ModeActionId::PianoOctaveDown) => {
+                self.perf.piano.octave_down();
+                Action::None
+            }
+            ActionId::Mode(ModeActionId::PianoOctaveUp) => {
+                self.perf.piano.octave_up();
+                Action::None
+            }
             ActionId::Mode(ModeActionId::PianoKey) | ActionId::Mode(ModeActionId::PianoSpace) => {
                 if let KeyCode::Char(c) = event.key {
                     let c = translate_key(c, state.keyboard_layout);
                     if let Some(pitches) = self.perf.piano.key_to_pitches(c) {
                         // Check if this is a new press or key repeat (sustain)
-                        if let Some(new_pitches) = self.perf.piano.key_pressed(c, pitches.clone(), event.timestamp, event.is_repeat) {
+                        if let Some(new_pitches) = self.perf.piano.key_pressed(
+                            c,
+                            pitches.clone(),
+                            event.timestamp,
+                            event.is_repeat,
+                        ) {
                             // NEW press - spawn voice(s)
                             if new_pitches.len() == 1 {
-                                return Action::Instrument(InstrumentAction::PlayNote(new_pitches[0], 100));
+                                return Action::Instrument(InstrumentAction::PlayNote(
+                                    new_pitches[0],
+                                    100,
+                                ));
                             } else {
-                                return Action::Instrument(InstrumentAction::PlayNotes(new_pitches, 100));
+                                return Action::Instrument(InstrumentAction::PlayNotes(
+                                    new_pitches,
+                                    100,
+                                ));
                             }
                         }
                         // Key repeat - sustain, no action needed
@@ -248,16 +290,33 @@ impl Pane for InstrumentPane {
         if state.instruments.instruments.is_empty() {
             buf.draw_line(
                 Rect::new(content_x + 2, list_y, inner.width.saturating_sub(4), 1),
-                &[("(no instruments — press 'a' to add)", Style::new().fg(Color::DARK_GRAY))],
+                &[(
+                    "(no instruments — press 'a' to add)",
+                    Style::new().fg(Color::DARK_GRAY),
+                )],
             );
         }
 
-        let scroll_offset = state.instruments.selected
-            .map(|s| if s >= max_visible { s - max_visible + 1 } else { 0 })
+        let scroll_offset = state
+            .instruments
+            .selected
+            .map(|s| {
+                if s >= max_visible {
+                    s - max_visible + 1
+                } else {
+                    0
+                }
+            })
             .unwrap_or(0);
         let sel_bg = Style::new().bg(Color::SELECTION_BG);
 
-        for (i, instrument) in state.instruments.instruments.iter().enumerate().skip(scroll_offset) {
+        for (i, instrument) in state
+            .instruments
+            .instruments
+            .iter()
+            .enumerate()
+            .skip(scroll_offset)
+        {
             let row = i - scroll_offset;
             if row >= max_visible {
                 break;
@@ -270,7 +329,12 @@ impl Pane for InstrumentPane {
 
             // Selection indicator
             if is_selected {
-                buf.set_cell(content_x, y, '>', Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG).bold());
+                buf.set_cell(
+                    content_x,
+                    y,
+                    '>',
+                    Style::new().fg(Color::WHITE).bg(Color::SELECTION_BG).bold(),
+                );
             }
 
             let mk_style = |fg: Color| -> Style {
@@ -346,10 +410,21 @@ impl Pane for InstrumentPane {
         // Scroll indicators
         let scroll_style = Style::new().fg(Color::ORANGE);
         if scroll_offset > 0 {
-            buf.draw_line(Rect::new(rect.x + rect.width - 5, list_y, 3, 1), &[("...", scroll_style)]);
+            buf.draw_line(
+                Rect::new(rect.x + rect.width - 5, list_y, 3, 1),
+                &[("...", scroll_style)],
+            );
         }
         if scroll_offset + max_visible < state.instruments.instruments.len() {
-            buf.draw_line(Rect::new(rect.x + rect.width - 5, list_y + max_visible as u16 - 1, 3, 1), &[("...", scroll_style)]);
+            buf.draw_line(
+                Rect::new(
+                    rect.x + rect.width - 5,
+                    list_y + max_visible as u16 - 1,
+                    3,
+                    1,
+                ),
+                &[("...", scroll_style)],
+            );
         }
 
         // Piano/Pad mode indicator
@@ -378,7 +453,6 @@ impl Pane for InstrumentPane {
                 &[(link_str, Style::new().fg(Color::BLACK).bg(Color::ORANGE))],
             );
         }
-
     }
 
     fn handle_mouse(&mut self, event: &MouseEvent, area: Rect, state: &AppState) -> Action {
@@ -390,8 +464,16 @@ impl Pane for InstrumentPane {
         let inner_height = rect.height.saturating_sub(4);
         let max_visible = ((inner_height.saturating_sub(7)) as usize).max(3);
 
-        let scroll_offset = state.instruments.selected
-            .map(|s| if s >= max_visible { s - max_visible + 1 } else { 0 })
+        let scroll_offset = state
+            .instruments
+            .selected
+            .map(|s| {
+                if s >= max_visible {
+                    s - max_visible + 1
+                } else {
+                    0
+                }
+            })
             .unwrap_or(0);
 
         match event.kind {
@@ -418,14 +500,18 @@ impl Pane for InstrumentPane {
     }
 
     fn tick(&mut self, state: &AppState) -> Vec<Action> {
-        let instrument_id = state.instruments.selected_instrument()
+        let instrument_id = state
+            .instruments
+            .selected_instrument()
             .map(|inst| inst.id)
             .unwrap_or(InstrumentId::new(0));
         self.perf.tick_releases(instrument_id)
     }
 
     fn toggle_performance_mode(&mut self, state: &AppState) -> ToggleResult {
-        let is_kit = state.instruments.selected_instrument()
+        let is_kit = state
+            .instruments
+            .selected_instrument()
             .is_some_and(|s| s.source.is_kit());
         self.perf.toggle(is_kit)
     }
@@ -442,7 +528,9 @@ impl Pane for InstrumentPane {
         self.perf.deactivate();
     }
 
-    fn supports_performance_mode(&self) -> bool { true }
+    fn supports_performance_mode(&self) -> bool {
+        true
+    }
 
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
@@ -466,7 +554,11 @@ mod tests {
         let id = state.add_instrument(SourceType::Saw);
         let mut pane = InstrumentPane::new(Keymap::new());
 
-        let action = pane.handle_action(ActionId::InstrumentList(InstrumentListActionId::Delete), &dummy_event(), &state);
+        let action = pane.handle_action(
+            ActionId::InstrumentList(InstrumentListActionId::Delete),
+            &dummy_event(),
+            &state,
+        );
         match action {
             Action::Instrument(InstrumentAction::Delete(got)) => assert_eq!(got, id),
             _ => panic!("Expected InstrumentAction::Delete"),
@@ -480,7 +572,11 @@ mod tests {
         let id = state.add_instrument(SourceType::Sin);
         let mut pane = InstrumentPane::new(Keymap::new());
 
-        let action = pane.handle_action(ActionId::InstrumentList(InstrumentListActionId::Edit), &dummy_event(), &state);
+        let action = pane.handle_action(
+            ActionId::InstrumentList(InstrumentListActionId::Edit),
+            &dummy_event(),
+            &state,
+        );
         match action {
             Action::Instrument(InstrumentAction::Edit(got)) => assert_eq!(got, id),
             _ => panic!("Expected InstrumentAction::Edit"),
@@ -493,7 +589,11 @@ mod tests {
         let state = AppState::new();
         let mut pane = InstrumentPane::new(Keymap::new());
 
-        let action = pane.handle_action(ActionId::InstrumentList(InstrumentListActionId::Add), &dummy_event(), &state);
+        let action = pane.handle_action(
+            ActionId::InstrumentList(InstrumentListActionId::Add),
+            &dummy_event(),
+            &state,
+        );
         match action {
             Action::Nav(NavAction::SwitchPane(id)) => assert_eq!(id, crate::ui::PaneId::Add),
             _ => panic!("Expected SwitchPane(add)"),
@@ -506,11 +606,25 @@ mod tests {
         let state = AppState::new();
         let mut pane = InstrumentPane::new(Keymap::new());
 
-        let action = pane.handle_action(ActionId::InstrumentList(InstrumentListActionId::Next), &dummy_event(), &state);
-        assert!(matches!(action, Action::Instrument(InstrumentAction::SelectNext)));
+        let action = pane.handle_action(
+            ActionId::InstrumentList(InstrumentListActionId::Next),
+            &dummy_event(),
+            &state,
+        );
+        assert!(matches!(
+            action,
+            Action::Instrument(InstrumentAction::SelectNext)
+        ));
 
-        let action = pane.handle_action(ActionId::InstrumentList(InstrumentListActionId::Prev), &dummy_event(), &state);
-        assert!(matches!(action, Action::Instrument(InstrumentAction::SelectPrev)));
+        let action = pane.handle_action(
+            ActionId::InstrumentList(InstrumentListActionId::Prev),
+            &dummy_event(),
+            &state,
+        );
+        assert!(matches!(
+            action,
+            Action::Instrument(InstrumentAction::SelectPrev)
+        ));
     }
 
     #[test]
@@ -525,12 +639,23 @@ mod tests {
 
         let mut pane = InstrumentPane::new(Keymap::new());
         // Enter linking mode
-        pane.handle_action(ActionId::InstrumentList(InstrumentListActionId::LinkLayer), &dummy_event(), &state);
+        pane.handle_action(
+            ActionId::InstrumentList(InstrumentListActionId::LinkLayer),
+            &dummy_event(),
+            &state,
+        );
         assert_eq!(pane.linking_from, Some(id0));
 
         // Navigation should pass through (return SelectNext), not complete the link
-        let action = pane.handle_action(ActionId::InstrumentList(InstrumentListActionId::Next), &dummy_event(), &state);
-        assert!(matches!(action, Action::Instrument(InstrumentAction::SelectNext)));
+        let action = pane.handle_action(
+            ActionId::InstrumentList(InstrumentListActionId::Next),
+            &dummy_event(),
+            &state,
+        );
+        assert!(matches!(
+            action,
+            Action::Instrument(InstrumentAction::SelectNext)
+        ));
         // Should still be in linking mode
         assert_eq!(pane.linking_from, Some(id0));
     }
@@ -545,14 +670,22 @@ mod tests {
         // Select first instrument, enter linking mode
         state.instruments.selected = Some(0);
         let mut pane = InstrumentPane::new(Keymap::new());
-        pane.handle_action(ActionId::InstrumentList(InstrumentListActionId::LinkLayer), &dummy_event(), &state);
+        pane.handle_action(
+            ActionId::InstrumentList(InstrumentListActionId::LinkLayer),
+            &dummy_event(),
+            &state,
+        );
         assert_eq!(pane.linking_from, Some(id0));
 
         // Move selection to second instrument
         state.instruments.selected = Some(1);
 
         // Press 'l' again to confirm
-        let action = pane.handle_action(ActionId::InstrumentList(InstrumentListActionId::LinkLayer), &dummy_event(), &state);
+        let action = pane.handle_action(
+            ActionId::InstrumentList(InstrumentListActionId::LinkLayer),
+            &dummy_event(),
+            &state,
+        );
         match action {
             Action::Instrument(InstrumentAction::LinkLayer(from, to)) => {
                 assert_eq!(from, id0);
@@ -571,10 +704,18 @@ mod tests {
 
         let mut pane = InstrumentPane::new(Keymap::new());
         // Enter linking mode
-        pane.handle_action(ActionId::InstrumentList(InstrumentListActionId::LinkLayer), &dummy_event(), &state);
+        pane.handle_action(
+            ActionId::InstrumentList(InstrumentListActionId::LinkLayer),
+            &dummy_event(),
+            &state,
+        );
 
         // Press 'l' again without moving — same instrument selected
-        let action = pane.handle_action(ActionId::InstrumentList(InstrumentListActionId::LinkLayer), &dummy_event(), &state);
+        let action = pane.handle_action(
+            ActionId::InstrumentList(InstrumentListActionId::LinkLayer),
+            &dummy_event(),
+            &state,
+        );
         assert!(matches!(action, Action::None));
         assert!(pane.linking_from.is_none());
     }
@@ -587,11 +728,19 @@ mod tests {
 
         let mut pane = InstrumentPane::new(Keymap::new());
         // Enter linking mode
-        pane.handle_action(ActionId::InstrumentList(InstrumentListActionId::LinkLayer), &dummy_event(), &state);
+        pane.handle_action(
+            ActionId::InstrumentList(InstrumentListActionId::LinkLayer),
+            &dummy_event(),
+            &state,
+        );
         assert!(pane.linking_from.is_some());
 
         // Any non-nav, non-link action should cancel
-        pane.handle_action(ActionId::InstrumentList(InstrumentListActionId::Delete), &dummy_event(), &state);
+        pane.handle_action(
+            ActionId::InstrumentList(InstrumentListActionId::Delete),
+            &dummy_event(),
+            &state,
+        );
         assert!(pane.linking_from.is_none());
     }
 

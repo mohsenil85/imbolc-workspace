@@ -1,12 +1,12 @@
 use std::path::PathBuf;
 
-use imbolc_types::CustomSynthDefId;
+use super::{load_project, save_project, temp_db_path};
 use crate::state::custom_synthdef::{CustomSynthDef, CustomSynthDefRegistry, ParamSpec};
-use imbolc_types::VstPluginId;
 use crate::state::instrument::{SourceExtra, SourceType};
 use crate::state::instrument_state::InstrumentState;
 use crate::state::session::SessionState;
-use super::{save_project, load_project, temp_db_path};
+use imbolc_types::CustomSynthDefId;
+use imbolc_types::VstPluginId;
 
 #[test]
 fn round_trip_drum_sequencer() {
@@ -35,7 +35,11 @@ fn round_trip_drum_sequencer() {
     save_project(&path, &session, &instruments).expect("save");
     let (_, loaded_inst) = load_project(&path).expect("load");
 
-    let loaded_kit = loaded_inst.instruments.iter().find(|i| i.id == kit_id).unwrap();
+    let loaded_kit = loaded_inst
+        .instruments
+        .iter()
+        .find(|i| i.id == kit_id)
+        .unwrap();
     let seq = loaded_kit.drum_sequencer().unwrap();
     assert_eq!(seq.pads[0].name, "Kick");
     assert!((seq.pads[0].level - 0.9).abs() < 0.001);
@@ -77,7 +81,11 @@ fn round_trip_sampler_config() {
     save_project(&path, &session, &instruments).expect("save");
     let (_, loaded_inst) = load_project(&path).expect("load");
 
-    let loaded = loaded_inst.instruments.iter().find(|i| i.id == sampler_id).unwrap();
+    let loaded = loaded_inst
+        .instruments
+        .iter()
+        .find(|i| i.id == sampler_id)
+        .unwrap();
     let config = loaded.sampler_config().unwrap();
     assert_eq!(config.buffer_id, Some(42));
     assert_eq!(config.sample_name.as_deref(), Some("test.wav"));
@@ -108,10 +116,23 @@ fn round_trip_vst_plugins() {
     save_project(&path, &session, &instruments).expect("save");
     let (_, loaded_inst) = load_project(&path).expect("load");
 
-    let loaded = loaded_inst.instruments.iter().find(|i| i.id == inst_id).unwrap();
-    assert!(loaded.vst_source_params().iter().any(|&(k, v)| k == 0 && (v - 0.75).abs() < 0.01));
-    assert!(loaded.vst_source_params().iter().any(|&(k, v)| k == 1 && (v - 0.5).abs() < 0.01));
-    assert_eq!(loaded.vst_source_state_path().map(|p| p.as_path()), Some(std::path::Path::new("/tmp/test.vststate")));
+    let loaded = loaded_inst
+        .instruments
+        .iter()
+        .find(|i| i.id == inst_id)
+        .unwrap();
+    assert!(loaded
+        .vst_source_params()
+        .iter()
+        .any(|&(k, v)| k == 0 && (v - 0.75).abs() < 0.01));
+    assert!(loaded
+        .vst_source_params()
+        .iter()
+        .any(|&(k, v)| k == 1 && (v - 0.5).abs() < 0.01));
+    assert_eq!(
+        loaded.vst_source_state_path().map(|p| p.as_path()),
+        Some(std::path::Path::new("/tmp/test.vststate"))
+    );
 
     std::fs::remove_file(&path).ok();
 }
@@ -128,8 +149,18 @@ fn round_trip_custom_synthdefs() {
         synthdef_name: "test_synth".to_string(),
         source_path: PathBuf::from("/tmp/test.scd"),
         params: vec![
-            ParamSpec { name: "freq".to_string(), default: 440.0, min: 20.0, max: 20000.0 },
-            ParamSpec { name: "amp".to_string(), default: 0.5, min: 0.0, max: 1.0 },
+            ParamSpec {
+                name: "freq".to_string(),
+                default: 440.0,
+                min: 20.0,
+                max: 20000.0,
+            },
+            ParamSpec {
+                name: "amp".to_string(),
+                default: 0.5,
+                min: 0.0,
+                max: 1.0,
+            },
         ],
     });
     session.custom_synthdefs = registry;
@@ -170,8 +201,22 @@ fn round_trip_layer_octave_offset() {
     save_project(&path, &session, &instruments).expect("save");
     let (_, loaded_instruments) = load_project(&path).expect("load");
 
-    assert_eq!(loaded_instruments.instrument(id1).unwrap().layer.octave_offset, 3);
-    assert_eq!(loaded_instruments.instrument(id2).unwrap().layer.octave_offset, -2);
+    assert_eq!(
+        loaded_instruments
+            .instrument(id1)
+            .unwrap()
+            .layer
+            .octave_offset,
+        3
+    );
+    assert_eq!(
+        loaded_instruments
+            .instrument(id2)
+            .unwrap()
+            .layer
+            .octave_offset,
+        -2
+    );
 
     std::fs::remove_file(&path).ok();
 }

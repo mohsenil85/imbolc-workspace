@@ -7,7 +7,7 @@ use crate::state::automation::{AutomationLaneId, AutomationTarget};
 use crate::state::AppState;
 use crate::ui::action_id::ActionId;
 use crate::ui::layout_helpers::center_rect;
-use crate::ui::{Rect, RenderBuf, Action, Color, InputEvent, Keymap, Pane, Style};
+use crate::ui::{Action, Color, InputEvent, Keymap, Pane, Rect, RenderBuf, Style};
 
 /// Focus area within the automation pane
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -20,7 +20,10 @@ enum AutomationFocus {
 #[derive(Debug, Clone)]
 enum TargetPickerState {
     Inactive,
-    Active { options: Vec<AutomationTarget>, cursor: usize },
+    Active {
+        options: Vec<AutomationTarget>,
+        cursor: usize,
+    },
 }
 
 pub struct AutomationPane {
@@ -71,7 +74,10 @@ impl AutomationPane {
     }
 
     /// Returns the selection region as (lane_id, start_tick, end_tick), or None if no selection.
-    pub(crate) fn selection_region(&self, state: &AppState) -> Option<(AutomationLaneId, u32, u32)> {
+    pub(crate) fn selection_region(
+        &self,
+        state: &AppState,
+    ) -> Option<(AutomationLaneId, u32, u32)> {
         let lane_id = self.selected_lane_id(state)?;
         let anchor_tick = self.selection_anchor_tick?;
         let (t0, t1) = crate::state::grid::normalize_tick_range(anchor_tick, self.cursor_tick);
@@ -96,7 +102,9 @@ impl Pane for AutomationPane {
         let rect = center_rect(area, 100.min(area.width), 30.min(area.height));
 
         // Title
-        let inst_name = state.instruments.selected_instrument()
+        let inst_name = state
+            .instruments
+            .selected_instrument()
             .map(|i| format!("Inst {} ({})", i.id, &i.name))
             .unwrap_or_else(|| "—".to_string());
         let title = format!(" Automation: {} ", inst_name);
@@ -123,7 +131,10 @@ impl Pane for AutomationPane {
 
         // Separator
         let sep_style = Style::new().fg(Color::DARK_GRAY);
-        let timeline_title = state.session.automation.selected()
+        let timeline_title = state
+            .session
+            .automation
+            .selected()
             .map(|l| {
                 let (min, max) = (l.min_value, l.max_value);
                 format!("─ {} ({:.1}–{:.1}) ", l.target.name(), min, max)
@@ -137,7 +148,9 @@ impl Pane for AutomationPane {
         let title_overlay_style = Style::new().fg(Color::CYAN);
         for (i, ch) in timeline_title.chars().enumerate() {
             let x = inner.x + 1 + i as u16;
-            if x >= inner.x + inner.width { break; }
+            if x >= inner.x + inner.width {
+                break;
+            }
             buf.set_cell(x, separator_y, ch, title_overlay_style);
         }
 
@@ -180,10 +193,18 @@ mod tests {
         let state = AppState::new();
         assert_eq!(pane.focus, AutomationFocus::LaneList);
 
-        pane.handle_action(ActionId::Automation(AutomationActionId::SwitchFocus), &dummy_event(), &state);
+        pane.handle_action(
+            ActionId::Automation(AutomationActionId::SwitchFocus),
+            &dummy_event(),
+            &state,
+        );
         assert_eq!(pane.focus, AutomationFocus::Timeline);
 
-        pane.handle_action(ActionId::Automation(AutomationActionId::SwitchFocus), &dummy_event(), &state);
+        pane.handle_action(
+            ActionId::Automation(AutomationActionId::SwitchFocus),
+            &dummy_event(),
+            &state,
+        );
         assert_eq!(pane.focus, AutomationFocus::LaneList);
     }
 
@@ -195,10 +216,18 @@ mod tests {
         pane.focus = AutomationFocus::Timeline;
 
         let start_tick = pane.cursor_tick;
-        pane.handle_action(ActionId::Automation(AutomationActionId::Right), &dummy_event(), &state);
+        pane.handle_action(
+            ActionId::Automation(AutomationActionId::Right),
+            &dummy_event(),
+            &state,
+        );
         assert!(pane.cursor_tick > start_tick);
 
-        pane.handle_action(ActionId::Automation(AutomationActionId::Left), &dummy_event(), &state);
+        pane.handle_action(
+            ActionId::Automation(AutomationActionId::Left),
+            &dummy_event(),
+            &state,
+        );
         assert_eq!(pane.cursor_tick, start_tick);
     }
 
@@ -207,7 +236,14 @@ mod tests {
         use crate::ui::action_id::{ActionId, AutomationActionId};
         let mut pane = AutomationPane::new(Keymap::new());
         let state = AppState::new();
-        pane.handle_action(ActionId::Automation(AutomationActionId::AddLane), &dummy_event(), &state);
-        assert!(matches!(pane.target_picker, TargetPickerState::Active { .. }));
+        pane.handle_action(
+            ActionId::Automation(AutomationActionId::AddLane),
+            &dummy_event(),
+            &state,
+        );
+        assert!(matches!(
+            pane.target_picker,
+            TargetPickerState::Active { .. }
+        ));
     }
 }

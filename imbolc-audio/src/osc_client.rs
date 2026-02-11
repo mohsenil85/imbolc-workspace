@@ -1,11 +1,11 @@
+use crossbeam_channel::{unbounded, Receiver, Sender};
+use rosc::{OscBundle, OscMessage, OscPacket, OscTime, OscType};
 use std::collections::{HashMap, VecDeque};
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, LazyLock, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use crossbeam_channel::{Sender, Receiver, unbounded};
-use rosc::{OscBundle, OscMessage, OscPacket, OscTime, OscType};
 
 use super::triple_buffer::TripleBufferHandle;
 
@@ -177,12 +177,14 @@ impl AudioMonitor {
     /// Set audio buffer latency based on buffer_size and sample_rate
     pub fn set_audio_latency(&self, buffer_size: u32, sample_rate: u32) {
         let latency = (buffer_size as f32 / sample_rate as f32) * 1000.0;
-        self.audio_latency_ms.store(latency.to_bits(), Ordering::Relaxed);
+        self.audio_latency_ms
+            .store(latency.to_bits(), Ordering::Relaxed);
     }
 
     /// Mark the time /status was sent, for latency measurement (lock-free atomic write)
     pub fn mark_status_sent(&self) {
-        self.status_sent_at.store(encode_instant(Some(Instant::now())), Ordering::Release);
+        self.status_sent_at
+            .store(encode_instant(Some(Instant::now())), Ordering::Release);
     }
 
     /// Drain incoming VST param replies from the channel and accumulate them.
@@ -277,7 +279,8 @@ fn handle_osc_packet(packet: &OscPacket, refs: &OscRefs) {
                     Some(OscType::Float(v)) => *v,
                     _ => 0.0,
                 };
-                refs.meter.store(pack_f32_pair(peak_l, peak_r), Ordering::Relaxed);
+                refs.meter
+                    .store(pack_f32_pair(peak_l, peak_r), Ordering::Relaxed);
             } else if msg.addr == "/audio_in_level" && msg.args.len() >= 4 {
                 // SendPeakRMS format: /audio_in_level nodeID replyID peakL rmsL peakR rmsR
                 let instrument_id = match msg.args.get(1) {
@@ -348,7 +351,8 @@ fn handle_osc_packet(packet: &OscPacket, refs: &OscRefs) {
                 let encoded = refs.status_sent_at.swap(0, Ordering::AcqRel);
                 if let Some(sent) = decode_instant(encoded) {
                     let latency = sent.elapsed().as_secs_f32() * 1000.0;
-                    refs.osc_latency_ms.store(latency.to_bits(), Ordering::Relaxed);
+                    refs.osc_latency_ms
+                        .store(latency.to_bits(), Ordering::Relaxed);
                 }
             } else if msg.addr == "/vst_param" && msg.args.len() >= 5 {
                 // VSTPlugin SendNodeReply: /vst_param nodeID replyID index value display_len char0 char1 ...
@@ -374,20 +378,21 @@ fn handle_osc_packet(packet: &OscPacket, refs: &OscRefs) {
                     _ => 0,
                 };
                 let display: String = (0..display_len)
-                    .filter_map(|i| {
-                        match msg.args.get(5 + i) {
-                            Some(OscType::Float(v)) => Some(*v as u8 as char),
-                            Some(OscType::Int(v)) => Some(*v as u8 as char),
-                            _ => None,
-                        }
+                    .filter_map(|i| match msg.args.get(5 + i) {
+                        Some(OscType::Float(v)) => Some(*v as u8 as char),
+                        Some(OscType::Int(v)) => Some(*v as u8 as char),
+                        _ => None,
                     })
                     .collect();
                 // Send to channel instead of modifying shared state (fixes race condition)
-                let _ = refs.vst_param_tx.send((node_id, VstParamReply {
-                    index,
-                    value,
-                    display,
-                }));
+                let _ = refs.vst_param_tx.send((
+                    node_id,
+                    VstParamReply {
+                        index,
+                        value,
+                        display,
+                    },
+                ));
             } else if msg.addr == "/n_end" && !msg.args.is_empty() {
                 // /n_end nodeID [prev_node_id, ...] — SC notifies when a node is freed
                 let node_id = match msg.args.first() {
@@ -510,10 +515,12 @@ impl OscClient {
     /// Get the server address as a SocketAddr for the OSC sender thread.
     pub fn server_socket_addr(&self) -> std::io::Result<std::net::SocketAddr> {
         use std::net::ToSocketAddrs;
-        self.server_addr
-            .to_socket_addrs()?
-            .next()
-            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "Cannot resolve server address"))
+        self.server_addr.to_socket_addrs()?.next().ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "Cannot resolve server address",
+            )
+        })
     }
 
     /// Get current peak levels (left, right) from the meter synth (lock-free atomic read)
@@ -543,21 +550,29 @@ impl OscClient {
 
     /// /g_new group_id add_action target
     pub fn create_group(&self, group_id: i32, add_action: i32, target: i32) -> std::io::Result<()> {
-        self.send_message("/g_new", vec![
-            OscType::Int(group_id),
-            OscType::Int(add_action),
-            OscType::Int(target),
-        ])
+        self.send_message(
+            "/g_new",
+            vec![
+                OscType::Int(group_id),
+                OscType::Int(add_action),
+                OscType::Int(target),
+            ],
+        )
     }
 
     /// /s_new synthdef node_id add_action target [param value ...]
     #[allow(dead_code)]
-    pub fn create_synth(&self, synth_def: &str, node_id: i32, params: &[(String, f32)]) -> std::io::Result<()> {
+    pub fn create_synth(
+        &self,
+        synth_def: &str,
+        node_id: i32,
+        params: &[(String, f32)],
+    ) -> std::io::Result<()> {
         let mut args: Vec<OscType> = vec![
             OscType::String(synth_def.to_string()),
             OscType::Int(node_id),
-            OscType::Int(1),  // addToTail
-            OscType::Int(0),  // default group
+            OscType::Int(1), // addToTail
+            OscType::Int(0), // default group
         ];
         for (name, value) in params {
             args.push(OscType::String(name.clone()));
@@ -567,11 +582,17 @@ impl OscClient {
     }
 
     /// /s_new synthdef node_id addToTail(1) group [param value ...]
-    pub fn create_synth_in_group(&self, synth_def: &str, node_id: i32, group_id: i32, params: &[(String, f32)]) -> std::io::Result<()> {
+    pub fn create_synth_in_group(
+        &self,
+        synth_def: &str,
+        node_id: i32,
+        group_id: i32,
+        params: &[(String, f32)],
+    ) -> std::io::Result<()> {
         let mut args: Vec<OscType> = vec![
             OscType::String(synth_def.to_string()),
             OscType::Int(node_id),
-            OscType::Int(1),  // addToTail
+            OscType::Int(1), // addToTail
             OscType::Int(group_id),
         ];
         for (name, value) in params {
@@ -586,15 +607,23 @@ impl OscClient {
     }
 
     pub fn set_param(&self, node_id: i32, param: &str, value: f32) -> std::io::Result<()> {
-        self.send_message("/n_set", vec![
-            OscType::Int(node_id),
-            OscType::String(param.to_string()),
-            OscType::Float(value),
-        ])
+        self.send_message(
+            "/n_set",
+            vec![
+                OscType::Int(node_id),
+                OscType::String(param.to_string()),
+                OscType::Float(value),
+            ],
+        )
     }
 
     /// Set multiple params on a node atomically via an OSC bundle
-    pub fn set_params_bundled(&self, node_id: i32, params: &[(&str, f32)], time: OscTime) -> std::io::Result<()> {
+    pub fn set_params_bundled(
+        &self,
+        node_id: i32,
+        params: &[(&str, f32)],
+        time: OscTime,
+    ) -> std::io::Result<()> {
         let mut args: Vec<OscType> = vec![OscType::Int(node_id)];
         for (name, value) in params {
             args.push(OscType::String(name.to_string()));
@@ -631,23 +660,34 @@ impl OscClient {
     /// Load a sound file into a buffer (SuperCollider reads the file)
     #[allow(dead_code)]
     pub fn load_buffer(&self, bufnum: i32, path: &str) -> std::io::Result<()> {
-        self.send_message("/b_allocRead", vec![
-            OscType::Int(bufnum),
-            OscType::String(path.to_string()),
-            OscType::Int(0),  // start frame
-            OscType::Int(0),  // 0 = read entire file
-        ])
+        self.send_message(
+            "/b_allocRead",
+            vec![
+                OscType::Int(bufnum),
+                OscType::String(path.to_string()),
+                OscType::Int(0), // start frame
+                OscType::Int(0), // 0 = read entire file
+            ],
+        )
     }
 
     /// /b_alloc bufnum numFrames numChannels
     /// Allocate an empty buffer
     #[allow(dead_code)]
-    pub fn alloc_buffer(&self, bufnum: i32, num_frames: i32, num_channels: i32) -> std::io::Result<()> {
-        self.send_message("/b_alloc", vec![
-            OscType::Int(bufnum),
-            OscType::Int(num_frames),
-            OscType::Int(num_channels),
-        ])
+    pub fn alloc_buffer(
+        &self,
+        bufnum: i32,
+        num_frames: i32,
+        num_channels: i32,
+    ) -> std::io::Result<()> {
+        self.send_message(
+            "/b_alloc",
+            vec![
+                OscType::Int(bufnum),
+                OscType::Int(num_frames),
+                OscType::Int(num_channels),
+            ],
+        )
     }
 
     /// /b_free bufnum
@@ -659,15 +699,18 @@ impl OscClient {
     /// /b_write bufnum path headerFormat sampleFormat numFrames startFrame leaveOpen
     /// Open a buffer for disk writing (WAV, 32-bit float, leave open for streaming)
     pub fn open_buffer_for_write(&self, bufnum: i32, path: &str) -> std::io::Result<()> {
-        self.send_message("/b_write", vec![
-            OscType::Int(bufnum),
-            OscType::String(path.to_string()),
-            OscType::String("wav".to_string()),
-            OscType::String("float".to_string()),
-            OscType::Int(0),  // numFrames (0 = all)
-            OscType::Int(0),  // startFrame
-            OscType::Int(1),  // leaveOpen = 1
-        ])
+        self.send_message(
+            "/b_write",
+            vec![
+                OscType::Int(bufnum),
+                OscType::String(path.to_string()),
+                OscType::String("wav".to_string()),
+                OscType::String("float".to_string()),
+                OscType::Int(0), // numFrames (0 = all)
+                OscType::Int(0), // startFrame
+                OscType::Int(1), // leaveOpen = 1
+            ],
+        )
     }
 
     /// /b_close bufnum
@@ -686,7 +729,13 @@ impl OscClient {
     /// /u_cmd nodeID ugenIndex command [args...]
     /// Send a unit command to a specific UGen instance within a synth node.
     /// Used for VSTPlugin UGen commands like /open, /midi_msg, /set, etc.
-    pub fn send_unit_cmd(&self, node_id: i32, ugen_index: i32, cmd: &str, args: Vec<OscType>) -> std::io::Result<()> {
+    pub fn send_unit_cmd(
+        &self,
+        node_id: i32,
+        ugen_index: i32,
+        cmd: &str,
+        args: Vec<OscType>,
+    ) -> std::io::Result<()> {
         let mut msg_args = vec![
             OscType::Int(node_id),
             OscType::Int(ugen_index),
@@ -719,12 +768,17 @@ pub fn osc_time_from_now(offset_secs: f64) -> OscTime {
     let total_secs = anchor_wall + elapsed + offset_secs;
     let secs = total_secs as u64 + NTP_UNIX_OFFSET;
     let frac = ((total_secs.fract()) * (u32::MAX as f64)) as u32;
-    OscTime { seconds: secs as u32, fractional: frac }
+    OscTime {
+        seconds: secs as u32,
+        fractional: frac,
+    }
 }
 
 /// Immediate timetag (0,1) — execute as soon as received
 #[allow(dead_code)]
 pub fn osc_time_immediate() -> OscTime {
-    OscTime { seconds: 0, fractional: 1 }
+    OscTime {
+        seconds: 0,
+        fractional: 1,
+    }
 }
-

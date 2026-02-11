@@ -22,9 +22,9 @@ use super::event_log::{EventLogWriter, LogEntryKind};
 use super::osc_client::AudioMonitor;
 use super::ServerStatus;
 use imbolc_types::AudioEffect;
+use imbolc_types::Note;
 use imbolc_types::{ArrangementState, PlayMode};
 use imbolc_types::{AutomationLane, AutomationTarget};
-use imbolc_types::Note;
 use imbolc_types::{BufferId, BusId, EffectId, InstrumentId};
 
 /// Audio-owned read state: values that the audio thread is the authority on.
@@ -80,8 +80,8 @@ impl ArrangementFlattenCache {
     /// Compute a simple hash of the arrangement structure for cache invalidation.
     /// Includes: clip count, placement count, clip lengths, placement positions, notes count per clip.
     fn compute_version_hash(arr: &ArrangementState) -> u64 {
-        use std::hash::{Hash, Hasher};
         use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
         let mut hasher = DefaultHasher::new();
 
         // Hash structural elements that affect flatten output
@@ -121,7 +121,10 @@ impl ArrangementFlattenCache {
     }
 
     /// Update cache if arrangement has changed, returning cached values.
-    fn get_or_compute(&mut self, arr: &ArrangementState) -> (&HashMap<InstrumentId, Vec<Note>>, u32, &Vec<AutomationLane>) {
+    fn get_or_compute(
+        &mut self,
+        arr: &ArrangementState,
+    ) -> (&HashMap<InstrumentId, Vec<Note>>, u32, &Vec<AutomationLane>) {
         let current_hash = Self::compute_version_hash(arr);
 
         if current_hash != self.version_hash {
@@ -132,7 +135,11 @@ impl ArrangementFlattenCache {
             self.version_hash = current_hash;
         }
 
-        (&self.flattened_notes, self.arrangement_length, &self.flattened_automation)
+        (
+            &self.flattened_notes,
+            self.arrangement_length,
+            &self.flattened_automation,
+        )
     }
 }
 
@@ -235,12 +242,19 @@ impl AudioHandle {
                 self.audio_state.playing = *playing;
             }
             AudioFeedback::DrumSequencerStep { .. } => {}
-            AudioFeedback::ServerStatus { status, server_running, .. } => {
+            AudioFeedback::ServerStatus {
+                status,
+                server_running,
+                ..
+            } => {
                 self.audio_state.server_status = *status;
                 self.audio_state.server_running = *server_running;
                 self.is_running = matches!(status, ServerStatus::Connected);
             }
-            AudioFeedback::RecordingState { is_recording, elapsed_secs } => {
+            AudioFeedback::RecordingState {
+                is_recording,
+                elapsed_secs,
+            } => {
                 self.audio_state.is_recording = *is_recording;
                 self.audio_state.recording_elapsed = if *is_recording {
                     Some(Duration::from_secs(*elapsed_secs))
@@ -331,7 +345,9 @@ impl AudioHandle {
             && state.session().arrangement.editing_clip.is_none()
         {
             let mut flat_pr = state.session().piano_roll.clone();
-            let (flattened, arr_len, _) = self.arrangement_cache.get_or_compute(&state.session().arrangement);
+            let (flattened, arr_len, _) = self
+                .arrangement_cache
+                .get_or_compute(&state.session().arrangement);
             for (&instrument_id, track) in &mut flat_pr.tracks {
                 track.notes = flattened.get(&instrument_id).cloned().unwrap_or_default();
             }
@@ -347,7 +363,9 @@ impl AudioHandle {
         let automation_lanes = if state.session().arrangement.play_mode == PlayMode::Song
             && state.session().arrangement.editing_clip.is_none()
         {
-            let (_, _, flattened_auto) = self.arrangement_cache.get_or_compute(&state.session().arrangement);
+            let (_, _, flattened_auto) = self
+                .arrangement_cache
+                .get_or_compute(&state.session().arrangement);
             let mut merged = state.session().automation.lanes.clone();
             merged.extend(flattened_auto.iter().cloned());
             merged
@@ -365,14 +383,23 @@ impl AudioHandle {
     }
 
     /// Sync the playback-facing piano roll / automation when dirty.
-    fn send_flattened_if_needed(&mut self, state: &dyn crate::AudioStateProvider, effects: &[AudioEffect]) {
-        if effects.iter().any(|e| matches!(e, AudioEffect::UpdatePianoRoll)) {
+    fn send_flattened_if_needed(
+        &mut self,
+        state: &dyn crate::AudioStateProvider,
+        effects: &[AudioEffect],
+    ) {
+        if effects
+            .iter()
+            .any(|e| matches!(e, AudioEffect::UpdatePianoRoll))
+        {
             if state.session().arrangement.play_mode == PlayMode::Song
                 && state.session().arrangement.editing_clip.is_none()
             {
                 // Song mode: flatten arrangement clips into timeline
                 let mut flat_pr = state.session().piano_roll.clone();
-                let (flattened, arr_len, _) = self.arrangement_cache.get_or_compute(&state.session().arrangement);
+                let (flattened, arr_len, _) = self
+                    .arrangement_cache
+                    .get_or_compute(&state.session().arrangement);
                 for (&instrument_id, track) in &mut flat_pr.tracks {
                     track.notes = flattened.get(&instrument_id).cloned().unwrap_or_default();
                 }
@@ -380,7 +407,8 @@ impl AudioHandle {
                     flat_pr.loop_end = arr_len;
                     flat_pr.looping = false;
                 }
-                self.event_log.append(LogEntryKind::PianoRollUpdate(flat_pr));
+                self.event_log
+                    .append(LogEntryKind::PianoRollUpdate(flat_pr));
             } else {
                 // Pattern/clip-edit mode: send raw piano roll
                 self.event_log.append(LogEntryKind::PianoRollUpdate(
@@ -388,15 +416,21 @@ impl AudioHandle {
                 ));
             }
         }
-        if effects.iter().any(|e| matches!(e, AudioEffect::UpdateAutomation)) {
+        if effects
+            .iter()
+            .any(|e| matches!(e, AudioEffect::UpdateAutomation))
+        {
             if state.session().arrangement.play_mode == PlayMode::Song
                 && state.session().arrangement.editing_clip.is_none()
             {
                 // Song mode: flatten arrangement automation
-                let (_, _, flattened_auto) = self.arrangement_cache.get_or_compute(&state.session().arrangement);
+                let (_, _, flattened_auto) = self
+                    .arrangement_cache
+                    .get_or_compute(&state.session().arrangement);
                 let mut merged = state.session().automation.lanes.clone();
                 merged.extend(flattened_auto.iter().cloned());
-                self.event_log.append(LogEntryKind::AutomationUpdate(merged));
+                self.event_log
+                    .append(LogEntryKind::AutomationUpdate(merged));
             } else {
                 // Pattern/clip-edit mode: send raw automation
                 self.event_log.append(LogEntryKind::AutomationUpdate(
@@ -407,14 +441,20 @@ impl AudioHandle {
     }
 
     /// Send targeted param updates (filter/effect/LFO knob tweaks via priority channel).
-    fn send_routing_and_params(&self, state: &dyn crate::AudioStateProvider, effects: &[AudioEffect]) {
+    fn send_routing_and_params(
+        &self,
+        state: &dyn crate::AudioStateProvider,
+        effects: &[AudioEffect],
+    ) {
         // Note: routing and mixer_params are handled by ForwardAction metadata fields
         // (rebuild_routing, rebuild_instrument_routing, mixer_dirty).
         // Targeted param updates bypass ForwardAction entirely via priority channel:
         for effect in effects {
             match effect {
                 AudioEffect::SetFilterParam(instrument_id, param_kind, value) => {
-                    if let Err(e) = self.set_filter_param(*instrument_id, param_kind.as_str(), *value) {
+                    if let Err(e) =
+                        self.set_filter_param(*instrument_id, param_kind.as_str(), *value)
+                    {
                         log::warn!(target: "audio", "set_filter_param dropped: {}", e);
                     }
                 }
@@ -422,7 +462,12 @@ impl AudioHandle {
                     if let Some(inst) = state.instruments().instrument(*instrument_id) {
                         if let Some(effect) = inst.effect_by_id(*effect_id) {
                             if let Some(param) = effect.params.get(param_idx.get()) {
-                                if let Err(e) = self.set_effect_param(*instrument_id, *effect_id, &param.name, *value) {
+                                if let Err(e) = self.set_effect_param(
+                                    *instrument_id,
+                                    *effect_id,
+                                    &param.name,
+                                    *value,
+                                ) {
                                     log::warn!(target: "audio", "set_effect_param dropped: {}", e);
                                 }
                             }
@@ -430,15 +475,22 @@ impl AudioHandle {
                     }
                 }
                 AudioEffect::SetLfoParam(instrument_id, param_kind, value) => {
-                    if let Err(e) = self.set_lfo_param(*instrument_id, param_kind.as_str(), *value) {
+                    if let Err(e) = self.set_lfo_param(*instrument_id, param_kind.as_str(), *value)
+                    {
                         log::warn!(target: "audio", "set_lfo_param dropped: {}", e);
                     }
                 }
                 AudioEffect::SetBusEffectParam(bus_id, effect_id, param_idx, value) => {
-                    if let Some(bus) = state.session().mixer.buses.iter().find(|b| b.id == *bus_id) {
+                    if let Some(bus) = state.session().mixer.buses.iter().find(|b| b.id == *bus_id)
+                    {
                         if let Some(effect) = bus.effect_chain.effect_by_id(*effect_id) {
                             if let Some(param) = effect.params.get(param_idx.get()) {
-                                if let Err(e) = self.set_bus_effect_param(*bus_id, *effect_id, &param.name, *value) {
+                                if let Err(e) = self.set_bus_effect_param(
+                                    *bus_id,
+                                    *effect_id,
+                                    &param.name,
+                                    *value,
+                                ) {
                                     log::warn!(target: "audio", "set_bus_effect_param dropped: {}", e);
                                 }
                             }
@@ -449,7 +501,12 @@ impl AudioHandle {
                     if let Some(gm) = state.session().mixer.layer_group_mixer(*group_id) {
                         if let Some(effect) = gm.effect_chain.effect_by_id(*effect_id) {
                             if let Some(param) = effect.params.get(param_idx.get()) {
-                                if let Err(e) = self.set_layer_group_effect_param(*group_id, *effect_id, &param.name, *value) {
+                                if let Err(e) = self.set_layer_group_effect_param(
+                                    *group_id,
+                                    *effect_id,
+                                    &param.name,
+                                    *value,
+                                ) {
                                     log::warn!(target: "audio", "set_layer_group_effect_param dropped: {}", e);
                                 }
                             }
@@ -466,7 +523,12 @@ impl AudioHandle {
     /// When `needs_full_sync` is true (unprojectable action or direct state mutation),
     /// sends a FullStateSync. Otherwise, only sends Song-mode flattening and targeted
     /// params — ForwardAction already handled state projection and routing/mixer.
-    pub fn apply_effects(&mut self, state: &dyn crate::AudioStateProvider, effects: &[AudioEffect], needs_full_sync: bool) {
+    pub fn apply_effects(
+        &mut self,
+        state: &dyn crate::AudioStateProvider,
+        effects: &[AudioEffect],
+        needs_full_sync: bool,
+    ) {
         if effects.is_empty() {
             return;
         }
@@ -571,6 +633,7 @@ impl AudioHandle {
         output_device: Option<&str>,
         buffer_size: u32,
         sample_rate: u32,
+        scsynth_args: &str,
     ) -> Result<(), String> {
         let (reply_tx, _reply_rx) = mpsc::channel();
         self.send_cmd(AudioCmd::StartServer {
@@ -578,6 +641,7 @@ impl AudioHandle {
             output_device: output_device.map(|s| s.to_string()),
             buffer_size,
             sample_rate,
+            scsynth_args: scsynth_args.to_string(),
             reply: reply_tx,
         })
     }
@@ -593,6 +657,7 @@ impl AudioHandle {
         server_addr: &str,
         buffer_size: u32,
         sample_rate: u32,
+        scsynth_args: &str,
     ) -> Result<(), String> {
         self.send_cmd(AudioCmd::RestartServer {
             input_device: input_device.map(|s| s.to_string()),
@@ -600,6 +665,7 @@ impl AudioHandle {
             server_addr: server_addr.to_string(),
             buffer_size,
             sample_rate,
+            scsynth_args: scsynth_args.to_string(),
         })
     }
 
@@ -610,7 +676,9 @@ impl AudioHandle {
                 server_addr: server_addr.to_string(),
                 reply: reply_tx,
             })
-            .map_err(|_| std::io::Error::new(std::io::ErrorKind::BrokenPipe, "Audio thread disconnected"))?;
+            .map_err(|_| {
+                std::io::Error::new(std::io::ErrorKind::BrokenPipe, "Audio thread disconnected")
+            })?;
         match reply_rx.recv() {
             Ok(result) => {
                 if result.is_ok() {
@@ -622,7 +690,10 @@ impl AudioHandle {
                 }
                 result
             }
-            Err(_) => Err(std::io::Error::new(std::io::ErrorKind::BrokenPipe, "Audio thread disconnected")),
+            Err(_) => Err(std::io::Error::new(
+                std::io::ErrorKind::BrokenPipe,
+                "Audio thread disconnected",
+            )),
         }
     }
 
@@ -642,6 +713,7 @@ impl AudioHandle {
         output_device: Option<&str>,
         buffer_size: u32,
         sample_rate: u32,
+        scsynth_args: &str,
     ) -> Result<(), String> {
         let (reply_tx, reply_rx) = mpsc::channel();
         self.send_cmd(AudioCmd::StartServer {
@@ -649,6 +721,7 @@ impl AudioHandle {
             output_device: output_device.map(|s| s.to_string()),
             buffer_size,
             sample_rate,
+            scsynth_args: scsynth_args.to_string(),
             reply: reply_tx,
         })?;
         match reply_rx.recv() {
@@ -924,7 +997,12 @@ impl AudioHandle {
         })
     }
 
-    pub fn push_active_note(&mut self, instrument_id: InstrumentId, pitch: u8, duration_ticks: u32) {
+    pub fn push_active_note(
+        &mut self,
+        instrument_id: InstrumentId,
+        pitch: u8,
+        duration_ticks: u32,
+    ) {
         self.send(AudioCmd::RegisterActiveNote {
             instrument_id,
             pitch,
@@ -964,7 +1042,11 @@ impl AudioHandle {
 
     // ── Recording ─────────────────────────────────────────────────
 
-    pub fn start_instrument_render(&mut self, instrument_id: InstrumentId, path: &Path) -> Result<(), String> {
+    pub fn start_instrument_render(
+        &mut self,
+        instrument_id: InstrumentId,
+        path: &Path,
+    ) -> Result<(), String> {
         let (reply_tx, reply_rx) = mpsc::channel();
         self.send_cmd(AudioCmd::StartInstrumentRender {
             instrument_id,
@@ -1034,10 +1116,7 @@ impl AudioHandle {
         }
     }
 
-    pub fn start_stem_export(
-        &mut self,
-        stems: &[(InstrumentId, PathBuf)],
-    ) -> Result<(), String> {
+    pub fn start_stem_export(&mut self, stems: &[(InstrumentId, PathBuf)]) -> Result<(), String> {
         let (reply_tx, reply_rx) = mpsc::channel();
         self.send_cmd(AudioCmd::StartStemExport {
             stems: stems.to_vec(),
@@ -1055,11 +1134,7 @@ impl AudioHandle {
 
     // ── Automation ────────────────────────────────────────────────
 
-    pub fn apply_automation(
-        &self,
-        target: &AutomationTarget,
-        value: f32,
-    ) -> Result<(), String> {
+    pub fn apply_automation(&self, target: &AutomationTarget, value: f32) -> Result<(), String> {
         self.send_cmd(AudioCmd::ApplyAutomation {
             target: target.clone(),
             value,

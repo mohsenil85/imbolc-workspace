@@ -9,7 +9,11 @@ pub fn process_midi_event(event: &MidiEvent, state: &AppState) -> Option<Action>
     let midi_rec = &state.session.midi_recording;
 
     match &event.kind {
-        MidiEventKind::ControlChange { channel, controller, value } => {
+        MidiEventKind::ControlChange {
+            channel,
+            controller,
+            value,
+        } => {
             // Check channel filter
             if !midi_rec.should_process_channel(*channel) {
                 return None;
@@ -22,10 +26,16 @@ pub fn process_midi_event(event: &MidiEvent, state: &AppState) -> Option<Action>
 
             // RecordValue always applies to audio engine; recording logic is in the dispatch handler
             let normalized = target.normalize_value(mapped_value);
-            Some(Action::Automation(AutomationAction::RecordValue(target, normalized)))
+            Some(Action::Automation(AutomationAction::RecordValue(
+                target, normalized,
+            )))
         }
 
-        MidiEventKind::NoteOn { channel, note, velocity } => {
+        MidiEventKind::NoteOn {
+            channel,
+            note,
+            velocity,
+        } => {
             if !midi_rec.should_process_channel(*channel) {
                 return None;
             }
@@ -35,7 +45,9 @@ pub fn process_midi_event(event: &MidiEvent, state: &AppState) -> Option<Action>
             }
 
             // PlayNote uses the selected instrument
-            Some(Action::Instrument(InstrumentAction::PlayNote(*note, *velocity)))
+            Some(Action::Instrument(InstrumentAction::PlayNote(
+                *note, *velocity,
+            )))
         }
 
         MidiEventKind::NoteOff { channel, .. } => {
@@ -52,7 +64,8 @@ pub fn process_midi_event(event: &MidiEvent, state: &AppState) -> Option<Action>
             }
 
             // Look up pitch bend config for the target instrument
-            let instrument_id = midi_rec.live_input_instrument
+            let instrument_id = midi_rec
+                .live_input_instrument
                 .or_else(|| state.instruments.selected_instrument().map(|i| i.id))?;
 
             let config = midi_rec.find_pitch_bend_config(instrument_id)?;
@@ -60,7 +73,9 @@ pub fn process_midi_event(event: &MidiEvent, state: &AppState) -> Option<Action>
             let mapped_value = config.map_value(*value);
 
             let normalized = target.normalize_value(mapped_value);
-            Some(Action::Automation(AutomationAction::RecordValue(target, normalized)))
+            Some(Action::Automation(AutomationAction::RecordValue(
+                target, normalized,
+            )))
         }
 
         _ => None,
@@ -77,16 +92,27 @@ mod tests {
     fn test_state() -> AppState {
         let mut state = AppState::new();
         // Add a CC mapping: CC 1 -> FilterCutoff of instrument 0
-        state.session.midi_recording.add_cc_mapping(
-            MidiCcMapping::new(1, AutomationTarget::filter_cutoff(InstrumentId::new(0))),
-        );
+        state
+            .session
+            .midi_recording
+            .add_cc_mapping(MidiCcMapping::new(
+                1,
+                AutomationTarget::filter_cutoff(InstrumentId::new(0)),
+            ));
         state
     }
 
     #[test]
     fn test_cc_mapped_returns_action() {
         let state = test_state();
-        let event = MidiEvent::new(0, MidiEventKind::ControlChange { channel: 0, controller: 1, value: 64 });
+        let event = MidiEvent::new(
+            0,
+            MidiEventKind::ControlChange {
+                channel: 0,
+                controller: 1,
+                value: 64,
+            },
+        );
         let action = process_midi_event(&event, &state);
         assert!(action.is_some());
     }
@@ -94,7 +120,14 @@ mod tests {
     #[test]
     fn test_cc_unmapped_returns_none() {
         let state = test_state();
-        let event = MidiEvent::new(0, MidiEventKind::ControlChange { channel: 0, controller: 99, value: 64 });
+        let event = MidiEvent::new(
+            0,
+            MidiEventKind::ControlChange {
+                channel: 0,
+                controller: 99,
+                value: 64,
+            },
+        );
         let action = process_midi_event(&event, &state);
         assert!(action.is_none());
     }
@@ -103,7 +136,14 @@ mod tests {
     fn test_channel_filter_blocks() {
         let mut state = test_state();
         state.session.midi_recording.channel_filter = Some(1); // Only channel 1
-        let event = MidiEvent::new(0, MidiEventKind::ControlChange { channel: 0, controller: 1, value: 64 });
+        let event = MidiEvent::new(
+            0,
+            MidiEventKind::ControlChange {
+                channel: 0,
+                controller: 1,
+                value: 64,
+            },
+        );
         let action = process_midi_event(&event, &state);
         assert!(action.is_none());
     }
@@ -112,7 +152,14 @@ mod tests {
     fn test_note_passthrough_no_instrument() {
         let state = test_state();
         // No instrument selected, so note passthrough should return action anyway (PlayNote)
-        let event = MidiEvent::new(0, MidiEventKind::NoteOn { channel: 0, note: 60, velocity: 100 });
+        let event = MidiEvent::new(
+            0,
+            MidiEventKind::NoteOn {
+                channel: 0,
+                note: 60,
+                velocity: 100,
+            },
+        );
         let action = process_midi_event(&event, &state);
         // PlayNote dispatches to selected instrument, which will be a no-op if none
         assert!(action.is_some());
@@ -122,7 +169,14 @@ mod tests {
     fn test_note_passthrough_disabled() {
         let mut state = test_state();
         state.session.midi_recording.note_passthrough = false;
-        let event = MidiEvent::new(0, MidiEventKind::NoteOn { channel: 0, note: 60, velocity: 100 });
+        let event = MidiEvent::new(
+            0,
+            MidiEventKind::NoteOn {
+                channel: 0,
+                note: 60,
+                velocity: 100,
+            },
+        );
         let action = process_midi_event(&event, &state);
         assert!(action.is_none());
     }

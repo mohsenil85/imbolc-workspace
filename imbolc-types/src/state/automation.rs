@@ -301,14 +301,18 @@ impl AutomationTarget {
             AutomationTarget::Instrument(_, InstrumentParameter::Standard(param)) => param.name(),
             AutomationTarget::Bus(bus_id, BusParameter::Level) => format!("Bus {} Level", bus_id),
             AutomationTarget::Global(GlobalParameter::Bpm) => "BPM".to_string(),
-            AutomationTarget::Global(GlobalParameter::TimeSignature) => "Time Signature".to_string(),
+            AutomationTarget::Global(GlobalParameter::TimeSignature) => {
+                "Time Signature".to_string()
+            }
         }
     }
 
     /// Get a short name for compact display.
     pub fn short_name(&self) -> &'static str {
         match self {
-            AutomationTarget::Instrument(_, InstrumentParameter::Standard(param)) => param.short_name(),
+            AutomationTarget::Instrument(_, InstrumentParameter::Standard(param)) => {
+                param.short_name()
+            }
             AutomationTarget::Bus(_, BusParameter::Level) => "BusLv",
             AutomationTarget::Global(GlobalParameter::Bpm) => "BPM",
             AutomationTarget::Global(GlobalParameter::TimeSignature) => "TSig",
@@ -350,7 +354,9 @@ impl AutomationTarget {
     /// Get the default min/max range for this target type.
     pub fn default_range(&self) -> (f32, f32) {
         match self {
-            AutomationTarget::Instrument(_, InstrumentParameter::Standard(param)) => param.default_range(),
+            AutomationTarget::Instrument(_, InstrumentParameter::Standard(param)) => {
+                param.default_range()
+            }
             AutomationTarget::Bus(_, BusParameter::Level) => (0.0, 1.0),
             AutomationTarget::Global(GlobalParameter::Bpm) => (30.0, 300.0),
             AutomationTarget::Global(GlobalParameter::TimeSignature) => (0.0, 1.0),
@@ -360,14 +366,12 @@ impl AutomationTarget {
     /// Get the value kind for this target (continuous or discrete).
     pub fn value_kind(&self) -> ValueKind {
         match self {
-            AutomationTarget::Instrument(_, InstrumentParameter::Standard(param)) => {
-                match param {
-                    ParameterTarget::FilterBypass
-                    | ParameterTarget::EffectBypass(_)
-                    | ParameterTarget::TimeSignature => ValueKind::Discrete,
-                    _ => ValueKind::Continuous,
-                }
-            }
+            AutomationTarget::Instrument(_, InstrumentParameter::Standard(param)) => match param {
+                ParameterTarget::FilterBypass
+                | ParameterTarget::EffectBypass(_)
+                | ParameterTarget::TimeSignature => ValueKind::Discrete,
+                _ => ValueKind::Continuous,
+            },
             AutomationTarget::Bus(_, _) => ValueKind::Continuous,
             AutomationTarget::Global(GlobalParameter::Bpm) => ValueKind::Continuous,
             AutomationTarget::Global(GlobalParameter::TimeSignature) => ValueKind::Discrete,
@@ -380,15 +384,13 @@ impl AutomationTarget {
             AutomationTarget::Global(GlobalParameter::TimeSignature) => {
                 Some(DiscreteValueKind::TimeSignature)
             }
-            AutomationTarget::Instrument(_, InstrumentParameter::Standard(param)) => {
-                match param {
-                    ParameterTarget::TimeSignature => Some(DiscreteValueKind::TimeSignature),
-                    ParameterTarget::FilterBypass | ParameterTarget::EffectBypass(_) => {
-                        Some(DiscreteValueKind::Bool)
-                    }
-                    _ => None,
+            AutomationTarget::Instrument(_, InstrumentParameter::Standard(param)) => match param {
+                ParameterTarget::TimeSignature => Some(DiscreteValueKind::TimeSignature),
+                ParameterTarget::FilterBypass | ParameterTarget::EffectBypass(_) => {
+                    Some(DiscreteValueKind::Bool)
                 }
-            }
+                _ => None,
+            },
             _ => None,
         }
     }
@@ -422,7 +424,8 @@ impl AutomationTarget {
             DiscreteValueKind::TimeSignature => {
                 // Map normalized value to time signature options
                 let signatures: [(u8, u8); 6] = [(4, 4), (3, 4), (5, 4), (6, 8), (7, 8), (12, 8)];
-                let index = ((normalized * signatures.len() as f32) as usize).min(signatures.len() - 1);
+                let index =
+                    ((normalized * signatures.len() as f32) as usize).min(signatures.len() - 1);
                 let (num, denom) = signatures[index];
                 Some(DiscreteValue::TimeSignature(num, denom))
             }
@@ -439,7 +442,9 @@ impl AutomationTarget {
             }
             (DiscreteValueKind::TimeSignature, DiscreteValue::TimeSignature(num, denom)) => {
                 let signatures: [(u8, u8); 6] = [(4, 4), (3, 4), (5, 4), (6, 8), (7, 8), (12, 8)];
-                let index = signatures.iter().position(|&(n, d)| n == *num && d == *denom)?;
+                let index = signatures
+                    .iter()
+                    .position(|&(n, d)| n == *num && d == *denom)?;
                 Some(index as f32 / (signatures.len() - 1).max(1) as f32)
             }
             _ => None,
@@ -482,7 +487,11 @@ impl AutomationLane {
         self.points.retain(|p| p.tick != tick);
 
         let point = AutomationPoint::new(tick, value);
-        let pos = self.points.iter().position(|p| p.tick > tick).unwrap_or(self.points.len());
+        let pos = self
+            .points
+            .iter()
+            .position(|p| p.tick > tick)
+            .unwrap_or(self.points.len());
         self.points.insert(pos, point);
     }
 
@@ -645,13 +654,19 @@ impl AutomationState {
     }
 
     /// Get mutable lane for a specific target
-    pub fn lane_for_target_mut(&mut self, target: &AutomationTarget) -> Option<&mut AutomationLane> {
+    pub fn lane_for_target_mut(
+        &mut self,
+        target: &AutomationTarget,
+    ) -> Option<&mut AutomationLane> {
         self.lanes.iter_mut().find(|l| &l.target == target)
     }
 
     /// Get all lanes for a specific instrument
     pub fn lanes_for_instrument(&self, instrument_id: InstrumentId) -> Vec<&AutomationLane> {
-        self.lanes.iter().filter(|l| l.target.instrument_id() == Some(instrument_id)).collect()
+        self.lanes
+            .iter()
+            .filter(|l| l.target.instrument_id() == Some(instrument_id))
+            .collect()
     }
 
     /// Selected lane
@@ -692,7 +707,8 @@ impl AutomationState {
 
     /// Remove all lanes for an instrument (when instrument is deleted)
     pub fn remove_lanes_for_instrument(&mut self, instrument_id: InstrumentId) {
-        self.lanes.retain(|l| l.target.instrument_id() != Some(instrument_id));
+        self.lanes
+            .retain(|l| l.target.instrument_id() != Some(instrument_id));
         // Adjust selection
         if let Some(sel) = self.selected_lane {
             if sel >= self.lanes.len() {
@@ -707,7 +723,8 @@ impl AutomationState {
 
     /// Remove all lanes for a bus (when bus is deleted)
     pub fn remove_lanes_for_bus(&mut self, bus_id: BusId) {
-        self.lanes.retain(|l| !matches!(l.target, AutomationTarget::Bus(id, _) if id == bus_id));
+        self.lanes
+            .retain(|l| !matches!(l.target, AutomationTarget::Bus(id, _) if id == bus_id));
         // Adjust selection
         if let Some(sel) = self.selected_lane {
             if sel >= self.lanes.len() {

@@ -1,6 +1,6 @@
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
-use serde::{Deserialize, Serialize};
 
 const MAX_ENTRIES: usize = 20;
 
@@ -41,11 +41,14 @@ impl RecentProjects {
         self.entries.retain(|e| e.path != path);
 
         // Insert at front
-        self.entries.insert(0, RecentProject {
-            path: path.to_path_buf(),
-            name: name.to_string(),
-            last_opened: SystemTime::now(),
-        });
+        self.entries.insert(
+            0,
+            RecentProject {
+                path: path.to_path_buf(),
+                name: name.to_string(),
+                last_opened: SystemTime::now(),
+            },
+        );
 
         // Trim to max
         self.entries.truncate(MAX_ENTRIES);

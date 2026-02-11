@@ -3,8 +3,8 @@ use std::path::PathBuf;
 use serde::Deserialize;
 
 use crate::state::music::{Key, Scale};
-use crate::state::MusicalSettings;
 use crate::state::KeyboardLayout;
+use crate::state::MusicalSettings;
 
 const DEFAULT_CONFIG: &str = include_str!("../config.toml");
 
@@ -40,9 +40,13 @@ impl Config {
                 match std::fs::read_to_string(&path) {
                     Ok(contents) => match toml::from_str::<ConfigFile>(&contents) {
                         Ok(user) => merge_defaults(&mut base.defaults, user.defaults),
-                        Err(e) => log::warn!(target: "config", "ignoring malformed config {}: {}", path.display(), e),
+                        Err(e) => {
+                            log::warn!(target: "config", "ignoring malformed config {}: {}", path.display(), e)
+                        }
                     },
-                    Err(e) => log::warn!(target: "config", "could not read config {}: {}", path.display(), e),
+                    Err(e) => {
+                        log::warn!(target: "config", "could not read config {}: {}", path.display(), e)
+                    }
                 }
             }
         }
@@ -203,8 +207,14 @@ mod tests {
 
     #[test]
     fn test_parse_keyboard_layout() {
-        assert_eq!(parse_keyboard_layout("qwerty"), Some(KeyboardLayout::Qwerty));
-        assert_eq!(parse_keyboard_layout("COLEMAK"), Some(KeyboardLayout::Colemak));
+        assert_eq!(
+            parse_keyboard_layout("qwerty"),
+            Some(KeyboardLayout::Qwerty)
+        );
+        assert_eq!(
+            parse_keyboard_layout("COLEMAK"),
+            Some(KeyboardLayout::Colemak)
+        );
         assert_eq!(parse_keyboard_layout("unknown"), None);
     }
 }

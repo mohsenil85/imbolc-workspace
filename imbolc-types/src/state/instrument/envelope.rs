@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EnvConfig {
@@ -10,7 +10,12 @@ pub struct EnvConfig {
 
 impl Default for EnvConfig {
     fn default() -> Self {
-        Self { attack: 0.01, decay: 0.1, sustain: 0.0, release: 0.3 }
+        Self {
+            attack: 0.01,
+            decay: 0.1,
+            sustain: 0.0,
+            release: 0.3,
+        }
     }
 }
 
@@ -29,7 +34,12 @@ mod tests {
 
     #[test]
     fn env_config_clone() {
-        let env = EnvConfig { attack: 0.05, decay: 0.2, sustain: 0.8, release: 0.5 };
+        let env = EnvConfig {
+            attack: 0.05,
+            decay: 0.2,
+            sustain: 0.8,
+            release: 0.5,
+        };
         let cloned = env.clone();
         assert_eq!(cloned.attack, env.attack);
         assert_eq!(cloned.decay, env.decay);

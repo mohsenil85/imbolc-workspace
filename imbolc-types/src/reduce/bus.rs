@@ -1,6 +1,6 @@
 use crate::{
-    BusAction, EqParamKind, InstrumentState, LayerGroupAction,
-    MixerSelection, OutputTarget, SessionState,
+    BusAction, EqParamKind, InstrumentState, LayerGroupAction, MixerSelection, OutputTarget,
+    SessionState,
 };
 
 pub(super) fn reduce_bus(
@@ -87,10 +87,7 @@ pub(super) fn reduce_bus(
     }
 }
 
-pub(super) fn reduce_layer_group(
-    action: &LayerGroupAction,
-    session: &mut SessionState,
-) -> bool {
+pub(super) fn reduce_layer_group(action: &LayerGroupAction, session: &mut SessionState) -> bool {
     match action {
         LayerGroupAction::AddEffect(group_id, effect_type) => {
             if let Some(gm) = session.mixer.layer_group_mixer_mut(*group_id) {

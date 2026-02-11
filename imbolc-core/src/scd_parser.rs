@@ -12,21 +12,14 @@ pub struct ParsedSynthDef {
 
 /// Internal params to filter out (not user-editable)
 const INTERNAL_PARAMS: &[&str] = &[
-    "out",
-    "freq_in",
-    "gate_in",
-    "vel_in",
-    "attack",
-    "decay",
-    "sustain",
-    "release",
+    "out", "freq_in", "gate_in", "vel_in", "attack", "decay", "sustain", "release",
 ];
 
 /// Parse a SynthDef .scd file and extract name and parameters
 pub fn parse_scd_file(content: &str) -> Result<ParsedSynthDef, String> {
     // Find SynthDef name: SynthDef(\name, ... or SynthDef("name", ...
-    let name_re = Regex::new(r#"SynthDef\s*\(\s*[\\"](\w+)"#)
-        .map_err(|e| format!("Regex error: {}", e))?;
+    let name_re =
+        Regex::new(r#"SynthDef\s*\(\s*[\\"](\w+)"#).map_err(|e| format!("Regex error: {}", e))?;
 
     let name = name_re
         .captures(content)

@@ -1,7 +1,7 @@
-use std::collections::HashMap;
 use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use crate::InstrumentId;
 
@@ -18,8 +18,8 @@ pub struct Note {
 /// anchor = (min_tick of selected notes, min_pitch of selected notes)
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ClipboardNote {
-    pub tick_offset: u32,    // tick - anchor_tick
-    pub pitch_offset: i16,   // pitch as i16 - anchor_pitch as i16
+    pub tick_offset: u32,  // tick - anchor_tick
+    pub pitch_offset: i16, // pitch as i16 - anchor_pitch as i16
     pub duration: u32,
     pub velocity: u8,
     pub probability: f32,
@@ -101,20 +101,34 @@ impl PianoRollState {
     }
 
     /// Toggle a note at the given position. If a note exists there, remove it; otherwise add one.
-    pub fn toggle_note(&mut self, track_index: usize, pitch: u8, tick: u32, duration: u32, velocity: u8) {
+    pub fn toggle_note(
+        &mut self,
+        track_index: usize,
+        pitch: u8,
+        tick: u32,
+        duration: u32,
+        velocity: u8,
+    ) {
         if let Some(track) = self.track_at_mut(track_index) {
             // Check if a note exists at this pitch/tick
-            if let Some(pos) = track.notes.iter().position(|n| n.pitch == pitch && n.tick == tick) {
+            if let Some(pos) = track
+                .notes
+                .iter()
+                .position(|n| n.pitch == pitch && n.tick == tick)
+            {
                 track.notes.remove(pos);
             } else {
                 let insert_pos = track.notes.partition_point(|n| n.tick < tick);
-                track.notes.insert(insert_pos, Note {
-                    tick,
-                    duration,
-                    pitch,
-                    velocity,
-                    probability: 1.0,
-                });
+                track.notes.insert(
+                    insert_pos,
+                    Note {
+                        tick,
+                        duration,
+                        pitch,
+                        velocity,
+                        probability: 1.0,
+                    },
+                );
             }
         }
     }
@@ -122,8 +136,12 @@ impl PianoRollState {
     /// Find a note at the given pitch and tick (exact match on tick start)
     #[allow(dead_code)]
     pub fn find_note(&self, track_index: usize, pitch: u8, tick: u32) -> Option<&Note> {
-        self.track_at(track_index)
-            .and_then(|track| track.notes.iter().find(|n| n.pitch == pitch && n.tick == tick))
+        self.track_at(track_index).and_then(|track| {
+            track
+                .notes
+                .iter()
+                .find(|n| n.pitch == pitch && n.tick == tick)
+        })
     }
 
     /// Find notes that start within a tick range (for playback)

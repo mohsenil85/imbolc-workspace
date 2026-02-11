@@ -1,7 +1,7 @@
-use imbolc_audio::AudioHandle;
-use crate::state::AppState;
-use crate::state::automation::AutomationTarget;
 use crate::action::{AudioEffect, DispatchResult, NavIntent, VstTarget};
+use crate::state::automation::AutomationTarget;
+use crate::state::AppState;
+use imbolc_audio::AudioHandle;
 use imbolc_types::{DomainAction, InstrumentAction, ParamValue};
 
 use super::super::automation::record_automation_point;
@@ -22,7 +22,9 @@ pub(super) fn handle_add_effect(
     reduce(state, &InstrumentAction::AddEffect(id, effect_type));
     let mut result = DispatchResult::with_nav(NavIntent::Pop);
     result.audio_effects.push(AudioEffect::RebuildInstruments);
-    result.audio_effects.push(AudioEffect::RebuildRoutingForInstrument(id));
+    result
+        .audio_effects
+        .push(AudioEffect::RebuildRoutingForInstrument(id));
     result
 }
 
@@ -34,7 +36,9 @@ pub(super) fn handle_remove_effect(
     reduce(state, &InstrumentAction::RemoveEffect(id, effect_id));
     let mut result = DispatchResult::none();
     result.audio_effects.push(AudioEffect::RebuildInstruments);
-    result.audio_effects.push(AudioEffect::RebuildRoutingForInstrument(id));
+    result
+        .audio_effects
+        .push(AudioEffect::RebuildRoutingForInstrument(id));
     result
 }
 
@@ -56,20 +60,30 @@ pub(super) fn handle_adjust_effect_param(
     param_idx: imbolc_types::ParamIndex,
     delta: f32,
 ) -> DispatchResult {
-    reduce(state, &InstrumentAction::AdjustEffectParam(id, effect_id, param_idx, delta));
+    reduce(
+        state,
+        &InstrumentAction::AdjustEffectParam(id, effect_id, param_idx, delta),
+    );
 
     let mut result = DispatchResult::none();
     result.audio_effects.push(AudioEffect::RebuildInstruments);
 
     // Read post-mutation value for targeted param + automation recording
     // Extract value first to avoid borrow conflict with record_automation_point
-    let param_value = state.instruments.instrument(id)
+    let param_value = state
+        .instruments
+        .instrument(id)
         .and_then(|inst| inst.effects().find(|e| e.id == effect_id))
         .and_then(|effect| effect.params.get(param_idx.get()))
-        .and_then(|param| match param.value { ParamValue::Float(v) => Some(v), _ => None });
+        .and_then(|param| match param.value {
+            ParamValue::Float(v) => Some(v),
+            _ => None,
+        });
 
     if let Some(value) = param_value {
-        result.audio_effects.push(AudioEffect::SetEffectParam(id, effect_id, param_idx, value));
+        result
+            .audio_effects
+            .push(AudioEffect::SetEffectParam(id, effect_id, param_idx, value));
         if state.recording.automation_recording && state.audio.playing {
             let target = AutomationTarget::effect_param(id, effect_id, param_idx);
             let normalized = target.normalize_value(value);
@@ -93,11 +107,16 @@ pub(super) fn handle_load_ir_result(
         let _ = audio.load_sample(buffer_id, &path.to_string_lossy());
     }
 
-    reduce(state, &InstrumentAction::LoadIRResult(instrument_id, effect_id, path.to_path_buf()));
+    reduce(
+        state,
+        &InstrumentAction::LoadIRResult(instrument_id, effect_id, path.to_path_buf()),
+    );
 
     let mut result = DispatchResult::with_nav(NavIntent::Pop);
     result.audio_effects.push(AudioEffect::RebuildInstruments);
-    result.audio_effects.push(AudioEffect::RebuildRoutingForInstrument(instrument_id));
+    result
+        .audio_effects
+        .push(AudioEffect::RebuildRoutingForInstrument(instrument_id));
     result
 }
 
@@ -105,5 +124,8 @@ pub(super) fn handle_open_vst_effect_params(
     instrument_id: crate::state::InstrumentId,
     effect_id: crate::state::EffectId,
 ) -> DispatchResult {
-    DispatchResult::with_nav(NavIntent::OpenVstParams(instrument_id, VstTarget::Effect(effect_id)))
+    DispatchResult::with_nav(NavIntent::OpenVstParams(
+        instrument_id,
+        VstTarget::Effect(effect_id),
+    ))
 }

@@ -8,9 +8,9 @@
 //! This ensures the writer never blocks and the reader gets the latest
 //! complete frame without tearing.
 
+use std::cell::UnsafeCell;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
-use std::cell::UnsafeCell;
 
 /// Index encoding for triple buffer state.
 /// Uses 2 bits per slot to track which logical buffer each physical slot represents.

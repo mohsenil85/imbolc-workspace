@@ -6,15 +6,15 @@ use std::time::{Duration, Instant};
 use crossbeam_channel::{Receiver, TryRecvError};
 
 use super::commands::{AudioCmd, AudioFeedback, ExportKind};
-use super::engine::AudioEngine;
 use super::engine::server::ServerSpawnResult;
+use super::engine::AudioEngine;
 use super::event_log::{EventLogReader, LogEntry, LogEntryKind};
 use super::osc_client::AudioMonitor;
+use super::snapshot::{AutomationSnapshot, InstrumentSnapshot, PianoRollSnapshot, SessionSnapshot};
 use super::telemetry::AudioTelemetry;
 use super::ServerStatus;
-use imbolc_types::VstTarget;
 use crate::arp_state::ArpPlayState;
-use super::snapshot::{AutomationSnapshot, InstrumentSnapshot, PianoRollSnapshot, SessionSnapshot};
+use imbolc_types::VstTarget;
 use imbolc_types::{InstrumentId, InstrumentState, SessionState};
 
 /// Deferred server connection: after spawning scsynth, wait before connecting
@@ -34,7 +34,9 @@ struct PendingServerStart {
 
 /// Pending async OSC connect (Phase 3: control-plane separation).
 struct PendingConnect {
-    rx: std::sync::mpsc::Receiver<Result<Box<dyn super::engine::backend::AudioBackend + Send>, String>>,
+    rx: std::sync::mpsc::Receiver<
+        Result<Box<dyn super::engine::backend::AudioBackend + Send>, String>,
+    >,
     /// Whether this is an initial connect (true) or a restart-connect (false).
     /// Restart-connects show "Server restarted" instead of "Connected".
     is_restart: bool,
@@ -231,7 +233,8 @@ impl AudioThread {
                 // Record tick timing for telemetry
                 let tick_start = Instant::now();
                 self.tick(elapsed);
-                self.telemetry.record(tick_start.elapsed(), TICK_INTERVAL.as_micros() as u32);
+                self.telemetry
+                    .record(tick_start.elapsed(), TICK_INTERVAL.as_micros() as u32);
             }
 
             self.poll_engine();
@@ -292,39 +295,66 @@ impl AudioThread {
         use AudioCmd::*;
         match cmd {
             // Server lifecycle
-            Connect { .. } | Disconnect | StartServer { .. } | StopServer |
-            RestartServer { .. } | CompileSynthDefs { .. } | LoadSynthDefs { .. } |
-            LoadSynthDefFile { .. } => self.handle_server_cmd(cmd),
+            Connect { .. }
+            | Disconnect
+            | StartServer { .. }
+            | StopServer
+            | RestartServer { .. }
+            | CompileSynthDefs { .. }
+            | LoadSynthDefs { .. }
+            | LoadSynthDefFile { .. } => self.handle_server_cmd(cmd),
 
             // Playback control
-            SetPlaying { .. } | ResetPlayhead | SetBpm { .. } |
-            SetClickEnabled { .. } | SetClickVolume { .. } | SetClickMuted { .. } |
-            StartTunerTone { .. } | StopTunerTone
-                => self.handle_playback_cmd(cmd),
+            SetPlaying { .. }
+            | ResetPlayhead
+            | SetBpm { .. }
+            | SetClickEnabled { .. }
+            | SetClickVolume { .. }
+            | SetClickMuted { .. }
+            | StartTunerTone { .. }
+            | StopTunerTone => self.handle_playback_cmd(cmd),
 
             // Routing & mixing parameters
-            RebuildRouting | RebuildInstrumentRouting { .. } | UpdateMixerParams |
-            SetMasterParams { .. } | SetInstrumentMixerParams { .. } |
-            SetBusMixerParams { .. } | SetLayerGroupMixerParams { .. } |
-            SetSourceParam { .. } | SetEqParam { .. } |
-            SetFilterParam { .. } | SetEffectParam { .. } | SetLfoParam { .. } |
-            SetBusEffectParam { .. } | SetLayerGroupEffectParam { .. } |
-            SetLayerGroupEqParam { .. } |
-            ApplyAutomation { .. } => self.handle_mixer_cmd(cmd),
+            RebuildRouting
+            | RebuildInstrumentRouting { .. }
+            | UpdateMixerParams
+            | SetMasterParams { .. }
+            | SetInstrumentMixerParams { .. }
+            | SetBusMixerParams { .. }
+            | SetLayerGroupMixerParams { .. }
+            | SetSourceParam { .. }
+            | SetEqParam { .. }
+            | SetFilterParam { .. }
+            | SetEffectParam { .. }
+            | SetLfoParam { .. }
+            | SetBusEffectParam { .. }
+            | SetLayerGroupEffectParam { .. }
+            | SetLayerGroupEqParam { .. }
+            | ApplyAutomation { .. } => self.handle_mixer_cmd(cmd),
 
             // Voice management
-            SpawnVoice { .. } | ReleaseVoice { .. } | RegisterActiveNote { .. } |
-            ClearActiveNotes | ReleaseAllVoices | PlayDrumHit { .. }
-                => self.handle_voice_cmd(cmd),
+            SpawnVoice { .. }
+            | ReleaseVoice { .. }
+            | RegisterActiveNote { .. }
+            | ClearActiveNotes
+            | ReleaseAllVoices
+            | PlayDrumHit { .. } => self.handle_voice_cmd(cmd),
 
             // Sample & recording
-            LoadSample { .. } | FreeSamples { .. } | StartInstrumentRender { .. } |
-            StartRecording { .. } | StopRecording { .. } | StartMasterBounce { .. } |
-            StartStemExport { .. } | CancelExport => self.handle_recording_cmd(cmd),
+            LoadSample { .. }
+            | FreeSamples { .. }
+            | StartInstrumentRender { .. }
+            | StartRecording { .. }
+            | StopRecording { .. }
+            | StartMasterBounce { .. }
+            | StartStemExport { .. }
+            | CancelExport => self.handle_recording_cmd(cmd),
 
             // VST parameters
-            QueryVstParams { .. } | SetVstParam { .. } | SaveVstState { .. } |
-            LoadVstState { .. } => self.handle_vst_cmd(cmd),
+            QueryVstParams { .. }
+            | SetVstParam { .. }
+            | SaveVstState { .. }
+            | LoadVstState { .. } => self.handle_vst_cmd(cmd),
 
             // Shutdown (special case - returns true)
             Shutdown => return true,
@@ -342,9 +372,8 @@ impl AudioThread {
                 if self.pending_connect.is_some() {
                     let _ = reply.send(Err(std::io::Error::other("Connect already in progress")));
                 } else {
-                    let rx = AudioEngine::connect_with_monitor_async(
-                        server_addr, self.monitor.clone(),
-                    );
+                    let rx =
+                        AudioEngine::connect_with_monitor_async(server_addr, self.monitor.clone());
                     self.pending_connect = Some(PendingConnect {
                         rx,
                         is_restart: false,
@@ -359,7 +388,14 @@ impl AudioThread {
                 self.engine.disconnect();
                 self.send_server_status(self.engine.status(), "Disconnected");
             }
-            AudioCmd::StartServer { input_device, output_device, buffer_size, sample_rate, reply } => {
+            AudioCmd::StartServer {
+                input_device,
+                output_device,
+                buffer_size,
+                sample_rate,
+                scsynth_args,
+                reply,
+            } => {
                 if self.pending_server_start.is_some() {
                     let _ = reply.send(Err("Server start already in progress".to_string()));
                 } else {
@@ -368,6 +404,7 @@ impl AudioThread {
                         output_device.as_deref(),
                         buffer_size,
                         sample_rate,
+                        &scsynth_args,
                     );
                     if result.is_ok() {
                         self.monitor.set_audio_latency(buffer_size, sample_rate);
@@ -387,7 +424,14 @@ impl AudioThread {
                 self.engine.stop_server();
                 self.send_server_status(ServerStatus::Stopped, "Server stopped");
             }
-            AudioCmd::RestartServer { input_device, output_device, server_addr, buffer_size, sample_rate } => {
+            AudioCmd::RestartServer {
+                input_device,
+                output_device,
+                server_addr,
+                buffer_size,
+                sample_rate,
+                scsynth_args,
+            } => {
                 self.engine.stop_server();
                 self.pending_server_connect = None;
                 self.pending_server_start = None;
@@ -395,7 +439,12 @@ impl AudioThread {
                 self.routing_rebuild = None;
                 self.send_server_status(ServerStatus::Stopped, "Restarting server...");
 
-                match self.engine.start_server_async(input_device, output_device, buffer_size) {
+                match self.engine.start_server_async(
+                    input_device,
+                    output_device,
+                    buffer_size,
+                    scsynth_args,
+                ) {
                     Ok(rx) => {
                         self.pending_server_start = Some(PendingServerStart {
                             rx,
@@ -415,12 +464,16 @@ impl AudioThread {
                 let _ = reply.send(result);
             }
             AudioCmd::LoadSynthDefs { dir } => {
-                let result = self.engine.load_synthdefs(&dir)
+                let result = self
+                    .engine
+                    .load_synthdefs(&dir)
                     .map(|()| format!("Loaded synthdefs from {}", dir.display()));
                 let _ = self.feedback_tx.send(AudioFeedback::LoadResult(result));
             }
             AudioCmd::LoadSynthDefFile { path } => {
-                let result = self.engine.load_synthdef_file(&path)
+                let result = self
+                    .engine
+                    .load_synthdef_file(&path)
                     .map(|()| format!("Loaded synthdef {}", path.display()));
                 let _ = self.feedback_tx.send(AudioFeedback::LoadResult(result));
             }
@@ -445,9 +498,13 @@ impl AudioThread {
     fn apply_log_entry(&mut self, entry: &LogEntry) {
         match &entry.kind {
             LogEntryKind::Action {
-                action, rebuild_routing, rebuild_instrument_routing,
-                add_instrument_routing, delete_instrument_routing,
-                rebuild_bus_processing, mixer_dirty,
+                action,
+                rebuild_routing,
+                rebuild_instrument_routing,
+                add_instrument_routing,
+                delete_instrument_routing,
+                rebuild_bus_processing,
+                mixer_dirty,
             } => {
                 let reduced = imbolc_types::reduce::reduce_action(
                     action,
@@ -459,36 +516,59 @@ impl AudioThread {
                 }
 
                 if *rebuild_routing {
-                    self.routing_rebuild = Some(super::engine::routing::RoutingRebuildPhase::TearDown);
+                    self.routing_rebuild =
+                        Some(super::engine::routing::RoutingRebuildPhase::TearDown);
                 } else {
                     // Targeted routing operations (only if no full rebuild)
                     if let Some(id) = delete_instrument_routing {
                         let _ = self.engine.delete_instrument_routing(*id);
                     }
                     if let Some(id) = add_instrument_routing {
-                        let _ = self.engine.add_instrument_routing(*id, &self.instruments, &self.session);
+                        let _ = self.engine.add_instrument_routing(
+                            *id,
+                            &self.instruments,
+                            &self.session,
+                        );
                     }
                     for id in rebuild_instrument_routing.iter().flatten() {
-                        let _ = self.engine.rebuild_single_instrument_routing(*id, &self.instruments, &self.session);
+                        let _ = self.engine.rebuild_single_instrument_routing(
+                            *id,
+                            &self.instruments,
+                            &self.session,
+                        );
                     }
                     if *rebuild_bus_processing {
-                        let _ = self.engine.rebuild_bus_processing(&self.instruments, &self.session);
+                        let _ = self
+                            .engine
+                            .rebuild_bus_processing(&self.instruments, &self.session);
                     }
                 }
                 if *mixer_dirty {
-                    let _ = self.engine.update_all_instrument_mixer_params(&self.instruments, &self.session);
+                    let _ = self
+                        .engine
+                        .update_all_instrument_mixer_params(&self.instruments, &self.session);
                 }
             }
-            LogEntryKind::Checkpoint { instruments, session, piano_roll, automation_lanes, rebuild_routing } => {
+            LogEntryKind::Checkpoint {
+                instruments,
+                session,
+                piano_roll,
+                automation_lanes,
+                rebuild_routing,
+            } => {
                 // Preserve drum sequencer playback state from old instruments
                 let mut instruments = instruments.clone();
-                let old_instruments: HashMap<InstrumentId, &_> = self.instruments.instruments
+                let old_instruments: HashMap<InstrumentId, &_> = self
+                    .instruments
+                    .instruments
                     .iter()
                     .map(|i| (i.id, i))
                     .collect();
                 for new_inst in instruments.instruments.iter_mut() {
                     if let Some(old_inst) = old_instruments.get(&new_inst.id) {
-                        if let (Some(old_seq), Some(new_seq)) = (old_inst.drum_sequencer(), new_inst.drum_sequencer_mut()) {
+                        if let (Some(old_seq), Some(new_seq)) =
+                            (old_inst.drum_sequencer(), new_inst.drum_sequencer_mut())
+                        {
                             if new_seq.playing {
                                 new_seq.current_step = old_seq.current_step;
                                 new_seq.step_accumulator = old_seq.step_accumulator;
@@ -507,9 +587,8 @@ impl AudioThread {
                 self.piano_roll.playing = playing;
                 self.automation_lanes = automation_lanes.clone();
                 if *rebuild_routing {
-                    self.routing_rebuild = Some(
-                        super::engine::routing::RoutingRebuildPhase::TearDown,
-                    );
+                    self.routing_rebuild =
+                        Some(super::engine::routing::RoutingRebuildPhase::TearDown);
                 }
                 self.last_scheduled_tick = None;
             }
@@ -531,7 +610,9 @@ impl AudioThread {
         match cmd {
             AudioCmd::SetPlaying { playing } => {
                 self.piano_roll.playing = playing;
-                let _ = self.feedback_tx.send(AudioFeedback::PlayingChanged(playing));
+                let _ = self
+                    .feedback_tx
+                    .send(AudioFeedback::PlayingChanged(playing));
                 self.last_scheduled_tick = None;
                 if playing {
                     self.tick_accumulator = 0.0;
@@ -589,60 +670,135 @@ impl AudioThread {
             AudioCmd::RebuildRouting => {
                 // Start (or restart) the phased routing rebuild state machine.
                 // Work is amortized across ticks in poll_engine().
-                self.routing_rebuild = Some(
-                    super::engine::routing::RoutingRebuildPhase::TearDown,
-                );
+                self.routing_rebuild = Some(super::engine::routing::RoutingRebuildPhase::TearDown);
             }
             AudioCmd::RebuildInstrumentRouting { instrument_id } => {
-                let _ = self.engine.rebuild_single_instrument_routing(instrument_id, &self.instruments, &self.session);
+                let _ = self.engine.rebuild_single_instrument_routing(
+                    instrument_id,
+                    &self.instruments,
+                    &self.session,
+                );
             }
             AudioCmd::UpdateMixerParams => {
-                let _ = self.engine.update_all_instrument_mixer_params(&self.instruments, &self.session);
+                let _ = self
+                    .engine
+                    .update_all_instrument_mixer_params(&self.instruments, &self.session);
             }
             AudioCmd::SetMasterParams { level, mute } => {
                 self.session.mixer.master_level = level;
                 self.session.mixer.master_mute = mute;
             }
-            AudioCmd::SetInstrumentMixerParams { instrument_id, level, pan, mute, solo } => {
-                if let Some(inst) = self.instruments.instruments.iter_mut().find(|i| i.id == instrument_id) {
+            AudioCmd::SetInstrumentMixerParams {
+                instrument_id,
+                level,
+                pan,
+                mute,
+                solo,
+            } => {
+                if let Some(inst) = self
+                    .instruments
+                    .instruments
+                    .iter_mut()
+                    .find(|i| i.id == instrument_id)
+                {
                     inst.mixer.level = level;
                     inst.mixer.pan = pan;
                     inst.mixer.mute = mute;
                     inst.mixer.solo = solo;
                 }
             }
-            AudioCmd::SetBusMixerParams { bus_id, level, mute, pan } => {
+            AudioCmd::SetBusMixerParams {
+                bus_id,
+                level,
+                mute,
+                pan,
+            } => {
                 let _ = self.engine.set_bus_mixer_params(bus_id, level, mute, pan);
             }
-            AudioCmd::SetLayerGroupMixerParams { group_id, level, mute, pan } => {
-                let _ = self.engine.set_layer_group_mixer_params(group_id, level, mute, pan);
+            AudioCmd::SetLayerGroupMixerParams {
+                group_id,
+                level,
+                mute,
+                pan,
+            } => {
+                let _ = self
+                    .engine
+                    .set_layer_group_mixer_params(group_id, level, mute, pan);
             }
-            AudioCmd::SetSourceParam { instrument_id, param, value } => {
+            AudioCmd::SetSourceParam {
+                instrument_id,
+                param,
+                value,
+            } => {
                 let _ = self.engine.set_source_param(instrument_id, &param, value);
             }
-            AudioCmd::SetEqParam { instrument_id, param, value } => {
+            AudioCmd::SetEqParam {
+                instrument_id,
+                param,
+                value,
+            } => {
                 let _ = self.engine.set_eq_param(instrument_id, &param, value);
             }
-            AudioCmd::SetFilterParam { instrument_id, param, value } => {
+            AudioCmd::SetFilterParam {
+                instrument_id,
+                param,
+                value,
+            } => {
                 let _ = self.engine.set_filter_param(instrument_id, &param, value);
             }
-            AudioCmd::SetEffectParam { instrument_id, effect_id, param, value } => {
-                let _ = self.engine.set_effect_param(instrument_id, effect_id, &param, value);
+            AudioCmd::SetEffectParam {
+                instrument_id,
+                effect_id,
+                param,
+                value,
+            } => {
+                let _ = self
+                    .engine
+                    .set_effect_param(instrument_id, effect_id, &param, value);
             }
-            AudioCmd::SetLfoParam { instrument_id, param, value } => {
+            AudioCmd::SetLfoParam {
+                instrument_id,
+                param,
+                value,
+            } => {
                 let _ = self.engine.set_lfo_param(instrument_id, &param, value);
             }
-            AudioCmd::SetBusEffectParam { bus_id, effect_id, param, value } => {
-                let _ = self.engine.set_bus_effect_param(bus_id, effect_id, &param, value);
+            AudioCmd::SetBusEffectParam {
+                bus_id,
+                effect_id,
+                param,
+                value,
+            } => {
+                let _ = self
+                    .engine
+                    .set_bus_effect_param(bus_id, effect_id, &param, value);
             }
-            AudioCmd::SetLayerGroupEffectParam { group_id, effect_id, param, value } => {
-                let _ = self.engine.set_layer_group_effect_param(group_id, effect_id, &param, value);
+            AudioCmd::SetLayerGroupEffectParam {
+                group_id,
+                effect_id,
+                param,
+                value,
+            } => {
+                let _ = self
+                    .engine
+                    .set_layer_group_effect_param(group_id, effect_id, &param, value);
             }
-            AudioCmd::SetLayerGroupEqParam { group_id, param, value } => {
-                let _ = self.engine.set_layer_group_eq_param(group_id, &param, value);
+            AudioCmd::SetLayerGroupEqParam {
+                group_id,
+                param,
+                value,
+            } => {
+                let _ = self
+                    .engine
+                    .set_layer_group_eq_param(group_id, &param, value);
             }
             AudioCmd::ApplyAutomation { target, value } => {
-                let _ = self.engine.apply_automation(&target, value, &mut self.instruments, &self.session);
+                let _ = self.engine.apply_automation(
+                    &target,
+                    value,
+                    &mut self.instruments,
+                    &self.session,
+                );
             }
             _ => {}
         }
@@ -654,14 +810,37 @@ impl AudioThread {
 
     fn handle_voice_cmd(&mut self, cmd: AudioCmd) {
         match cmd {
-            AudioCmd::SpawnVoice { instrument_id, pitch, velocity, offset_secs } => {
-                let _ = self.engine.spawn_voice(instrument_id, pitch, velocity, offset_secs, &self.instruments, &self.session);
+            AudioCmd::SpawnVoice {
+                instrument_id,
+                pitch,
+                velocity,
+                offset_secs,
+            } => {
+                let _ = self.engine.spawn_voice(
+                    instrument_id,
+                    pitch,
+                    velocity,
+                    offset_secs,
+                    &self.instruments,
+                    &self.session,
+                );
             }
-            AudioCmd::ReleaseVoice { instrument_id, pitch, offset_secs } => {
-                let _ = self.engine.release_voice(instrument_id, pitch, offset_secs, &self.instruments);
+            AudioCmd::ReleaseVoice {
+                instrument_id,
+                pitch,
+                offset_secs,
+            } => {
+                let _ =
+                    self.engine
+                        .release_voice(instrument_id, pitch, offset_secs, &self.instruments);
             }
-            AudioCmd::RegisterActiveNote { instrument_id, pitch, duration_ticks } => {
-                self.active_notes.push((instrument_id, pitch, duration_ticks));
+            AudioCmd::RegisterActiveNote {
+                instrument_id,
+                pitch,
+                duration_ticks,
+            } => {
+                self.active_notes
+                    .push((instrument_id, pitch, duration_ticks));
             }
             AudioCmd::ClearActiveNotes => {
                 self.active_notes.clear();
@@ -669,9 +848,23 @@ impl AudioThread {
             AudioCmd::ReleaseAllVoices => {
                 self.engine.release_all_voices();
             }
-            AudioCmd::PlayDrumHit { buffer_id, amp, instrument_id, slice_start, slice_end, rate, offset_secs } => {
+            AudioCmd::PlayDrumHit {
+                buffer_id,
+                amp,
+                instrument_id,
+                slice_start,
+                slice_end,
+                rate,
+                offset_secs,
+            } => {
                 let _ = self.engine.play_drum_hit_to_instrument(
-                    buffer_id, amp, instrument_id, slice_start, slice_end, rate, offset_secs,
+                    buffer_id,
+                    amp,
+                    instrument_id,
+                    slice_start,
+                    slice_end,
+                    rate,
+                    offset_secs,
                 );
             }
             _ => {}
@@ -684,7 +877,11 @@ impl AudioThread {
 
     fn handle_recording_cmd(&mut self, cmd: AudioCmd) {
         match cmd {
-            AudioCmd::LoadSample { buffer_id, path, reply } => {
+            AudioCmd::LoadSample {
+                buffer_id,
+                path,
+                reply,
+            } => {
                 let result = self.engine.load_sample(buffer_id, &path);
                 let _ = reply.send(result);
             }
@@ -693,18 +890,23 @@ impl AudioThread {
                     let _ = self.engine.free_sample(id);
                 }
             }
-            AudioCmd::StartInstrumentRender { instrument_id, path, reply } => {
-                let result = if let Some(&bus) = self.engine.instrument_final_buses.get(&instrument_id) {
-                    self.engine.start_recording(bus, &path).map(|_| {
-                        self.render_state = Some(RenderState {
-                            instrument_id,
-                            loop_end: self.piano_roll.loop_end,
-                            tail_ticks: self.calculate_tail_ticks(),
-                        });
-                    })
-                } else {
-                    Err(format!("No audio bus for instrument {}", instrument_id))
-                };
+            AudioCmd::StartInstrumentRender {
+                instrument_id,
+                path,
+                reply,
+            } => {
+                let result =
+                    if let Some(&bus) = self.engine.instrument_final_buses.get(&instrument_id) {
+                        self.engine.start_recording(bus, &path).map(|_| {
+                            self.render_state = Some(RenderState {
+                                instrument_id,
+                                loop_end: self.piano_roll.loop_end,
+                                tail_ticks: self.calculate_tail_ticks(),
+                            });
+                        })
+                    } else {
+                        Err(format!("No audio bus for instrument {}", instrument_id))
+                    };
                 let _ = reply.send(result);
             }
             AudioCmd::StartRecording { bus, path, reply } => {
@@ -741,8 +943,7 @@ impl AudioThread {
                 if instrument_buses.is_empty() {
                     let _ = reply.send(Err("No instrument buses available".to_string()));
                 } else {
-                    let paths: Vec<PathBuf> =
-                        stems.iter().map(|(_, p)| p.clone()).collect();
+                    let paths: Vec<PathBuf> = stems.iter().map(|(_, p)| p.clone()).collect();
                     let result = self.engine.start_export_stems(&instrument_buses).map(|_| {
                         self.export_state = Some(ExportState {
                             kind: ExportKind::StemExport,
@@ -774,7 +975,10 @@ impl AudioThread {
 
     fn handle_vst_cmd(&mut self, cmd: AudioCmd) {
         match cmd {
-            AudioCmd::QueryVstParams { instrument_id, target } => {
+            AudioCmd::QueryVstParams {
+                instrument_id,
+                target,
+            } => {
                 let node_id = self.resolve_vst_node_id(instrument_id, target);
                 let vst_plugin_id = self.resolve_vst_plugin_id(instrument_id, target);
                 if let (Some(node_id), Some(vst_plugin_id)) = (node_id, vst_plugin_id) {
@@ -796,12 +1000,21 @@ impl AudioThread {
                     });
                 }
             }
-            AudioCmd::SetVstParam { instrument_id, target, param_index, value } => {
+            AudioCmd::SetVstParam {
+                instrument_id,
+                target,
+                param_index,
+                value,
+            } => {
                 if let Some(node_id) = self.resolve_vst_node_id(instrument_id, target) {
                     let _ = self.engine.set_vst_param_node(node_id, param_index, value);
                 }
             }
-            AudioCmd::SaveVstState { instrument_id, target, path } => {
+            AudioCmd::SaveVstState {
+                instrument_id,
+                target,
+                path,
+            } => {
                 if let Some(node_id) = self.resolve_vst_node_id(instrument_id, target) {
                     let _ = self.engine.save_vst_state_node(node_id, &path);
                 }
@@ -811,7 +1024,11 @@ impl AudioThread {
                     path,
                 });
             }
-            AudioCmd::LoadVstState { instrument_id, target, path } => {
+            AudioCmd::LoadVstState {
+                instrument_id,
+                target,
+                path,
+            } => {
                 if let Some(node_id) = self.resolve_vst_node_id(instrument_id, target) {
                     let _ = self.engine.load_vst_state_node(node_id, &path);
                 }
@@ -877,7 +1094,8 @@ impl AudioThread {
                     params,
                 });
             } else {
-                let mut params: Vec<(u32, String, Option<String>, f32)> = replies.iter()
+                let mut params: Vec<(u32, String, Option<String>, f32)> = replies
+                    .iter()
                     .map(|r| {
                         // Use display string as name for now (Phase 1);
                         // Phase 2 VST3 probing will provide real names
@@ -904,15 +1122,20 @@ impl AudioThread {
         let nodes = self.engine.node_map.get(&instrument_id)?;
         match target {
             VstTarget::Source => nodes.source,
-            VstTarget::Effect(effect_id) => {
-                nodes.effects.get(&effect_id).copied()
-            }
+            VstTarget::Effect(effect_id) => nodes.effects.get(&effect_id).copied(),
         }
     }
 
     /// Resolve the VstPluginId for a given instrument and target
-    fn resolve_vst_plugin_id(&self, instrument_id: InstrumentId, target: VstTarget) -> Option<imbolc_types::VstPluginId> {
-        let inst = self.instruments.instruments.iter()
+    fn resolve_vst_plugin_id(
+        &self,
+        instrument_id: InstrumentId,
+        target: VstTarget,
+    ) -> Option<imbolc_types::VstPluginId> {
+        let inst = self
+            .instruments
+            .instruments
+            .iter()
             .find(|i| i.id == instrument_id)?;
         match target {
             VstTarget::Source => {
@@ -922,15 +1145,13 @@ impl AudioThread {
                     None
                 }
             }
-            VstTarget::Effect(effect_id) => {
-                inst.effect_by_id(effect_id).and_then(|effect| {
-                    if let imbolc_types::EffectType::Vst(id) = effect.effect_type {
-                        Some(id)
-                    } else {
-                        None
-                    }
-                })
-            }
+            VstTarget::Effect(effect_id) => inst.effect_by_id(effect_id).and_then(|effect| {
+                if let imbolc_types::EffectType::Vst(id) = effect.effect_type {
+                    Some(id)
+                } else {
+                    None
+                }
+            }),
         }
     }
 
@@ -1144,7 +1365,10 @@ impl AudioThread {
                 Err(std::sync::mpsc::TryRecvError::Disconnected) => {
                     self.pending_server_start = None;
                     self.engine.set_status(ServerStatus::Error);
-                    self.send_server_status(ServerStatus::Error, "Server spawn thread terminated unexpectedly");
+                    self.send_server_status(
+                        ServerStatus::Error,
+                        "Server spawn thread terminated unexpectedly",
+                    );
                 }
             }
         }
@@ -1161,9 +1385,8 @@ impl AudioThread {
                 } else if self.pending_connect.is_none() {
                     // Spawn async connect (Phase 3: off-thread connect)
                     self.send_server_status(ServerStatus::Running, "Server started, connecting...");
-                    let rx = AudioEngine::connect_with_monitor_async(
-                        server_addr, self.monitor.clone(),
-                    );
+                    let rx =
+                        AudioEngine::connect_with_monitor_async(server_addr, self.monitor.clone());
                     self.pending_connect = Some(PendingConnect {
                         rx,
                         is_restart: true,
@@ -1182,12 +1405,18 @@ impl AudioThread {
                     self.engine.install_backend(backend);
                     let message = match self.load_synthdefs_and_samples() {
                         Ok(()) => {
-                            if is_restart { "Server restarted".to_string() }
-                            else { "Connected".to_string() }
+                            if is_restart {
+                                "Server restarted".to_string()
+                            } else {
+                                "Connected".to_string()
+                            }
                         }
                         Err(e) => {
-                            if is_restart { format!("Restarted (synthdef warning: {})", e) }
-                            else { format!("Connected (synthdef warning: {})", e) }
+                            if is_restart {
+                                format!("Restarted (synthdef warning: {})", e)
+                            } else {
+                                format!("Connected (synthdef warning: {})", e)
+                            }
                         }
                     };
                     self.send_server_status(ServerStatus::Connected, message);
@@ -1207,9 +1436,14 @@ impl AudioThread {
                 Err(std::sync::mpsc::TryRecvError::Disconnected) => {
                     let reply = self.pending_connect.take().unwrap().reply;
                     self.engine.set_status(ServerStatus::Error);
-                    self.send_server_status(ServerStatus::Error, "Connect thread terminated unexpectedly");
+                    self.send_server_status(
+                        ServerStatus::Error,
+                        "Connect thread terminated unexpectedly",
+                    );
                     if let Some(reply) = reply {
-                        let _ = reply.send(Err(std::io::Error::other("Connect thread terminated unexpectedly")));
+                        let _ = reply.send(Err(std::io::Error::other(
+                            "Connect thread terminated unexpectedly",
+                        )));
                     }
                 }
             }
@@ -1218,7 +1452,10 @@ impl AudioThread {
         // Drive phased routing rebuild (Phase 4: amortized across ticks)
         if let Some(phase) = self.routing_rebuild.take() {
             use super::engine::routing::RebuildStepResult;
-            match self.engine.routing_rebuild_step(phase, &self.instruments, &self.session) {
+            match self
+                .engine
+                .routing_rebuild_step(phase, &self.instruments, &self.session)
+            {
                 Ok(RebuildStepResult::Continue(next)) => {
                     self.routing_rebuild = Some(next);
                 }
@@ -1285,7 +1522,9 @@ impl AudioThread {
             .map(|d| d.as_secs())
             .unwrap_or(0);
 
-        if is_recording != self.last_recording_state || (is_recording && elapsed_secs != self.last_recording_secs) {
+        if is_recording != self.last_recording_state
+            || (is_recording && elapsed_secs != self.last_recording_secs)
+        {
             self.last_recording_state = is_recording;
             self.last_recording_secs = elapsed_secs;
             let _ = self.feedback_tx.send(AudioFeedback::RecordingState {
