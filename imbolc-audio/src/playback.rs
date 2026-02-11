@@ -248,6 +248,8 @@ pub fn tick_playback(
 
                 let pitch = instruments.instrument(instrument_id)
                     .map_or(pitch, |inst| inst.offset_pitch(pitch));
+                // Evict stale entry for same instrument+pitch (voice was already stolen by spawn_voice)
+                active_notes.retain(|n| !(n.0 == instrument_id && n.1 == pitch));
                 let _ = engine.spawn_voice(instrument_id, pitch, vel_f, offset, instruments, session);
                 active_notes.push((instrument_id, pitch, duration));
             }
@@ -502,6 +504,30 @@ mod tests {
         do_tick(&mut pr, &mut inst, &session, &mut engine, &tx, Duration::from_millis(10), &mut tick_acc, &mut last_sched);
 
         assert_eq!(last_sched, Some(42), "last_scheduled_tick should not change when not playing");
+    }
+
+    #[test]
+    fn same_pitch_retrigger_evicts_stale_active_note() {
+        let (mut pr, mut inst, session, mut engine, _rx, tx) = make_fixtures();
+        engine.is_running = true;
+
+        // Two notes at the same pitch (60), different ticks, both within the scan window
+        pr.toggle_note(0, 60, 2, 480, 100);
+        pr.toggle_note(0, 60, 5, 480, 100);
+        pr.playhead = 0;
+
+        let mut tick_acc = 0.0;
+        let mut last_sched: Option<u32> = None;
+
+        let active = do_tick(
+            &mut pr, &mut inst, &session, &mut engine, &tx,
+            Duration::from_millis(10), &mut tick_acc, &mut last_sched,
+        );
+
+        // Should have exactly one active_notes entry for pitch 60 (the second note evicts the first)
+        let pitch_60_count = active.iter().filter(|n| n.1 == 60).count();
+        assert_eq!(pitch_60_count, 1,
+            "expected 1 active_notes entry for pitch 60 after retrigger, got {}", pitch_60_count);
     }
 
     #[test]

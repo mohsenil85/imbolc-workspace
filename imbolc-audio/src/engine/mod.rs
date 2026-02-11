@@ -116,7 +116,7 @@ pub struct AudioEngine {
     backend: Option<Box<dyn AudioBackend>>,
     pub(crate) node_map: HashMap<InstrumentId, InstrumentNodes>,
     next_node_id: i32,
-    is_running: bool,
+    pub(crate) is_running: bool,
     scsynth_process: Option<Child>,
     server_status: ServerStatus,
     compile_receiver: Option<Receiver<Result<String, String>>>,
