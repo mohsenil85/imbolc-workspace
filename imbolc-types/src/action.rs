@@ -229,278 +229,66 @@ pub struct StatusEvent {
 }
 
 // ============================================================================
-// AudioDirty and DispatchResult
+// AudioEffect and DispatchResult
 // ============================================================================
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
-pub struct AudioDirty {
-    pub instruments: bool,
-    pub session: bool,
-    pub piano_roll: bool,
-    pub automation: bool,
-    pub routing: bool,
-    /// When set, rebuild routing for these specific instruments (optimization).
-    /// If `routing` is also true, these are ignored and a full rebuild is performed.
-    /// Supports up to 4 instruments per frame; overflow escalates to full rebuild.
-    pub routing_instruments: [Option<InstrumentId>; 4],
-    /// When set, build routing for a newly added instrument without tearing down others.
-    /// If `routing` is also true, this is ignored and a full rebuild is performed.
-    pub routing_add_instrument: Option<InstrumentId>,
-    /// When set, tear down routing for a deleted instrument without rebuilding others.
-    /// If `routing` is also true, this is ignored and a full rebuild is performed.
-    pub routing_delete_instrument: Option<InstrumentId>,
-    /// When set, rebuild only the bus processing section (GROUP_BUS_PROCESSING)
-    /// without touching instrument nodes or voices.
-    /// If `routing` is also true, this is ignored and a full rebuild is performed.
-    pub routing_bus_processing: bool,
-    pub mixer_params: bool,
-    /// Targeted filter param updates: (instrument_id, param_kind, value).
-    /// Sends /n_set directly to the filter node without routing rebuild.
-    /// Supports up to 2 per frame (one per FilterParamKind); overflow escalates to instruments=true.
-    pub filter_params: [Option<(InstrumentId, FilterParamKind, f32)>; 2],
-    /// Targeted effect param updates: (instrument_id, effect_id, param_index, value).
-    /// Sends /n_set directly to the effect node without routing rebuild.
-    /// The param name is resolved from the instrument state at send time.
-    /// Supports up to 4 per frame; overflow escalates to instruments=true.
-    pub effect_params: [Option<(InstrumentId, EffectId, ParamIndex, f32)>; 4],
-    /// Targeted LFO param updates: (instrument_id, param_kind, value).
-    /// Sends /n_set directly to the LFO node without routing rebuild.
-    /// Supports up to 2 per frame (one per LfoParamKind); overflow escalates to instruments=true.
-    pub lfo_params: [Option<(InstrumentId, LfoParamKind, f32)>; 2],
-    /// Targeted bus effect param updates: (bus_id, effect_id, param_index, value).
-    /// Sends /n_set directly to the bus effect node without routing rebuild.
-    /// Supports up to 4 per frame; overflow escalates to session=true.
-    pub bus_effect_params: [Option<(BusId, EffectId, ParamIndex, f32)>; 4],
-    /// Targeted layer group effect param updates: (group_id, effect_id, param_index, value).
-    /// Sends /n_set directly to the layer group effect node without routing rebuild.
-    /// Supports up to 4 per frame; overflow escalates to session=true.
-    pub layer_group_effect_params: [Option<(u32, EffectId, ParamIndex, f32)>; 4],
+/// Typed audio effect event — replaces boolean-flag AudioDirty.
+///
+/// Dispatch handlers push these to signal what the audio thread needs to do.
+/// The UI accumulates them per-frame and flushes once via `apply_effects()`.
+/// No fixed-size arrays or overflow escalation — just push events.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum AudioEffect {
+    // Structural rebuilds
+    RebuildInstruments,
+    RebuildSession,
+    RebuildRouting,
+    RebuildRoutingForInstrument(InstrumentId),
+    AddInstrumentRouting(InstrumentId),
+    DeleteInstrumentRouting(InstrumentId),
+    RebuildBusProcessing,
+    UpdateMixerParams,
+    UpdatePianoRoll,
+    UpdateAutomation,
+
+    // Targeted /n_set params (no rebuild needed)
+    SetFilterParam(InstrumentId, FilterParamKind, f32),
+    SetEffectParam(InstrumentId, EffectId, ParamIndex, f32),
+    SetLfoParam(InstrumentId, LfoParamKind, f32),
+    SetBusEffectParam(BusId, EffectId, ParamIndex, f32),
+    SetLayerGroupEffectParam(u32, EffectId, ParamIndex, f32),
 }
 
-impl AudioDirty {
-    pub fn all() -> Self {
-        Self {
-            instruments: true,
-            session: true,
-            piano_roll: true,
-            automation: true,
-            routing: true,
-            routing_instruments: [None; 4],
-            routing_add_instrument: None,
-            routing_delete_instrument: None,
-            routing_bus_processing: false,
-            mixer_params: true,
-            filter_params: [None; 2],
-            effect_params: [None; 4],
-            lfo_params: [None; 2],
-            bus_effect_params: [None; 4],
-            layer_group_effect_params: [None; 4],
-        }
+impl AudioEffect {
+    /// All structural rebuild effects (for undo/redo/load/full sync).
+    pub fn all() -> Vec<AudioEffect> {
+        vec![
+            AudioEffect::RebuildInstruments,
+            AudioEffect::RebuildSession,
+            AudioEffect::UpdatePianoRoll,
+            AudioEffect::UpdateAutomation,
+            AudioEffect::RebuildRouting,
+            AudioEffect::UpdateMixerParams,
+        ]
     }
 
-    pub fn any(&self) -> bool {
-        self.instruments
-            || self.session
-            || self.piano_roll
-            || self.automation
-            || self.routing
-            || self.routing_instruments.iter().any(|id| id.is_some())
-            || self.routing_add_instrument.is_some()
-            || self.routing_delete_instrument.is_some()
-            || self.routing_bus_processing
-            || self.mixer_params
-            || self.filter_params.iter().any(|p| p.is_some())
-            || self.effect_params.iter().any(|p| p.is_some())
-            || self.lfo_params.iter().any(|p| p.is_some())
-            || self.bus_effect_params.iter().any(|p| p.is_some())
-            || self.layer_group_effect_params.iter().any(|p| p.is_some())
+    /// Effects for a single instrument rebuild + targeted routing.
+    pub fn for_instrument(id: InstrumentId) -> Vec<AudioEffect> {
+        vec![
+            AudioEffect::RebuildInstruments,
+            AudioEffect::RebuildRoutingForInstrument(id),
+        ]
     }
 
-    pub fn merge(&mut self, other: AudioDirty) {
-        self.instruments |= other.instruments;
-        self.session |= other.session;
-        self.piano_roll |= other.piano_roll;
-        self.automation |= other.automation;
-        self.routing |= other.routing;
-        // Merge routing_instruments: collect unique IDs into the array.
-        // Overflow (>4 unique instruments) escalates to full rebuild.
-        for other_id in other.routing_instruments.iter().flatten() {
-            // Skip if already present
-            if self.routing_instruments.iter().flatten().any(|id| id == other_id) {
-                continue;
-            }
-            // Find an empty slot
-            if let Some(slot) = self.routing_instruments.iter_mut().find(|s| s.is_none()) {
-                *slot = Some(*other_id);
-            } else {
-                // All 4 slots full — escalate to full rebuild
-                self.routing = true;
-                self.routing_instruments = [None; 4];
-                break;
-            }
-        }
-        // Merge routing_add_instrument: conflict escalates to full rebuild
-        match (self.routing_add_instrument, other.routing_add_instrument) {
-            (Some(a), Some(b)) if a != b => {
-                self.routing = true;
-                self.routing_add_instrument = None;
-            }
-            (None, Some(id)) => {
-                self.routing_add_instrument = Some(id);
-            }
-            _ => {}
-        }
-        // Merge routing_delete_instrument: conflict escalates to full rebuild
-        match (self.routing_delete_instrument, other.routing_delete_instrument) {
-            (Some(a), Some(b)) if a != b => {
-                self.routing = true;
-                self.routing_delete_instrument = None;
-            }
-            (None, Some(id)) => {
-                self.routing_delete_instrument = Some(id);
-            }
-            _ => {}
-        }
-        // If add and delete target different instruments in same frame, escalate
-        if let (Some(add), Some(del)) = (self.routing_add_instrument, self.routing_delete_instrument) {
-            if add != del {
-                self.routing = true;
-                self.routing_add_instrument = None;
-                self.routing_delete_instrument = None;
-            }
-        }
-        self.routing_bus_processing |= other.routing_bus_processing;
-        self.mixer_params |= other.mixer_params;
-        // Targeted param updates: accumulate into arrays, escalate on overflow.
-        for entry in other.filter_params.iter().flatten() {
-            if let Some(slot) = self.filter_params.iter_mut().find(|s| s.is_none()) {
-                *slot = Some(*entry);
-            } else {
-                self.instruments = true;
-                self.filter_params = [None; 2];
-                break;
-            }
-        }
-        for entry in other.effect_params.iter().flatten() {
-            if let Some(slot) = self.effect_params.iter_mut().find(|s| s.is_none()) {
-                *slot = Some(*entry);
-            } else {
-                self.instruments = true;
-                self.effect_params = [None; 4];
-                break;
-            }
-        }
-        for entry in other.lfo_params.iter().flatten() {
-            if let Some(slot) = self.lfo_params.iter_mut().find(|s| s.is_none()) {
-                *slot = Some(*entry);
-            } else {
-                self.instruments = true;
-                self.lfo_params = [None; 2];
-                break;
-            }
-        }
-        for entry in other.bus_effect_params.iter().flatten() {
-            if let Some(slot) = self.bus_effect_params.iter_mut().find(|s| s.is_none()) {
-                *slot = Some(*entry);
-            } else {
-                self.session = true;
-                self.bus_effect_params = [None; 4];
-                break;
-            }
-        }
-        for entry in other.layer_group_effect_params.iter().flatten() {
-            if let Some(slot) = self.layer_group_effect_params.iter_mut().find(|s| s.is_none()) {
-                *slot = Some(*entry);
-            } else {
-                self.session = true;
-                self.layer_group_effect_params = [None; 4];
-                break;
-            }
-        }
-    }
-
-    /// Set a single-instrument routing rebuild. Finds an empty slot in the array.
-    /// If all slots are full, escalates to full rebuild.
-    pub fn set_routing_instrument(&mut self, id: InstrumentId) {
-        // Skip if already present
-        if self.routing_instruments.iter().flatten().any(|existing| *existing == id) {
-            return;
-        }
-        if let Some(slot) = self.routing_instruments.iter_mut().find(|s| s.is_none()) {
-            *slot = Some(id);
-        } else {
-            // Overflow — escalate to full rebuild
-            self.routing = true;
-            self.routing_instruments = [None; 4];
-        }
-    }
-
-    /// Set a targeted filter param update. Finds an empty slot in the array.
-    /// If all slots are full, escalates to instruments=true.
-    pub fn set_filter_param(&mut self, id: InstrumentId, kind: FilterParamKind, value: f32) {
-        if let Some(slot) = self.filter_params.iter_mut().find(|s| s.is_none()) {
-            *slot = Some((id, kind, value));
-        } else {
-            self.instruments = true;
-            self.filter_params = [None; 2];
-        }
-    }
-
-    /// Set a targeted effect param update. Finds an empty slot in the array.
-    /// If all slots are full, escalates to instruments=true.
-    pub fn set_effect_param(&mut self, id: InstrumentId, effect_id: EffectId, param_idx: ParamIndex, value: f32) {
-        if let Some(slot) = self.effect_params.iter_mut().find(|s| s.is_none()) {
-            *slot = Some((id, effect_id, param_idx, value));
-        } else {
-            self.instruments = true;
-            self.effect_params = [None; 4];
-        }
-    }
-
-    /// Set a targeted LFO param update. Finds an empty slot in the array.
-    /// If all slots are full, escalates to instruments=true.
-    pub fn set_lfo_param(&mut self, id: InstrumentId, kind: LfoParamKind, value: f32) {
-        if let Some(slot) = self.lfo_params.iter_mut().find(|s| s.is_none()) {
-            *slot = Some((id, kind, value));
-        } else {
-            self.instruments = true;
-            self.lfo_params = [None; 2];
-        }
-    }
-
-    /// Set a targeted bus effect param update. Finds an empty slot in the array.
-    /// If all slots are full, escalates to session=true.
-    pub fn set_bus_effect_param(&mut self, bus_id: BusId, effect_id: EffectId, param_idx: ParamIndex, value: f32) {
-        if let Some(slot) = self.bus_effect_params.iter_mut().find(|s| s.is_none()) {
-            *slot = Some((bus_id, effect_id, param_idx, value));
-        } else {
-            self.session = true;
-            self.bus_effect_params = [None; 4];
-        }
-    }
-
-    /// Set a targeted layer group effect param update. Finds an empty slot in the array.
-    /// If all slots are full, escalates to session=true.
-    pub fn set_layer_group_effect_param(&mut self, group_id: u32, effect_id: EffectId, param_idx: ParamIndex, value: f32) {
-        if let Some(slot) = self.layer_group_effect_params.iter_mut().find(|s| s.is_none()) {
-            *slot = Some((group_id, effect_id, param_idx, value));
-        } else {
-            self.session = true;
-            self.layer_group_effect_params = [None; 4];
-        }
-    }
-
-    /// Create an AudioDirty with just instruments + routing for a single instrument.
-    pub fn for_instrument(id: InstrumentId) -> Self {
-        Self {
-            instruments: true,
-            routing_instruments: [Some(id), None, None, None],
-            ..Self::default()
-        }
-    }
-
-    pub fn clear(&mut self) {
-        *self = Self::default();
+    /// Whether this effect requests any routing rebuild.
+    pub fn is_routing(&self) -> bool {
+        matches!(
+            self,
+            AudioEffect::RebuildRouting
+                | AudioEffect::RebuildRoutingForInstrument(_)
+                | AudioEffect::AddInstrumentRouting(_)
+                | AudioEffect::DeleteInstrumentRouting(_)
+        )
     }
 }
 
@@ -511,11 +299,14 @@ pub struct DispatchResult {
     pub nav: Vec<NavIntent>,
     pub status: Vec<StatusEvent>,
     pub project_name: Option<String>,
-    pub audio_dirty: AudioDirty,
+    pub audio_effects: Vec<AudioEffect>,
     /// Signal that playback should be stopped (processed by the UI layer, not dispatch)
     pub stop_playback: bool,
     /// Signal that the playhead should be reset to 0 (processed by the UI layer, not dispatch)
     pub reset_playhead: bool,
+    /// True if the action could not be incrementally projected to the audio thread
+    /// and requires a full state sync via `apply_effects()`.
+    pub needs_full_sync: bool,
 }
 
 impl DispatchResult {
@@ -550,10 +341,6 @@ impl DispatchResult {
         self.status.push(StatusEvent { status, message: message.into(), server_running: Some(running) });
     }
 
-    pub fn mark_audio_dirty(&mut self, dirty: AudioDirty) {
-        self.audio_dirty.merge(dirty);
-    }
-
     pub fn merge(&mut self, other: DispatchResult) {
         self.quit = self.quit || other.quit;
         self.nav.extend(other.nav);
@@ -561,7 +348,7 @@ impl DispatchResult {
         if other.project_name.is_some() {
             self.project_name = other.project_name;
         }
-        self.audio_dirty.merge(other.audio_dirty);
+        self.audio_effects.extend(other.audio_effects);
         self.stop_playback |= other.stop_playback;
         self.reset_playhead |= other.reset_playhead;
     }
@@ -988,10 +775,14 @@ pub enum ClickAction {
 }
 
 // ============================================================================
-// Main Action enum
+// Main Action enum (also serves as PaneAction — returned from pane handlers)
 // ============================================================================
 
-/// Actions that can be returned from pane input handling.
+/// Actions returned from pane input handling. Contains both UI-layer mechanics
+/// (Nav, PushLayer, PopLayer, ExitPerformanceMode, Quit, SaveAndQuit) and
+/// domain mutations (Instrument, Mixer, etc.).
+///
+/// Use `to_domain()` to extract a `DomainAction` for dispatch.
 #[derive(Debug, Clone)]
 pub enum Action {
     None,
@@ -1027,50 +818,115 @@ pub enum Action {
     SaveAndQuit,
 }
 
+// ============================================================================
+// DomainAction — state mutations handled by core dispatch
+// ============================================================================
+
+/// Actions that mutate domain state (instruments, session, mixer, etc.).
+/// Handled by `dispatch_action()` in imbolc-core. Does not include UI-layer
+/// mechanics (navigation, layer stack, quit).
+///
+/// Extracted from `Action` via `Action::to_domain()`. Dispatch, undo, and
+/// audio projection operate on `DomainAction` exclusively.
+#[derive(Debug, Clone)]
+pub enum DomainAction {
+    Instrument(InstrumentAction),
+    Mixer(MixerAction),
+    PianoRoll(PianoRollAction),
+    Arrangement(ArrangementAction),
+    Server(ServerAction),
+    Session(SessionAction),
+    Sequencer(SequencerAction),
+    Chopper(ChopperAction),
+    Automation(AutomationAction),
+    Midi(MidiAction),
+    Bus(BusAction),
+    LayerGroup(LayerGroupAction),
+    VstParam(VstParamAction),
+    Click(ClickAction),
+    Tuner(TunerAction),
+    AudioFeedback(crate::AudioFeedback),
+    Undo,
+    Redo,
+}
+
+impl Action {
+    /// Convert to a `DomainAction` if this is a domain action.
+    /// Returns `None` for UI-only actions (None, Quit, Nav, PushLayer, PopLayer,
+    /// ExitPerformanceMode, SaveAndQuit).
+    pub fn to_domain(&self) -> Option<DomainAction> {
+        match self {
+            Self::Instrument(a) => Some(DomainAction::Instrument(a.clone())),
+            Self::Mixer(a) => Some(DomainAction::Mixer(a.clone())),
+            Self::PianoRoll(a) => Some(DomainAction::PianoRoll(a.clone())),
+            Self::Arrangement(a) => Some(DomainAction::Arrangement(a.clone())),
+            Self::Server(a) => Some(DomainAction::Server(a.clone())),
+            Self::Session(a) => Some(DomainAction::Session(a.clone())),
+            Self::Sequencer(a) => Some(DomainAction::Sequencer(a.clone())),
+            Self::Chopper(a) => Some(DomainAction::Chopper(a.clone())),
+            Self::Automation(a) => Some(DomainAction::Automation(a.clone())),
+            Self::Midi(a) => Some(DomainAction::Midi(a.clone())),
+            Self::Bus(a) => Some(DomainAction::Bus(a.clone())),
+            Self::LayerGroup(a) => Some(DomainAction::LayerGroup(a.clone())),
+            Self::VstParam(a) => Some(DomainAction::VstParam(a.clone())),
+            Self::Click(a) => Some(DomainAction::Click(a.clone())),
+            Self::Tuner(a) => Some(DomainAction::Tuner(a.clone())),
+            Self::AudioFeedback(f) => Some(DomainAction::AudioFeedback(f.clone())),
+            Self::Undo => Some(DomainAction::Undo),
+            Self::Redo => Some(DomainAction::Redo),
+            // UI-only actions
+            Self::None | Self::Quit | Self::Nav(_) | Self::ExitPerformanceMode
+            | Self::PushLayer(_) | Self::PopLayer(_) | Self::SaveAndQuit => None,
+        }
+    }
+}
+
+impl From<DomainAction> for Action {
+    fn from(d: DomainAction) -> Self {
+        match d {
+            DomainAction::Instrument(a) => Self::Instrument(a),
+            DomainAction::Mixer(a) => Self::Mixer(a),
+            DomainAction::PianoRoll(a) => Self::PianoRoll(a),
+            DomainAction::Arrangement(a) => Self::Arrangement(a),
+            DomainAction::Server(a) => Self::Server(a),
+            DomainAction::Session(a) => Self::Session(a),
+            DomainAction::Sequencer(a) => Self::Sequencer(a),
+            DomainAction::Chopper(a) => Self::Chopper(a),
+            DomainAction::Automation(a) => Self::Automation(a),
+            DomainAction::Midi(a) => Self::Midi(a),
+            DomainAction::Bus(a) => Self::Bus(a),
+            DomainAction::LayerGroup(a) => Self::LayerGroup(a),
+            DomainAction::VstParam(a) => Self::VstParam(a),
+            DomainAction::Click(a) => Self::Click(a),
+            DomainAction::Tuner(a) => Self::Tuner(a),
+            DomainAction::AudioFeedback(f) => Self::AudioFeedback(f),
+            DomainAction::Undo => Self::Undo,
+            DomainAction::Redo => Self::Redo,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::BusId;
 
     #[test]
-    fn audio_dirty_all_sets_everything() {
-        let d = AudioDirty::all();
-        assert!(d.instruments);
-        assert!(d.session);
-        assert!(d.piano_roll);
-        assert!(d.automation);
-        assert!(d.routing);
-        assert!(d.mixer_params);
+    fn audio_effect_all_contains_structural_effects() {
+        let effects = AudioEffect::all();
+        assert!(effects.contains(&AudioEffect::RebuildInstruments));
+        assert!(effects.contains(&AudioEffect::RebuildSession));
+        assert!(effects.contains(&AudioEffect::UpdatePianoRoll));
+        assert!(effects.contains(&AudioEffect::UpdateAutomation));
+        assert!(effects.contains(&AudioEffect::RebuildRouting));
+        assert!(effects.contains(&AudioEffect::UpdateMixerParams));
     }
 
     #[test]
-    fn audio_dirty_any_detects_single_flag() {
-        let mut d = AudioDirty::default();
-        assert!(!d.any());
-        d.instruments = true;
-        assert!(d.any());
-    }
-
-    #[test]
-    fn audio_dirty_any_false_when_empty() {
-        let d = AudioDirty::default();
-        assert!(!d.any());
-    }
-
-    #[test]
-    fn audio_dirty_merge_combines_flags() {
-        let mut a = AudioDirty { instruments: true, ..AudioDirty::default() };
-        let b = AudioDirty { session: true, ..AudioDirty::default() };
-        a.merge(b);
-        assert!(a.instruments);
-        assert!(a.session);
-    }
-
-    #[test]
-    fn audio_dirty_clear() {
-        let mut d = AudioDirty::all();
-        d.clear();
-        assert!(!d.any());
+    fn audio_effect_for_instrument() {
+        let id = InstrumentId::new(42);
+        let effects = AudioEffect::for_instrument(id);
+        assert!(effects.contains(&AudioEffect::RebuildInstruments));
+        assert!(effects.contains(&AudioEffect::RebuildRoutingForInstrument(id)));
     }
 
     #[test]
@@ -1079,12 +935,25 @@ mod tests {
         assert!(!r.quit);
         assert!(r.nav.is_empty());
         assert!(r.status.is_empty());
+        assert!(r.audio_effects.is_empty());
     }
 
     #[test]
     fn dispatch_result_with_quit() {
         let r = DispatchResult::with_quit();
         assert!(r.quit);
+    }
+
+    #[test]
+    fn dispatch_result_merge_extends_effects() {
+        let mut a = DispatchResult::none();
+        a.audio_effects.push(AudioEffect::RebuildInstruments);
+        let mut b = DispatchResult::none();
+        b.audio_effects.push(AudioEffect::RebuildSession);
+        a.merge(b);
+        assert_eq!(a.audio_effects.len(), 2);
+        assert!(a.audio_effects.contains(&AudioEffect::RebuildInstruments));
+        assert!(a.audio_effects.contains(&AudioEffect::RebuildSession));
     }
 
     #[test]
@@ -1099,174 +968,13 @@ mod tests {
         assert_eq!(LfoParamKind::Depth.as_str(), "depth");
     }
 
-    // ========================================================================
-    // Targeted param array merge tests
-    // ========================================================================
-
     #[test]
-    fn merge_preserves_both_filter_params() {
-        let mut a = AudioDirty::default();
-        a.filter_params[0] = Some((InstrumentId::new(1), FilterParamKind::Cutoff, 500.0));
-        let mut b = AudioDirty::default();
-        b.filter_params[0] = Some((InstrumentId::new(1), FilterParamKind::Resonance, 0.7));
-        a.merge(b);
-        assert!(a.filter_params[0].is_some());
-        assert!(a.filter_params[1].is_some());
-        // Both params preserved
-        let kinds: Vec<FilterParamKind> = a.filter_params.iter().flatten().map(|p| p.1).collect();
-        assert!(kinds.contains(&FilterParamKind::Cutoff));
-        assert!(kinds.contains(&FilterParamKind::Resonance));
-        assert!(!a.instruments, "should not escalate when both slots fit");
-    }
-
-    #[test]
-    fn merge_filter_overflow_escalates() {
-        let mut a = AudioDirty {
-            filter_params: [
-                Some((InstrumentId::new(1), FilterParamKind::Cutoff, 500.0)),
-                Some((InstrumentId::new(1), FilterParamKind::Resonance, 0.7)),
-            ],
-            ..Default::default()
-        };
-        let mut b = AudioDirty::default();
-        b.filter_params[0] = Some((InstrumentId::new(2), FilterParamKind::Cutoff, 1000.0));
-        a.merge(b);
-        assert!(a.instruments, "overflow should escalate to instruments=true");
-        assert!(a.filter_params.iter().all(|p| p.is_none()), "array should be cleared on overflow");
-    }
-
-    #[test]
-    fn merge_preserves_multiple_effect_params() {
-        let eid = EffectId::new(1);
-        let mut a = AudioDirty::default();
-        a.effect_params[0] = Some((InstrumentId::new(1), eid, ParamIndex::new(0), 0.5));
-        let mut b = AudioDirty::default();
-        b.effect_params[0] = Some((InstrumentId::new(1), eid, ParamIndex::new(1), 0.8));
-        let mut c = AudioDirty::default();
-        c.effect_params[0] = Some((InstrumentId::new(2), eid, ParamIndex::new(0), 0.3));
-        let mut d = AudioDirty::default();
-        d.effect_params[0] = Some((InstrumentId::new(2), eid, ParamIndex::new(1), 0.6));
-        a.merge(b);
-        a.merge(c);
-        a.merge(d);
-        let count = a.effect_params.iter().filter(|p| p.is_some()).count();
-        assert_eq!(count, 4, "all 4 effect params should be preserved");
-        assert!(!a.instruments);
-    }
-
-    #[test]
-    fn merge_effect_overflow_escalates() {
-        let eid = EffectId::new(1);
-        let mut a = AudioDirty::default();
-        // Fill all 4 slots
-        for i in 0..4 {
-            a.effect_params[i] = Some((InstrumentId::new(1), eid, ParamIndex::new(i), i as f32));
-        }
-        let mut b = AudioDirty::default();
-        b.effect_params[0] = Some((InstrumentId::new(2), eid, ParamIndex::new(0), 99.0));
-        a.merge(b);
-        assert!(a.instruments, "overflow should escalate to instruments=true");
-        assert!(a.effect_params.iter().all(|p| p.is_none()));
-    }
-
-    #[test]
-    fn merge_preserves_both_lfo_params() {
-        let mut a = AudioDirty::default();
-        a.lfo_params[0] = Some((InstrumentId::new(1), LfoParamKind::Rate, 5.0));
-        let mut b = AudioDirty::default();
-        b.lfo_params[0] = Some((InstrumentId::new(1), LfoParamKind::Depth, 0.8));
-        a.merge(b);
-        assert!(a.lfo_params[0].is_some());
-        assert!(a.lfo_params[1].is_some());
-        assert!(!a.instruments);
-    }
-
-    #[test]
-    fn merge_lfo_overflow_escalates() {
-        let mut a = AudioDirty {
-            lfo_params: [
-                Some((InstrumentId::new(1), LfoParamKind::Rate, 5.0)),
-                Some((InstrumentId::new(1), LfoParamKind::Depth, 0.8)),
-            ],
-            ..Default::default()
-        };
-        let mut b = AudioDirty::default();
-        b.lfo_params[0] = Some((InstrumentId::new(2), LfoParamKind::Rate, 10.0));
-        a.merge(b);
-        assert!(a.instruments, "overflow should escalate to instruments=true");
-        assert!(a.lfo_params.iter().all(|p| p.is_none()));
-    }
-
-    #[test]
-    fn merge_bus_effect_overflow_escalates_to_session() {
-        let eid = EffectId::new(1);
-        let mut a = AudioDirty::default();
-        for i in 0..4 {
-            a.bus_effect_params[i] = Some((BusId::new(1), eid, ParamIndex::new(i), i as f32));
-        }
-        let mut b = AudioDirty::default();
-        b.bus_effect_params[0] = Some((BusId::new(2), eid, ParamIndex::new(0), 99.0));
-        a.merge(b);
-        assert!(a.session, "bus overflow should escalate to session=true");
-        assert!(!a.instruments, "bus overflow should NOT escalate to instruments");
-        assert!(a.bus_effect_params.iter().all(|p| p.is_none()));
-    }
-
-    #[test]
-    fn merge_layer_group_effect_overflow_escalates_to_session() {
-        let eid = EffectId::new(1);
-        let mut a = AudioDirty::default();
-        for i in 0..4 {
-            a.layer_group_effect_params[i] = Some((1, eid, ParamIndex::new(i), i as f32));
-        }
-        let mut b = AudioDirty::default();
-        b.layer_group_effect_params[0] = Some((2, eid, ParamIndex::new(0), 99.0));
-        a.merge(b);
-        assert!(a.session, "layer group overflow should escalate to session=true");
-        assert!(!a.instruments);
-        assert!(a.layer_group_effect_params.iter().all(|p| p.is_none()));
-    }
-
-    #[test]
-    fn set_filter_param_fills_slots() {
-        let mut d = AudioDirty::default();
-        d.set_filter_param(InstrumentId::new(1), FilterParamKind::Cutoff, 500.0);
-        assert!(d.filter_params[0].is_some());
-        assert!(d.filter_params[1].is_none());
-        d.set_filter_param(InstrumentId::new(1), FilterParamKind::Resonance, 0.7);
-        assert!(d.filter_params[1].is_some());
-        assert!(!d.instruments);
-    }
-
-    #[test]
-    fn set_filter_param_overflow_escalates() {
-        let mut d = AudioDirty::default();
-        d.set_filter_param(InstrumentId::new(1), FilterParamKind::Cutoff, 500.0);
-        d.set_filter_param(InstrumentId::new(1), FilterParamKind::Resonance, 0.7);
-        d.set_filter_param(InstrumentId::new(2), FilterParamKind::Cutoff, 1000.0);
-        assert!(d.instruments, "overflow should escalate");
-        assert!(d.filter_params.iter().all(|p| p.is_none()));
-    }
-
-    #[test]
-    fn any_detects_filter_params() {
-        let mut d = AudioDirty::default();
-        assert!(!d.any());
-        d.filter_params[0] = Some((InstrumentId::new(1), FilterParamKind::Cutoff, 500.0));
-        assert!(d.any());
-    }
-
-    #[test]
-    fn any_detects_effect_params() {
-        let mut d = AudioDirty::default();
-        d.effect_params[0] = Some((InstrumentId::new(1), EffectId::new(1), ParamIndex::new(0), 0.5));
-        assert!(d.any());
-    }
-
-    #[test]
-    fn any_detects_bus_effect_params() {
-        let mut d = AudioDirty::default();
-        d.bus_effect_params[0] = Some((BusId::new(1), EffectId::new(1), ParamIndex::new(0), 0.5));
-        assert!(d.any());
+    fn audio_effect_is_routing() {
+        assert!(AudioEffect::RebuildRouting.is_routing());
+        assert!(AudioEffect::RebuildRoutingForInstrument(InstrumentId::new(1)).is_routing());
+        assert!(AudioEffect::AddInstrumentRouting(InstrumentId::new(1)).is_routing());
+        assert!(AudioEffect::DeleteInstrumentRouting(InstrumentId::new(1)).is_routing());
+        assert!(!AudioEffect::RebuildInstruments.is_routing());
+        assert!(!AudioEffect::UpdatePianoRoll.is_routing());
     }
 }

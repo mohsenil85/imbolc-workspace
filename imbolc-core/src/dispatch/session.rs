@@ -3,16 +3,15 @@ use std::sync::mpsc::Sender;
 use imbolc_audio::AudioHandle;
 use crate::scd_parser;
 use crate::state::{AppState, CustomSynthDef, ParamSpec};
-use crate::action::{DispatchResult, IoFeedback, NavIntent, SessionAction};
+use crate::action::{AudioEffect, DispatchResult, IoFeedback, NavIntent, SessionAction};
 
 use super::server::compile_synthdef;
-use super::side_effects::AudioSideEffect;
 use super::default_rack_path;
 
 fn dispatch_save(
     path: PathBuf,
     state: &mut AppState,
-    audio: &AudioHandle,
+    audio: &mut AudioHandle,
     io_tx: &Sender<IoFeedback>,
     result: &mut DispatchResult,
 ) {
@@ -49,7 +48,7 @@ fn dispatch_save(
 fn dispatch_load(
     path: PathBuf,
     state: &mut AppState,
-    audio: &AudioHandle,
+    audio: &mut AudioHandle,
     io_tx: &Sender<IoFeedback>,
     result: &mut DispatchResult,
 ) {
@@ -84,8 +83,7 @@ fn dispatch_load(
 pub(super) fn dispatch_session(
     action: &SessionAction,
     state: &mut AppState,
-    audio: &AudioHandle,
-    _effects: &mut Vec<AudioSideEffect>,
+    audio: &mut AudioHandle,
     io_tx: &Sender<IoFeedback>,
 ) -> DispatchResult {
     let mut result = DispatchResult::none();
@@ -119,7 +117,7 @@ pub(super) fn dispatch_session(
             state.project.path = None;
             state.project.dirty = false;
             state.undo_history.clear();
-            result.audio_dirty = crate::action::AudioDirty::all();
+            result.audio_effects = AudioEffect::all();
             result.project_name = Some("untitled".to_string());
             result.push_nav(NavIntent::ConditionalPop("confirm"));
             result.push_nav(NavIntent::ConditionalPop("project_browser"));
@@ -128,13 +126,13 @@ pub(super) fn dispatch_session(
         SessionAction::UpdateSession(ref settings) => {
             state.session.apply_musical_settings(settings);
             result.push_nav(NavIntent::PopOrSwitchTo("instrument"));
-            result.audio_dirty.session = true;
-            result.audio_dirty.piano_roll = true;
+            result.audio_effects.push(AudioEffect::RebuildSession);
+            result.audio_effects.push(AudioEffect::UpdatePianoRoll);
         }
         SessionAction::UpdateSessionLive(ref settings) => {
             state.session.apply_musical_settings(settings);
-            result.audio_dirty.session = true;
-            result.audio_dirty.piano_roll = true;
+            result.audio_effects.push(AudioEffect::RebuildSession);
+            result.audio_effects.push(AudioEffect::UpdatePianoRoll);
         }
         SessionAction::OpenFileBrowser(ref file_action) => {
             result.push_nav(NavIntent::OpenFileBrowser(file_action.clone()));
@@ -206,11 +204,11 @@ pub(super) fn dispatch_session(
         }
         SessionAction::AdjustHumanizeVelocity(delta) => {
             state.session.humanize.velocity = (state.session.humanize.velocity + delta).clamp(0.0, 1.0);
-            result.audio_dirty.session = true;
+            result.audio_effects.push(AudioEffect::RebuildSession);
         }
         SessionAction::AdjustHumanizeTiming(delta) => {
             state.session.humanize.timing = (state.session.humanize.timing + delta).clamp(0.0, 1.0);
-            result.audio_dirty.session = true;
+            result.audio_effects.push(AudioEffect::RebuildSession);
         }
         SessionAction::ImportVstPlugin(ref path, kind) => {
             use crate::state::vst_plugin::{VstPlugin, VstParamSpec};
@@ -256,12 +254,12 @@ pub(super) fn dispatch_session(
             result.push_status(audio.status(), &status_msg);
 
             result.push_nav(NavIntent::Pop);
-            result.audio_dirty.session = true;
+            result.audio_effects.push(AudioEffect::RebuildSession);
         }
         SessionAction::ToggleMasterMute => {
             state.session.mixer.master_mute = !state.session.mixer.master_mute;
-            result.audio_dirty.session = true;
-            result.audio_dirty.mixer_params = true;
+            result.audio_effects.push(AudioEffect::RebuildSession);
+            result.audio_effects.push(AudioEffect::UpdateMixerParams);
         }
         SessionAction::CycleTheme => {
             use imbolc_types::state::Theme;
@@ -298,7 +296,7 @@ pub(super) fn dispatch_session(
                     state.instruments = instruments;
                     state.instruments.rebuild_index();
                     state.undo_history.clear();
-                    result.audio_dirty = crate::action::AudioDirty::all();
+                    result.audio_effects = AudioEffect::all();
                     result.push_status(audio.status(), "Checkpoint restored");
                 }
                 Err(e) => {

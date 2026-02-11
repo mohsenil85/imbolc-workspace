@@ -11,14 +11,9 @@ mod piano_roll;
 mod sequencer;
 mod server;
 mod session;
-pub mod side_effects;
 mod vst_param;
 
-#[cfg(test)]
-mod projection_parity;
-
 pub use local::LocalDispatcher;
-pub use side_effects::AudioSideEffect;
 
 use std::path::PathBuf;
 use std::sync::mpsc::Sender;
@@ -26,7 +21,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use imbolc_audio::AudioHandle;
 use crate::state::AppState;
-use crate::action::{Action, AudioDirty, ClickAction, DispatchResult, IoFeedback, TunerAction};
+use crate::action::{AudioEffect, ClickAction, DispatchResult, DomainAction, IoFeedback, TunerAction};
 use crate::state::undo::{coalesce_key, is_undoable, undo_scope, UndoScope};
 
 pub use helpers::{
@@ -57,19 +52,18 @@ fn recording_path(prefix: &str) -> PathBuf {
     dir.join(format!("{}_{}.wav", prefix, secs))
 }
 
-/// Dispatch an action. Returns a DispatchResult describing side effects for the UI layer.
-/// Dispatch no longer takes panes or app_frame — it operates purely on state and audio engine.
+/// Dispatch a domain action. Returns a DispatchResult describing side effects for the UI layer.
 ///
-/// Audio write operations are collected into `effects` rather than executed inline.
-/// The caller (`dispatch_with_audio`) applies them after dispatch returns.
-/// `audio` is passed as shared ref for read-only queries (`is_running()`, `status()`).
+/// Only handles domain actions (state mutations). UI-layer actions (Nav, PushLayer,
+/// PopLayer, ExitPerformanceMode, Quit, SaveAndQuit) are handled by the main loop.
+///
+/// Audio operations are executed directly via `AudioHandle` methods.
 ///
 /// Automatically pushes undo snapshots for undoable actions before mutating state.
 pub fn dispatch_action(
-    action: &Action,
+    action: &DomainAction,
     state: &mut AppState,
-    audio: &AudioHandle,
-    effects: &mut Vec<AudioSideEffect>,
+    audio: &mut AudioHandle,
     io_tx: &Sender<IoFeedback>,
 ) -> DispatchResult {
     // Auto-push undo snapshot for undoable actions (with coalescing for param sweeps)
@@ -81,47 +75,38 @@ pub fn dispatch_action(
         state.project.dirty = true;
     }
 
-    
-
     match action {
-        Action::Quit => DispatchResult::with_quit(),
-        Action::Nav(_) => DispatchResult::none(), // Handled by PaneManager
-        Action::Instrument(a) => instrument::dispatch_instrument(a, state, audio, effects),
-        Action::Mixer(a) => mixer::dispatch_mixer(a, state, audio, effects),
-        Action::PianoRoll(a) => piano_roll::dispatch_piano_roll(a, state, audio, effects),
-        Action::Arrangement(a) => arrangement::dispatch_arrangement(a, state, audio, effects),
-        Action::Server(a) => server::dispatch_server(a, state, audio, effects),
-        Action::Session(a) => session::dispatch_session(a, state, audio, effects, io_tx),
-        Action::Sequencer(a) => sequencer::dispatch_sequencer(a, state, audio, effects),
-        Action::Chopper(a) => sequencer::dispatch_chopper(a, state, audio, effects),
-        Action::Automation(a) => automation::dispatch_automation(a, state, audio, effects),
-        Action::Midi(a) => midi::dispatch_midi(a, state),
-        Action::Bus(a) => bus::dispatch_bus(a, state),
-        Action::LayerGroup(a) => bus::dispatch_layer_group(a, state, audio, effects),
-        Action::VstParam(a) => vst_param::dispatch_vst_param(a, state, audio, effects),
-        Action::Click(a) => dispatch_click(a, state, effects),
-        Action::Tuner(a) => dispatch_tuner(a, effects),
-        Action::AudioFeedback(f) => audio_feedback::dispatch_audio_feedback(f, state, audio, effects),
-        Action::None => DispatchResult::none(),
-        // Layer management actions — handled in main.rs before dispatch
-        Action::ExitPerformanceMode | Action::PushLayer(_) | Action::PopLayer(_) => DispatchResult::none(),
-        // SaveAndQuit is intercepted in main.rs before reaching dispatch
-        Action::SaveAndQuit => DispatchResult::none(),
-        Action::Undo => {
+        DomainAction::Instrument(a) => instrument::dispatch_instrument(a, state, audio),
+        DomainAction::Mixer(a) => mixer::dispatch_mixer(a, state, audio),
+        DomainAction::PianoRoll(a) => piano_roll::dispatch_piano_roll(a, state, audio),
+        DomainAction::Arrangement(a) => arrangement::dispatch_arrangement(a, state, audio),
+        DomainAction::Server(a) => server::dispatch_server(a, state, audio),
+        DomainAction::Session(a) => session::dispatch_session(a, state, audio, io_tx),
+        DomainAction::Sequencer(a) => sequencer::dispatch_sequencer(a, state, audio),
+        DomainAction::Chopper(a) => sequencer::dispatch_chopper(a, state, audio),
+        DomainAction::Automation(a) => automation::dispatch_automation(a, state, audio),
+        DomainAction::Midi(a) => midi::dispatch_midi(a, state),
+        DomainAction::Bus(a) => bus::dispatch_bus(a, state),
+        DomainAction::LayerGroup(a) => bus::dispatch_layer_group(a, state, audio),
+        DomainAction::VstParam(a) => vst_param::dispatch_vst_param(a, state, audio),
+        DomainAction::Click(a) => dispatch_click(a, state, audio),
+        DomainAction::Tuner(a) => dispatch_tuner(a, audio),
+        DomainAction::AudioFeedback(f) => audio_feedback::dispatch_audio_feedback(f, state, audio),
+        DomainAction::Undo => {
             if let Some(scope) = state.undo_history.undo(&mut state.session, &mut state.instruments) {
                 state.project.dirty = true;
                 let mut r = DispatchResult::none();
-                r.audio_dirty = audio_dirty_for_undo_scope(scope);
+                r.audio_effects = audio_effects_for_undo_scope(scope);
                 r
             } else {
                 DispatchResult::none()
             }
         }
-        Action::Redo => {
+        DomainAction::Redo => {
             if let Some(scope) = state.undo_history.redo(&mut state.session, &mut state.instruments) {
                 state.project.dirty = true;
                 let mut r = DispatchResult::none();
-                r.audio_dirty = audio_dirty_for_undo_scope(scope);
+                r.audio_effects = audio_effects_for_undo_scope(scope);
                 r
             } else {
                 DispatchResult::none()
@@ -130,45 +115,45 @@ pub fn dispatch_action(
     }
 }
 
-/// Map an undo scope to the minimal AudioDirty flags needed.
-fn audio_dirty_for_undo_scope(scope: UndoScope) -> AudioDirty {
+/// Map an undo scope to the minimal audio effects needed.
+fn audio_effects_for_undo_scope(scope: UndoScope) -> Vec<AudioEffect> {
     match scope {
-        UndoScope::SingleInstrument(id) => AudioDirty::for_instrument(id),
-        _ => AudioDirty::all(),
+        UndoScope::SingleInstrument(id) => AudioEffect::for_instrument(id),
+        _ => AudioEffect::all(),
     }
 }
 
 /// Dispatch tuner actions.
-fn dispatch_tuner(action: &TunerAction, effects: &mut Vec<AudioSideEffect>) -> DispatchResult {
+fn dispatch_tuner(action: &TunerAction, audio: &mut AudioHandle) -> DispatchResult {
     match action {
         TunerAction::PlayTone(freq) => {
-            effects.push(AudioSideEffect::StartTunerTone { freq: *freq });
+            audio.start_tuner_tone(*freq);
         }
         TunerAction::StopTone => {
-            effects.push(AudioSideEffect::StopTunerTone);
+            audio.stop_tuner_tone();
         }
     }
     DispatchResult::none()
 }
 
 /// Dispatch click track actions.
-fn dispatch_click(action: &ClickAction, state: &mut AppState, effects: &mut Vec<AudioSideEffect>) -> DispatchResult {
+fn dispatch_click(action: &ClickAction, state: &mut AppState, audio: &mut AudioHandle) -> DispatchResult {
     match action {
         ClickAction::Toggle => {
             state.session.click_track.enabled = !state.session.click_track.enabled;
-            effects.push(AudioSideEffect::SetClickEnabled { enabled: state.session.click_track.enabled });
+            let _ = audio.set_click_enabled(state.session.click_track.enabled);
         }
         ClickAction::ToggleMute => {
             state.session.click_track.muted = !state.session.click_track.muted;
-            effects.push(AudioSideEffect::SetClickMuted { muted: state.session.click_track.muted });
+            let _ = audio.set_click_muted(state.session.click_track.muted);
         }
         ClickAction::AdjustVolume(delta) => {
             state.session.click_track.volume = (state.session.click_track.volume + delta).clamp(0.0, 1.0);
-            effects.push(AudioSideEffect::SetClickVolume { volume: state.session.click_track.volume });
+            let _ = audio.set_click_volume(state.session.click_track.volume);
         }
         ClickAction::SetVolume(volume) => {
             state.session.click_track.volume = volume.clamp(0.0, 1.0);
-            effects.push(AudioSideEffect::SetClickVolume { volume: state.session.click_track.volume });
+            let _ = audio.set_click_volume(state.session.click_track.volume);
         }
     }
     DispatchResult::none()

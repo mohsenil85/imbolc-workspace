@@ -11,11 +11,12 @@ use crate::state::session::SessionState;
 
 // Re-export all action types from imbolc-types
 pub use imbolc_types::{
-    Action, ArrangementAction, AudioDirty, AudioFeedback, AutomationAction, BusAction,
-    ChopperAction, ClickAction, DispatchResult, EqParamKind, FileSelectAction, FilterParamKind,
-    InstrumentAction, InstrumentUpdate, LayerGroupAction, LfoParamKind, MidiAction, MixerAction,
-    NavAction, NavIntent, PianoRollAction, SequencerAction, ServerAction, SessionAction,
-    StatusEvent, ToggleResult, TunerAction, VstParamAction, VstTarget,
+    Action, ArrangementAction, AudioEffect, AudioFeedback, AutomationAction, BusAction,
+    ChopperAction, ClickAction, DispatchResult, DomainAction, EqParamKind, FileSelectAction,
+    FilterParamKind, InstrumentAction, InstrumentUpdate, LayerGroupAction, LfoParamKind,
+    MidiAction, MixerAction, NavAction, NavIntent, PianoRollAction, SequencerAction,
+    ServerAction, SessionAction, StatusEvent, ToggleResult, TunerAction, VstParamAction,
+    VstTarget,
 };
 
 /// Feedback from async I/O operations to the main thread.

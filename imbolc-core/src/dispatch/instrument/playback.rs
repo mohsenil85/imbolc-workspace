@@ -1,12 +1,10 @@
 use imbolc_audio::AudioHandle;
 use crate::state::AppState;
 use crate::action::DispatchResult;
-use crate::dispatch::side_effects::AudioSideEffect;
 
 pub(super) fn handle_play_note(
     state: &mut AppState,
-    audio: &AudioHandle,
-    effects: &mut Vec<AudioSideEffect>,
+    audio: &mut AudioHandle,
     pitch: u8,
     velocity: u8,
 ) -> DispatchResult {
@@ -25,17 +23,8 @@ pub(super) fn handle_play_note(
                     };
                     for p in &pitches {
                         let p = inst.offset_pitch(*p);
-                        effects.push(AudioSideEffect::SpawnVoice {
-                            instrument_id: target_id,
-                            pitch: p,
-                            velocity: vel_f,
-                            offset_secs: 0.0,
-                        });
-                        effects.push(AudioSideEffect::PushActiveNote {
-                            instrument_id: target_id,
-                            pitch: p,
-                            duration_ticks: 240,
-                        });
+                        let _ = audio.spawn_voice(target_id, p, vel_f, 0.0);
+                        audio.push_active_note(target_id, p, 240);
                     }
                 }
             }
@@ -48,8 +37,7 @@ pub(super) fn handle_play_note(
 
 pub(super) fn handle_play_notes(
     state: &mut AppState,
-    audio: &AudioHandle,
-    effects: &mut Vec<AudioSideEffect>,
+    audio: &mut AudioHandle,
     pitches: &[u8],
     velocity: u8,
 ) -> DispatchResult {
@@ -69,17 +57,8 @@ pub(super) fn handle_play_notes(
                         };
                         for p in &expanded {
                             let p = inst.offset_pitch(*p);
-                            effects.push(AudioSideEffect::SpawnVoice {
-                                instrument_id: target_id,
-                                pitch: p,
-                                velocity: vel_f,
-                                offset_secs: 0.0,
-                            });
-                            effects.push(AudioSideEffect::PushActiveNote {
-                                instrument_id: target_id,
-                                pitch: p,
-                                duration_ticks: 240,
-                            });
+                            let _ = audio.spawn_voice(target_id, p, vel_f, 0.0);
+                            audio.push_active_note(target_id, p, 240);
                         }
                     }
                 }
@@ -93,8 +72,7 @@ pub(super) fn handle_play_notes(
 
 pub(super) fn handle_play_drum_pad(
     state: &AppState,
-    audio: &AudioHandle,
-    effects: &mut Vec<AudioSideEffect>,
+    audio: &mut AudioHandle,
     pad_idx: usize,
 ) -> DispatchResult {
     if let Some(instrument) = state.instruments.selected_instrument() {
@@ -105,15 +83,7 @@ pub(super) fn handle_play_drum_pad(
                     let pitch_rate = 2.0_f32.powf(pad.pitch as f32 / 12.0);
                     let rate = if pad.reverse { -pitch_rate } else { pitch_rate };
                     if audio.is_running() {
-                        effects.push(AudioSideEffect::PlayDrumHit {
-                            buffer_id,
-                            amp,
-                            instrument_id,
-                            slice_start: pad.slice_start,
-                            slice_end: pad.slice_end,
-                            rate,
-                            offset_secs: 0.0,
-                        });
+                        let _ = audio.play_drum_hit_to_instrument(buffer_id, amp, instrument_id, pad.slice_start, pad.slice_end, rate, 0.0);
                     } else {
                         return DispatchResult::with_status(imbolc_audio::ServerStatus::Stopped, "Audio engine not running");
                     }

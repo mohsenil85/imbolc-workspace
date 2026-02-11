@@ -1,8 +1,8 @@
 use crate::action::{
-    AudioDirty, ClickAction, MixerAction, PianoRollAction, SequencerAction,
+    AudioEffect, ClickAction, MixerAction, PianoRollAction, SequencerAction,
     AutomationAction, Action
 };
-use crate::audio::{AudioHandle, is_action_projectable};
+use crate::audio::AudioHandle;
 use crate::state::{AppState, MixerSelection, ClipboardContents};
 use crate::dispatch::LocalDispatcher;
 use crate::panes::{
@@ -134,7 +134,7 @@ pub(crate) fn handle_global_action(
     audio: &mut AudioHandle,
     app_frame: &mut Frame,
     select_mode: &mut InstrumentSelectMode,
-    pending_audio_dirty: &mut AudioDirty,
+    pending_audio_effects: &mut Vec<AudioEffect>,
     needs_full_sync: &mut bool,
     layer_stack: &mut LayerStack,
 ) -> GlobalResult {
@@ -199,17 +199,17 @@ pub(crate) fn handle_global_action(
                 return GlobalResult::Quit;
             }
             GlobalActionId::Undo => {
-                let r = dispatcher.dispatch_with_audio(&Action::Undo, audio);
-                if r.audio_dirty.any() { *needs_full_sync = true; }
-                pending_audio_dirty.merge(r.audio_dirty);
+                let mut r = dispatcher.dispatch_with_audio(&Action::Undo, audio);
+                if !r.audio_effects.is_empty() { *needs_full_sync = true; }
+                pending_audio_effects.extend(std::mem::take(&mut r.audio_effects));
                 apply_dispatch_result(r, dispatcher, panes, app_frame, audio);
                 sync_piano_roll_to_selection(dispatcher, panes, audio);
                 sync_instrument_edit(dispatcher.state(), panes);
             }
             GlobalActionId::Redo => {
-                let r = dispatcher.dispatch_with_audio(&Action::Redo, audio);
-                if r.audio_dirty.any() { *needs_full_sync = true; }
-                pending_audio_dirty.merge(r.audio_dirty);
+                let mut r = dispatcher.dispatch_with_audio(&Action::Redo, audio);
+                if !r.audio_effects.is_empty() { *needs_full_sync = true; }
+                pending_audio_effects.extend(std::mem::take(&mut r.audio_effects));
                 apply_dispatch_result(r, dispatcher, panes, app_frame, audio);
                 sync_piano_roll_to_selection(dispatcher, panes, audio);
                 sync_instrument_edit(dispatcher.state(), panes);
@@ -225,11 +225,11 @@ pub(crate) fn handle_global_action(
                     sync_pane_layer(panes, layer_stack);
                 } else {
                     let save_action = Action::Session(SessionAction::Save);
-                    let r = dispatcher.dispatch_with_audio(&save_action, audio);
-                    if !is_action_projectable(&save_action) && r.audio_dirty.any() {
+                    let mut r = dispatcher.dispatch_with_audio(&save_action, audio);
+                    if r.needs_full_sync {
                         *needs_full_sync = true;
                     }
-                    pending_audio_dirty.merge(r.audio_dirty);
+                    pending_audio_effects.extend(std::mem::take(&mut r.audio_effects));
                     apply_dispatch_result(r, dispatcher, panes, app_frame, audio);
                 }
             }
@@ -242,11 +242,11 @@ pub(crate) fn handle_global_action(
                     sync_pane_layer(panes, layer_stack);
                 } else {
                     let load_action = Action::Session(SessionAction::Load);
-                    let r = dispatcher.dispatch_with_audio(&load_action, audio);
-                    if !is_action_projectable(&load_action) && r.audio_dirty.any() {
+                    let mut r = dispatcher.dispatch_with_audio(&load_action, audio);
+                    if r.needs_full_sync {
                         *needs_full_sync = true;
                     }
-                    pending_audio_dirty.merge(r.audio_dirty);
+                    pending_audio_effects.extend(std::mem::take(&mut r.audio_effects));
                     apply_dispatch_result(r, dispatcher, panes, app_frame, audio);
                 }
             }
@@ -267,22 +267,22 @@ pub(crate) fn handle_global_action(
                 sync_pane_layer(panes, layer_stack);
             }
             GlobalActionId::MasterMute => {
-                let r = dispatcher.dispatch_with_audio(&Action::Session(SessionAction::ToggleMasterMute), audio);
-                pending_audio_dirty.merge(r.audio_dirty);
+                let mut r = dispatcher.dispatch_with_audio(&Action::Session(SessionAction::ToggleMasterMute), audio);
+                pending_audio_effects.extend(std::mem::take(&mut r.audio_effects));
                 apply_dispatch_result(r, dispatcher, panes, app_frame, audio);
             }
             GlobalActionId::ClickTrackToggle => {
-                let r = dispatcher.dispatch_with_audio(&Action::Click(ClickAction::Toggle), audio);
-                pending_audio_dirty.merge(r.audio_dirty);
+                let mut r = dispatcher.dispatch_with_audio(&Action::Click(ClickAction::Toggle), audio);
+                pending_audio_effects.extend(std::mem::take(&mut r.audio_effects));
                 apply_dispatch_result(r, dispatcher, panes, app_frame, audio);
             }
             GlobalActionId::RecordMaster => {
                 let record_action = Action::Server(ui::ServerAction::RecordMaster);
-                let r = dispatcher.dispatch_with_audio(&record_action, audio);
-                if !is_action_projectable(&record_action) && r.audio_dirty.any() {
+                let mut r = dispatcher.dispatch_with_audio(&record_action, audio);
+                if r.needs_full_sync {
                     *needs_full_sync = true;
                 }
-                pending_audio_dirty.merge(r.audio_dirty);
+                pending_audio_effects.extend(std::mem::take(&mut r.audio_effects));
                 apply_dispatch_result(r, dispatcher, panes, app_frame, audio);
             }
             GlobalActionId::Copy => {
@@ -291,22 +291,22 @@ pub(crate) fn handle_global_action(
             GlobalActionId::Cut => {
                 let action = cut_from_active_pane(dispatcher, panes, audio);
                 if let Some(action) = action {
-                    let r = dispatcher.dispatch_with_audio(&action, audio);
-                    if !is_action_projectable(&action) && r.audio_dirty.any() {
+                    let mut r = dispatcher.dispatch_with_audio(&action, audio);
+                    if r.needs_full_sync {
                         *needs_full_sync = true;
                     }
-                    pending_audio_dirty.merge(r.audio_dirty);
+                    pending_audio_effects.extend(std::mem::take(&mut r.audio_effects));
                     apply_dispatch_result(r, dispatcher, panes, app_frame, audio);
                 }
             }
             GlobalActionId::Paste => {
                 let action = paste_to_active_pane(dispatcher.state_mut(), panes);
                 if let Some(action) = action {
-                    let r = dispatcher.dispatch_with_audio(&action, audio);
-                    if !is_action_projectable(&action) && r.audio_dirty.any() {
+                    let mut r = dispatcher.dispatch_with_audio(&action, audio);
+                    if r.needs_full_sync {
                         *needs_full_sync = true;
                     }
-                    pending_audio_dirty.merge(r.audio_dirty);
+                    pending_audio_effects.extend(std::mem::take(&mut r.audio_effects));
                     apply_dispatch_result(r, dispatcher, panes, app_frame, audio);
                 }
             }
@@ -500,8 +500,8 @@ pub(crate) fn handle_global_action(
             GlobalActionId::DeleteInstrument => {
                 if let Some(instrument) = dispatcher.state().instruments.selected_instrument() {
                     let id = instrument.id;
-                    let r = dispatcher.dispatch_with_audio(&Action::Instrument(ui::InstrumentAction::Delete(id)), audio);
-                    pending_audio_dirty.merge(r.audio_dirty);
+                    let mut r = dispatcher.dispatch_with_audio(&Action::Instrument(ui::InstrumentAction::Delete(id)), audio);
+                    pending_audio_effects.extend(std::mem::take(&mut r.audio_effects));
                     apply_dispatch_result(r, dispatcher, panes, app_frame, audio);
                     // Re-sync edit pane after deletion
                     sync_instrument_edit(dispatcher.state(), panes);
@@ -552,7 +552,7 @@ pub(crate) fn handle_global_action(
                         }
                     }
                 }
-                pending_audio_dirty.instruments = true;
+                pending_audio_effects.push(AudioEffect::RebuildInstruments);
                 *needs_full_sync = true;
             }
             GlobalActionId::Escape => {
@@ -563,8 +563,8 @@ pub(crate) fn handle_global_action(
                 return GlobalResult::RefreshScreen;
             }
             GlobalActionId::CycleTheme => {
-                let r = dispatcher.dispatch_with_audio(&Action::Session(SessionAction::CycleTheme), audio);
-                pending_audio_dirty.merge(r.audio_dirty);
+                let mut r = dispatcher.dispatch_with_audio(&Action::Session(SessionAction::CycleTheme), audio);
+                pending_audio_effects.extend(std::mem::take(&mut r.audio_effects));
                 apply_dispatch_result(r, dispatcher, panes, app_frame, audio);
             }
             GlobalActionId::OpenCheckpointList => {

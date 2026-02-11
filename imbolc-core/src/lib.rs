@@ -24,10 +24,10 @@
 //! let mut effects = Vec::new();
 //! let result = dispatch_action(&action, &mut state, &audio, &mut effects, &io_tx);
 //!
-//! // 4. Process DispatchResult: audio_dirty flags, nav intents, status events
-//! // ForwardAction handles incremental projection; apply_dirty handles fallback sync
-//! // audio.forward_action(&action, result.audio_dirty);
-//! // audio.apply_dirty(&state, result.audio_dirty, needs_full_sync);
+//! // 4. Process DispatchResult: audio_effects, nav intents, status events
+//! // ForwardAction handles incremental projection; apply_effects handles fallback sync
+//! // audio.forward_action(&action, &result.audio_effects);
+//! // audio.apply_effects(&state, &result.audio_effects, needs_full_sync);
 //!
 //! // 5. Drain IoFeedback from io_rx for async save/load completions
 //! // 6. Drain AudioFeedback via audio.drain_feedback() for render/export progress
@@ -38,7 +38,7 @@
 //! - [`state`] — All application state: `AppState`, instruments, session, piano roll,
 //!   automation, clipboard, undo history, persistence (SQLite save/load)
 //! - [`action`] — Action enums (`Action`, `PianoRollAction`, `SequencerAction`, etc.),
-//!   `DispatchResult`, `AudioDirty` flags, `NavIntent`, `IoFeedback`
+//!   `DispatchResult`, `AudioEffect`, `NavIntent`, `IoFeedback`
 //! - [`dispatch`] — `dispatch_action()` — the single entry point for state mutation.
 //!   Automatically manages undo snapshots for undoable actions.
 //! - [`audio`] — `AudioHandle` (main-thread interface) and audio thread communication

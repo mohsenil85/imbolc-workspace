@@ -1,9 +1,9 @@
+use imbolc_audio::AudioHandle;
 use crate::state::AppState;
 use crate::state::automation::AutomationTarget;
 use crate::state::BufferId;
-use crate::action::{DispatchResult, NavIntent};
+use crate::action::{AudioEffect, DispatchResult, NavIntent};
 use crate::dispatch::automation::record_automation_point;
-use crate::dispatch::side_effects::AudioSideEffect;
 
 pub(super) fn handle_add(
     state: &mut AppState,
@@ -11,15 +11,15 @@ pub(super) fn handle_add(
 ) -> DispatchResult {
     let new_id = state.add_instrument(source_type);
     let mut result = DispatchResult::with_nav(NavIntent::SwitchTo("instrument_edit"));
-    result.audio_dirty.instruments = true;
-    result.audio_dirty.piano_roll = true;
-    result.audio_dirty.routing_add_instrument = Some(new_id);
+    result.audio_effects.push(AudioEffect::RebuildInstruments);
+    result.audio_effects.push(AudioEffect::UpdatePianoRoll);
+    result.audio_effects.push(AudioEffect::AddInstrumentRouting(new_id));
     result
 }
 
 pub(super) fn handle_delete(
     state: &mut AppState,
-    effects: &mut Vec<AudioSideEffect>,
+    audio: &mut AudioHandle,
     inst_id: crate::state::InstrumentId,
 ) -> DispatchResult {
     // Collect buffer IDs from the instrument before removing it
@@ -44,7 +44,7 @@ pub(super) fn handle_delete(
         }
     }
     if !buffer_ids.is_empty() {
-        effects.push(AudioSideEffect::FreeSamples { buffer_ids });
+        audio.free_samples(buffer_ids);
     }
 
     state.remove_instrument(inst_id);
@@ -53,10 +53,10 @@ pub(super) fn handle_delete(
     } else {
         DispatchResult::none()
     };
-    result.audio_dirty.instruments = true;
-    result.audio_dirty.piano_roll = true;
-    result.audio_dirty.automation = true;
-    result.audio_dirty.routing_delete_instrument = Some(inst_id);
+    result.audio_effects.push(AudioEffect::RebuildInstruments);
+    result.audio_effects.push(AudioEffect::UpdatePianoRoll);
+    result.audio_effects.push(AudioEffect::UpdateAutomation);
+    result.audio_effects.push(AudioEffect::DeleteInstrumentRouting(inst_id));
     result
 }
 
@@ -125,8 +125,8 @@ pub(super) fn handle_update(
     }
 
     let mut result = DispatchResult::none();
-    result.audio_dirty.instruments = true;
-    result.audio_dirty.set_routing_instrument(update.id);
+    result.audio_effects.push(AudioEffect::RebuildInstruments);
+    result.audio_effects.push(AudioEffect::RebuildRoutingForInstrument(update.id));
     result
 }
 

@@ -1,4 +1,4 @@
-use crate::action::{DispatchResult, LfoParamKind};
+use crate::action::{AudioEffect, DispatchResult, LfoParamKind};
 use crate::dispatch::helpers::maybe_record_automation;
 use crate::state::automation::AutomationTarget;
 use crate::state::AppState;
@@ -13,8 +13,8 @@ pub(super) fn handle_toggle_lfo(state: &mut AppState, id: InstrumentId) -> Dispa
         instrument.modulation.lfo.enabled = !instrument.modulation.lfo.enabled;
     }
     let mut result = DispatchResult::none();
-    result.audio_dirty.instruments = true;
-    result.audio_dirty.set_routing_instrument(id);
+    result.audio_effects.push(AudioEffect::RebuildInstruments);
+    result.audio_effects.push(AudioEffect::RebuildRoutingForInstrument(id));
     result
 }
 
@@ -40,9 +40,9 @@ pub(super) fn handle_adjust_lfo_rate(
         maybe_record_automation(state, &mut result, AutomationTarget::lfo_rate(inst_id), normalized);
     }
 
-    result.audio_dirty.instruments = true;
+    result.audio_effects.push(AudioEffect::RebuildInstruments);
     if let Some(rate) = new_rate {
-        result.audio_dirty.set_lfo_param(id, LfoParamKind::Rate, rate);
+        result.audio_effects.push(AudioEffect::SetLfoParam(id, LfoParamKind::Rate, rate));
     }
 
     result
@@ -67,9 +67,9 @@ pub(super) fn handle_adjust_lfo_depth(
         maybe_record_automation(state, &mut result, AutomationTarget::lfo_depth(inst_id), depth);
     }
 
-    result.audio_dirty.instruments = true;
+    result.audio_effects.push(AudioEffect::RebuildInstruments);
     if let Some(depth) = new_depth {
-        result.audio_dirty.set_lfo_param(id, LfoParamKind::Depth, depth);
+        result.audio_effects.push(AudioEffect::SetLfoParam(id, LfoParamKind::Depth, depth));
     }
 
     result
@@ -84,8 +84,8 @@ pub(super) fn handle_set_lfo_shape(
         instrument.modulation.lfo.shape = shape;
     }
     let mut result = DispatchResult::none();
-    result.audio_dirty.instruments = true;
-    result.audio_dirty.set_routing_instrument(id);
+    result.audio_effects.push(AudioEffect::RebuildInstruments);
+    result.audio_effects.push(AudioEffect::RebuildRoutingForInstrument(id));
     result
 }
 
@@ -98,7 +98,7 @@ pub(super) fn handle_set_lfo_target(
         instrument.modulation.lfo.target = target;
     }
     let mut result = DispatchResult::none();
-    result.audio_dirty.instruments = true;
-    result.audio_dirty.set_routing_instrument(id);
+    result.audio_effects.push(AudioEffect::RebuildInstruments);
+    result.audio_effects.push(AudioEffect::RebuildRoutingForInstrument(id));
     result
 }

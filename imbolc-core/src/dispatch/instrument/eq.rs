@@ -1,15 +1,13 @@
 use imbolc_audio::AudioHandle;
 use crate::state::AppState;
 use crate::state::automation::AutomationTarget;
-use crate::action::{DispatchResult, EqParamKind};
-use crate::dispatch::side_effects::AudioSideEffect;
+use crate::action::{AudioEffect, DispatchResult, EqParamKind};
 
 use super::super::automation::record_automation_point;
 
 pub(super) fn handle_set_eq_param(
     state: &mut AppState,
-    audio: &AudioHandle,
-    effects: &mut Vec<AudioSideEffect>,
+    audio: &mut AudioHandle,
     instrument_id: crate::state::InstrumentId,
     band_idx: usize,
     param: EqParamKind,
@@ -45,18 +43,14 @@ pub(super) fn handle_set_eq_param(
     if audio.is_running() {
         let sc_param = format!("b{}_{}", band_idx, param.as_str());
         let sc_value = if param == EqParamKind::Q { 1.0 / value } else { value };
-        effects.push(AudioSideEffect::SetEqParam {
-            instrument_id,
-            param: sc_param,
-            value: sc_value,
-        });
+        let _ = audio.set_eq_param(instrument_id, &sc_param, sc_value);
     }
 
     let mut result = DispatchResult::none();
-    result.audio_dirty.instruments = true;
+    result.audio_effects.push(AudioEffect::RebuildInstruments);
     if let Some((target, value)) = record_target {
         record_automation_point(state, target, value);
-        result.audio_dirty.automation = true;
+        result.audio_effects.push(AudioEffect::UpdateAutomation);
     }
     result
 }
@@ -69,7 +63,7 @@ pub(super) fn handle_toggle_eq(
         instrument.toggle_eq();
     }
     let mut result = DispatchResult::none();
-    result.audio_dirty.instruments = true;
-    result.audio_dirty.set_routing_instrument(instrument_id);
+    result.audio_effects.push(AudioEffect::RebuildInstruments);
+    result.audio_effects.push(AudioEffect::RebuildRoutingForInstrument(instrument_id));
     result
 }

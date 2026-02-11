@@ -449,13 +449,13 @@ impl AudioThread {
                 add_instrument_routing, delete_instrument_routing,
                 rebuild_bus_processing, mixer_dirty,
             } => {
-                let projected = super::action_projection::project_action(
+                let reduced = imbolc_types::reduce::reduce_action(
                     action,
                     &mut self.instruments,
                     &mut self.session,
                 );
-                if !projected {
-                    log::debug!(target: "audio::projection", "unprojectable action: {:?}", std::mem::discriminant(&**action));
+                if !reduced {
+                    log::debug!(target: "audio::reduce", "unreducible action: {:?}", std::mem::discriminant(&**action));
                 }
 
                 if *rebuild_routing {

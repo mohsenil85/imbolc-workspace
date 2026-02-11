@@ -9,7 +9,7 @@ use imbolc_net::{NetworkState, RemoteDispatcher};
 use imbolc_types::Action;
 
 use crate::audio::AudioHandle;
-use crate::action::{AudioDirty, IoFeedback};
+use crate::action::{AudioEffect, IoFeedback};
 use crate::config;
 use crate::dispatch::LocalDispatcher;
 use crate::setup;
@@ -66,7 +66,7 @@ pub fn run_server() -> std::io::Result<()> {
         }
     };
 
-    let mut pending_audio_dirty = AudioDirty::default();
+    let mut pending_audio_effects: Vec<AudioEffect> = Vec::new();
     let mut last_metering = Instant::now();
     #[cfg(feature = "mdns")]
     let mut last_client_count = 0usize;
@@ -96,7 +96,7 @@ pub fn run_server() -> std::io::Result<()> {
 
             // Dispatch
             let result = dispatcher.dispatch_with_audio(&action, &mut audio);
-            pending_audio_dirty.merge(result.audio_dirty);
+            pending_audio_effects.extend(result.audio_effects);
 
             if result.quit {
                 log::info!("Quit requested, shutting down server");
@@ -106,9 +106,9 @@ pub fn run_server() -> std::io::Result<()> {
         }
 
         // Flush audio dirty flags (always full sync in network server mode)
-        if pending_audio_dirty.any() {
-            audio.apply_dirty(dispatcher.state(), pending_audio_dirty, true);
-            pending_audio_dirty.clear();
+        if !pending_audio_effects.is_empty() {
+            audio.apply_effects(dispatcher.state(), &pending_audio_effects, true);
+            pending_audio_effects.clear();
         }
 
         // Broadcast state updates (only build NetworkState when needed)
@@ -135,7 +135,7 @@ pub fn run_server() -> std::io::Result<()> {
         for feedback in audio.drain_feedback() {
             let action = Action::AudioFeedback(feedback);
             let result = dispatcher.dispatch_with_audio(&action, &mut audio);
-            pending_audio_dirty.merge(result.audio_dirty);
+            pending_audio_effects.extend(result.audio_effects);
         }
 
         // Send metering at ~30Hz

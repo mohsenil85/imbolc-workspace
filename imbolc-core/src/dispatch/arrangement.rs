@@ -1,15 +1,12 @@
-use crate::action::{ArrangementAction, DispatchResult, NavIntent};
+use crate::action::{ArrangementAction, AudioEffect, DispatchResult, NavIntent};
 use imbolc_audio::AudioHandle;
 use crate::state::arrangement::{ClipEditContext, PlayMode};
 use crate::state::AppState;
 
-use super::side_effects::AudioSideEffect;
-
 pub(super) fn dispatch_arrangement(
     action: &ArrangementAction,
     state: &mut AppState,
-    audio: &AudioHandle,
-    effects: &mut Vec<AudioSideEffect>,
+    audio: &mut AudioHandle,
 ) -> DispatchResult {
     match action {
         ArrangementAction::TogglePlayMode => {
@@ -19,7 +16,7 @@ pub(super) fn dispatch_arrangement(
                 PlayMode::Song => PlayMode::Pattern,
             };
             let mut result = DispatchResult::none();
-            result.audio_dirty.piano_roll = true;
+            result.audio_effects.push(AudioEffect::UpdatePianoRoll);
             result
         }
         ArrangementAction::CreateClip { instrument_id, length_ticks } => {
@@ -91,8 +88,8 @@ pub(super) fn dispatch_arrangement(
         ArrangementAction::DeleteClip(clip_id) => {
             state.session.arrangement.remove_clip(*clip_id);
             let mut result = DispatchResult::none();
-            result.audio_dirty.piano_roll = true;
-            result.audio_dirty.automation = true;
+            result.audio_effects.push(AudioEffect::UpdatePianoRoll);
+            result.audio_effects.push(AudioEffect::UpdateAutomation);
             result
         }
         ArrangementAction::RenameClip(clip_id, name) => {
@@ -104,29 +101,29 @@ pub(super) fn dispatch_arrangement(
         ArrangementAction::PlaceClip { clip_id, instrument_id, start_tick } => {
             state.session.arrangement.add_placement(*clip_id, *instrument_id, *start_tick);
             let mut result = DispatchResult::none();
-            result.audio_dirty.piano_roll = true;
-            result.audio_dirty.automation = true;
+            result.audio_effects.push(AudioEffect::UpdatePianoRoll);
+            result.audio_effects.push(AudioEffect::UpdateAutomation);
             result
         }
         ArrangementAction::RemovePlacement(placement_id) => {
             state.session.arrangement.remove_placement(*placement_id);
             let mut result = DispatchResult::none();
-            result.audio_dirty.piano_roll = true;
-            result.audio_dirty.automation = true;
+            result.audio_effects.push(AudioEffect::UpdatePianoRoll);
+            result.audio_effects.push(AudioEffect::UpdateAutomation);
             result
         }
         ArrangementAction::MovePlacement { placement_id, new_start_tick } => {
             state.session.arrangement.move_placement(*placement_id, *new_start_tick);
             let mut result = DispatchResult::none();
-            result.audio_dirty.piano_roll = true;
-            result.audio_dirty.automation = true;
+            result.audio_effects.push(AudioEffect::UpdatePianoRoll);
+            result.audio_effects.push(AudioEffect::UpdateAutomation);
             result
         }
         ArrangementAction::ResizePlacement { placement_id, new_length } => {
             state.session.arrangement.resize_placement(*placement_id, *new_length);
             let mut result = DispatchResult::none();
-            result.audio_dirty.piano_roll = true;
-            result.audio_dirty.automation = true;
+            result.audio_effects.push(AudioEffect::UpdatePianoRoll);
+            result.audio_effects.push(AudioEffect::UpdateAutomation);
             result
         }
         ArrangementAction::DuplicatePlacement(placement_id) => {
@@ -157,8 +154,8 @@ pub(super) fn dispatch_arrangement(
                 }
             }
             let mut result = DispatchResult::none();
-            result.audio_dirty.piano_roll = true;
-            result.audio_dirty.automation = true;
+            result.audio_effects.push(AudioEffect::UpdatePianoRoll);
+            result.audio_effects.push(AudioEffect::UpdateAutomation);
             result
         }
         ArrangementAction::SelectPlacement(selection) => {
@@ -255,8 +252,8 @@ pub(super) fn dispatch_arrangement(
             });
 
             let mut result = DispatchResult::with_nav(NavIntent::PushTo("piano_roll"));
-            result.audio_dirty.piano_roll = true;
-            result.audio_dirty.automation = true;
+            result.audio_effects.push(AudioEffect::UpdatePianoRoll);
+            result.audio_effects.push(AudioEffect::UpdateAutomation);
             result
         }
         ArrangementAction::ExitClipEdit => {
@@ -315,22 +312,22 @@ pub(super) fn dispatch_arrangement(
             }
 
             let mut result = DispatchResult::with_nav(NavIntent::PopOrSwitchTo("track"));
-            result.audio_dirty.piano_roll = true;
-            result.audio_dirty.automation = true;
+            result.audio_effects.push(AudioEffect::UpdatePianoRoll);
+            result.audio_effects.push(AudioEffect::UpdateAutomation);
             result
         }
         ArrangementAction::PlayStop => {
             let pr = &mut state.session.piano_roll;
             pr.playing = !pr.playing;
             state.audio.playing = pr.playing;
-            effects.push(AudioSideEffect::SetPlaying { playing: pr.playing });
+            audio.set_playing(pr.playing);
             if !pr.playing {
                 state.audio.playhead = 0;
-                effects.push(AudioSideEffect::ResetPlayhead);
+                audio.reset_playhead();
                 if audio.is_running() {
-                    effects.push(AudioSideEffect::ReleaseAllVoices);
+                    audio.release_all_voices();
                 }
-                effects.push(AudioSideEffect::ClearActiveNotes);
+                audio.clear_active_notes();
             }
             pr.recording = false;
             DispatchResult::none()

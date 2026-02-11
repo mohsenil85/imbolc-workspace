@@ -1,13 +1,12 @@
-use crate::action::DispatchResult;
+use crate::action::{AudioEffect, DispatchResult};
 use crate::state::automation::AutomationTarget;
 use crate::state::AppState;
 use imbolc_types::InstrumentId;
 
 use super::automation::record_automation_point;
-use super::side_effects::AudioSideEffect;
 
 /// Record automation point if currently recording and playing.
-/// Returns true if a point was recorded (for setting audio_dirty.automation).
+/// Returns true if a point was recorded (for pushing AudioEffect::UpdateAutomation).
 pub fn maybe_record_automation(
     state: &mut AppState,
     result: &mut DispatchResult,
@@ -16,7 +15,7 @@ pub fn maybe_record_automation(
 ) {
     if state.recording.automation_recording && state.audio.playing {
         record_automation_point(state, target, value);
-        result.audio_dirty.automation = true;
+        result.audio_effects.push(AudioEffect::UpdateAutomation);
     }
 }
 
@@ -53,12 +52,12 @@ where
     }
 
     let mut result = DispatchResult::none();
-    result.audio_dirty.instruments = true;
-    result.audio_dirty.set_routing_instrument(id);
+    result.audio_effects.push(AudioEffect::RebuildInstruments);
+    result.audio_effects.push(AudioEffect::RebuildRoutingForInstrument(id));
 
     if let Some((target, value)) = record_target {
         record_automation_point(state, target, value);
-        result.audio_dirty.automation = true;
+        result.audio_effects.push(AudioEffect::UpdateAutomation);
     }
 
     result
@@ -86,20 +85,20 @@ where
     DispatchResult::none()
 }
 
-/// Push bus mixer params effect if audio is running.
-pub fn apply_bus_update(audio: &imbolc_audio::AudioHandle, effects: &mut Vec<AudioSideEffect>, update: Option<(imbolc_types::BusId, f32, bool, f32)>) {
+/// Set bus mixer params directly if audio is running.
+pub fn apply_bus_update(audio: &mut imbolc_audio::AudioHandle, update: Option<(imbolc_types::BusId, f32, bool, f32)>) {
     if let Some((bus_id, level, mute, pan)) = update {
         if audio.is_running() {
-            effects.push(AudioSideEffect::SetBusMixerParams { bus_id, level, mute, pan });
+            let _ = audio.set_bus_mixer_params(bus_id, level, mute, pan);
         }
     }
 }
 
-/// Push layer group mixer params effect if audio is running.
-pub fn apply_layer_group_update(audio: &imbolc_audio::AudioHandle, effects: &mut Vec<AudioSideEffect>, update: Option<(u32, f32, bool, f32)>) {
+/// Set layer group mixer params directly if audio is running.
+pub fn apply_layer_group_update(audio: &mut imbolc_audio::AudioHandle, update: Option<(u32, f32, bool, f32)>) {
     if let Some((group_id, level, mute, pan)) = update {
         if audio.is_running() {
-            effects.push(AudioSideEffect::SetLayerGroupMixerParams { group_id, level, mute, pan });
+            let _ = audio.set_layer_group_mixer_params(group_id, level, mute, pan);
         }
     }
 }

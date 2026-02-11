@@ -1,12 +1,10 @@
 use imbolc_audio::AudioHandle;
 use crate::state::AppState;
-use crate::action::{DispatchResult, NavIntent};
-use crate::dispatch::side_effects::AudioSideEffect;
+use crate::action::{AudioEffect, DispatchResult, NavIntent};
 
 pub(super) fn handle_load_sample_result(
     state: &mut AppState,
-    audio: &AudioHandle,
-    effects: &mut Vec<AudioSideEffect>,
+    audio: &mut AudioHandle,
     instrument_id: crate::state::InstrumentId,
     path: &std::path::Path,
 ) -> DispatchResult {
@@ -18,7 +16,7 @@ pub(super) fn handle_load_sample_result(
     state.instruments.next_sampler_buffer_id += 1;
 
     if audio.is_running() {
-        effects.push(AudioSideEffect::LoadSample { buffer_id, path: path_str });
+        let _ = audio.load_sample(buffer_id, &path_str);
     }
 
     if let Some(instrument) = state.instruments.instrument_mut(instrument_id) {
@@ -29,6 +27,6 @@ pub(super) fn handle_load_sample_result(
     }
 
     let mut result = DispatchResult::with_nav(NavIntent::Pop);
-    result.audio_dirty.instruments = true;
+    result.audio_effects.push(AudioEffect::RebuildInstruments);
     result
 }

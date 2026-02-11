@@ -12,12 +12,11 @@ mod param;
 pub mod state;
 pub mod action;
 mod audio;
-pub mod dispatch;
+pub mod reduce;
 
 pub use audio::{AudioFeedback, ExportKind, ServerStatus};
 pub use param::{Param, ParamValue, adjust_freq_semitone, adjust_musical_step, is_freq_param};
 pub use action::*;
-pub use dispatch::Dispatcher;
 
 // Re-export all state types at crate root for convenience
 pub use state::*;

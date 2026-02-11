@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 
 use crossbeam_channel::{Receiver, Sender, TryRecvError};
 
-use imbolc_types::Action;
+use imbolc_types::DomainAction;
 
 use super::snapshot::{AutomationSnapshot, InstrumentSnapshot, PianoRollSnapshot, SessionSnapshot};
 use imbolc_types::InstrumentId;
@@ -29,7 +29,7 @@ pub struct LogEntry {
 pub enum LogEntryKind {
     /// Projectable action (replaces AudioCmd::ForwardAction).
     Action {
-        action: Box<Action>,
+        action: Box<DomainAction>,
         rebuild_routing: bool,
         rebuild_instrument_routing: [Option<InstrumentId>; 4],
         add_instrument_routing: Option<InstrumentId>,
@@ -148,7 +148,7 @@ mod tests {
 
     fn make_dummy_action_kind() -> LogEntryKind {
         LogEntryKind::Action {
-            action: Box::new(Action::Undo),
+            action: Box::new(DomainAction::Undo),
             rebuild_routing: false,
             rebuild_instrument_routing: [None; 4],
             add_instrument_routing: None,

@@ -1,5 +1,5 @@
 use crate::state::AppState;
-use crate::action::DispatchResult;
+use crate::action::{AudioEffect, DispatchResult};
 
 pub(super) fn handle_toggle_arp(
     state: &mut AppState,
@@ -9,7 +9,7 @@ pub(super) fn handle_toggle_arp(
         inst.note_input.arpeggiator.enabled = !inst.note_input.arpeggiator.enabled;
     }
     let mut result = DispatchResult::none();
-    result.audio_dirty.instruments = true;
+    result.audio_effects.push(AudioEffect::RebuildInstruments);
     result
 }
 
@@ -21,7 +21,7 @@ pub(super) fn handle_cycle_arp_direction(
         inst.note_input.arpeggiator.direction = inst.note_input.arpeggiator.direction.next();
     }
     let mut result = DispatchResult::none();
-    result.audio_dirty.instruments = true;
+    result.audio_effects.push(AudioEffect::RebuildInstruments);
     result
 }
 
@@ -33,7 +33,7 @@ pub(super) fn handle_cycle_arp_rate(
         inst.note_input.arpeggiator.rate = inst.note_input.arpeggiator.rate.next();
     }
     let mut result = DispatchResult::none();
-    result.audio_dirty.instruments = true;
+    result.audio_effects.push(AudioEffect::RebuildInstruments);
     result
 }
 
@@ -46,7 +46,7 @@ pub(super) fn handle_adjust_arp_octaves(
         inst.note_input.arpeggiator.octaves = (inst.note_input.arpeggiator.octaves as i8 + delta).clamp(1, 4) as u8;
     }
     let mut result = DispatchResult::none();
-    result.audio_dirty.instruments = true;
+    result.audio_effects.push(AudioEffect::RebuildInstruments);
     result
 }
 
@@ -59,7 +59,7 @@ pub(super) fn handle_adjust_arp_gate(
         inst.note_input.arpeggiator.gate = (inst.note_input.arpeggiator.gate + delta).clamp(0.1, 1.0);
     }
     let mut result = DispatchResult::none();
-    result.audio_dirty.instruments = true;
+    result.audio_effects.push(AudioEffect::RebuildInstruments);
     result
 }
 
@@ -74,7 +74,7 @@ pub(super) fn handle_cycle_chord_shape(
         });
     }
     let mut result = DispatchResult::none();
-    result.audio_dirty.instruments = true;
+    result.audio_effects.push(AudioEffect::RebuildInstruments);
     result
 }
 
@@ -86,6 +86,6 @@ pub(super) fn handle_clear_chord_shape(
         inst.note_input.chord_shape = None;
     }
     let mut result = DispatchResult::none();
-    result.audio_dirty.instruments = true;
+    result.audio_effects.push(AudioEffect::RebuildInstruments);
     result
 }

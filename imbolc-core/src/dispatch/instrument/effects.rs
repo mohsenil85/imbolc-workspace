@@ -1,8 +1,7 @@
 use imbolc_audio::AudioHandle;
 use crate::state::AppState;
 use crate::state::automation::AutomationTarget;
-use crate::action::{DispatchResult, NavIntent, VstTarget};
-use crate::dispatch::side_effects::AudioSideEffect;
+use crate::action::{AudioEffect, DispatchResult, NavIntent, VstTarget};
 
 use super::super::automation::record_automation_point;
 
@@ -15,8 +14,8 @@ pub(super) fn handle_add_effect(
         instrument.add_effect(effect_type);
     }
     let mut result = DispatchResult::with_nav(NavIntent::Pop);
-    result.audio_dirty.instruments = true;
-    result.audio_dirty.set_routing_instrument(id);
+    result.audio_effects.push(AudioEffect::RebuildInstruments);
+    result.audio_effects.push(AudioEffect::RebuildRoutingForInstrument(id));
     result
 }
 
@@ -29,8 +28,8 @@ pub(super) fn handle_remove_effect(
         instrument.remove_effect(effect_id);
     }
     let mut result = DispatchResult::none();
-    result.audio_dirty.instruments = true;
-    result.audio_dirty.set_routing_instrument(id);
+    result.audio_effects.push(AudioEffect::RebuildInstruments);
+    result.audio_effects.push(AudioEffect::RebuildRoutingForInstrument(id));
     result
 }
 
@@ -45,7 +44,7 @@ pub(super) fn handle_toggle_effect_bypass(
         }
     }
     let mut result = DispatchResult::none();
-    result.audio_dirty.instruments = true;
+    result.audio_effects.push(AudioEffect::RebuildInstruments);
     result
 }
 
@@ -84,22 +83,21 @@ pub(super) fn handle_adjust_effect_param(
         }
     }
     let mut result = DispatchResult::none();
-    result.audio_dirty.instruments = true;
+    result.audio_effects.push(AudioEffect::RebuildInstruments);
     // Targeted param update: send /n_set directly to effect node
     if let Some(value) = targeted_value {
-        result.audio_dirty.set_effect_param(id, effect_id, param_idx, value);
+        result.audio_effects.push(AudioEffect::SetEffectParam(id, effect_id, param_idx, value));
     }
     if let Some((target, value)) = record_target {
         record_automation_point(state, target, value);
-        result.audio_dirty.automation = true;
+        result.audio_effects.push(AudioEffect::UpdateAutomation);
     }
     result
 }
 
 pub(super) fn handle_load_ir_result(
     state: &mut AppState,
-    audio: &AudioHandle,
-    effects: &mut Vec<AudioSideEffect>,
+    audio: &mut AudioHandle,
     instrument_id: crate::state::InstrumentId,
     effect_id: crate::state::EffectId,
     path: &std::path::Path,
@@ -110,7 +108,7 @@ pub(super) fn handle_load_ir_result(
     state.instruments.next_sampler_buffer_id += 1;
 
     if audio.is_running() {
-        effects.push(AudioSideEffect::LoadSample { buffer_id, path: path_str.clone() });
+        let _ = audio.load_sample(buffer_id, &path_str);
     }
 
     if let Some(instrument) = state.instruments.instrument_mut(instrument_id) {
@@ -128,8 +126,8 @@ pub(super) fn handle_load_ir_result(
     }
 
     let mut result = DispatchResult::with_nav(NavIntent::Pop);
-    result.audio_dirty.instruments = true;
-    result.audio_dirty.set_routing_instrument(instrument_id);
+    result.audio_effects.push(AudioEffect::RebuildInstruments);
+    result.audio_effects.push(AudioEffect::RebuildRoutingForInstrument(instrument_id));
     result
 }
 

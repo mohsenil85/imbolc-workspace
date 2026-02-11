@@ -1,15 +1,13 @@
-use crate::action::{DispatchResult, NavIntent, VstTarget};
+use crate::action::{AudioEffect, DispatchResult, NavIntent, VstTarget};
 use imbolc_types::SourceExtra;
 use imbolc_audio::commands::AudioFeedback;
 use imbolc_audio::AudioHandle;
 use crate::state::AppState;
-use super::side_effects::AudioSideEffect;
 
 pub fn dispatch_audio_feedback(
     feedback: &AudioFeedback,
     state: &mut AppState,
-    audio: &AudioHandle,
-    effects: &mut Vec<AudioSideEffect>,
+    audio: &mut AudioHandle,
 ) -> DispatchResult {
     let mut result = DispatchResult::default();
 
@@ -55,10 +53,8 @@ pub fn dispatch_audio_feedback(
             // Convert instrument to PitchedSampler
             let buffer_id = state.instruments.next_sampler_buffer_id;
             state.instruments.next_sampler_buffer_id += 1;
-            effects.push(AudioSideEffect::LoadSample {
-                buffer_id,
-                path: path.to_string_lossy().to_string(),
-            });
+            let path_str = path.to_string_lossy().to_string();
+            let _ = audio.load_sample(buffer_id, &path_str);
 
             if let Some(inst) = state.instruments.instrument_mut(*instrument_id) {
                 use crate::state::{SourceType, ParamValue};
@@ -70,8 +66,8 @@ pub fn dispatch_audio_feedback(
                 }
             }
 
-            result.audio_dirty.instruments = true;
-            result.audio_dirty.set_routing_instrument(*instrument_id);
+            result.audio_effects.push(AudioEffect::RebuildInstruments);
+            result.audio_effects.push(AudioEffect::RebuildRoutingForInstrument(*instrument_id));
             result.push_status(audio.status(), "Render complete".to_string());
         }
         AudioFeedback::CompileResult(res) | AudioFeedback::LoadResult(res) => {

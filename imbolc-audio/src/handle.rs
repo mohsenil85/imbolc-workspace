@@ -15,13 +15,13 @@ use std::time::Duration;
 
 use crossbeam_channel::Sender as CrossbeamSender;
 
-use imbolc_types::Action;
+use imbolc_types::DomainAction;
 
 use super::commands::{AudioCmd, AudioFeedback};
 use super::event_log::{EventLogWriter, LogEntryKind};
 use super::osc_client::AudioMonitor;
 use super::ServerStatus;
-use imbolc_types::AudioDirty;
+use imbolc_types::AudioEffect;
 use imbolc_types::{ArrangementState, PlayMode};
 use imbolc_types::{AutomationLane, AutomationTarget};
 use imbolc_types::Note;
@@ -275,24 +275,51 @@ impl AudioHandle {
     /// Appends a LogEntryKind::Action to the event log. The audio thread applies
     /// the action's state mutations to its local copies, along with routing/mixer
     /// rebuild metadata. Skips unprojectable actions (undo/redo, etc.) — those
-    /// are handled via `apply_dirty()` with full sync.
-    pub fn forward_action(&mut self, action: &Action, dirty: AudioDirty) {
-        if !dirty.any() {
+    /// are handled via `apply_effects()` with full sync.
+    pub fn forward_action(&mut self, action: &DomainAction, effects: &[AudioEffect]) {
+        if effects.is_empty() {
             return;
         }
 
-        if !super::action_projection::is_action_projectable(action) {
+        if !imbolc_types::reduce::is_reducible(action) {
             return;
+        }
+
+        let mut rebuild_routing = false;
+        let mut rebuild_instrument_routing = [None; 4];
+        let mut add_instrument_routing = None;
+        let mut delete_instrument_routing = None;
+        let mut rebuild_bus_processing = false;
+        let mut mixer_dirty = false;
+        let mut ri_idx = 0;
+
+        for effect in effects {
+            match effect {
+                AudioEffect::RebuildRouting => rebuild_routing = true,
+                AudioEffect::RebuildRoutingForInstrument(id) => {
+                    if ri_idx < 4 {
+                        rebuild_instrument_routing[ri_idx] = Some(*id);
+                        ri_idx += 1;
+                    } else {
+                        rebuild_routing = true;
+                    }
+                }
+                AudioEffect::AddInstrumentRouting(id) => add_instrument_routing = Some(*id),
+                AudioEffect::DeleteInstrumentRouting(id) => delete_instrument_routing = Some(*id),
+                AudioEffect::RebuildBusProcessing => rebuild_bus_processing = true,
+                AudioEffect::UpdateMixerParams => mixer_dirty = true,
+                _ => {}
+            }
         }
 
         self.event_log.append(LogEntryKind::Action {
             action: Box::new(action.clone()),
-            rebuild_routing: dirty.routing,
-            rebuild_instrument_routing: dirty.routing_instruments,
-            add_instrument_routing: dirty.routing_add_instrument,
-            delete_instrument_routing: dirty.routing_delete_instrument,
-            rebuild_bus_processing: dirty.routing_bus_processing,
-            mixer_dirty: dirty.mixer_params,
+            rebuild_routing,
+            rebuild_instrument_routing,
+            add_instrument_routing,
+            delete_instrument_routing,
+            rebuild_bus_processing,
+            mixer_dirty,
         });
     }
 
@@ -338,8 +365,8 @@ impl AudioHandle {
     }
 
     /// Append flattened piano roll / automation for Song mode if dirty.
-    fn send_flattened_if_needed(&mut self, state: &dyn crate::AudioStateProvider, dirty: &AudioDirty) {
-        if dirty.piano_roll
+    fn send_flattened_if_needed(&mut self, state: &dyn crate::AudioStateProvider, effects: &[AudioEffect]) {
+        if effects.iter().any(|e| matches!(e, AudioEffect::UpdatePianoRoll))
             && state.session().arrangement.play_mode == PlayMode::Song
             && state.session().arrangement.editing_clip.is_none()
         {
@@ -355,7 +382,7 @@ impl AudioHandle {
             self.event_log.append(LogEntryKind::PianoRollUpdate(flat_pr));
             // In Live/clip-edit mode, ForwardAction updates session.piano_roll directly
         }
-        if dirty.automation
+        if effects.iter().any(|e| matches!(e, AudioEffect::UpdateAutomation))
             && state.session().arrangement.play_mode == PlayMode::Song
             && state.session().arrangement.editing_clip.is_none()
         {
@@ -368,71 +395,77 @@ impl AudioHandle {
     }
 
     /// Send targeted param updates (filter/effect/LFO knob tweaks via priority channel).
-    fn send_routing_and_params(&self, state: &dyn crate::AudioStateProvider, dirty: &AudioDirty) {
+    fn send_routing_and_params(&self, state: &dyn crate::AudioStateProvider, effects: &[AudioEffect]) {
         // Note: routing and mixer_params are handled by ForwardAction metadata fields
         // (rebuild_routing, rebuild_instrument_routing, mixer_dirty).
         // Targeted param updates bypass ForwardAction entirely via priority channel:
-        for &(instrument_id, param_kind, value) in dirty.filter_params.iter().flatten() {
-            if let Err(e) = self.set_filter_param(instrument_id, param_kind.as_str(), value) {
-                log::warn!(target: "audio", "set_filter_param dropped: {}", e);
-            }
-        }
-        for &(instrument_id, effect_id, param_idx, value) in dirty.effect_params.iter().flatten() {
-            if let Some(inst) = state.instruments().instrument(instrument_id) {
-                if let Some(effect) = inst.effect_by_id(effect_id) {
-                    if let Some(param) = effect.params.get(param_idx.get()) {
-                        if let Err(e) = self.set_effect_param(instrument_id, effect_id, &param.name, value) {
-                            log::warn!(target: "audio", "set_effect_param dropped: {}", e);
+        for effect in effects {
+            match effect {
+                AudioEffect::SetFilterParam(instrument_id, param_kind, value) => {
+                    if let Err(e) = self.set_filter_param(*instrument_id, param_kind.as_str(), *value) {
+                        log::warn!(target: "audio", "set_filter_param dropped: {}", e);
+                    }
+                }
+                AudioEffect::SetEffectParam(instrument_id, effect_id, param_idx, value) => {
+                    if let Some(inst) = state.instruments().instrument(*instrument_id) {
+                        if let Some(effect) = inst.effect_by_id(*effect_id) {
+                            if let Some(param) = effect.params.get(param_idx.get()) {
+                                if let Err(e) = self.set_effect_param(*instrument_id, *effect_id, &param.name, *value) {
+                                    log::warn!(target: "audio", "set_effect_param dropped: {}", e);
+                                }
+                            }
                         }
                     }
                 }
-            }
-        }
-        for &(instrument_id, param_kind, value) in dirty.lfo_params.iter().flatten() {
-            if let Err(e) = self.set_lfo_param(instrument_id, param_kind.as_str(), value) {
-                log::warn!(target: "audio", "set_lfo_param dropped: {}", e);
-            }
-        }
-        for &(bus_id, effect_id, param_idx, value) in dirty.bus_effect_params.iter().flatten() {
-            if let Some(bus) = state.session().mixer.buses.iter().find(|b| b.id == bus_id) {
-                if let Some(effect) = bus.effect_chain.effect_by_id(effect_id) {
-                    if let Some(param) = effect.params.get(param_idx.get()) {
-                        if let Err(e) = self.set_bus_effect_param(bus_id, effect_id, &param.name, value) {
-                            log::warn!(target: "audio", "set_bus_effect_param dropped: {}", e);
+                AudioEffect::SetLfoParam(instrument_id, param_kind, value) => {
+                    if let Err(e) = self.set_lfo_param(*instrument_id, param_kind.as_str(), *value) {
+                        log::warn!(target: "audio", "set_lfo_param dropped: {}", e);
+                    }
+                }
+                AudioEffect::SetBusEffectParam(bus_id, effect_id, param_idx, value) => {
+                    if let Some(bus) = state.session().mixer.buses.iter().find(|b| b.id == *bus_id) {
+                        if let Some(effect) = bus.effect_chain.effect_by_id(*effect_id) {
+                            if let Some(param) = effect.params.get(param_idx.get()) {
+                                if let Err(e) = self.set_bus_effect_param(*bus_id, *effect_id, &param.name, *value) {
+                                    log::warn!(target: "audio", "set_bus_effect_param dropped: {}", e);
+                                }
+                            }
                         }
                     }
                 }
-            }
-        }
-        for &(group_id, effect_id, param_idx, value) in dirty.layer_group_effect_params.iter().flatten() {
-            if let Some(gm) = state.session().mixer.layer_group_mixer(group_id) {
-                if let Some(effect) = gm.effect_chain.effect_by_id(effect_id) {
-                    if let Some(param) = effect.params.get(param_idx.get()) {
-                        if let Err(e) = self.set_layer_group_effect_param(group_id, effect_id, &param.name, value) {
-                            log::warn!(target: "audio", "set_layer_group_effect_param dropped: {}", e);
+                AudioEffect::SetLayerGroupEffectParam(group_id, effect_id, param_idx, value) => {
+                    if let Some(gm) = state.session().mixer.layer_group_mixer(*group_id) {
+                        if let Some(effect) = gm.effect_chain.effect_by_id(*effect_id) {
+                            if let Some(param) = effect.params.get(param_idx.get()) {
+                                if let Err(e) = self.set_layer_group_effect_param(*group_id, *effect_id, &param.name, *value) {
+                                    log::warn!(target: "audio", "set_layer_group_effect_param dropped: {}", e);
+                                }
+                            }
                         }
                     }
                 }
+                _ => {}
             }
         }
     }
 
-    /// Apply accumulated dirty flags to the audio thread.
+    /// Apply accumulated audio effects to the audio thread.
     ///
     /// When `needs_full_sync` is true (unprojectable action or direct state mutation),
     /// sends a FullStateSync. Otherwise, only sends Song-mode flattening and targeted
     /// params — ForwardAction already handled state projection and routing/mixer.
-    pub fn apply_dirty(&mut self, state: &dyn crate::AudioStateProvider, dirty: AudioDirty, needs_full_sync: bool) {
-        if !dirty.any() {
+    pub fn apply_effects(&mut self, state: &dyn crate::AudioStateProvider, effects: &[AudioEffect], needs_full_sync: bool) {
+        if effects.is_empty() {
             return;
         }
         if needs_full_sync {
-            self.send_full_sync(state, dirty.routing);
+            let rebuild_routing = effects.iter().any(|e| e.is_routing());
+            self.send_full_sync(state, rebuild_routing);
         } else {
-            self.send_flattened_if_needed(state, &dirty);
+            self.send_flattened_if_needed(state, effects);
         }
         // Always send targeted params (they bypass state sync)
-        self.send_routing_and_params(state, &dirty);
+        self.send_routing_and_params(state, effects);
     }
 
     pub fn set_playing(&mut self, playing: bool) {

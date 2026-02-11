@@ -1,5 +1,5 @@
 use crate::state::AppState;
-use crate::action::DispatchResult;
+use crate::action::{AudioEffect, DispatchResult};
 use crate::state::InstrumentId;
 
 pub(super) fn handle_link_layer(
@@ -29,9 +29,9 @@ pub(super) fn handle_link_layer(
         state.session.mixer.add_layer_group_mixer(group_id, &bus_ids);
     }
     let mut result = DispatchResult::none();
-    result.audio_dirty.routing = true;
-    result.audio_dirty.session = true;
-    result.audio_dirty.instruments = true;
+    result.audio_effects.push(AudioEffect::RebuildRouting);
+    result.audio_effects.push(AudioEffect::RebuildSession);
+    result.audio_effects.push(AudioEffect::RebuildInstruments);
     result
 }
 
@@ -60,9 +60,9 @@ pub(super) fn handle_unlink_layer(
             // Remove the group mixer
             state.session.mixer.remove_layer_group_mixer(g);
         }
-        result.audio_dirty.routing = true;
-        result.audio_dirty.session = true;
-        result.audio_dirty.instruments = true;
+        result.audio_effects.push(AudioEffect::RebuildRouting);
+        result.audio_effects.push(AudioEffect::RebuildSession);
+        result.audio_effects.push(AudioEffect::RebuildInstruments);
     }
     result
 }
@@ -128,12 +128,12 @@ mod tests {
     }
 
     #[test]
-    fn adjust_layer_octave_offset_no_audio_dirty() {
+    fn adjust_layer_octave_offset_no_audio_effects() {
         let mut state = AppState::new();
         let id = state.add_instrument(SourceType::Saw);
 
         let result = handle_adjust_layer_octave_offset(&mut state, id, 1);
-        assert!(!result.audio_dirty.instruments);
-        assert!(!result.audio_dirty.routing);
+        assert!(!result.audio_effects.contains(&AudioEffect::RebuildInstruments));
+        assert!(!result.audio_effects.contains(&AudioEffect::RebuildRouting));
     }
 }

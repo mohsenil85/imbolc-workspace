@@ -1,4 +1,4 @@
-use crate::action::{DispatchResult, FilterParamKind};
+use crate::action::{AudioEffect, DispatchResult, FilterParamKind};
 use crate::dispatch::helpers::maybe_record_automation;
 use crate::state::automation::AutomationTarget;
 use crate::state::{AppState, FilterType, InstrumentId};
@@ -12,8 +12,8 @@ pub(super) fn handle_set_filter(
         instrument.set_filter(filter_type);
     }
     let mut result = DispatchResult::none();
-    result.audio_dirty.instruments = true;
-    result.audio_dirty.set_routing_instrument(id);
+    result.audio_effects.push(AudioEffect::RebuildInstruments);
+    result.audio_effects.push(AudioEffect::RebuildRoutingForInstrument(id));
     result
 }
 
@@ -22,8 +22,8 @@ pub(super) fn handle_toggle_filter(state: &mut AppState, id: InstrumentId) -> Di
         instrument.toggle_filter();
     }
     let mut result = DispatchResult::none();
-    result.audio_dirty.instruments = true;
-    result.audio_dirty.set_routing_instrument(id);
+    result.audio_effects.push(AudioEffect::RebuildInstruments);
+    result.audio_effects.push(AudioEffect::RebuildRoutingForInstrument(id));
     result
 }
 
@@ -44,7 +44,7 @@ pub(super) fn handle_cycle_filter_type(state: &mut AppState, id: InstrumentId) -
         }
     }
     let mut result = DispatchResult::none();
-    result.audio_dirty.instruments = true;
+    result.audio_effects.push(AudioEffect::RebuildInstruments);
     result
 }
 
@@ -79,9 +79,9 @@ pub(super) fn handle_adjust_filter_cutoff(
         );
     }
 
-    result.audio_dirty.instruments = true;
+    result.audio_effects.push(AudioEffect::RebuildInstruments);
     if let Some(cutoff) = new_cutoff {
-        result.audio_dirty.set_filter_param(id, FilterParamKind::Cutoff, cutoff);
+        result.audio_effects.push(AudioEffect::SetFilterParam(id, FilterParamKind::Cutoff, cutoff));
     }
     result
 }
@@ -117,9 +117,9 @@ pub(super) fn handle_adjust_filter_resonance(
         );
     }
 
-    result.audio_dirty.instruments = true;
+    result.audio_effects.push(AudioEffect::RebuildInstruments);
     if let Some(resonance) = new_resonance {
-        result.audio_dirty.set_filter_param(id, FilterParamKind::Resonance, resonance);
+        result.audio_effects.push(AudioEffect::SetFilterParam(id, FilterParamKind::Resonance, resonance));
     }
     result
 }
