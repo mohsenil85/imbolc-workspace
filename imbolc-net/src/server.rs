@@ -11,7 +11,10 @@ use std::time::{Duration, Instant};
 
 use log::{error, info, warn};
 
-use imbolc_types::{InstrumentAction, InstrumentId, PianoRollAction, SessionState, VstParamAction};
+use imbolc_types::{
+    AutomationAction, AutomationLaneId, BusAction, BusId, InstrumentAction, InstrumentId,
+    PianoRollAction, SessionState, VstParamAction,
+};
 
 use crate::framing::{read_message, serialize_frame, write_message};
 use crate::protocol::{
@@ -87,10 +90,14 @@ pub struct DirtyFlags {
     pub piano_roll_structural: bool,
     /// Arrangement subsystem changed.
     pub arrangement: bool,
-    /// Automation subsystem changed.
-    pub automation: bool,
-    /// Mixer subsystem changed (buses, layer groups).
-    pub mixer: bool,
+    /// Per-lane automation edits.
+    pub dirty_automation_lanes: HashSet<AutomationLaneId>,
+    /// Structural automation changes: add/remove lane, select, recording toggle.
+    pub automation_structural: bool,
+    /// Per-bus mixer edits.
+    pub dirty_mixer_buses: HashSet<BusId>,
+    /// Structural mixer changes: add/remove bus, layer groups, full mixer actions.
+    pub mixer_structural: bool,
     /// Session "remainder" — musical settings, registries, rare changes, undo/redo.
     /// When set, sends the full SessionState (which includes all subsystems).
     pub session: bool,
@@ -154,17 +161,20 @@ impl DirtyFlags {
             NetworkAction::Arrangement(_) => {
                 self.arrangement = true;
             }
-            NetworkAction::Automation(_) => {
-                self.automation = true;
+            NetworkAction::Automation(a) => {
+                self.mark_automation_action(a);
             }
-            NetworkAction::Bus(_) | NetworkAction::LayerGroup(_) => {
-                self.mixer = true;
+            NetworkAction::Bus(a) => {
+                self.mark_bus_action(a);
+            }
+            NetworkAction::LayerGroup(_) => {
+                self.mixer_structural = true;
             }
             NetworkAction::Session(_) | NetworkAction::Server(_) | NetworkAction::Chopper(_) => {
                 self.session = true;
             }
             NetworkAction::Mixer(_) => {
-                self.mixer = true;
+                self.mixer_structural = true;
                 self.instruments_structural = true;
             }
             NetworkAction::Midi(_) => {
@@ -245,12 +255,63 @@ impl DirtyFlags {
         }
     }
 
+    /// Mark automation dirty flags based on the specific AutomationAction variant.
+    fn mark_automation_action(&mut self, action: &AutomationAction) {
+        match action {
+            // Per-lane edits
+            AutomationAction::AddPoint(id, ..)
+            | AutomationAction::RemovePoint(id, ..)
+            | AutomationAction::MovePoint(id, ..)
+            | AutomationAction::SetCurveType(id, ..)
+            | AutomationAction::ClearLane(id)
+            | AutomationAction::ToggleLaneEnabled(id)
+            | AutomationAction::ToggleLaneArm(id)
+            | AutomationAction::DeletePointsInRange(id, ..)
+            | AutomationAction::PastePoints(id, ..) => {
+                self.dirty_automation_lanes.insert(*id);
+            }
+            // Clipboard-only — no state change
+            AutomationAction::CopyPoints(..) => {}
+            // Structural changes
+            AutomationAction::AddLane(_)
+            | AutomationAction::RemoveLane(_)
+            | AutomationAction::SelectLane(_)
+            | AutomationAction::ToggleRecording
+            | AutomationAction::ArmAllLanes
+            | AutomationAction::DisarmAllLanes
+            | AutomationAction::RecordValue(..) => {
+                self.automation_structural = true;
+            }
+        }
+    }
+
+    /// Mark mixer dirty flags based on the specific BusAction variant.
+    fn mark_bus_action(&mut self, action: &BusAction) {
+        match action {
+            // Per-bus edits
+            BusAction::Rename(id, ..)
+            | BusAction::AddEffect(id, ..)
+            | BusAction::RemoveEffect(id, ..)
+            | BusAction::MoveEffect(id, ..)
+            | BusAction::ToggleEffectBypass(id, ..)
+            | BusAction::AdjustEffectParam(id, ..) => {
+                self.dirty_mixer_buses.insert(*id);
+            }
+            // Structural changes
+            BusAction::Add | BusAction::Remove(_) => {
+                self.mixer_structural = true;
+            }
+        }
+    }
+
     fn any(&self) -> bool {
         !self.dirty_piano_roll_tracks.is_empty()
             || self.piano_roll_structural
             || self.arrangement
-            || self.automation
-            || self.mixer
+            || !self.dirty_automation_lanes.is_empty()
+            || self.automation_structural
+            || !self.dirty_mixer_buses.is_empty()
+            || self.mixer_structural
             || self.session
             || !self.dirty_instruments.is_empty()
             || self.instruments_structural
@@ -262,8 +323,10 @@ impl DirtyFlags {
         self.dirty_piano_roll_tracks.clear();
         self.piano_roll_structural = false;
         self.arrangement = false;
-        self.automation = false;
-        self.mixer = false;
+        self.dirty_automation_lanes.clear();
+        self.automation_structural = false;
+        self.dirty_mixer_buses.clear();
+        self.mixer_structural = false;
         self.session = false;
         self.dirty_instruments.clear();
         self.instruments_structural = false;
@@ -1114,9 +1177,11 @@ impl NetServer {
 
         // If dirty.session is set, send full SessionState (includes all subsystems).
         // Otherwise, send only the specific subsystems that changed.
-        let (session, piano_roll, piano_roll_track_patches, arrangement, automation, mixer) =
-            if self.dirty.session {
-                (Some(state.session.clone()), None, None, None, None, None)
+        let (
+            session, piano_roll, piano_roll_track_patches, arrangement,
+            automation, automation_lane_patches, mixer, mixer_bus_patches,
+        ) = if self.dirty.session {
+                (Some(state.session.clone()), None, None, None, None, None, None, None)
             } else {
                 // Piano roll: threshold coalescing (same pattern as instruments)
                 let pr_total = state.session.piano_roll.tracks.len();
@@ -1147,13 +1212,73 @@ impl NetServer {
                     None
                 };
 
+                // Automation: threshold coalescing (same pattern as instruments)
+                let auto_total = state.session.automation.lanes.len();
+                let use_full_auto = self.dirty.automation_structural
+                    || (auto_total > 0
+                        && self.dirty.dirty_automation_lanes.len() > auto_total / 2);
+
+                let auto_full = if use_full_auto
+                    && (self.dirty.automation_structural
+                        || !self.dirty.dirty_automation_lanes.is_empty())
+                {
+                    Some(state.session.automation.clone())
+                } else {
+                    None
+                };
+
+                let auto_patches = if !use_full_auto
+                    && !self.dirty.dirty_automation_lanes.is_empty()
+                {
+                    let mut patches = HashMap::new();
+                    for &id in &self.dirty.dirty_automation_lanes {
+                        if let Some(lane) = state.session.automation.lane(id) {
+                            patches.insert(id, lane.clone());
+                        }
+                    }
+                    if patches.is_empty() { None } else { Some(patches) }
+                } else {
+                    None
+                };
+
+                // Mixer: threshold coalescing (same pattern as instruments)
+                let mixer_total = state.session.mixer.buses.len();
+                let use_full_mixer = self.dirty.mixer_structural
+                    || (mixer_total > 0
+                        && self.dirty.dirty_mixer_buses.len() > mixer_total / 2);
+
+                let mixer_full = if use_full_mixer
+                    && (self.dirty.mixer_structural
+                        || !self.dirty.dirty_mixer_buses.is_empty())
+                {
+                    Some(state.session.mixer.clone())
+                } else {
+                    None
+                };
+
+                let mixer_patches = if !use_full_mixer
+                    && !self.dirty.dirty_mixer_buses.is_empty()
+                {
+                    let mut patches = HashMap::new();
+                    for &id in &self.dirty.dirty_mixer_buses {
+                        if let Some(bus) = state.session.mixer.bus(id) {
+                            patches.insert(id, bus.clone());
+                        }
+                    }
+                    if patches.is_empty() { None } else { Some(patches) }
+                } else {
+                    None
+                };
+
                 (
                     None,
                     pr_full,
                     pr_patches,
                     if self.dirty.arrangement { Some(state.session.arrangement.clone()) } else { None },
-                    if self.dirty.automation { Some(state.session.automation.clone()) } else { None },
-                    if self.dirty.mixer { Some(state.session.mixer.clone()) } else { None },
+                    auto_full,
+                    auto_patches,
+                    mixer_full,
+                    mixer_patches,
                 )
             };
 
@@ -1163,7 +1288,9 @@ impl NetServer {
             piano_roll_track_patches,
             arrangement,
             automation,
+            automation_lane_patches,
             mixer,
+            mixer_bus_patches,
             instruments,
             instrument_patches,
             ownership: if self.dirty.ownership {
@@ -1470,18 +1597,18 @@ mod tests {
         assert!(d.arrangement, "arrangement dirty");
         assert!(!d.session, "session clean for Arrangement");
 
-        // Automation → automation flag
+        // Automation (structural) → automation_structural flag
         let mut d = DirtyFlags::default();
         d.mark_from_action(&NetworkAction::Automation(AutomationAction::AddLane(
             AutomationTarget::Instrument(InstrumentId::new(0), InstrumentParameter::Standard(ParameterTarget::Level)),
         )), None);
-        assert!(d.automation, "automation dirty");
+        assert!(d.automation_structural, "automation_structural dirty");
         assert!(!d.session, "session clean for Automation");
 
-        // Bus → mixer flag
+        // Bus (structural) → mixer_structural flag
         let mut d = DirtyFlags::default();
         d.mark_from_action(&NetworkAction::Bus(BusAction::Add), None);
-        assert!(d.mixer, "mixer dirty for Bus");
+        assert!(d.mixer_structural, "mixer_structural dirty for Bus::Add");
         assert!(!d.session, "session clean for Bus");
     }
 
@@ -1489,7 +1616,7 @@ mod tests {
     fn dirty_mixer_marks_mixer_and_instruments() {
         let mut d = DirtyFlags::default();
         d.mark_from_action(&NetworkAction::Mixer(MixerAction::Move(1)), None);
-        assert!(d.mixer, "mixer dirty for Mixer");
+        assert!(d.mixer_structural, "mixer_structural dirty for Mixer");
         assert!(d.instruments_structural, "instruments_structural for Mixer");
         assert!(!d.session, "session clean for Mixer");
     }
@@ -1595,8 +1722,10 @@ mod tests {
             (|d: &mut DirtyFlags| { d.dirty_piano_roll_tracks.insert(InstrumentId::new(0)); }) as fn(&mut DirtyFlags),
             |d: &mut DirtyFlags| d.piano_roll_structural = true,
             |d: &mut DirtyFlags| d.arrangement = true,
-            |d: &mut DirtyFlags| d.automation = true,
-            |d: &mut DirtyFlags| d.mixer = true,
+            |d: &mut DirtyFlags| { d.dirty_automation_lanes.insert(0); },
+            |d: &mut DirtyFlags| d.automation_structural = true,
+            |d: &mut DirtyFlags| { d.dirty_mixer_buses.insert(BusId::new(1)); },
+            |d: &mut DirtyFlags| d.mixer_structural = true,
             |d: &mut DirtyFlags| d.session = true,
             |d: &mut DirtyFlags| { d.dirty_instruments.insert(InstrumentId::new(0)); },
             |d: &mut DirtyFlags| d.instruments_structural = true,
@@ -1615,8 +1744,10 @@ mod tests {
             dirty_piano_roll_tracks: HashSet::from([InstrumentId::new(0), InstrumentId::new(1)]),
             piano_roll_structural: true,
             arrangement: true,
-            automation: true,
-            mixer: true,
+            dirty_automation_lanes: HashSet::from([0, 1]),
+            automation_structural: true,
+            dirty_mixer_buses: HashSet::from([BusId::new(1), BusId::new(2)]),
+            mixer_structural: true,
             session: true,
             dirty_instruments: HashSet::from([InstrumentId::new(0), InstrumentId::new(1), InstrumentId::new(2)]),
             instruments_structural: true,
@@ -1628,8 +1759,10 @@ mod tests {
         assert!(d.dirty_piano_roll_tracks.is_empty());
         assert!(!d.piano_roll_structural);
         assert!(!d.arrangement);
-        assert!(!d.automation);
-        assert!(!d.mixer);
+        assert!(d.dirty_automation_lanes.is_empty());
+        assert!(!d.automation_structural);
+        assert!(d.dirty_mixer_buses.is_empty());
+        assert!(!d.mixer_structural);
         assert!(!d.session);
         assert!(d.dirty_instruments.is_empty());
         assert!(!d.instruments_structural);
@@ -1667,6 +1800,69 @@ mod tests {
         }
         assert!(!d.ownership);
         assert!(!d.privileged_client);
+    }
+
+    // ── Automation & mixer targeted vs structural ──────────────────
+
+    #[test]
+    fn dirty_automation_targeted_vs_structural() {
+        // AddPoint → per-lane
+        let mut d = DirtyFlags::default();
+        d.mark_from_action(&NetworkAction::Automation(
+            AutomationAction::AddPoint(42, 100, 0.5),
+        ), None);
+        assert!(d.dirty_automation_lanes.contains(&42));
+        assert!(!d.automation_structural);
+
+        // AddLane → structural
+        let mut d = DirtyFlags::default();
+        d.mark_from_action(&NetworkAction::Automation(AutomationAction::AddLane(
+            AutomationTarget::Instrument(InstrumentId::new(0), InstrumentParameter::Standard(ParameterTarget::Level)),
+        )), None);
+        assert!(d.dirty_automation_lanes.is_empty());
+        assert!(d.automation_structural);
+    }
+
+    #[test]
+    fn dirty_automation_copypoints_is_noop() {
+        let mut d = DirtyFlags::default();
+        d.mark_from_action(&NetworkAction::Automation(
+            AutomationAction::CopyPoints(1, 0, 100),
+        ), None);
+        assert!(!d.any(), "CopyPoints should not dirty anything");
+    }
+
+    #[test]
+    fn dirty_mixer_bus_targeted_vs_structural() {
+        // Rename → per-bus
+        let mut d = DirtyFlags::default();
+        d.mark_from_action(&NetworkAction::Bus(
+            BusAction::Rename(BusId::new(3), "FX".into()),
+        ), None);
+        assert!(d.dirty_mixer_buses.contains(&BusId::new(3)));
+        assert!(!d.mixer_structural);
+
+        // Add → structural
+        let mut d = DirtyFlags::default();
+        d.mark_from_action(&NetworkAction::Bus(BusAction::Add), None);
+        assert!(d.dirty_mixer_buses.is_empty());
+        assert!(d.mixer_structural);
+
+        // Remove → structural
+        let mut d = DirtyFlags::default();
+        d.mark_from_action(&NetworkAction::Bus(BusAction::Remove(BusId::new(1))), None);
+        assert!(d.dirty_mixer_buses.is_empty());
+        assert!(d.mixer_structural);
+    }
+
+    #[test]
+    fn dirty_layer_group_is_mixer_structural() {
+        let mut d = DirtyFlags::default();
+        d.mark_from_action(&NetworkAction::LayerGroup(
+            imbolc_types::LayerGroupAction::AddEffect(0, imbolc_types::EffectType::Delay),
+        ), None);
+        assert!(d.mixer_structural);
+        assert!(d.dirty_mixer_buses.is_empty());
     }
 
     // ── Outbox drop policy ──────────────────────────────────────────

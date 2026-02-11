@@ -279,7 +279,9 @@ fn test_roundtrip_state_patch_update() {
         piano_roll_track_patches: None,
         arrangement: None,
         automation: None,
+        automation_lane_patches: None,
         mixer: None,
+        mixer_bus_patches: None,
         instruments: None,
         instrument_patches: None,
         ownership: None,
@@ -345,7 +347,9 @@ fn test_roundtrip_state_patch_all_none() {
         piano_roll_track_patches: None,
         arrangement: None,
         automation: None,
+        automation_lane_patches: None,
         mixer: None,
+        mixer_bus_patches: None,
         instruments: None,
         instrument_patches: None,
         ownership: None,
@@ -375,7 +379,9 @@ fn test_roundtrip_state_patch_privileged_client_cleared() {
         piano_roll_track_patches: None,
         arrangement: None,
         automation: None,
+        automation_lane_patches: None,
         mixer: None,
+        mixer_bus_patches: None,
         instruments: None,
         instrument_patches: None,
         ownership: None,
@@ -395,20 +401,20 @@ fn test_roundtrip_state_patch_privileged_client_all_variants() {
     let cfg = bincode::config::standard();
 
     // None = no change
-    let p1 = StatePatch { session: None, piano_roll: None, piano_roll_track_patches: None, arrangement: None, automation: None, mixer: None, instruments: None, instrument_patches: None, ownership: None, privileged_client: None, seq: 1 };
+    let p1 = StatePatch { session: None, piano_roll: None, piano_roll_track_patches: None, arrangement: None, automation: None, automation_lane_patches: None, mixer: None, mixer_bus_patches: None, instruments: None, instrument_patches: None, ownership: None, privileged_client: None, seq: 1 };
     let b1 = bincode::serde::encode_to_vec(&p1, cfg).unwrap();
     let (r1, _): (StatePatch, _) = bincode::serde::decode_from_slice(&b1, cfg).unwrap();
     assert_eq!(r1.privileged_client, None);
 
     // Some(None) = changed to nobody
-    let p2 = StatePatch { session: None, piano_roll: None, piano_roll_track_patches: None, arrangement: None, automation: None, mixer: None, instruments: None, instrument_patches: None, ownership: None, privileged_client: Some(None), seq: 2 };
+    let p2 = StatePatch { session: None, piano_roll: None, piano_roll_track_patches: None, arrangement: None, automation: None, automation_lane_patches: None, mixer: None, mixer_bus_patches: None, instruments: None, instrument_patches: None, ownership: None, privileged_client: Some(None), seq: 2 };
     let b2 = bincode::serde::encode_to_vec(&p2, cfg).unwrap();
     let (r2, _): (StatePatch, _) = bincode::serde::decode_from_slice(&b2, cfg).unwrap();
     assert_eq!(r2.privileged_client, Some(None));
 
     // Some(Some(...)) = changed to Alice
     let p3 = StatePatch {
-        session: None, piano_roll: None, piano_roll_track_patches: None, arrangement: None, automation: None, mixer: None,
+        session: None, piano_roll: None, piano_roll_track_patches: None, arrangement: None, automation: None, automation_lane_patches: None, mixer: None, mixer_bus_patches: None,
         instruments: None, instrument_patches: None, ownership: None,
         privileged_client: Some(Some((ClientId::new(1), "Alice".into()))),
         seq: 3,
@@ -436,7 +442,9 @@ fn test_roundtrip_state_patch_with_instrument_patches() {
         piano_roll_track_patches: None,
         arrangement: None,
         automation: None,
+        automation_lane_patches: None,
         mixer: None,
+        mixer_bus_patches: None,
         instruments: None,
         instrument_patches: Some(patches),
         ownership: None,

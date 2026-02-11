@@ -7,10 +7,11 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 use imbolc_types::{
-    ArrangementAction, ArrangementState, AutomationAction, AutomationState, BusAction,
-    ChopperAction, Instrument, InstrumentAction, InstrumentId, InstrumentState, LayerGroupAction,
-    MidiAction, MixerAction, MixerState, PianoRollAction, PianoRollState, SequencerAction,
-    ServerAction, SessionAction, SessionState, Track, VstParamAction,
+    ArrangementAction, ArrangementState, AutomationAction, AutomationLane, AutomationLaneId,
+    AutomationState, BusAction, BusId, ChopperAction, Instrument, InstrumentAction, InstrumentId,
+    InstrumentState, LayerGroupAction, MidiAction, MixerAction, MixerBus, MixerState,
+    PianoRollAction, PianoRollState, SequencerAction, ServerAction, SessionAction, SessionState,
+    Track, VstParamAction,
 };
 
 /// Unique identifier for a connected client.
@@ -132,7 +133,11 @@ pub struct StatePatch {
     pub piano_roll_track_patches: Option<HashMap<InstrumentId, Track>>,
     pub arrangement: Option<ArrangementState>,
     pub automation: Option<AutomationState>,
+    /// Per-lane delta patches (mutually exclusive with `automation`).
+    pub automation_lane_patches: Option<HashMap<AutomationLaneId, AutomationLane>>,
     pub mixer: Option<MixerState>,
+    /// Per-bus delta patches (mutually exclusive with `mixer`).
+    pub mixer_bus_patches: Option<HashMap<BusId, MixerBus>>,
     pub instruments: Option<InstrumentState>,
     /// Per-instrument delta patches (mutually exclusive with `instruments`).
     pub instrument_patches: Option<HashMap<InstrumentId, Instrument>>,

@@ -389,9 +389,21 @@ impl RemoteDispatcher {
                                 }
                                 if let Some(auto) = patch.automation {
                                     self.state.session.automation = auto;
+                                } else if let Some(lane_patches) = patch.automation_lane_patches {
+                                    for (id, lane) in lane_patches {
+                                        if let Some(existing) = self.state.session.automation.lane_mut(id) {
+                                            *existing = lane;
+                                        }
+                                    }
                                 }
                                 if let Some(mix) = patch.mixer {
                                     self.state.session.mixer = mix;
+                                } else if let Some(bus_patches) = patch.mixer_bus_patches {
+                                    for (id, bus) in bus_patches {
+                                        if let Some(existing) = self.state.session.mixer.bus_mut(id) {
+                                            *existing = bus;
+                                        }
+                                    }
                                 }
                             }
                             if let Some(instruments) = patch.instruments {
