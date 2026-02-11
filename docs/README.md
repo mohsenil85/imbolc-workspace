@@ -2,6 +2,13 @@
 
 Reference documentation for the Imbolc DAW. Per-crate `CLAUDE.md` files are the primary living contracts; these docs provide deeper architectural detail.
 
+## Guides
+
+| Document | Description |
+|----------|-------------|
+| [installation.md](installation.md) | Platform setup, dependencies, and troubleshooting |
+| [getting-started.md](getting-started.md) | First-session walkthrough: launch, compose, save, export |
+
 ## Architecture
 
 | Document | Description |
