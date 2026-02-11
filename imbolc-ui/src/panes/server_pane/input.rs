@@ -1,4 +1,4 @@
-use super::{BufferSize, ServerPane, ServerPaneFocus};
+use super::{BufferSize, ScsynthArgsDialogButton, ServerPane, ServerPaneFocus};
 use crate::state::AppState;
 use crate::ui::action_id::{ActionId, ModeActionId, ServerActionId};
 use crate::ui::{Action, InputEvent, KeyCode, ServerAction};
@@ -7,6 +7,7 @@ impl ServerPane {
     fn begin_scsynth_args_edit(&mut self) -> Action {
         self.editing_scsynth_args = true;
         self.scsynth_args_edit = self.scsynth_args.clone();
+        self.scsynth_args_dialog_button = ScsynthArgsDialogButton::ApplyRestart;
         Action::PushLayer("text_edit")
     }
 
@@ -39,6 +40,18 @@ impl ServerPane {
             KeyCode::Delete => {
                 self.scsynth_args_edit.clear();
             }
+            KeyCode::Tab => {
+                self.scsynth_args_dialog_button = match self.scsynth_args_dialog_button {
+                    ScsynthArgsDialogButton::Cancel => ScsynthArgsDialogButton::ApplyRestart,
+                    ScsynthArgsDialogButton::ApplyRestart => ScsynthArgsDialogButton::Cancel,
+                };
+            }
+            KeyCode::Left => {
+                self.scsynth_args_dialog_button = ScsynthArgsDialogButton::Cancel;
+            }
+            KeyCode::Right => {
+                self.scsynth_args_dialog_button = ScsynthArgsDialogButton::ApplyRestart;
+            }
             _ => {}
         }
     }
@@ -51,7 +64,13 @@ impl ServerPane {
     ) -> Action {
         if self.editing_scsynth_args {
             return match action {
-                ActionId::Mode(ModeActionId::TextConfirm) => self.finish_scsynth_args_edit(true),
+                ActionId::Mode(ModeActionId::TextConfirm) => {
+                    let apply = matches!(
+                        self.scsynth_args_dialog_button,
+                        ScsynthArgsDialogButton::ApplyRestart
+                    );
+                    self.finish_scsynth_args_edit(apply)
+                }
                 ActionId::Mode(ModeActionId::TextCancel) => self.finish_scsynth_args_edit(false),
                 _ => Action::None,
             };

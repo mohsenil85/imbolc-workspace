@@ -25,6 +25,12 @@ enum ServerPaneFocus {
     ScsynthArgs,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ScsynthArgsDialogButton {
+    Cancel,
+    ApplyRestart,
+}
+
 pub struct ServerPane {
     keymap: Keymap,
     status: ServerStatus,
@@ -39,6 +45,7 @@ pub struct ServerPane {
     scsynth_args: String,
     editing_scsynth_args: bool,
     scsynth_args_edit: String,
+    scsynth_args_dialog_button: ScsynthArgsDialogButton,
     device_config_dirty: bool,
     log_lines: Vec<String>,
     log_path: PathBuf,
@@ -104,6 +111,7 @@ impl ServerPane {
             scsynth_args: config.scsynth_args,
             editing_scsynth_args: false,
             scsynth_args_edit: String::new(),
+            scsynth_args_dialog_button: ScsynthArgsDialogButton::ApplyRestart,
             device_config_dirty: false,
             log_lines: Vec::new(),
             log_path,

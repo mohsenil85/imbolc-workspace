@@ -1,9 +1,34 @@
-use super::{BufferSize, ServerPane, ServerPaneFocus};
+use super::{BufferSize, ScsynthArgsDialogButton, ServerPane, ServerPaneFocus};
 use crate::audio::devices::AudioDevice;
 use crate::audio::ServerStatus;
 use crate::state::AppState;
 use crate::ui::layout_helpers::center_rect;
 use crate::ui::{Color, Rect, RenderBuf, Style};
+
+const DEFAULT_SCSYNTH_HELP_LINE: &str = "-w <number-of-wire-buffers>         (default 64)";
+const SCSYNTH_ARG_HELP: [(&str, &str); 15] = [
+    (
+        "-u",
+        "-u <udp-port-number>               (default 57110 in imbolc)",
+    ),
+    (
+        "-H",
+        "-H <hardware-device-name>          (default system device)",
+    ),
+    ("-Z", "-Z <hardware-buffer-size>          (default 0)"),
+    ("-S", "-S <hardware-sample-rate>          (default 0)"),
+    ("-n", "-n <max-number-of-nodes>           (default 1024)"),
+    ("-d", "-d <max-number-of-synth-defs>      (default 1024)"),
+    ("-m", "-m <real-time-memory-size>         (default 8192)"),
+    ("-w", "-w <number-of-wire-buffers>        (default 64)"),
+    ("-a", "-a <number-of-audio-bus-channels>  (default 1024)"),
+    ("-c", "-c <number-of-control-bus-channels>(default 16384)"),
+    ("-b", "-b <number-of-sample-buffers>      (default 1024)"),
+    ("-i", "-i <number-of-input-bus-channels>  (default 8)"),
+    ("-o", "-o <number-of-output-bus-channels> (default 8)"),
+    ("-l", "-l <max-logins>                    (default 64)"),
+    ("-V", "-V <verbosity>                     (default 0)"),
+];
 
 impl ServerPane {
     pub(super) fn render_impl(&mut self, area: Rect, buf: &mut RenderBuf, state: &AppState) {
@@ -182,23 +207,12 @@ impl ServerPane {
             Style::new().fg(Color::WHITE)
         };
         let marker = if args_focused { "> " } else { "  " };
-        let args_text = if self.editing_scsynth_args {
-            format!(
-                "{}_",
-                if self.scsynth_args_edit.is_empty() {
-                    "<empty>".to_string()
-                } else {
-                    self.scsynth_args_edit.clone()
-                }
-            )
-        } else if self.scsynth_args.is_empty() {
+        let args_text = if self.scsynth_args.is_empty() {
             "(none)".to_string()
         } else {
             self.scsynth_args.clone()
         };
-        let args_style = if self.editing_scsynth_args {
-            Style::new().fg(Color::SKY_BLUE).bold()
-        } else if self.scsynth_args.is_empty() {
+        let args_style = if self.scsynth_args.is_empty() {
             Style::new().fg(Color::DARK_GRAY)
         } else {
             Style::new().fg(Color::WHITE)
@@ -210,9 +224,9 @@ impl ServerPane {
         y += 1;
 
         let args_hint = if self.editing_scsynth_args {
-            "[Enter] Apply+Restart  [Esc] Cancel"
+            "scsynth args editor open..."
         } else {
-            "[Enter] Edit args"
+            "[Enter] Open args editor"
         };
         buf.draw_line(
             Rect::new(x, y, w, 1),
@@ -341,6 +355,142 @@ impl ServerPane {
                 buf.draw_line(Rect::new(x, y, w, 1), &[(&truncated, log_style)]);
                 y += 1;
             }
+        }
+
+        if self.editing_scsynth_args {
+            self.render_scsynth_args_popup(area, buf);
+        }
+    }
+
+    fn current_scsynth_flag(&self) -> Option<String> {
+        self.scsynth_args_edit
+            .split_whitespace()
+            .rev()
+            .find(|token| token.starts_with('-'))
+            .map(|token| token.split('=').next().unwrap_or(token).to_string())
+    }
+
+    fn scsynth_help_line_for(flag: &str) -> Option<&'static str> {
+        SCSYNTH_ARG_HELP
+            .iter()
+            .find(|(known_flag, _)| *known_flag == flag)
+            .map(|(_, help_line)| *help_line)
+    }
+
+    fn current_scsynth_help_line(&self) -> String {
+        if let Some(flag) = self.current_scsynth_flag() {
+            if let Some(help_line) = Self::scsynth_help_line_for(&flag) {
+                return help_line.to_string();
+            }
+            return format!("{flag} (unknown flag; run `scsynth -h` for full help)");
+        }
+        DEFAULT_SCSYNTH_HELP_LINE.to_string()
+    }
+
+    fn render_scsynth_args_popup(&self, area: Rect, buf: &mut RenderBuf) {
+        let popup_width = area.width.saturating_sub(4).min(100);
+        let popup_rect = center_rect(area, popup_width, 12);
+
+        for row in popup_rect.y..popup_rect.y.saturating_add(popup_rect.height) {
+            buf.fill_line_bg(
+                popup_rect.x,
+                row,
+                popup_rect.width,
+                Style::new().bg(Color::BLACK),
+            );
+        }
+
+        let border_style = Style::new().fg(Color::GOLD);
+        let inner = buf.draw_block(
+            popup_rect,
+            " scsynth Args Editor ",
+            border_style,
+            border_style,
+        );
+
+        let x = inner.x + 1;
+        let w = inner.width.saturating_sub(2);
+        let bottom = inner.y.saturating_add(inner.height);
+        let mut y = inner.y + 1;
+
+        if y < bottom {
+            buf.draw_line(
+                Rect::new(x, y, w, 1),
+                &[(
+                    "Help for current flag (from `scsynth -h`):",
+                    Style::new().fg(Color::DARK_GRAY),
+                )],
+            );
+            y += 1;
+        }
+
+        if y < bottom {
+            let help_line = self.current_scsynth_help_line();
+            buf.draw_line(
+                Rect::new(x, y, w, 1),
+                &[(&help_line, Style::new().fg(Color::CYAN).bold())],
+            );
+            y += 2;
+        }
+
+        if y < bottom {
+            buf.draw_line(
+                Rect::new(x, y, w, 1),
+                &[("Launch args:", Style::new().fg(Color::DARK_GRAY))],
+            );
+            y += 1;
+        }
+
+        if y < bottom {
+            let field_text = format!(
+                "{}_",
+                if self.scsynth_args_edit.is_empty() {
+                    "<empty>".to_string()
+                } else {
+                    self.scsynth_args_edit.clone()
+                }
+            );
+            buf.draw_line(
+                Rect::new(x, y, w, 1),
+                &[(&field_text, Style::new().fg(Color::SKY_BLUE).bold())],
+            );
+            y += 2;
+        }
+
+        if y < bottom {
+            let cancel_selected =
+                self.scsynth_args_dialog_button == ScsynthArgsDialogButton::Cancel;
+            let apply_selected =
+                self.scsynth_args_dialog_button == ScsynthArgsDialogButton::ApplyRestart;
+            let cancel_style = if cancel_selected {
+                Style::new().fg(Color::BLACK).bg(Color::WHITE).bold()
+            } else {
+                Style::new().fg(Color::DARK_GRAY)
+            };
+            let apply_style = if apply_selected {
+                Style::new().fg(Color::BLACK).bg(Color::GOLD).bold()
+            } else {
+                Style::new().fg(Color::DARK_GRAY)
+            };
+            buf.draw_line(
+                Rect::new(x, y, w, 1),
+                &[
+                    ("[ Cancel ]", cancel_style),
+                    ("   ", Style::new()),
+                    ("[ Apply and Restart Server ]", apply_style),
+                ],
+            );
+            y += 1;
+        }
+
+        if y < bottom {
+            buf.draw_line(
+                Rect::new(x, y, w, 1),
+                &[(
+                    "[Type] edit args  [Tab/←/→] select button  [Enter] activate  [Esc] cancel",
+                    Style::new().fg(Color::DARK_GRAY),
+                )],
+            );
         }
     }
 
