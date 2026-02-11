@@ -364,33 +364,45 @@ impl AudioHandle {
         });
     }
 
-    /// Append flattened piano roll / automation for Song mode if dirty.
+    /// Sync the playback-facing piano roll / automation when dirty.
     fn send_flattened_if_needed(&mut self, state: &dyn crate::AudioStateProvider, effects: &[AudioEffect]) {
-        if effects.iter().any(|e| matches!(e, AudioEffect::UpdatePianoRoll))
-            && state.session().arrangement.play_mode == PlayMode::Song
-            && state.session().arrangement.editing_clip.is_none()
-        {
-            let mut flat_pr = state.session().piano_roll.clone();
-            let (flattened, arr_len, _) = self.arrangement_cache.get_or_compute(&state.session().arrangement);
-            for (&instrument_id, track) in &mut flat_pr.tracks {
-                track.notes = flattened.get(&instrument_id).cloned().unwrap_or_default();
+        if effects.iter().any(|e| matches!(e, AudioEffect::UpdatePianoRoll)) {
+            if state.session().arrangement.play_mode == PlayMode::Song
+                && state.session().arrangement.editing_clip.is_none()
+            {
+                // Song mode: flatten arrangement clips into timeline
+                let mut flat_pr = state.session().piano_roll.clone();
+                let (flattened, arr_len, _) = self.arrangement_cache.get_or_compute(&state.session().arrangement);
+                for (&instrument_id, track) in &mut flat_pr.tracks {
+                    track.notes = flattened.get(&instrument_id).cloned().unwrap_or_default();
+                }
+                if arr_len > 0 {
+                    flat_pr.loop_end = arr_len;
+                    flat_pr.looping = false;
+                }
+                self.event_log.append(LogEntryKind::PianoRollUpdate(flat_pr));
+            } else {
+                // Pattern/clip-edit mode: send raw piano roll
+                self.event_log.append(LogEntryKind::PianoRollUpdate(
+                    state.session().piano_roll.clone(),
+                ));
             }
-            if arr_len > 0 {
-                flat_pr.loop_end = arr_len;
-                flat_pr.looping = false;
-            }
-            self.event_log.append(LogEntryKind::PianoRollUpdate(flat_pr));
-            // In Live/clip-edit mode, ForwardAction updates session.piano_roll directly
         }
-        if effects.iter().any(|e| matches!(e, AudioEffect::UpdateAutomation))
-            && state.session().arrangement.play_mode == PlayMode::Song
-            && state.session().arrangement.editing_clip.is_none()
-        {
-            let (_, _, flattened_auto) = self.arrangement_cache.get_or_compute(&state.session().arrangement);
-            let mut merged = state.session().automation.lanes.clone();
-            merged.extend(flattened_auto.iter().cloned());
-            self.event_log.append(LogEntryKind::AutomationUpdate(merged));
-            // In Live/clip-edit mode, ForwardAction updates session.automation directly
+        if effects.iter().any(|e| matches!(e, AudioEffect::UpdateAutomation)) {
+            if state.session().arrangement.play_mode == PlayMode::Song
+                && state.session().arrangement.editing_clip.is_none()
+            {
+                // Song mode: flatten arrangement automation
+                let (_, _, flattened_auto) = self.arrangement_cache.get_or_compute(&state.session().arrangement);
+                let mut merged = state.session().automation.lanes.clone();
+                merged.extend(flattened_auto.iter().cloned());
+                self.event_log.append(LogEntryKind::AutomationUpdate(merged));
+            } else {
+                // Pattern/clip-edit mode: send raw automation
+                self.event_log.append(LogEntryKind::AutomationUpdate(
+                    state.session().automation.lanes.clone(),
+                ));
+            }
         }
     }
 
