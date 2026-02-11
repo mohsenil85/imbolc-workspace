@@ -377,14 +377,6 @@ impl Pane for FileBrowserPane {
             }
         }
 
-        // Help text
-        let help_y = rect.y + rect.height - 2;
-        if help_y < area.y + area.height {
-            buf.draw_line(
-                Rect::new(content_x, help_y, inner.width.saturating_sub(2), 1),
-                &[("Enter: select | Backspace: parent | ~: home | &: hidden | Esc: cancel", Style::new().fg(Color::DARK_GRAY))],
-            );
-        }
     }
 
     fn handle_mouse(&mut self, event: &MouseEvent, area: Rect, _state: &AppState) -> Action {

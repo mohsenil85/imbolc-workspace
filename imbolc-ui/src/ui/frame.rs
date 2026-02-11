@@ -1,4 +1,5 @@
 use super::{Color, Rect, RenderBuf, Style};
+use super::status_bar::{StatusBar, StatusLevel};
 use crate::audio::ServerStatus;
 use crate::state::AppState;
 
@@ -35,6 +36,8 @@ pub struct Frame {
     osc_latency_ms: f32,
     /// Audio buffer latency (ms), calculated from buffer_size / sample_rate
     audio_latency_ms: f32,
+    /// Status bar for transient user notifications
+    pub status_bar: StatusBar,
 }
 
 impl Frame {
@@ -51,6 +54,7 @@ impl Frame {
             sc_cpu: 0.0,
             osc_latency_ms: 0.0,
             audio_latency_ms: 0.0,
+            status_bar: StatusBar::new(),
         }
     }
 
@@ -85,17 +89,24 @@ impl Frame {
         }
     }
 
+    pub const MIN_WIDTH: u16 = 80;
+    pub const MIN_HEIGHT: u16 = 24;
+
+    /// Returns true if the terminal area is large enough for normal rendering.
+    pub fn is_size_ok(area: Rect) -> bool {
+        area.width >= Self::MIN_WIDTH && area.height >= Self::MIN_HEIGHT
+    }
+
     /// Render the frame border, header, indicators, meter, and status bar.
     pub fn render_buf(&self, area: Rect, buf: &mut RenderBuf, state: &AppState) {
-        const MIN_WIDTH: u16 = 80;
-        const MIN_HEIGHT: u16 = 24;
-
-        if area.width < MIN_WIDTH || area.height < MIN_HEIGHT {
+        if !Self::is_size_ok(area) {
             let msg = format!(
-                "Terminal too small: {}x{} (need {}x{})",
-                area.width, area.height, MIN_WIDTH, MIN_HEIGHT
+                "{}x{} required, got {}x{}",
+                Self::MIN_WIDTH, Self::MIN_HEIGHT, area.width, area.height
             );
-            buf.draw_str(0, 0, &msg, Style::new().fg(Color::MUTE_COLOR));
+            let x = area.x + area.width.saturating_sub(msg.len() as u16) / 2;
+            let y = area.y + area.height / 2;
+            buf.draw_str(x, y, &msg, Style::new().fg(Color::MUTE_COLOR));
             return;
         }
 
@@ -233,6 +244,21 @@ impl Frame {
             buf.draw_str(x, bottom_y, &audio_lat_text, Style::new().fg(audio_lat_color));
             let x = x + audio_lat_text.len() as u16;
             buf.draw_str(x, bottom_y, &osc_lat_text, Style::new().fg(osc_lat_color));
+        }
+
+        // Status bar message (centered on bottom border)
+        if let Some(msg) = self.status_bar.current() {
+            let bottom_y = area.y + area.height.saturating_sub(1);
+            let color = match msg.level {
+                StatusLevel::Info => Color::METER_LOW,
+                StatusLevel::Warning => Color::SOLO_COLOR,
+                StatusLevel::Error => Color::MUTE_COLOR,
+            };
+            let text = format!(" {} ", msg.text);
+            let max_width = area.width.saturating_sub(40) as usize; // leave room for left/right indicators
+            let display: String = text.chars().take(max_width).collect();
+            let x = area.x + (area.width.saturating_sub(display.len() as u16)) / 2;
+            buf.draw_str(x, bottom_y, &display, Style::new().fg(color));
         }
 
         // Right-aligned SC and MIDI status indicators on bottom border

@@ -183,11 +183,6 @@ impl Pane for GroovePane {
             normal_style, global_style, selected_style,
         );
 
-        // Reset hint
-        let hint_y = y + 6;
-        let hint = "[r] Reset to global";
-        let hint_style = Style::new().fg(Color::DARK_GRAY);
-        render_text_at(inner.x + 2, hint_y, hint, hint_style, inner.width, buf);
     }
 
     fn keymap(&self) -> &Keymap {
@@ -246,15 +241,6 @@ fn render_param_row(
         let suffix = " (global)";
         for (i, ch) in suffix.chars().enumerate() {
             buf.set_cell(value_x + value.len() as u16 + i as u16, y, ch, global_style);
-        }
-    }
-}
-
-fn render_text_at(x: u16, y: u16, text: &str, style: Style, max_width: u16, buf: &mut RenderBuf) {
-    for (i, ch) in text.chars().enumerate() {
-        let px = x + i as u16;
-        if px < x + max_width {
-            buf.set_cell(px, y, ch, style);
         }
     }
 }

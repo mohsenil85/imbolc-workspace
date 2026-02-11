@@ -347,8 +347,7 @@ mod tests {
         use crate::ui::action_id::{ActionId, FrameEditActionId};
         let mut pane = FrameEditPane::new(Keymap::new());
         let state = AppState::new();
-        let mut settings = MusicalSettings::default();
-        settings.bpm = 140;
+        let settings = MusicalSettings { bpm: 140, ..Default::default() };
         pane.set_settings(settings.clone());
 
         pane.settings.bpm = 200;
@@ -368,8 +367,7 @@ mod tests {
         use crate::ui::action_id::{ActionId, ModeActionId};
         let mut pane = FrameEditPane::new(Keymap::new());
         let state = AppState::new();
-        let mut settings = MusicalSettings::default();
-        settings.tuning_a4 = 432.0;
+        let settings = MusicalSettings { tuning_a4: 432.0, ..Default::default() };
         pane.set_settings(settings.clone());
 
         pane.settings.tuning_a4 = 450.0;

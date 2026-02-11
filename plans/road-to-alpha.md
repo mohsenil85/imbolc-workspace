@@ -16,81 +16,78 @@ adopters who'll tolerate rough edges but expect stability.
 
 ---
 
-## Phase 0: Hygiene (1-2 days)
+## Phase 0: Hygiene (1-2 days) -- DONE
 
 Clean build = professional signal. Zero warnings makes regressions
 visible.
 
-### 0.1 Fix compile error
-- `imbolc-ui/src/panes/global_actions.rs:186` — non-exhaustive match
+### 0.1 Fix compile error -- DONE
+- [x] `imbolc-ui/src/panes/global_actions.rs:186` — non-exhaustive match
   on `PaneId::Tuner`. Add the missing arm.
-- `imbolc-ui/src/ui/action_id.rs` — verify `PaneId::Tuner` variant
+- [x] `imbolc-ui/src/ui/action_id.rs` — verify `PaneId::Tuner` variant
   exists and is handled
 
-### 0.2 Fix all compiler warnings (~33)
-- `imbolc-ui/src/ui/mod.rs:30` — remove unused imports
+### 0.2 Fix all compiler warnings (~33) -- DONE
+- [x] `imbolc-ui/src/ui/mod.rs:30` — remove unused imports
   `selected_style_bold`, `selected_style`
-- `imbolc-ui/src/main.rs:64` — prefix `discover_mode` with `_` (or
+- [x] `imbolc-ui/src/main.rs:64` — prefix `discover_mode` with `_` (or
   cfg-gate on `net` feature)
-- `imbolc-ui/src/ui/input.rs:35` — `#[allow(dead_code)]` on `AppEvent`
+- [x] `imbolc-ui/src/ui/input.rs:35` — `#[allow(dead_code)]` on `AppEvent`
   variant fields
-- `imbolc-ui/src/ui/style.rs` — `#[allow(dead_code)]` on `theme_*`
+- [x] `imbolc-ui/src/ui/style.rs` — `#[allow(dead_code)]` on `theme_*`
   functions (intentional API for future themes)
-- `imbolc-ui/src/ui/layout_helpers.rs:20` — annotate or use
+- [x] `imbolc-ui/src/ui/layout_helpers.rs:20` — annotate or use
   `render_dialog_frame`
-- `imbolc-ui/src/ui/render.rs:73` — annotate or use `fill_line_bg`
-- `imbolc-ui/src/ui/list_selector.rs` — annotate `reset`,
+- [x] `imbolc-ui/src/ui/render.rs:73` — annotate or use `fill_line_bg`
+- [x] `imbolc-ui/src/ui/list_selector.rs` — annotate `reset`,
   `next_and_scroll`, `prev_and_scroll`
-- Test helpers (`make_test_state`, `drive_and_collect_actions`,
+- [x] Test helpers (`make_test_state`, `drive_and_collect_actions`,
   `send_reconnect`) — add `#[cfg(test)]` or `#[allow(dead_code)]`
 
 **Done when:** `cargo build` produces zero warnings.
 
-### 0.3 Quick wins from TASKS.md
-- Remove time signature from piano roll header (`piano_roll_pane.rs`)
-- Remove inline help text from pane `render()` methods (all panes)
+### 0.3 Quick wins from TASKS.md -- DONE
+- [x] Remove time signature from piano roll header (`piano_roll_pane.rs`)
+- [x] Remove inline help text from pane `render()` methods (all panes)
 
 ---
 
-## Phase 1: Crash Resilience & Error Feedback (1-2 weeks)
+## Phase 1: Crash Resilience & Error Feedback (1-2 weeks) -- DONE
 
 An alpha that crashes or silently fails destroys trust.
 
-### 1.1 Notification/feedback system
-**Why:** Every subsequent phase needs a way to tell users what
-happened. Currently errors go to server pane status or nowhere.
-
-- Add `StatusMessage { text, level, timestamp }` ring buffer to
+### 1.1 Notification/feedback system -- DONE
+- [x] Add `StatusMessage { text, level, timestamp }` ring buffer to
   `AppState`
-- Render one-line status bar at bottom of frame (`frame.rs`)
-- Auto-dismiss after 3-5s. Levels: Info (white), Warning (yellow),
+- [x] Render one-line status bar at bottom of frame (`frame.rs`)
+- [x] Auto-dismiss after 3-5s. Levels: Info (white), Warning (yellow),
   Error (red)
-- Wire into: save/load, audio errors, MIDI connection, export progress
+- [x] Wire into: save/load, audio errors, MIDI connection, export progress
 
 **Files:** `imbolc-types/src/` (new type),
 `imbolc-core/src/state/mod.rs`, `imbolc-ui/src/ui/frame.rs`,
 `imbolc-ui/src/main.rs`
 
-### 1.2 Terminal size handling
-- On startup + `Event::Resize`: check against minimum (80x24)
-- If too small: render centered message, skip pane rendering
-- Clamp layout dimensions to available space
+### 1.2 Terminal size handling -- DONE
+- [x] On startup + `Event::Resize`: check against minimum (80x24)
+- [x] If too small: render centered message, skip pane rendering
+- [x] Clamp layout dimensions to available space
 
 **Files:** `imbolc-ui/src/main.rs`, `imbolc-ui/src/ui/frame.rs`
 
-### 1.3 Panic recovery hook
-- Set a panic hook that restores terminal state (disable raw mode,
+### 1.3 Panic recovery hook -- DONE
+- [x] Set a panic hook that restores terminal state (disable raw mode,
   show cursor)
-- Attempt autosave on panic before exiting
-- Print useful error message to stderr
+- [x] Attempt autosave on panic before exiting
+- [x] Print useful error message to stderr
 
 **Files:** `imbolc-ui/src/main.rs`
 
-### 1.4 Audit production unwraps
-- Review all `.unwrap()` outside test modules in imbolc-core and
+### 1.4 Audit production unwraps -- DONE
+- [x] Review all `.unwrap()` outside test modules in imbolc-core and
   imbolc-ui
-- Replace with proper error handling or document with comments
-- Mutex `.lock().unwrap()` → poisoned-mutex recovery where needed
+- [x] Replace with proper error handling or document with comments
+- [x] Mutex `.lock().unwrap()` → poisoned-mutex recovery where needed
 
 ---
 

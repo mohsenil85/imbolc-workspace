@@ -16,7 +16,7 @@ use crate::dispatch::dispatch_action;
 use crate::state::AppState;
 
 use imbolc_types::{
-    AutomationTarget, BusId, CurveType, EffectType, FilterType, InstrumentId, LfoShape,
+    AutomationTarget, BusId, CurveType, EffectId, EffectType, FilterType, InstrumentId, LfoShape,
     MixerSelection, MixerSend, MusicalSettings, OutputTarget, ParamIndex, ParameterTarget,
     SourceType,
 };
@@ -106,7 +106,7 @@ fn first_id(s: &AppState) -> InstrumentId {
 }
 
 /// Helper: get the first effect ID from the first instrument.
-fn first_effect_id(s: &AppState) -> u32 {
+fn first_effect_id(s: &AppState) -> EffectId {
     s.instruments.instruments[0]
         .effects()
         .next()
@@ -1590,7 +1590,7 @@ fn not_projectable_automation_toggle_recording() {
 fn parity_action_on_nonexistent_instrument() {
     // Both paths should no-op when targeting a nonexistent instrument
     let mut s = minimal();
-    let bogus_id: InstrumentId = 99999;
+    let bogus_id = InstrumentId::new(99999);
     assert_parity(
         &mut s,
         &Action::Instrument(InstrumentAction::ToggleFilter(bogus_id)),
@@ -1706,7 +1706,7 @@ fn parity_vst_param_reset() {
 #[test]
 fn not_projectable_vst_discover() {
     assert_not_projectable(&Action::VstParam(VstParamAction::DiscoverParams(
-        1,
+        InstrumentId::new(1),
         VstTarget::Source,
     )));
 }
@@ -1714,7 +1714,7 @@ fn not_projectable_vst_discover() {
 #[test]
 fn not_projectable_vst_save_state() {
     assert_not_projectable(&Action::VstParam(VstParamAction::SaveState(
-        1,
+        InstrumentId::new(1),
         VstTarget::Source,
     )));
 }

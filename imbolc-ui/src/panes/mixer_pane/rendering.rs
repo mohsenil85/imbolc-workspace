@@ -661,11 +661,6 @@ impl MixerPane {
             }
         }
 
-        // Hint line at bottom
-        let hint_y = rect.y + rect.height - 1;
-        let hint = "Tab:section  a:add  d:del  e:bypass  Esc:back";
-        let hint_x = rect.x + (rect.width.saturating_sub(hint.len() as u16)) / 2;
-        Self::write_str(buf, hint_x, hint_y, hint, dim);
     }
 
     pub(super) fn render_bus_detail_buf(&self, buf: &mut RenderBuf, area: Rect, state: &AppState, bus_id: BusId) {
@@ -791,11 +786,6 @@ impl MixerPane {
             }
         }
 
-        // Hint line at bottom
-        let hint_y = rect.y + rect.height - 1;
-        let hint = "Tab:section  a:add  d:del  e:bypass  Esc:back";
-        let hint_x = rect.x + (rect.width.saturating_sub(hint.len() as u16)) / 2;
-        Self::write_str(buf, hint_x, hint_y, hint, dim);
     }
 
     #[allow(clippy::too_many_arguments)]

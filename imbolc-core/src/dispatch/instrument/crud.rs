@@ -135,14 +135,15 @@ mod tests {
     use super::*;
     use crate::action::InstrumentUpdate;
     use crate::state::instrument::SourceType;
+    use imbolc_types::InstrumentId;
 
-    fn setup_with_instrument() -> (AppState, u32) {
+    fn setup_with_instrument() -> (AppState, InstrumentId) {
         let mut state = AppState::new();
         let id = state.instruments.add_instrument(SourceType::Saw);
         (state, id)
     }
 
-    fn default_update(state: &AppState, id: u32) -> InstrumentUpdate {
+    fn default_update(state: &AppState, id: InstrumentId) -> InstrumentUpdate {
         let inst = state.instruments.instrument(id).unwrap();
         InstrumentUpdate {
             id,

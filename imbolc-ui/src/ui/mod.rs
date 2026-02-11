@@ -12,6 +12,7 @@ pub mod piano_keyboard;
 pub mod rat_compat;
 pub mod ratatui_impl;
 pub mod render;
+pub mod status_bar;
 #[allow(dead_code)]
 pub mod style;
 #[allow(dead_code)]

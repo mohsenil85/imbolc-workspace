@@ -20,7 +20,7 @@ pub fn deserialize_instruments(bytes: &[u8]) -> Result<InstrumentState, String> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use imbolc_types::{BusId, EffectId, ParamIndex};
+    use imbolc_types::{BusId, CustomSynthDefId, EffectId, ParamIndex};
     use crate::state::AutomationTarget;
     use crate::state::custom_synthdef::{CustomSynthDef, CustomSynthDefRegistry, ParamSpec};
     use crate::state::instrument::{
@@ -54,7 +54,7 @@ mod tests {
 
         let mut registry = CustomSynthDefRegistry::new();
         let custom_id = registry.add(CustomSynthDef {
-            id: 0,
+            id: CustomSynthDefId::new(0),
             name: "MySynth".to_string(),
             synthdef_name: "my_synth".to_string(),
             source_path: PathBuf::from("/tmp/my_synth.scd"),

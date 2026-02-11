@@ -115,7 +115,7 @@ impl Pane for SampleChopperPane {
             let inner = buf.draw_block(rect, " Sample Chopper ", border_style, border_style);
             buf.draw_line(
                 Rect::new(inner.x + 1, inner.y + 1, inner.width.saturating_sub(2), 1),
-                &[("No drum machine instrument selected. Press 1 to add one.", Style::new().fg(Color::DARK_GRAY))],
+                &[("No drum machine instrument selected.", Style::new().fg(Color::DARK_GRAY))],
             );
             return;
         }

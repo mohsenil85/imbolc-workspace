@@ -1,6 +1,8 @@
 use std::path::PathBuf;
 
+use imbolc_types::CustomSynthDefId;
 use crate::state::custom_synthdef::{CustomSynthDef, CustomSynthDefRegistry, ParamSpec};
+use imbolc_types::VstPluginId;
 use crate::state::instrument::{SourceExtra, SourceType};
 use crate::state::instrument_state::InstrumentState;
 use crate::state::session::SessionState;
@@ -91,7 +93,7 @@ fn round_trip_sampler_config() {
 fn round_trip_vst_plugins() {
     let mut session = SessionState::new();
     let mut instruments = InstrumentState::new();
-    let inst_id = instruments.add_instrument(SourceType::Saw);
+    let inst_id = instruments.add_instrument(SourceType::Vst(VstPluginId::new(0)));
 
     if let Some(inst) = instruments.instrument_mut(inst_id) {
         inst.source_extra = SourceExtra::Vst {
@@ -121,7 +123,7 @@ fn round_trip_custom_synthdefs() {
 
     let mut registry = CustomSynthDefRegistry::new();
     registry.add(CustomSynthDef {
-        id: 0,
+        id: CustomSynthDefId::new(0),
         name: "TestSynth".to_string(),
         synthdef_name: "test_synth".to_string(),
         source_path: PathBuf::from("/tmp/test.scd"),

@@ -176,6 +176,7 @@ pub(crate) fn record_automation_point(state: &mut AppState, target: AutomationTa
 mod tests {
     use super::*;
     use imbolc_audio::AudioHandle;
+    use imbolc_types::InstrumentId;
     use crate::state::automation::AutomationLaneId;
 
     fn setup() -> (AppState, AudioHandle) {
@@ -185,14 +186,14 @@ mod tests {
     }
 
     fn add_lane(state: &mut AppState) -> AutomationLaneId {
-        state.session.automation.add_lane(AutomationTarget::level(0))
+        state.session.automation.add_lane(AutomationTarget::level(InstrumentId::new(0)))
     }
 
     #[test]
     fn add_lane_creates_and_is_idempotent() {
         let (mut state, audio) = setup();
         let mut effects = Vec::new();
-        let target = AutomationTarget::level(0);
+        let target = AutomationTarget::level(InstrumentId::new(0));
         let result = dispatch_automation(&AutomationAction::AddLane(target.clone()), &mut state, &audio, &mut effects);
         assert!(result.audio_dirty.automation);
         assert_eq!(state.session.automation.lanes.len(), 1);
@@ -265,7 +266,7 @@ mod tests {
         let (mut state, audio) = setup();
         let mut effects = Vec::new();
         add_lane(&mut state);
-        state.session.automation.add_lane(AutomationTarget::pan(0));
+        state.session.automation.add_lane(AutomationTarget::pan(InstrumentId::new(0)));
 
         dispatch_automation(&AutomationAction::ArmAllLanes, &mut state, &audio, &mut effects);
         assert!(state.session.automation.lanes.iter().all(|l| l.record_armed));
@@ -289,7 +290,7 @@ mod tests {
         let (mut state, _audio) = setup();
         state.recording.automation_recording = true;
         state.session.piano_roll.playing = true;
-        let target = AutomationTarget::level(0);
+        let target = AutomationTarget::level(InstrumentId::new(0));
 
         // First point always added
         state.audio.playhead = 0;
@@ -315,7 +316,7 @@ mod tests {
         let (mut state, _audio) = setup();
         state.recording.automation_recording = true;
         state.session.piano_roll.playing = true;
-        let target = AutomationTarget::level(0);
+        let target = AutomationTarget::level(InstrumentId::new(0));
         let lane_id = state.session.automation.add_lane(target.clone());
 
         // Disarm the lane
@@ -334,7 +335,7 @@ mod tests {
         state.recording.automation_recording = false;
         state.session.piano_roll.playing = true;
         state.audio.playing = true;
-        let target = AutomationTarget::level(0);
+        let target = AutomationTarget::level(InstrumentId::new(0));
         dispatch_automation(&AutomationAction::RecordValue(target.clone(), 0.5), &mut state, &audio, &mut effects);
         // No lane should be created
         assert!(state.session.automation.lane_for_target(&target).is_none());
@@ -347,7 +348,7 @@ mod tests {
         // Recording but not playing — RecordValue should NOT add points
         state.recording.automation_recording = true;
         state.session.piano_roll.playing = false;
-        let target = AutomationTarget::level(0);
+        let target = AutomationTarget::level(InstrumentId::new(0));
         dispatch_automation(&AutomationAction::RecordValue(target.clone(), 0.5), &mut state, &audio, &mut effects);
         assert!(state.session.automation.lane_for_target(&target).is_none());
     }
@@ -360,7 +361,7 @@ mod tests {
         state.session.piano_roll.playing = true;
         state.audio.playing = true;
         state.audio.playhead = 100;
-        let target = AutomationTarget::level(0);
+        let target = AutomationTarget::level(InstrumentId::new(0));
         let result = dispatch_automation(&AutomationAction::RecordValue(target.clone(), 0.5), &mut state, &audio, &mut effects);
         assert!(result.audio_dirty.automation);
         let lane = state.session.automation.lane_for_target(&target).unwrap();
@@ -375,7 +376,7 @@ mod tests {
         state.recording.automation_recording = true;
         state.session.piano_roll.playing = true;
         state.audio.playing = true;
-        let target = AutomationTarget::level(0);
+        let target = AutomationTarget::level(InstrumentId::new(0));
 
         // First point
         state.audio.playhead = 0;

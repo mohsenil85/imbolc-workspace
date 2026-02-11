@@ -26,6 +26,7 @@ use state::AppState;
 use ui::{
     Action, AppEvent, Frame, InputSource, KeyCode, Keymap, LayerResult,
     LayerStack, PaneManager, RatatuiBackend, keybindings,
+    status_bar::StatusLevel,
 };
 use global_actions::*;
 
@@ -103,6 +104,21 @@ fn main() -> std::io::Result<()> {
             std::process::exit(1);
         }
     }
+
+    // Install panic hook to restore terminal before printing panic info
+    let original_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        // Best-effort terminal restoration — ignore errors
+        let _ = crossterm::terminal::disable_raw_mode();
+        let _ = crossterm::execute!(
+            std::io::stderr(),
+            crossterm::terminal::LeaveAlternateScreen,
+            crossterm::event::DisableMouseCapture,
+            crossterm::event::PopKeyboardEnhancementFlags,
+        );
+        // Print panic info to stderr, then delegate to original hook (backtrace etc.)
+        original_hook(info);
+    }));
 
     let mut backend = RatatuiBackend::new()?;
     backend.start()?;
@@ -243,7 +259,7 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
     // Auto-start SuperCollider and apply status events
     {
         let startup_events = setup::auto_start_sc(&mut audio);
-        apply_status_events(&startup_events, &mut panes);
+        apply_status_events(&startup_events, &mut panes, &mut app_frame);
     }
 
     // Track last render area for mouse hit-testing
@@ -564,9 +580,14 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
                             recent_projects.add(&path, &name);
                             recent_projects.save();
                             app_frame.set_project_name(name);
+                            app_frame.status_bar.push("Project saved", StatusLevel::Info);
                             "Saved project".to_string()
                         }
-                        Err(e) => format!("Save failed: {}", e),
+                        Err(e) => {
+                            let msg = format!("Save failed: {}", e);
+                            app_frame.status_bar.push(&msg, StatusLevel::Error);
+                            msg
+                        }
                     };
                     if let Some(server) = panes.get_pane_mut::<ServerPane>("server") {
                         server.set_status(audio.status(), &status);
@@ -625,13 +646,16 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
                                  });
                              }
 
+                             app_frame.status_bar.push("Project loaded", StatusLevel::Info);
                              if let Some(server) = panes.get_pane_mut::<ServerPane>("server") {
                                  server.set_status(audio.status(), "Project loaded");
                              }
                          }
                          Err(e) => {
+                             let msg = format!("Load failed: {}", e);
+                             app_frame.status_bar.push(&msg, StatusLevel::Error);
                              if let Some(server) = panes.get_pane_mut::<ServerPane>("server") {
-                                 server.set_status(audio.status(), &format!("Load failed: {}", e));
+                                 server.set_status(audio.status(), &msg);
                              }
                          }
                      }
@@ -720,6 +744,11 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
                 render_needed = true;
             }
 
+            // Re-render while status bar has a visible message (for auto-dismiss)
+            if app_frame.status_bar.current().is_some() {
+                render_needed = true;
+            }
+
             if render_needed {
                 last_render_time = now_render;
 
@@ -799,7 +828,9 @@ fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
                 last_area = area;
                 let mut rbuf = ui::RenderBuf::new(frame.buffer_mut());
                 app_frame.render_buf(area, &mut rbuf, dispatcher.state());
-                panes.render(area, &mut rbuf, dispatcher.state());
+                if Frame::is_size_ok(area) {
+                    panes.render(area, &mut rbuf, dispatcher.state());
+                }
                 backend.end_frame(frame)?;
 
                 render_needed = false;

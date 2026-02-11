@@ -125,14 +125,6 @@ impl Pane for HelpPane {
             }
         }
 
-        // Help text at bottom
-        let help_y = rect.y + rect.height - 2;
-        if help_y < area.y + area.height {
-            let help_area = Rect::new(inner.x + 1, help_y, inner.width.saturating_sub(1), 1);
-            buf.draw_line(help_area, &[
-                ("[ESC/F1] Close  [Up/Down] Scroll", Style::new().fg(Color::DARK_GRAY)),
-            ]);
-        }
     }
 
     fn handle_mouse(&mut self, event: &MouseEvent, _area: Rect, _state: &AppState) -> Action {

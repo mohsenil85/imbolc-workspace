@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::state::automation::*;
-    use imbolc_types::BusId;
+    use imbolc_types::{BusId, InstrumentId};
 
     #[test]
     fn test_automation_point() {
@@ -12,9 +12,7 @@ mod tests {
 
     #[test]
     fn test_automation_lane_interpolation() {
-        let mut lane = AutomationLane::new(0, AutomationTarget::level(0));
-
-        // Add points
+        let mut lane = AutomationLane::new(0, AutomationTarget::level(InstrumentId::new(0)));
         lane.add_point(0, 0.0);
         lane.add_point(100, 1.0);
 
@@ -29,8 +27,7 @@ mod tests {
 
     #[test]
     fn test_automation_lane_step_curve() {
-        let mut lane = AutomationLane::new(0, AutomationTarget::level(0));
-
+        let mut lane = AutomationLane::new(0, AutomationTarget::level(InstrumentId::new(0)));
         lane.points.push(AutomationPoint::with_curve(0, 0.0, CurveType::Step));
         lane.points.push(AutomationPoint::with_curve(100, 1.0, CurveType::Step));
 
@@ -42,13 +39,11 @@ mod tests {
     fn test_automation_state() {
         let mut state = AutomationState::new();
 
-        let id1 = state.add_lane(AutomationTarget::level(0));
-        let id2 = state.add_lane(AutomationTarget::pan(0));
-
+        let id1 = state.add_lane(AutomationTarget::level(InstrumentId::new(0)));
+        let id2 = state.add_lane(AutomationTarget::pan(InstrumentId::new(0)));
         assert_eq!(state.lanes.len(), 2);
 
-        // Adding same target should return existing ID
-        let id1_again = state.add_lane(AutomationTarget::level(0));
+        let id1_again = state.add_lane(AutomationTarget::level(InstrumentId::new(0)));
         assert_eq!(id1, id1_again);
         assert_eq!(state.lanes.len(), 2);
 
@@ -59,7 +54,7 @@ mod tests {
 
     #[test]
     fn test_value_range_mapping() {
-        let mut lane = AutomationLane::new(0, AutomationTarget::filter_cutoff(0));
+        let mut lane = AutomationLane::new(0, AutomationTarget::filter_cutoff(InstrumentId::new(0)));
         // Default range for filter cutoff is 20-20000
 
         lane.add_point(0, 0.0);   // Maps to 20 Hz
@@ -74,15 +69,15 @@ mod tests {
 
     #[test]
     fn test_new_target_instrument_id() {
-        assert_eq!(AutomationTarget::lfo_rate(5).instrument_id(), Some(5));
-        assert_eq!(AutomationTarget::send_level(3, BusId::new(1)).instrument_id(), Some(3));
+        assert_eq!(AutomationTarget::lfo_rate(InstrumentId::new(5)).instrument_id(), Some(InstrumentId::new(5)));
+        assert_eq!(AutomationTarget::send_level(InstrumentId::new(3), BusId::new(1)).instrument_id(), Some(InstrumentId::new(3)));
         assert_eq!(AutomationTarget::bus_level(BusId::new(1)).instrument_id(), None);
         assert_eq!(AutomationTarget::bpm().instrument_id(), None);
     }
 
     #[test]
     fn test_new_target_ranges() {
-        let (min, max) = AutomationTarget::lfo_rate(0).default_range();
+        let (min, max) = AutomationTarget::lfo_rate(InstrumentId::new(0)).default_range();
         assert!((min - 0.1).abs() < 0.01);
         assert!((max - 32.0).abs() < 0.01);
 
@@ -94,11 +89,11 @@ mod tests {
     #[test]
     fn test_global_targets_not_removed_by_instrument_cleanup() {
         let mut state = AutomationState::new();
-        state.add_lane(AutomationTarget::level(1));
+        state.add_lane(AutomationTarget::level(InstrumentId::new(1)));
         state.add_lane(AutomationTarget::bpm());
         state.add_lane(AutomationTarget::bus_level(BusId::new(2)));
 
-        state.remove_lanes_for_instrument(1);
+        state.remove_lanes_for_instrument(InstrumentId::new(1));
         assert_eq!(state.lanes.len(), 2);
         assert!(matches!(state.lanes[0].target, AutomationTarget::Global(imbolc_types::GlobalParameter::Bpm)));
         assert!(matches!(state.lanes[1].target, AutomationTarget::Bus(id, _) if id == BusId::new(2)));
@@ -108,15 +103,15 @@ mod tests {
     fn test_remove_lanes_for_instrument_updates_selection() {
         let mut state = AutomationState::new();
 
-        let _id1 = state.add_lane(AutomationTarget::level(1));
-        let _id2 = state.add_lane(AutomationTarget::pan(2));
-        let _id3 = state.add_lane(AutomationTarget::filter_cutoff(1));
+        let _id1 = state.add_lane(AutomationTarget::level(InstrumentId::new(1)));
+        let _id2 = state.add_lane(AutomationTarget::pan(InstrumentId::new(2)));
+        let _id3 = state.add_lane(AutomationTarget::filter_cutoff(InstrumentId::new(1)));
 
         state.selected_lane = Some(2);
-        state.remove_lanes_for_instrument(1);
+        state.remove_lanes_for_instrument(InstrumentId::new(1));
 
         assert_eq!(state.lanes.len(), 1);
-        assert_eq!(state.lanes[0].target.instrument_id(), Some(2));
+        assert_eq!(state.lanes[0].target.instrument_id(), Some(InstrumentId::new(2)));
         assert_eq!(state.selected_lane, Some(0));
     }
 
@@ -131,7 +126,7 @@ mod tests {
 
     #[test]
     fn add_point_replaces_at_same_tick() {
-        let mut lane = AutomationLane::new(0, AutomationTarget::level(0));
+        let mut lane = AutomationLane::new(0, AutomationTarget::level(InstrumentId::new(0)));
         lane.add_point(100, 0.5);
         lane.add_point(100, 0.8);
         assert_eq!(lane.points.len(), 1);
@@ -140,7 +135,7 @@ mod tests {
 
     #[test]
     fn add_point_keeps_sorted_order() {
-        let mut lane = AutomationLane::new(0, AutomationTarget::level(0));
+        let mut lane = AutomationLane::new(0, AutomationTarget::level(InstrumentId::new(0)));
         lane.add_point(100, 0.5);
         lane.add_point(50, 0.3);
         lane.add_point(200, 0.9);
@@ -150,7 +145,7 @@ mod tests {
 
     #[test]
     fn value_at_disabled_lane() {
-        let mut lane = AutomationLane::new(0, AutomationTarget::level(0));
+        let mut lane = AutomationLane::new(0, AutomationTarget::level(InstrumentId::new(0)));
         lane.add_point(0, 0.5);
         lane.enabled = false;
         assert!(lane.value_at(0).is_none());
@@ -158,13 +153,13 @@ mod tests {
 
     #[test]
     fn value_at_empty_lane() {
-        let lane = AutomationLane::new(0, AutomationTarget::level(0));
+        let lane = AutomationLane::new(0, AutomationTarget::level(InstrumentId::new(0)));
         assert!(lane.value_at(0).is_none());
     }
 
     #[test]
     fn value_at_exponential_curve() {
-        let mut lane = AutomationLane::new(0, AutomationTarget::level(0));
+        let mut lane = AutomationLane::new(0, AutomationTarget::level(InstrumentId::new(0)));
         lane.points.push(AutomationPoint::with_curve(0, 0.0, CurveType::Exponential));
         lane.points.push(AutomationPoint::with_curve(100, 1.0, CurveType::Linear));
         // At midpoint t=0.5, exponential gives t^2 = 0.25 (normalized)
@@ -175,7 +170,7 @@ mod tests {
 
     #[test]
     fn value_at_s_curve() {
-        let mut lane = AutomationLane::new(0, AutomationTarget::level(0));
+        let mut lane = AutomationLane::new(0, AutomationTarget::level(InstrumentId::new(0)));
         lane.points.push(AutomationPoint::with_curve(0, 0.0, CurveType::SCurve));
         lane.points.push(AutomationPoint::with_curve(100, 1.0, CurveType::Linear));
         // At midpoint t=0.5, smoothstep gives 0.5*0.5*(3-2*0.5) = 0.5
@@ -185,7 +180,7 @@ mod tests {
 
     #[test]
     fn normalize_value_instrument_pan() {
-        let target = AutomationTarget::pan(0);
+        let target = AutomationTarget::pan(InstrumentId::new(0));
         // Range is -1.0 to 1.0
         assert!((target.normalize_value(-1.0) - 0.0).abs() < f32::EPSILON);
         assert!((target.normalize_value(0.0) - 0.5).abs() < f32::EPSILON);
@@ -205,8 +200,8 @@ mod tests {
     #[test]
     fn select_next_at_end_stays() {
         let mut state = AutomationState::new();
-        state.add_lane(AutomationTarget::level(0));
-        state.add_lane(AutomationTarget::pan(0));
+        state.add_lane(AutomationTarget::level(InstrumentId::new(0)));
+        state.add_lane(AutomationTarget::pan(InstrumentId::new(0)));
         state.selected_lane = Some(1);
         state.select_next();
         assert_eq!(state.selected_lane, Some(1));
@@ -215,7 +210,7 @@ mod tests {
     #[test]
     fn select_prev_at_0_stays() {
         let mut state = AutomationState::new();
-        state.add_lane(AutomationTarget::level(0));
+        state.add_lane(AutomationTarget::level(InstrumentId::new(0)));
         state.selected_lane = Some(0);
         state.select_prev();
         assert_eq!(state.selected_lane, Some(0));
@@ -224,9 +219,9 @@ mod tests {
     #[test]
     fn recalculate_next_lane_id() {
         let mut state = AutomationState::new();
-        let _id1 = state.add_lane(AutomationTarget::level(0));
-        let _id2 = state.add_lane(AutomationTarget::pan(0));
-        let id3 = state.add_lane(AutomationTarget::filter_cutoff(0));
+        let _id1 = state.add_lane(AutomationTarget::level(InstrumentId::new(0)));
+        let _id2 = state.add_lane(AutomationTarget::pan(InstrumentId::new(0)));
+        let id3 = state.add_lane(AutomationTarget::filter_cutoff(InstrumentId::new(0)));
 
         // Manually set next_lane_id to 0 to simulate loading
         state.next_lane_id = 0;
@@ -240,7 +235,7 @@ mod tests {
         use crate::state::vst_plugin::VstPluginRegistry;
         use crate::state::automation::target::AutomationTargetExt;
 
-        let inst = Instrument::new(1, SourceType::Saw);
+        let inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
         let vst_registry = VstPluginRegistry::new();
         let targets = AutomationTarget::targets_for_instrument_context(&inst, &vst_registry);
         // Plain oscillator: 16 static targets (10 original + 4 groove + 2 discrete: TrackTimeSignature, FilterBypass)
@@ -253,7 +248,7 @@ mod tests {
         use crate::state::vst_plugin::VstPluginRegistry;
         use crate::state::automation::target::AutomationTargetExt;
 
-        let mut inst = Instrument::new(1, SourceType::Saw);
+        let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
         inst.add_effect(EffectType::Delay); // 3 params: time, feedback, mix
         inst.add_effect(EffectType::Reverb); // 3 params: room, damp, mix
         let vst_registry = VstPluginRegistry::new();
@@ -276,7 +271,7 @@ mod tests {
         use crate::state::vst_plugin::VstPluginRegistry;
         use crate::state::automation::target::AutomationTargetExt;
 
-        let inst = Instrument::new(1, SourceType::PitchedSampler);
+        let inst = Instrument::new(InstrumentId::new(1), SourceType::PitchedSampler);
         let vst_registry = VstPluginRegistry::new();
         let targets = AutomationTarget::targets_for_instrument_context(&inst, &vst_registry);
         // 16 static + SampleRate + SampleAmp = 18
@@ -296,7 +291,7 @@ mod tests {
         use crate::state::vst_plugin::VstPluginRegistry;
         use crate::state::automation::target::AutomationTargetExt;
 
-        let mut inst = Instrument::new(1, SourceType::Saw);
+        let mut inst = Instrument::new(InstrumentId::new(1), SourceType::Saw);
         inst.toggle_eq(); // adds EQ to processing_chain
         let vst_registry = VstPluginRegistry::new();
         let targets = AutomationTarget::targets_for_instrument_context(&inst, &vst_registry);

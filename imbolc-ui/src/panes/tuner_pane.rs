@@ -143,7 +143,7 @@ impl Pane for TunerPane {
 
     fn render(&mut self, area: Rect, buf: &mut RenderBuf, state: &AppState) {
         let preset = self.preset();
-        let height = (preset.strings.len() as u16) + 8; // title + instrument + a4 + gap + strings + gap + hint
+        let height = (preset.strings.len() as u16) + 6; // title + instrument + a4 + gap + strings
         let width = 44;
         let inner = center_rect(area, width, height);
 
@@ -201,12 +201,6 @@ impl Pane for TunerPane {
             y += 1;
         }
 
-        y += 1;
-
-        // Hint bar
-        let hint = "Enter: play/stop | Arrows: navigate";
-        let hx = inner.x + (inner.width.saturating_sub(hint.len() as u16)) / 2;
-        buf.draw_str(hx, y, hint, Style::new().fg(Color::new(80, 80, 100)).bg(bg));
     }
 
     fn keymap(&self) -> &Keymap {

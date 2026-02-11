@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use imbolc_types::{BusId, EffectId, MixerSend, ParamIndex};
+use imbolc_types::{BusId, CustomSynthDefId, EffectId, MixerSend, ParamIndex};
 use crate::state::AutomationTarget;
 use crate::state::custom_synthdef::{CustomSynthDef, CustomSynthDefRegistry, ParamSpec};
 use crate::state::instrument::{EffectType, FilterType, LfoConfig, LfoShape, ParameterTarget, ModSource, OutputTarget, SourceType};
@@ -117,7 +117,7 @@ fn save_and_load_round_trip_complex() {
 
     let mut registry = CustomSynthDefRegistry::new();
     let custom_id = registry.add(CustomSynthDef {
-        id: 0,
+        id: CustomSynthDefId::new(0),
         name: "MySynth".to_string(),
         synthdef_name: "my_synth".to_string(),
         source_path: PathBuf::from("/tmp/my_synth.scd"),

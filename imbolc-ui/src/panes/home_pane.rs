@@ -115,12 +115,6 @@ impl Pane for HomePane {
             }
         }
 
-        // Help text
-        let help_y = rect.y + rect.height - 2;
-        if help_y < area.y + area.height {
-            let help_area = Rect::new(inner.x + 2, help_y, inner.width.saturating_sub(2), 1);
-            buf.draw_line(help_area, &[("[1-3] Jump  [Enter] Select  [q] Quit", Style::new().fg(Color::DARK_GRAY))]);
-        }
     }
 
     fn handle_mouse(&mut self, event: &MouseEvent, area: Rect, _state: &AppState) -> Action {

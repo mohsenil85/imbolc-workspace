@@ -580,8 +580,9 @@ pub(crate) fn handle_global_action(
     GlobalResult::Handled
 }
 
-/// Apply status events from dispatch or setup to the server pane
-pub(crate) fn apply_status_events(events: &[StatusEvent], panes: &mut PaneManager) {
+/// Apply status events from dispatch or setup to the server pane and status bar
+pub(crate) fn apply_status_events(events: &[StatusEvent], panes: &mut PaneManager, app_frame: &mut Frame) {
+    use crate::ui::status_bar::StatusLevel;
     for event in events {
         if let Some(server) = panes.get_pane_mut::<ServerPane>("server") {
             server.set_status(event.status, &event.message);
@@ -589,6 +590,7 @@ pub(crate) fn apply_status_events(events: &[StatusEvent], panes: &mut PaneManage
                 server.set_server_running(running);
             }
         }
+        app_frame.status_bar.push(&event.message, StatusLevel::Info);
     }
 }
 
@@ -622,7 +624,7 @@ pub(crate) fn apply_dispatch_result(
     panes.process_nav_intents(&result.nav, dispatcher.state());
 
     // Process status events
-    apply_status_events(&result.status, panes);
+    apply_status_events(&result.status, panes, app_frame);
 
     // Process project name
     if let Some(ref name) = result.project_name {

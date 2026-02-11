@@ -248,6 +248,7 @@ pub(super) fn dispatch_vst_param(
 mod tests {
     use super::*;
     use crate::state::instrument::SourceType;
+    use imbolc_types::VstPluginId;
 
     fn setup() -> (AppState, AudioHandle) {
         let state = AppState::new();
@@ -259,7 +260,7 @@ mod tests {
     fn set_param_records_when_recording() {
         let (mut state, audio) = setup();
         let mut effects = Vec::new();
-        let id = state.instruments.add_instrument(SourceType::Saw);
+        let id = state.instruments.add_instrument(SourceType::Vst(VstPluginId::new(0)));
         state.recording.automation_recording = true;
         state.session.piano_roll.playing = true;
         state.audio.playing = true;
@@ -282,7 +283,7 @@ mod tests {
     fn set_param_no_record_when_not_recording() {
         let (mut state, audio) = setup();
         let mut effects = Vec::new();
-        let id = state.instruments.add_instrument(SourceType::Saw);
+        let id = state.instruments.add_instrument(SourceType::Vst(VstPluginId::new(0)));
         state.recording.automation_recording = false;
         state.session.piano_roll.playing = true;
         state.audio.playing = true;
@@ -302,7 +303,7 @@ mod tests {
     fn set_param_updates_state_regardless() {
         let (mut state, audio) = setup();
         let mut effects = Vec::new();
-        let id = state.instruments.add_instrument(SourceType::Saw);
+        let id = state.instruments.add_instrument(SourceType::Vst(VstPluginId::new(0)));
         state.recording.automation_recording = false;
 
         dispatch_vst_param(

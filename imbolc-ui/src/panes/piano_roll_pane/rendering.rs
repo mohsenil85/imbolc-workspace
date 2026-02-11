@@ -375,11 +375,6 @@ impl PianoRollPane {
             for (j, ch) in piano_str.chars().enumerate() {
                 buf.set_cell(indicator_x + j as u16, status_y, ch, piano_style);
             }
-        } else {
-            let hint_str = "/=piano";
-            let hint_x = rect.x + rect.width - hint_str.len() as u16 - 2;
-            buf.draw_line(Rect::new(hint_x, status_y, hint_str.len() as u16, 1),
-                &[(hint_str, Style::new().fg(Color::GRAY))]);
         }
     }
 }

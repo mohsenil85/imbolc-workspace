@@ -1,4 +1,5 @@
 use crate::state::persistence::load::decoders;
+use imbolc_types::{CustomSynthDefId, VstPluginId};
 
 #[test]
 fn roundtrip_key() {
@@ -36,7 +37,7 @@ fn roundtrip_source_type() {
         Choir, EPiano, Organ, BrassStab, Strings, Acid,
         Gendy, Chaos, Additive, Wavetable, Granular,
         AudioIn, BusIn, PitchedSampler, TimeStretch, Kit,
-        Custom(42), Vst(99),
+        Custom(CustomSynthDefId::new(42)), Vst(VstPluginId::new(99)),
     ];
     for s in &all {
         match s {
@@ -53,8 +54,8 @@ fn roundtrip_source_type() {
         let encoded = format!("{:?}", s);
         // Custom and Vst use "Custom:42" / "Vst:99" encoding in save
         let save_str = match s {
-            Custom(id) => format!("Custom:{}", id),
-            Vst(id) => format!("Vst:{}", id),
+            Custom(id) => format!("Custom:{}", id.get()),
+            Vst(id) => format!("Vst:{}", id.get()),
             _ => encoded,
         };
         let decoded = decoders::decode_source_type(&save_str);
@@ -75,7 +76,7 @@ fn roundtrip_effect_type() {
         MultibandComp, ParaEq, SpectralFreeze, Glitch,
         Leslie, SpringReverb, EnvFollower,
         MidSide, Crossfader, Denoise, Autotune, WahPedal,
-        Vst(42),
+        Vst(VstPluginId::new(42)),
     ];
     for e in &all {
         match e {
@@ -91,7 +92,7 @@ fn roundtrip_effect_type() {
             Vst(_) => {}
         }
         let save_str = match e {
-            Vst(id) => format!("Vst:{}", id),
+            Vst(id) => format!("Vst:{}", id.get()),
             _ => format!("{:?}", e),
         };
         let decoded = decoders::decode_effect_type(&save_str);
@@ -153,7 +154,7 @@ fn roundtrip_parameter_target() {
         // Data variants
         SendLevel(BusId::new(1)), SendLevel(BusId::new(3)),
         EffectParam(EffectId::new(1), ParamIndex::new(2)),
-        EffectBypass(5),
+        EffectBypass(EffectId::new(5)),
         EqBandFreq(0), EqBandGain(1), EqBandQ(2),
         VstParam(7),
     ];
@@ -175,7 +176,7 @@ fn roundtrip_parameter_target() {
         // Use the same encoding as save.rs: {:?} for simple variants,
         // "SendLevel:N" / "EffectParam:E:P" / "EffectBypass:E" / etc for data variants
         let save_str = match pt {
-            SendLevel(idx) => format!("SendLevel:{}", idx),
+            SendLevel(bus_id) => format!("SendLevel:bus:{}", bus_id.get()),
             EffectParam(eid, pidx) => format!("EffectParam:{}:{}", eid, pidx),
             EffectBypass(eid) => format!("EffectBypass:{}", eid),
             EqBandFreq(idx) => format!("EqBandFreq:{}", idx),

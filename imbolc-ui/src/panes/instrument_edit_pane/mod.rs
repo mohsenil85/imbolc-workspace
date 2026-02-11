@@ -330,12 +330,13 @@ mod tests {
     use imbolc_types::{EffectId, InstrumentId};
 
     fn make_pane_with_chain(chain: Vec<ProcessingStage>) -> InstrumentEditPane {
-        let mut pane = InstrumentEditPane::default();
-        pane.instrument_id = Some(InstrumentId::new(1));
-        pane.source = SourceType::Saw;
-        pane.source_params = SourceType::Saw.default_params();
-        pane.processing_chain = chain;
-        pane
+        InstrumentEditPane {
+            instrument_id: Some(InstrumentId::new(1)),
+            source: SourceType::Saw,
+            source_params: SourceType::Saw.default_params(),
+            processing_chain: chain,
+            ..Default::default()
+        }
     }
 
     fn dummy_event() -> InputEvent {

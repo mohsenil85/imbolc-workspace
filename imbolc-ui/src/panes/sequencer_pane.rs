@@ -214,7 +214,7 @@ impl Pane for SequencerPane {
                 let cy = rect.y + rect.height / 2;
                 buf.draw_line(
                     Rect::new(inner.x + 11, cy, inner.width.saturating_sub(12), 1),
-                    &[("No drum machine instrument selected. Press 1 to add one.", Style::new().fg(Color::DARK_GRAY))],
+                    &[("No drum machine instrument selected.", Style::new().fg(Color::DARK_GRAY))],
                 );
                 return;
             }
