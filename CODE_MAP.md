@@ -60,7 +60,7 @@ Comprehensive code map for agents. Read this first to avoid re-exploring.
 5. **Layer management** → process PushLayer/PopLayer/ExitPerformanceMode
 6. **Navigation** → `panes.process_nav()` handles pane switching
 7. **Dispatch** → `dispatcher.dispatch_with_audio(&action, &mut audio)` mutates state, returns `DispatchResult`
-8. **Audio sync** → `audio.apply_dirty(state, audio_dirty, needs_full_sync)` sends changes to audio thread
+8. **Audio sync** → `audio.apply_effects(state, &effects, needs_full_sync)` sends changes to audio thread
 
 ## Type Composition Hierarchy
 
@@ -149,7 +149,7 @@ Effects are collected in `DispatchResult.audio_effects: Vec<AudioEffect>` and ap
 | `helpers.rs` | Dispatch utilities |
 | `instrument/mod.rs` | Routes `InstrumentAction` to sub-handlers |
 | `instrument/crud.rs` | Add/delete/edit/update instruments |
-| `instrument/playback.rs` | Note/pad triggering → AudioSideEffect |
+| `instrument/playback.rs` | Note/pad triggering → audio commands |
 | `instrument/selection.rs` | Instrument selection state |
 | `instrument/effects.rs` | Effect chain CRUD + param adjustment |
 | `instrument/filter.rs` | Filter type/cutoff/resonance |
@@ -344,7 +344,7 @@ Every undoable dispatch pushes a scoped snapshot before mutation:
 - `Session` — session state only
 - `Full` — both session + instruments
 
-Undo/Redo replaces state from stack and sets `AudioDirty::all()`.
+Undo/Redo replaces state from stack and sets `AudioEffect::all()`.
 
 ### Persistence
 

@@ -871,6 +871,9 @@ pub enum ClickAction {
 pub enum Action {
     None,
     Quit,
+    /// Request to quit — routes through dirty-state policy check.
+    /// Panes emit this instead of `Quit` when the user hasn't confirmed.
+    QuitIntent,
     Nav(NavAction),
     Instrument(InstrumentAction),
     Mixer(MixerAction),
@@ -911,6 +914,7 @@ pub enum Action {
 pub enum UiAction {
     None,
     Quit,
+    QuitIntent,
     Nav(NavAction),
     ExitPerformanceMode,
     PushLayer(&'static str),
@@ -986,6 +990,7 @@ impl Action {
             Self::Redo => RoutedAction::Domain(DomainAction::Redo),
             Self::None => RoutedAction::Ui(UiAction::None),
             Self::Quit => RoutedAction::Ui(UiAction::Quit),
+            Self::QuitIntent => RoutedAction::Ui(UiAction::QuitIntent),
             Self::Nav(a) => RoutedAction::Ui(UiAction::Nav(a.clone())),
             Self::ExitPerformanceMode => RoutedAction::Ui(UiAction::ExitPerformanceMode),
             Self::PushLayer(name) => RoutedAction::Ui(UiAction::PushLayer(name)),
@@ -1079,6 +1084,10 @@ mod tests {
         assert!(matches!(
             Action::Quit.route(),
             RoutedAction::Ui(UiAction::Quit)
+        ));
+        assert!(matches!(
+            Action::QuitIntent.route(),
+            RoutedAction::Ui(UiAction::QuitIntent)
         ));
         assert!(matches!(
             Action::Nav(NavAction::PopPane).route(),

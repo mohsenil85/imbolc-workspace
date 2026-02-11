@@ -124,7 +124,7 @@ impl Pane for InstrumentPane {
         }
 
         match action {
-            ActionId::InstrumentList(InstrumentListActionId::Quit) => Action::Quit,
+            ActionId::InstrumentList(InstrumentListActionId::Quit) => Action::QuitIntent,
             ActionId::InstrumentList(InstrumentListActionId::Next) => Action::Instrument(InstrumentAction::SelectNext),
             ActionId::InstrumentList(InstrumentListActionId::Prev) => Action::Instrument(InstrumentAction::SelectPrev),
             ActionId::InstrumentList(InstrumentListActionId::GotoTop) => Action::Instrument(InstrumentAction::SelectFirst),

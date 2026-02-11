@@ -1,16 +1,23 @@
 use crate::action::{AudioEffect, DispatchResult, FilterParamKind};
 use crate::dispatch::helpers::maybe_record_automation;
 use crate::state::automation::AutomationTarget;
-use crate::state::{AppState, FilterType, InstrumentId};
+use crate::state::{AppState, InstrumentId};
+use imbolc_types::{DomainAction, InstrumentAction};
+
+fn reduce(state: &mut AppState, action: &InstrumentAction) {
+    imbolc_types::reduce::reduce_action(
+        &DomainAction::Instrument(action.clone()),
+        &mut state.instruments,
+        &mut state.session,
+    );
+}
 
 pub(super) fn handle_set_filter(
     state: &mut AppState,
     id: InstrumentId,
-    filter_type: Option<FilterType>,
+    filter_type: Option<crate::state::FilterType>,
 ) -> DispatchResult {
-    if let Some(instrument) = state.instruments.instrument_mut(id) {
-        instrument.set_filter(filter_type);
-    }
+    reduce(state, &InstrumentAction::SetFilter(id, filter_type));
     let mut result = DispatchResult::none();
     result.audio_effects.push(AudioEffect::RebuildInstruments);
     result.audio_effects.push(AudioEffect::RebuildRoutingForInstrument(id));
@@ -18,9 +25,7 @@ pub(super) fn handle_set_filter(
 }
 
 pub(super) fn handle_toggle_filter(state: &mut AppState, id: InstrumentId) -> DispatchResult {
-    if let Some(instrument) = state.instruments.instrument_mut(id) {
-        instrument.toggle_filter();
-    }
+    reduce(state, &InstrumentAction::ToggleFilter(id));
     let mut result = DispatchResult::none();
     result.audio_effects.push(AudioEffect::RebuildInstruments);
     result.audio_effects.push(AudioEffect::RebuildRoutingForInstrument(id));
@@ -28,21 +33,7 @@ pub(super) fn handle_toggle_filter(state: &mut AppState, id: InstrumentId) -> Di
 }
 
 pub(super) fn handle_cycle_filter_type(state: &mut AppState, id: InstrumentId) -> DispatchResult {
-    if let Some(instrument) = state.instruments.instrument_mut(id) {
-        if let Some(filter) = instrument.filter_mut() {
-            filter.filter_type = match filter.filter_type {
-                FilterType::Lpf => FilterType::Hpf,
-                FilterType::Hpf => FilterType::Bpf,
-                FilterType::Bpf => FilterType::Notch,
-                FilterType::Notch => FilterType::Comb,
-                FilterType::Comb => FilterType::Allpass,
-                FilterType::Allpass => FilterType::Vowel,
-                FilterType::Vowel => FilterType::ResDrive,
-                FilterType::ResDrive => FilterType::Lpf,
-            };
-            filter.extra_params = filter.filter_type.default_extra_params();
-        }
-    }
+    reduce(state, &InstrumentAction::CycleFilterType(id));
     let mut result = DispatchResult::none();
     result.audio_effects.push(AudioEffect::RebuildInstruments);
     result
@@ -53,36 +44,21 @@ pub(super) fn handle_adjust_filter_cutoff(
     id: InstrumentId,
     delta: f32,
 ) -> DispatchResult {
+    reduce(state, &InstrumentAction::AdjustFilterCutoff(id, delta));
+
     let mut result = DispatchResult::none();
-    let mut new_cutoff: Option<f32> = None;
-    let mut automation_data: Option<(InstrumentId, f32)> = None;
-
-    if let Some(instrument) = state.instruments.instrument_mut(id) {
-        let inst_id = instrument.id;
-        if let Some(filter) = instrument.filter_mut() {
-            filter.cutoff.value = (filter.cutoff.value + delta * filter.cutoff.max * 0.02)
-                .clamp(filter.cutoff.min, filter.cutoff.max);
-            new_cutoff = Some(filter.cutoff.value);
-
-            let target = AutomationTarget::filter_cutoff(inst_id);
-            let normalized = target.normalize_value(filter.cutoff.value);
-            automation_data = Some((inst_id, normalized));
+    // Read post-mutation value for automation recording and targeted param
+    if let Some(instrument) = state.instruments.instrument(id) {
+        if let Some(filter) = instrument.filter() {
+            let cutoff = filter.cutoff.value;
+            let target = AutomationTarget::filter_cutoff(id);
+            let normalized = target.normalize_value(cutoff);
+            maybe_record_automation(state, &mut result, AutomationTarget::filter_cutoff(id), normalized);
+            result.audio_effects.push(AudioEffect::SetFilterParam(id, FilterParamKind::Cutoff, cutoff));
         }
     }
 
-    if let Some((inst_id, normalized)) = automation_data {
-        maybe_record_automation(
-            state,
-            &mut result,
-            AutomationTarget::filter_cutoff(inst_id),
-            normalized,
-        );
-    }
-
     result.audio_effects.push(AudioEffect::RebuildInstruments);
-    if let Some(cutoff) = new_cutoff {
-        result.audio_effects.push(AudioEffect::SetFilterParam(id, FilterParamKind::Cutoff, cutoff));
-    }
     result
 }
 
@@ -91,35 +67,20 @@ pub(super) fn handle_adjust_filter_resonance(
     id: InstrumentId,
     delta: f32,
 ) -> DispatchResult {
+    reduce(state, &InstrumentAction::AdjustFilterResonance(id, delta));
+
     let mut result = DispatchResult::none();
-    let mut new_resonance: Option<f32> = None;
-    let mut automation_data: Option<(InstrumentId, f32)> = None;
-
-    if let Some(instrument) = state.instruments.instrument_mut(id) {
-        let inst_id = instrument.id;
-        if let Some(filter) = instrument.filter_mut() {
-            filter.resonance.value = (filter.resonance.value + delta * 0.05)
-                .clamp(filter.resonance.min, filter.resonance.max);
-            new_resonance = Some(filter.resonance.value);
-
-            let target = AutomationTarget::filter_resonance(inst_id);
-            let normalized = target.normalize_value(filter.resonance.value);
-            automation_data = Some((inst_id, normalized));
+    // Read post-mutation value for automation recording and targeted param
+    if let Some(instrument) = state.instruments.instrument(id) {
+        if let Some(filter) = instrument.filter() {
+            let resonance = filter.resonance.value;
+            let target = AutomationTarget::filter_resonance(id);
+            let normalized = target.normalize_value(resonance);
+            maybe_record_automation(state, &mut result, AutomationTarget::filter_resonance(id), normalized);
+            result.audio_effects.push(AudioEffect::SetFilterParam(id, FilterParamKind::Resonance, resonance));
         }
     }
 
-    if let Some((inst_id, normalized)) = automation_data {
-        maybe_record_automation(
-            state,
-            &mut result,
-            AutomationTarget::filter_resonance(inst_id),
-            normalized,
-        );
-    }
-
     result.audio_effects.push(AudioEffect::RebuildInstruments);
-    if let Some(resonance) = new_resonance {
-        result.audio_effects.push(AudioEffect::SetFilterParam(id, FilterParamKind::Resonance, resonance));
-    }
     result
 }

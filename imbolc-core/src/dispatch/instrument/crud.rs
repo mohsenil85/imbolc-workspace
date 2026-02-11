@@ -1,19 +1,29 @@
 use imbolc_audio::AudioHandle;
+use imbolc_types::{DomainAction, InstrumentAction};
 use crate::state::AppState;
 use crate::state::automation::AutomationTarget;
 use crate::state::BufferId;
 use crate::action::{AudioEffect, DispatchResult, NavIntent};
 use crate::dispatch::automation::record_automation_point;
 
+fn reduce(state: &mut AppState, action: &InstrumentAction) {
+    imbolc_types::reduce::reduce_action(
+        &DomainAction::Instrument(action.clone()),
+        &mut state.instruments,
+        &mut state.session,
+    );
+}
+
 pub(super) fn handle_add(
     state: &mut AppState,
     source_type: crate::state::SourceType,
 ) -> DispatchResult {
-    let new_id = state.add_instrument(source_type);
+    let next_id = state.instruments.next_id;
+    reduce(state, &InstrumentAction::Add(source_type));
     let mut result = DispatchResult::with_nav(NavIntent::SwitchTo("instrument_edit"));
     result.audio_effects.push(AudioEffect::RebuildInstruments);
     result.audio_effects.push(AudioEffect::UpdatePianoRoll);
-    result.audio_effects.push(AudioEffect::AddInstrumentRouting(new_id));
+    result.audio_effects.push(AudioEffect::AddInstrumentRouting(next_id));
     result
 }
 
@@ -47,7 +57,7 @@ pub(super) fn handle_delete(
         audio.free_samples(buffer_ids);
     }
 
-    state.remove_instrument(inst_id);
+    reduce(state, &InstrumentAction::Delete(inst_id));
     let mut result = if state.instruments.instruments.is_empty() {
         DispatchResult::with_nav(NavIntent::SwitchTo("add"))
     } else {
@@ -64,7 +74,7 @@ pub(super) fn handle_edit(
     state: &mut AppState,
     id: crate::state::InstrumentId,
 ) -> DispatchResult {
-    state.instruments.editing_instrument_id = Some(id);
+    reduce(state, &InstrumentAction::Edit(id));
     DispatchResult::with_nav(NavIntent::SwitchTo("instrument_edit"))
 }
 
@@ -83,15 +93,7 @@ pub(super) fn handle_update(
         None
     };
 
-    if let Some(instrument) = state.instruments.instrument_mut(update.id) {
-        instrument.source = update.source;
-        instrument.source_params = update.source_params.clone();
-        instrument.processing_chain = update.processing_chain.clone();
-        instrument.modulation.lfo = update.lfo.clone();
-        instrument.modulation.amp_envelope = update.amp_envelope.clone();
-        instrument.polyphonic = update.polyphonic;
-        instrument.mixer.active = update.active;
-    }
+    reduce(state, &InstrumentAction::Update(Box::new(update.clone())));
 
     // Record automation for changed LFO/envelope params
     if let Some((old_lfo_rate, old_lfo_depth, old_attack, old_decay, old_sustain, old_release)) = old_values {

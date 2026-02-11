@@ -26,7 +26,7 @@ pub(super) fn dispatch_mixer(
         // Navigation-only: no audio effects needed
         MixerAction::Move(_) | MixerAction::Jump(_) | MixerAction::SelectAt(_) | MixerAction::CycleSection => {}
 
-        MixerAction::AdjustLevel(delta) => {
+        MixerAction::AdjustLevel(_delta) => {
             match selection {
                 MixerSelection::Instrument(idx) => {
                     result.audio_effects.push(AudioEffect::RebuildInstruments);

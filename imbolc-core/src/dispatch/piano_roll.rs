@@ -1,8 +1,16 @@
 use imbolc_audio::AudioHandle;
+use imbolc_types::{DomainAction, PianoRollAction};
 use crate::state::AppState;
-use crate::state::piano_roll::Note;
 use crate::state::{ClipboardContents, ClipboardNote};
-use crate::action::{AudioEffect, DispatchResult, PianoRollAction};
+use crate::action::{AudioEffect, DispatchResult};
+
+fn reduce(action: &PianoRollAction, state: &mut AppState) {
+    imbolc_types::reduce::reduce_action(
+        &DomainAction::PianoRoll(action.clone()),
+        &mut state.instruments,
+        &mut state.session,
+    );
+}
 
 pub(super) fn dispatch_piano_roll(
     action: &PianoRollAction,
@@ -10,8 +18,8 @@ pub(super) fn dispatch_piano_roll(
     audio: &mut AudioHandle,
 ) -> DispatchResult {
     match action {
-        PianoRollAction::ToggleNote { pitch, tick, duration, velocity, track } => {
-            state.session.piano_roll.toggle_note(*track, *pitch, *tick, *duration, *velocity);
+        PianoRollAction::ToggleNote { .. } => {
+            reduce(action, state);
             let mut result = DispatchResult::none();
             result.audio_effects.push(AudioEffect::UpdatePianoRoll);
             result
@@ -21,11 +29,11 @@ pub(super) fn dispatch_piano_roll(
             if state.io.pending_export.is_some() || state.io.pending_render.is_some() {
                 return DispatchResult::none();
             }
-            let pr = &mut state.session.piano_roll;
-            pr.playing = !pr.playing;
-            state.audio.playing = pr.playing;
-            audio.set_playing(pr.playing);
-            if !pr.playing {
+            reduce(action, state);
+            let playing = state.session.piano_roll.playing;
+            state.audio.playing = playing;
+            audio.set_playing(playing);
+            if !playing {
                 state.audio.playhead = 0;
                 audio.reset_playhead();
                 if audio.is_running() {
@@ -33,23 +41,20 @@ pub(super) fn dispatch_piano_roll(
                 }
                 audio.clear_active_notes();
             }
-            // Clear recording if stopping via normal play/stop
+            // Clear recording unconditionally via normal play/stop
             state.session.piano_roll.recording = false;
             DispatchResult::none()
         }
         PianoRollAction::PlayStopRecord => {
-            let is_playing = state.audio.playing;
+            let was_playing = state.audio.playing;
+            reduce(action, state);
 
-            if !is_playing {
-                // Start playing + recording
-                state.session.piano_roll.playing = true;
+            if !was_playing {
+                // Started playing + recording
                 state.audio.playing = true;
                 audio.set_playing(true);
-                state.session.piano_roll.recording = true;
             } else {
-                // Stop playing + recording
-                let pr = &mut state.session.piano_roll;
-                pr.playing = false;
+                // Stopped playing + recording
                 state.audio.playing = false;
                 state.audio.playhead = 0;
                 audio.set_playing(false);
@@ -58,47 +63,36 @@ pub(super) fn dispatch_piano_roll(
                     audio.release_all_voices();
                 }
                 audio.clear_active_notes();
-                state.session.piano_roll.recording = false;
             }
             DispatchResult::none()
         }
         PianoRollAction::ToggleLoop => {
-            state.session.piano_roll.looping = !state.session.piano_roll.looping;
+            reduce(action, state);
             let mut result = DispatchResult::none();
             result.audio_effects.push(AudioEffect::UpdatePianoRoll);
             result
         }
-        PianoRollAction::SetLoopStart(tick) => {
-            state.session.piano_roll.loop_start = *tick;
+        PianoRollAction::SetLoopStart(_) => {
+            reduce(action, state);
             let mut result = DispatchResult::none();
             result.audio_effects.push(AudioEffect::UpdatePianoRoll);
             result
         }
-        PianoRollAction::SetLoopEnd(tick) => {
-            state.session.piano_roll.loop_end = *tick;
+        PianoRollAction::SetLoopEnd(_) => {
+            reduce(action, state);
             let mut result = DispatchResult::none();
             result.audio_effects.push(AudioEffect::UpdatePianoRoll);
             result
         }
         PianoRollAction::CycleTimeSig => {
-            let new_ts = match state.session.time_signature {
-                (4, 4) => (3, 4),
-                (3, 4) => (6, 8),
-                (6, 8) => (5, 4),
-                (5, 4) => (7, 8),
-                _ => (4, 4),
-            };
-            state.session.time_signature = new_ts;
-            state.session.piano_roll.time_signature = new_ts;
+            reduce(action, state);
             let mut result = DispatchResult::none();
             result.audio_effects.push(AudioEffect::UpdatePianoRoll);
             result.audio_effects.push(AudioEffect::RebuildSession);
             result
         }
-        PianoRollAction::TogglePolyMode(track_idx) => {
-            if let Some(track) = state.session.piano_roll.track_at_mut(*track_idx) {
-                track.polyphonic = !track.polyphonic;
-            }
+        PianoRollAction::TogglePolyMode(_) => {
+            reduce(action, state);
             let mut result = DispatchResult::none();
             result.audio_effects.push(AudioEffect::UpdatePianoRoll);
             result
@@ -202,9 +196,8 @@ pub(super) fn dispatch_piano_roll(
             }
             DispatchResult::none()
         }
-        PianoRollAction::AdjustSwing(delta) => {
-            let pr = &mut state.session.piano_roll;
-            pr.swing_amount = (pr.swing_amount + delta).clamp(0.0, 1.0);
+        PianoRollAction::AdjustSwing(_) => {
+            reduce(action, state);
             let mut result = DispatchResult::none();
             result.audio_effects.push(AudioEffect::UpdatePianoRoll);
             result
@@ -245,37 +238,14 @@ pub(super) fn dispatch_piano_roll(
             result.audio_effects.push(AudioEffect::UpdatePianoRoll);
             result
         }
-        PianoRollAction::DeleteNotesInRegion { track, start_tick, end_tick, start_pitch, end_pitch } => {
-            if let Some(t) = state.session.piano_roll.track_at_mut(*track) {
-                t.notes.retain(|n| {
-                    !(n.pitch >= *start_pitch && n.pitch <= *end_pitch
-                      && n.tick >= *start_tick && n.tick < *end_tick)
-                });
-            }
+        PianoRollAction::DeleteNotesInRegion { .. } => {
+            reduce(action, state);
             let mut result = DispatchResult::none();
             result.audio_effects.push(AudioEffect::UpdatePianoRoll);
             result
         }
-        PianoRollAction::PasteNotes { track, anchor_tick, anchor_pitch, notes } => {
-            if let Some(t) = state.session.piano_roll.track_at_mut(*track) {
-                for cn in notes {
-                    let tick = *anchor_tick + cn.tick_offset;
-                    let pitch_i16 = *anchor_pitch as i16 + cn.pitch_offset;
-                    if !(0..=127).contains(&pitch_i16) { continue; }
-                    let pitch = pitch_i16 as u8;
-                    // Avoid duplicates at same (pitch, tick)
-                    if !t.notes.iter().any(|n| n.pitch == pitch && n.tick == tick) {
-                        let pos = t.notes.partition_point(|n| n.tick < tick);
-                        t.notes.insert(pos, Note {
-                            tick,
-                            duration: cn.duration,
-                            pitch,
-                            velocity: cn.velocity,
-                            probability: cn.probability,
-                        });
-                    }
-                }
-            }
+        PianoRollAction::PasteNotes { .. } => {
+            reduce(action, state);
             let mut result = DispatchResult::none();
             result.audio_effects.push(AudioEffect::UpdatePianoRoll);
             result

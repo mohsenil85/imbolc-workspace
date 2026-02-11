@@ -1,7 +1,6 @@
 use crate::action::{AudioEffect, DispatchResult};
 use crate::state::automation::AutomationTarget;
 use crate::state::AppState;
-use imbolc_types::InstrumentId;
 
 use super::automation::record_automation_point;
 
@@ -17,72 +16,6 @@ pub fn maybe_record_automation(
         record_automation_point(state, target, value);
         result.audio_effects.push(AudioEffect::UpdateAutomation);
     }
-}
-
-/// Adjust an instrument parameter with clamping and optional automation recording.
-/// Generic helper that reduces boilerplate in envelope, LFO, and filter dispatch handlers.
-#[allow(clippy::too_many_arguments)]
-pub fn adjust_instrument_param<F, G>(
-    state: &mut AppState,
-    id: InstrumentId,
-    delta: f32,
-    scale: f32,
-    min: f32,
-    max: f32,
-    get_value: F,
-    set_value: G,
-    make_target: impl FnOnce(InstrumentId) -> AutomationTarget,
-    normalize: impl FnOnce(f32) -> f32,
-) -> DispatchResult
-where
-    F: FnOnce(&crate::state::Instrument) -> f32,
-    G: FnOnce(&mut crate::state::Instrument, f32),
-{
-    let mut record_target: Option<(AutomationTarget, f32)> = None;
-
-    if let Some(instrument) = state.instruments.instrument_mut(id) {
-        let old_value = get_value(instrument);
-        let new_value = (old_value + delta * scale).clamp(min, max);
-        set_value(instrument, new_value);
-
-        if state.recording.automation_recording && state.audio.playing {
-            let target = make_target(instrument.id);
-            record_target = Some((target, normalize(new_value)));
-        }
-    }
-
-    let mut result = DispatchResult::none();
-    result.audio_effects.push(AudioEffect::RebuildInstruments);
-    result.audio_effects.push(AudioEffect::RebuildRoutingForInstrument(id));
-
-    if let Some((target, value)) = record_target {
-        record_automation_point(state, target, value);
-        result.audio_effects.push(AudioEffect::UpdateAutomation);
-    }
-
-    result
-}
-
-/// Adjust a groove parameter (swing, humanize_velocity, humanize_timing).
-/// Falls back to the global session value if no per-instrument override exists.
-pub fn adjust_groove_param<F, G>(
-    state: &mut AppState,
-    id: InstrumentId,
-    delta: f32,
-    get_override: F,
-    set_override: G,
-    get_default: impl FnOnce(&crate::state::SessionState) -> f32,
-) -> DispatchResult
-where
-    F: FnOnce(&crate::state::Instrument) -> Option<f32>,
-    G: FnOnce(&mut crate::state::Instrument, Option<f32>),
-{
-    if let Some(instrument) = state.instruments.instrument_mut(id) {
-        let current = get_override(instrument).unwrap_or_else(|| get_default(&state.session));
-        let new_value = (current + delta).clamp(0.0, 1.0);
-        set_override(instrument, Some(new_value));
-    }
-    DispatchResult::none()
 }
 
 /// Set bus mixer params directly if audio is running.

@@ -24,10 +24,7 @@ use crate::state::AppState;
 use crate::action::{AudioEffect, ClickAction, DispatchResult, DomainAction, IoFeedback, TunerAction};
 use crate::state::undo::{coalesce_key, is_undoable, undo_scope, UndoScope};
 
-pub use helpers::{
-    adjust_groove_param, adjust_instrument_param, compute_waveform_peaks,
-    maybe_record_automation,
-};
+pub use helpers::{compute_waveform_peaks, maybe_record_automation};
 pub use helpers::{apply_bus_update, apply_layer_group_update};
 
 /// Default path for save file
@@ -138,21 +135,22 @@ fn dispatch_tuner(action: &TunerAction, audio: &mut AudioHandle) -> DispatchResu
 
 /// Dispatch click track actions.
 fn dispatch_click(action: &ClickAction, state: &mut AppState, audio: &mut AudioHandle) -> DispatchResult {
+    // Delegate pure state mutation to the shared reducer
+    imbolc_types::reduce::reduce_action(
+        &DomainAction::Click(action.clone()),
+        &mut state.instruments,
+        &mut state.session,
+    );
+
+    // Side effects: forward updated state to audio engine
     match action {
         ClickAction::Toggle => {
-            state.session.click_track.enabled = !state.session.click_track.enabled;
             let _ = audio.set_click_enabled(state.session.click_track.enabled);
         }
         ClickAction::ToggleMute => {
-            state.session.click_track.muted = !state.session.click_track.muted;
             let _ = audio.set_click_muted(state.session.click_track.muted);
         }
-        ClickAction::AdjustVolume(delta) => {
-            state.session.click_track.volume = (state.session.click_track.volume + delta).clamp(0.0, 1.0);
-            let _ = audio.set_click_volume(state.session.click_track.volume);
-        }
-        ClickAction::SetVolume(volume) => {
-            state.session.click_track.volume = volume.clamp(0.0, 1.0);
+        ClickAction::AdjustVolume(_) | ClickAction::SetVolume(_) => {
             let _ = audio.set_click_volume(state.session.click_track.volume);
         }
     }

@@ -70,15 +70,12 @@ fn get_param_values(instrument: &Instrument, target: VstTarget) -> &[(u32, f32)]
     }
 }
 
-/// Get mutable param values for a given target
-fn get_param_values_mut(instrument: &mut Instrument, target: VstTarget) -> Option<&mut Vec<(u32, f32)>> {
-    match target {
-        VstTarget::Source => instrument.vst_source_params_mut(),
-        VstTarget::Effect(effect_id) => {
-            instrument.effect_by_id_mut(effect_id)
-                .map(|e| &mut e.vst_param_values)
-        }
-    }
+fn reduce(state: &mut AppState, action: &VstParamAction) {
+    imbolc_types::reduce::reduce_action(
+        &imbolc_types::DomainAction::VstParam(action.clone()),
+        &mut state.instruments,
+        &mut state.session,
+    );
 }
 
 pub(super) fn dispatch_vst_param(
@@ -88,16 +85,11 @@ pub(super) fn dispatch_vst_param(
 ) -> DispatchResult {
     match action {
         VstParamAction::SetParam(instrument_id, target, param_index, value) => {
+            // Delegate state mutation to reducer
+            reduce(state, action);
+
+            // Side effects: send audio command and record automation
             let value = value.clamp(0.0, 1.0);
-            if let Some(instrument) = state.instruments.instrument_mut(*instrument_id) {
-                if let Some(values) = get_param_values_mut(instrument, *target) {
-                    if let Some(entry) = values.iter_mut().find(|(idx, _)| *idx == *param_index) {
-                        entry.1 = value;
-                    } else {
-                        values.push((*param_index, value));
-                    }
-                }
-            }
             if audio.is_running() {
                 if let Err(e) = audio.send_cmd(AudioCmd::SetVstParam {
                     instrument_id: *instrument_id,
@@ -118,46 +110,64 @@ pub(super) fn dispatch_vst_param(
             }
             DispatchResult::none()
         }
-        VstParamAction::AdjustParam(instrument_id, target, param_index, delta) => {
-            let current = state.instruments.instrument(*instrument_id)
+        VstParamAction::AdjustParam(instrument_id, target, param_index, _delta) => {
+            // Delegate state mutation to reducer (computes current + delta internally)
+            reduce(state, action);
+
+            // Read back the new value after mutation for side effects
+            let new_value = state.instruments.instrument(*instrument_id)
                 .map(|inst| {
                     let values = get_param_values(inst, *target);
                     values.iter().find(|(idx, _)| *idx == *param_index)
                         .map(|(_, v)| *v)
-                        .unwrap_or_else(|| {
-                            // Look up default from VST plugin registry
-                            if let Some(plugin_id) = get_vst_plugin_id(inst, *target) {
-                                if let Some(plugin) = state.session.vst_plugins.get(plugin_id) {
-                                    if let Some(spec) = plugin.params.iter().find(|p| p.index == *param_index) {
-                                        return spec.default;
-                                    }
-                                }
-                            }
-                            0.5
-                        })
+                        .unwrap_or(0.5)
                 })
                 .unwrap_or(0.5);
-            let new_value = (current + delta).clamp(0.0, 1.0);
-            dispatch_vst_param(
-                &VstParamAction::SetParam(*instrument_id, *target, *param_index, new_value),
-                state,
-                audio,
-            )
+
+            if audio.is_running() {
+                if let Err(e) = audio.send_cmd(AudioCmd::SetVstParam {
+                    instrument_id: *instrument_id,
+                    target: *target,
+                    param_index: *param_index,
+                    value: new_value,
+                }) {
+                    log::warn!(target: "dispatch::vst", "SetVstParam dropped: {}", e);
+                }
+            }
+            if state.recording.automation_recording && state.audio.playing {
+                record_automation_point(
+                    state,
+                    AutomationTarget::vst_param(*instrument_id, *param_index),
+                    new_value,
+                );
+            }
+            DispatchResult::none()
         }
         VstParamAction::ResetParam(instrument_id, target, param_index) => {
-            let default = state.instruments.instrument(*instrument_id)
-                .and_then(|inst| {
-                    let plugin_id = get_vst_plugin_id(inst, *target)?;
-                    state.session.vst_plugins.get(plugin_id)
-                        .and_then(|plugin| plugin.params.iter().find(|p| p.index == *param_index))
-                        .map(|spec| spec.default)
+            // Delegate state mutation to reducer (looks up default internally)
+            reduce(state, action);
+
+            // Read back the new value after mutation for side effects
+            let new_value = state.instruments.instrument(*instrument_id)
+                .map(|inst| {
+                    let values = get_param_values(inst, *target);
+                    values.iter().find(|(idx, _)| *idx == *param_index)
+                        .map(|(_, v)| *v)
+                        .unwrap_or(0.5)
                 })
                 .unwrap_or(0.5);
-            dispatch_vst_param(
-                &VstParamAction::SetParam(*instrument_id, *target, *param_index, default),
-                state,
-                audio,
-            )
+
+            if audio.is_running() {
+                if let Err(e) = audio.send_cmd(AudioCmd::SetVstParam {
+                    instrument_id: *instrument_id,
+                    target: *target,
+                    param_index: *param_index,
+                    value: new_value,
+                }) {
+                    log::warn!(target: "dispatch::vst", "SetVstParam dropped: {}", e);
+                }
+            }
+            DispatchResult::none()
         }
         VstParamAction::DiscoverParams(instrument_id, target) => {
             // Try VST3 probe first — direct binary probing gives real param names

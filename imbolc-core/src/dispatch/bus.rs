@@ -1,112 +1,73 @@
 use crate::action::{AudioEffect, BusAction, DispatchResult, EqParamKind, LayerGroupAction, NavIntent};
 use imbolc_audio::AudioHandle;
-use crate::state::{AppState, OutputTarget};
+use imbolc_types::DomainAction;
+use crate::state::AppState;
+
+fn reduce(state: &mut AppState, action: &BusAction) {
+    imbolc_types::reduce::reduce_action(
+        &DomainAction::Bus(action.clone()),
+        &mut state.instruments,
+        &mut state.session,
+    );
+}
 
 /// Dispatch bus management actions
 pub fn dispatch_bus(action: &BusAction, state: &mut AppState) -> DispatchResult {
+    // Check bus existence before reducer for Remove (to skip audio effects on no-op)
+    let bus_exists = match action {
+        BusAction::Remove(bus_id) => state.session.bus(*bus_id).is_some(),
+        _ => true,
+    };
+
+    // Delegate pure state mutation to the shared reducer
+    reduce(state, action);
+
+    // Orchestration: AudioEffects and navigation
     let mut result = DispatchResult::none();
 
     match action {
         BusAction::Add => {
-            if state.session.add_bus().is_some() {
+            result.audio_effects.push(AudioEffect::RebuildRouting);
+            result.audio_effects.push(AudioEffect::RebuildSession);
+        }
+
+        BusAction::Remove(_) => {
+            if bus_exists {
                 result.audio_effects.push(AudioEffect::RebuildRouting);
                 result.audio_effects.push(AudioEffect::RebuildSession);
             }
         }
 
-        BusAction::Remove(bus_id) => {
-            let bus_id = *bus_id;
+        BusAction::Rename(_, _) => {}
 
-            // Check if bus exists
-            if state.session.bus(bus_id).is_none() {
-                return result;
-            }
-
-            // Reset instruments that output to this bus
-            for inst in &mut state.instruments.instruments {
-                if inst.mixer.output_target == OutputTarget::Bus(bus_id) {
-                    inst.mixer.output_target = OutputTarget::Master;
-                }
-                // Disable sends to this bus
-                inst.disable_send_for_bus(bus_id);
-            }
-
-            // Reset layer group mixers that output to this bus and disable their sends
-            for gm in &mut state.session.mixer.layer_group_mixers {
-                if gm.output_target == OutputTarget::Bus(bus_id) {
-                    gm.output_target = OutputTarget::Master;
-                }
-                gm.disable_send_for_bus(bus_id);
-            }
-
-            // Remove automation lanes for this bus
-            state.session.automation.remove_lanes_for_bus(bus_id);
-
-            // Remove the bus
-            state.session.remove_bus(bus_id);
-
-            // Update mixer selection if it was pointing to the removed bus
-            if let crate::state::MixerSelection::Bus(id) = state.session.mixer.selection {
-                if id == bus_id {
-                    // Select first remaining bus, or Master if none
-                    let first_bus = state.session.bus_ids().next();
-                    state.session.mixer.selection = first_bus
-                        .map(crate::state::MixerSelection::Bus)
-                        .unwrap_or(crate::state::MixerSelection::Master);
-                }
-            }
-
-            result.audio_effects.push(AudioEffect::RebuildRouting);
-            result.audio_effects.push(AudioEffect::RebuildSession);
-        }
-
-        BusAction::Rename(bus_id, name) => {
-            if let Some(bus) = state.session.bus_mut(*bus_id) {
-                bus.name = name.clone();
-            }
-        }
-
-        BusAction::AddEffect(bus_id, effect_type) => {
-            if let Some(bus) = state.session.bus_mut(*bus_id) {
-                bus.effect_chain.add_effect(*effect_type);
-            }
+        BusAction::AddEffect(_, _) => {
             result.audio_effects.push(AudioEffect::RebuildBusProcessing);
             result.audio_effects.push(AudioEffect::RebuildSession);
             result.nav.push(NavIntent::Pop);
         }
 
-        BusAction::RemoveEffect(bus_id, effect_id) => {
-            if let Some(bus) = state.session.bus_mut(*bus_id) {
-                bus.effect_chain.remove_effect(*effect_id);
-            }
+        BusAction::RemoveEffect(_, _) => {
             result.audio_effects.push(AudioEffect::RebuildBusProcessing);
             result.audio_effects.push(AudioEffect::RebuildSession);
         }
 
-        BusAction::MoveEffect(bus_id, effect_id, direction) => {
-            if let Some(bus) = state.session.bus_mut(*bus_id) {
-                bus.effect_chain.move_effect(*effect_id, *direction);
-            }
+        BusAction::MoveEffect(_, _, _) => {
             result.audio_effects.push(AudioEffect::RebuildBusProcessing);
             result.audio_effects.push(AudioEffect::RebuildSession);
         }
 
-        BusAction::ToggleEffectBypass(bus_id, effect_id) => {
-            if let Some(bus) = state.session.bus_mut(*bus_id) {
-                if let Some(effect) = bus.effect_chain.effect_by_id_mut(*effect_id) {
-                    effect.enabled = !effect.enabled;
-                }
-            }
+        BusAction::ToggleEffectBypass(_, _) => {
             result.audio_effects.push(AudioEffect::RebuildBusProcessing);
             result.audio_effects.push(AudioEffect::RebuildSession);
         }
 
-        BusAction::AdjustEffectParam(bus_id, effect_id, param_idx, delta) => {
-            let targeted_value = state.session.bus_mut(*bus_id)
-                .and_then(|bus| bus.effect_chain.effect_by_id_mut(*effect_id))
-                .and_then(|effect| effect.params.get_mut(param_idx.get()))
-                .and_then(|param| param.adjust_delta(*delta));
+        BusAction::AdjustEffectParam(bus_id, effect_id, param_idx, _delta) => {
             result.audio_effects.push(AudioEffect::RebuildSession);
+            // Read back the param value after reducer mutation for targeted audio update
+            let targeted_value = state.session.bus(*bus_id)
+                .and_then(|bus| bus.effect_chain.effect_by_id(*effect_id))
+                .and_then(|effect| effect.params.get(param_idx.get()))
+                .map(|param| param.value.to_f32());
             if let Some(value) = targeted_value {
                 result.audio_effects.push(AudioEffect::SetBusEffectParam(*bus_id, *effect_id, *param_idx, value));
             }
@@ -116,82 +77,66 @@ pub fn dispatch_bus(action: &BusAction, state: &mut AppState) -> DispatchResult 
     result
 }
 
+fn reduce_lg(state: &mut AppState, action: &LayerGroupAction) {
+    imbolc_types::reduce::reduce_action(
+        &DomainAction::LayerGroup(action.clone()),
+        &mut state.instruments,
+        &mut state.session,
+    );
+}
+
 /// Dispatch layer group actions
 pub fn dispatch_layer_group(
     action: &LayerGroupAction,
     state: &mut AppState,
     audio: &mut AudioHandle,
 ) -> DispatchResult {
+    // Delegate pure state mutation to the shared reducer
+    reduce_lg(state, action);
+
+    // Orchestration: AudioEffects, real-time audio updates, navigation
     let mut result = DispatchResult::none();
 
     match action {
-        LayerGroupAction::AddEffect(group_id, effect_type) => {
-            if let Some(gm) = state.session.mixer.layer_group_mixer_mut(*group_id) {
-                gm.effect_chain.add_effect(*effect_type);
-            }
+        LayerGroupAction::AddEffect(_, _) => {
             result.audio_effects.push(AudioEffect::RebuildBusProcessing);
             result.audio_effects.push(AudioEffect::RebuildSession);
             result.nav.push(NavIntent::Pop);
         }
 
-        LayerGroupAction::RemoveEffect(group_id, effect_id) => {
-            if let Some(gm) = state.session.mixer.layer_group_mixer_mut(*group_id) {
-                gm.effect_chain.remove_effect(*effect_id);
-            }
+        LayerGroupAction::RemoveEffect(_, _) => {
             result.audio_effects.push(AudioEffect::RebuildBusProcessing);
             result.audio_effects.push(AudioEffect::RebuildSession);
         }
 
-        LayerGroupAction::MoveEffect(group_id, effect_id, direction) => {
-            if let Some(gm) = state.session.mixer.layer_group_mixer_mut(*group_id) {
-                gm.effect_chain.move_effect(*effect_id, *direction);
-            }
+        LayerGroupAction::MoveEffect(_, _, _) => {
             result.audio_effects.push(AudioEffect::RebuildBusProcessing);
             result.audio_effects.push(AudioEffect::RebuildSession);
         }
 
-        LayerGroupAction::ToggleEffectBypass(group_id, effect_id) => {
-            if let Some(gm) = state.session.mixer.layer_group_mixer_mut(*group_id) {
-                if let Some(effect) = gm.effect_chain.effect_by_id_mut(*effect_id) {
-                    effect.enabled = !effect.enabled;
-                }
-            }
+        LayerGroupAction::ToggleEffectBypass(_, _) => {
             result.audio_effects.push(AudioEffect::RebuildBusProcessing);
             result.audio_effects.push(AudioEffect::RebuildSession);
         }
 
-        LayerGroupAction::AdjustEffectParam(group_id, effect_id, param_idx, delta) => {
-            let targeted_value = state.session.mixer.layer_group_mixer_mut(*group_id)
-                .and_then(|gm| gm.effect_chain.effect_by_id_mut(*effect_id))
-                .and_then(|effect| effect.params.get_mut(param_idx.get()))
-                .and_then(|param| param.adjust_delta(*delta));
+        LayerGroupAction::AdjustEffectParam(group_id, effect_id, param_idx, _delta) => {
             result.audio_effects.push(AudioEffect::RebuildSession);
+            // Read back the param value after reducer mutation for targeted audio update
+            let targeted_value = state.session.mixer.layer_group_mixer(*group_id)
+                .and_then(|gm| gm.effect_chain.effect_by_id(*effect_id))
+                .and_then(|effect| effect.params.get(param_idx.get()))
+                .map(|param| param.value.to_f32());
             if let Some(value) = targeted_value {
                 result.audio_effects.push(AudioEffect::SetLayerGroupEffectParam(*group_id, *effect_id, *param_idx, value));
             }
         }
 
-        LayerGroupAction::ToggleEq(group_id) => {
-            if let Some(gm) = state.session.mixer.layer_group_mixer_mut(*group_id) {
-                gm.toggle_eq();
-            }
+        LayerGroupAction::ToggleEq(_) => {
             result.audio_effects.push(AudioEffect::RebuildBusProcessing);
             result.audio_effects.push(AudioEffect::RebuildSession);
         }
 
         LayerGroupAction::SetEqParam(group_id, band_idx, param, value) => {
-            if let Some(gm) = state.session.mixer.layer_group_mixer_mut(*group_id) {
-                if let Some(ref mut eq) = gm.eq {
-                    if let Some(band) = eq.bands.get_mut(*band_idx) {
-                        match param {
-                            EqParamKind::Freq => band.freq = value.clamp(20.0, 20000.0),
-                            EqParamKind::Gain => band.gain = value.clamp(-24.0, 24.0),
-                            EqParamKind::Q => band.q = value.clamp(0.1, 10.0),
-                            EqParamKind::Enabled => band.enabled = *value > 0.5,
-                        }
-                    }
-                }
-            }
             // Send real-time param update to audio engine
             if audio.is_running() {
                 let sc_param = format!("b{}_{}", band_idx, param.as_str());
@@ -208,7 +153,7 @@ pub fn dispatch_layer_group(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use imbolc_types::{BusId, ParamIndex};
+    use imbolc_types::{BusId, OutputTarget, ParamIndex};
     use crate::state::SourceType;
     use crate::state::automation::AutomationTarget;
 

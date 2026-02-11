@@ -177,9 +177,8 @@ is called only when the layer stack resolves a key to an `ActionId`; otherwise
 Panes communicate exclusively through `Action` values. A pane's `handle_action()` or
 `handle_raw_input()` returns an `Action`, which is dispatched by
 `dispatch::dispatch_action()` in `imbolc-core/src/dispatch/mod.rs`. Dispatch mutates
-`AppState`, returns a `DispatchResult`, and collects `AudioSideEffect` values; the
-`LocalDispatcher::dispatch_with_audio()` call applies those side effects after dispatch
-returns. Audio sync is handled via `AudioDirty` flags + `AudioHandle::apply_dirty()`.
+`AppState`, returns a `DispatchResult` containing `AudioEffect` events; the runtime
+layer flushes them via `AudioHandle::apply_effects()` after dispatch returns.
 
 For cross-pane data passing (e.g., opening the editor with a specific instrument's data), the dispatch function uses `PaneManager::get_pane_mut::<T>()` to downcast and configure the target pane before switching to it.
 

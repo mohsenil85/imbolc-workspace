@@ -149,7 +149,7 @@ impl AppRuntime {
                         self.layer_stack.pop("pad_mode");
                         self.panes.active_mut().deactivate_performance();
                     }
-                    UiAction::None | UiAction::Quit | UiAction::Nav(_) | UiAction::SaveAndQuit => {
+                    UiAction::None | UiAction::Quit | UiAction::QuitIntent | UiAction::Nav(_) | UiAction::SaveAndQuit => {
                     }
                 }
             }
@@ -296,6 +296,7 @@ impl AppRuntime {
                                 RoutedAction::Ui(
                                     UiAction::None
                                     | UiAction::Quit
+                                    | UiAction::QuitIntent
                                     | UiAction::ExitPerformanceMode
                                     | UiAction::PushLayer(_)
                                     | UiAction::PopLayer(_)
@@ -351,35 +352,30 @@ impl AppRuntime {
                     should_quit = true;
                     break 'events;
                 }
-                RoutedAction::Ui(UiAction::SaveAndQuit) => {
-                    if self.dispatcher.state().project.path.is_some() {
-                        let mut r = self.dispatcher.dispatch_domain(
-                            &action::DomainAction::Session(action::SessionAction::Save),
-                            &mut self.audio,
-                        );
-                        if r.needs_full_sync {
-                            self.needs_full_sync = true;
+                RoutedAction::Ui(UiAction::QuitIntent) => {
+                    match handle_quit_intent(
+                        &mut self.dispatcher,
+                        &mut self.panes,
+                        &mut self.layer_stack,
+                    ) {
+                        GlobalResult::Quit => {
+                            should_quit = true;
+                            break 'events;
                         }
-                        self.pending_audio_effects
-                            .extend(std::mem::take(&mut r.audio_effects));
-                        apply_dispatch_result(
-                            r,
-                            &mut self.dispatcher,
-                            &mut self.panes,
-                            &mut self.app_frame,
-                            &mut self.audio,
-                        );
-                        self.quit_after_save = true;
-                    } else {
-                        let default_name = "untitled".to_string();
-                        if let Some(sa) = self.panes.get_pane_mut::<SaveAsPane>("save_as") {
-                            sa.reset(&default_name);
-                        }
-                        self.panes.pop(self.dispatcher.state());
-                        self.panes.push_to("save_as", self.dispatcher.state());
-                        sync_pane_layer(&mut self.panes, &mut self.layer_stack);
-                        self.quit_after_save = true;
+                        _ => {}
                     }
+                }
+                RoutedAction::Ui(UiAction::SaveAndQuit) => {
+                    handle_save_and_quit(
+                        &mut self.dispatcher,
+                        &mut self.panes,
+                        &mut self.audio,
+                        &mut self.app_frame,
+                        &mut self.pending_audio_effects,
+                        &mut self.needs_full_sync,
+                        &mut self.layer_stack,
+                        &mut self.quit_after_save,
+                    );
                 }
                 // Already handled above: layer management, navigation, text_edit auto-pop
                 RoutedAction::Ui(
@@ -442,6 +438,7 @@ impl AppRuntime {
                 RoutedAction::Ui(
                     UiAction::None
                     | UiAction::Quit
+                    | UiAction::QuitIntent
                     | UiAction::Nav(_)
                     | UiAction::ExitPerformanceMode
                     | UiAction::PushLayer(_)

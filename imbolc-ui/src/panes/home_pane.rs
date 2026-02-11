@@ -72,7 +72,7 @@ impl Pane for HomePane {
                 Action::None
             }
             ActionId::Home(HomeActionId::Select) => Action::Nav(NavAction::SwitchPane(self.items[self.selected].pane_id)),
-            ActionId::Home(HomeActionId::Quit) => Action::Quit,
+            ActionId::Home(HomeActionId::Quit) => Action::QuitIntent,
             _ => Action::None,
         }
     }

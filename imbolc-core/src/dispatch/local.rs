@@ -87,6 +87,7 @@ impl LocalDispatcher {
         match action {
             UiAction::Quit => DispatchResult::with_quit(),
             UiAction::None
+            | UiAction::QuitIntent
             | UiAction::Nav(_)
             | UiAction::ExitPerformanceMode
             | UiAction::PushLayer(_)

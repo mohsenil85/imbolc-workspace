@@ -378,7 +378,8 @@ pub fn run_client(addr: &str, own_instruments: Vec<u32>) -> std::io::Result<()> 
                 crate::ui::AppEvent::Key(event) => {
                     match layer_stack.resolve(&event) {
                         crate::ui::LayerResult::Action(action) => {
-                            // Handle quit locally
+                            // Handle quit locally — network client owns no project state
+                            // (server does), so immediate quit is always correct.
                             if matches!(action, ActionId::Global(GlobalActionId::Quit)) {
                                 break;
                             }
@@ -425,8 +426,8 @@ pub fn run_client(addr: &str, own_instruments: Vec<u32>) -> std::io::Result<()> 
                 }
             }
 
-            // Local quit
-            if matches!(&pane_action, Action::Quit) {
+            // Local quit — network client has no dirty state to check
+            if matches!(&pane_action, Action::Quit | Action::QuitIntent) {
                 break;
             }
         }
@@ -502,6 +503,7 @@ pub fn action_to_network_action(action: &Action) -> Option<imbolc_net::NetworkAc
         Action::Undo => Some(NetworkAction::Undo),
         Action::Redo => Some(NetworkAction::Redo),
         // Local-only actions
+        Action::QuitIntent => None,
         Action::Nav(_) => None,
         Action::AudioFeedback(_) => None,
         Action::ExitPerformanceMode => None,

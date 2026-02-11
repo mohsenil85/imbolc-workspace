@@ -248,12 +248,7 @@ pub(crate) fn handle_global_action(
     match action {
         ActionId::Global(g) => match g {
             GlobalActionId::Quit => {
-                if dispatcher.state().project.dirty {
-                    panes.push_to("quit_prompt", dispatcher.state());
-                    sync_pane_layer(panes, layer_stack);
-                    return GlobalResult::Handled;
-                }
-                return GlobalResult::Quit;
+                return handle_quit_intent(dispatcher, panes, layer_stack);
             }
             GlobalActionId::Undo => {
                 let mut r = dispatcher.dispatch_domain(&DomainAction::Undo, audio);
@@ -680,6 +675,57 @@ pub(crate) fn handle_global_action(
         _ => return GlobalResult::NotHandled,
     }
     GlobalResult::Handled
+}
+
+/// Handle a quit intent: check dirty state and show prompt if needed.
+/// Returns `GlobalResult::Quit` for immediate exit, `GlobalResult::Handled` if prompt was shown.
+pub(crate) fn handle_quit_intent(
+    dispatcher: &mut LocalDispatcher,
+    panes: &mut PaneManager,
+    layer_stack: &mut LayerStack,
+) -> GlobalResult {
+    if dispatcher.state().project.dirty {
+        panes.push_to("quit_prompt", dispatcher.state());
+        sync_pane_layer(panes, layer_stack);
+        GlobalResult::Handled
+    } else {
+        GlobalResult::Quit
+    }
+}
+
+/// Handle SaveAndQuit: save (or prompt for name), then quit.
+/// Sets `quit_after_save` so the runtime exits after save completes.
+pub(crate) fn handle_save_and_quit(
+    dispatcher: &mut LocalDispatcher,
+    panes: &mut PaneManager,
+    audio: &mut AudioHandle,
+    app_frame: &mut Frame,
+    pending_audio_effects: &mut Vec<AudioEffect>,
+    needs_full_sync: &mut bool,
+    layer_stack: &mut LayerStack,
+    quit_after_save: &mut bool,
+) {
+    if dispatcher.state().project.path.is_some() {
+        let mut r = dispatcher.dispatch_domain(
+            &DomainAction::Session(SessionAction::Save),
+            audio,
+        );
+        if r.needs_full_sync {
+            *needs_full_sync = true;
+        }
+        pending_audio_effects.extend(std::mem::take(&mut r.audio_effects));
+        apply_dispatch_result(r, dispatcher, panes, app_frame, audio);
+        *quit_after_save = true;
+    } else {
+        let default_name = "untitled".to_string();
+        if let Some(sa) = panes.get_pane_mut::<SaveAsPane>("save_as") {
+            sa.reset(&default_name);
+        }
+        panes.pop(dispatcher.state());
+        panes.push_to("save_as", dispatcher.state());
+        sync_pane_layer(panes, layer_stack);
+        *quit_after_save = true;
+    }
 }
 
 /// Apply status events from dispatch or setup to the server pane and status bar

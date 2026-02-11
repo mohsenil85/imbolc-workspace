@@ -66,6 +66,7 @@ impl SharedState {
             RoutedAction::Ui(ui) => match ui {
                 UiAction::Quit => std::process::exit(0),
                 UiAction::None
+                | UiAction::QuitIntent
                 | UiAction::Nav(_)
                 | UiAction::ExitPerformanceMode
                 | UiAction::PushLayer(_)

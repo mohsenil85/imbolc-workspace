@@ -1,33 +1,21 @@
 use crate::state::AppState;
 use crate::action::{AudioEffect, DispatchResult};
 use crate::state::InstrumentId;
+use imbolc_types::{DomainAction, InstrumentAction};
 
 pub(super) fn handle_link_layer(
     state: &mut AppState,
-    a: crate::state::InstrumentId,
-    b: crate::state::InstrumentId,
+    a: InstrumentId,
+    b: InstrumentId,
 ) -> DispatchResult {
     if a == b {
         return DispatchResult::none();
     }
-    let group_b = state.instruments.instrument(b).and_then(|i| i.layer.group);
-    let group_a = state.instruments.instrument(a).and_then(|i| i.layer.group);
-    let group_id = match (group_a, group_b) {
-        (_, Some(g)) => g,
-        (Some(g), None) => g,
-        (None, None) => state.instruments.next_layer_group(),
-    };
-    if let Some(inst) = state.instruments.instrument_mut(a) {
-        inst.layer.group = Some(group_id);
-    }
-    if let Some(inst) = state.instruments.instrument_mut(b) {
-        inst.layer.group = Some(group_id);
-    }
-    // Auto-create LayerGroupMixer if new group
-    let bus_ids: Vec<imbolc_types::BusId> = state.session.mixer.bus_ids().collect();
-    if state.session.mixer.layer_group_mixer(group_id).is_none() {
-        state.session.mixer.add_layer_group_mixer(group_id, &bus_ids);
-    }
+    imbolc_types::reduce::reduce_action(
+        &DomainAction::Instrument(InstrumentAction::LinkLayer(a, b)),
+        &mut state.instruments,
+        &mut state.session,
+    );
     let mut result = DispatchResult::none();
     result.audio_effects.push(AudioEffect::RebuildRouting);
     result.audio_effects.push(AudioEffect::RebuildSession);
@@ -37,29 +25,16 @@ pub(super) fn handle_link_layer(
 
 pub(super) fn handle_unlink_layer(
     state: &mut AppState,
-    id: crate::state::InstrumentId,
+    id: InstrumentId,
 ) -> DispatchResult {
-    let old_group = state.instruments.instrument(id).and_then(|i| i.layer.group);
-    if let Some(inst) = state.instruments.instrument_mut(id) {
-        inst.layer.group = None;
-    }
+    let had_group = state.instruments.instrument(id).and_then(|i| i.layer.group).is_some();
+    imbolc_types::reduce::reduce_action(
+        &DomainAction::Instrument(InstrumentAction::UnlinkLayer(id)),
+        &mut state.instruments,
+        &mut state.session,
+    );
     let mut result = DispatchResult::none();
-    // If old group now has only 1 member, clear that member too and remove group mixer
-    if let Some(g) = old_group {
-        let remaining: Vec<crate::state::InstrumentId> = state.instruments.instruments.iter()
-            .filter(|i| i.layer.group == Some(g))
-            .map(|i| i.id)
-            .collect();
-        if remaining.len() <= 1 {
-            // Clear any remaining singleton
-            if remaining.len() == 1 {
-                if let Some(inst) = state.instruments.instrument_mut(remaining[0]) {
-                    inst.layer.group = None;
-                }
-            }
-            // Remove the group mixer
-            state.session.mixer.remove_layer_group_mixer(g);
-        }
+    if had_group {
         result.audio_effects.push(AudioEffect::RebuildRouting);
         result.audio_effects.push(AudioEffect::RebuildSession);
         result.audio_effects.push(AudioEffect::RebuildInstruments);
@@ -72,9 +47,11 @@ pub(super) fn handle_adjust_layer_octave_offset(
     id: InstrumentId,
     delta: i8,
 ) -> DispatchResult {
-    if let Some(inst) = state.instruments.instrument_mut(id) {
-        inst.layer.octave_offset = (inst.layer.octave_offset + delta).clamp(-4, 4);
-    }
+    imbolc_types::reduce::reduce_action(
+        &DomainAction::Instrument(InstrumentAction::AdjustLayerOctaveOffset(id, delta)),
+        &mut state.instruments,
+        &mut state.session,
+    );
     DispatchResult::none()
 }
 

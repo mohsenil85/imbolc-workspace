@@ -2,6 +2,7 @@ use imbolc_audio::AudioHandle;
 use crate::state::AppState;
 use crate::state::automation::AutomationTarget;
 use crate::action::{AudioEffect, DispatchResult, EqParamKind};
+use imbolc_types::{DomainAction, InstrumentAction};
 
 use super::super::automation::record_automation_point;
 
@@ -13,31 +14,11 @@ pub(super) fn handle_set_eq_param(
     param: EqParamKind,
     value: f32,
 ) -> DispatchResult {
-    let mut record_target: Option<(AutomationTarget, f32)> = None;
-
-    if let Some(instrument) = state.instruments.instrument_mut(instrument_id) {
-        if let Some(eq) = instrument.eq_mut() {
-            if let Some(band) = eq.bands.get_mut(band_idx) {
-                match param {
-                    EqParamKind::Freq => band.freq = value.clamp(20.0, 20000.0),
-                    EqParamKind::Gain => band.gain = value.clamp(-24.0, 24.0),
-                    EqParamKind::Q => band.q = value.clamp(0.1, 10.0),
-                    EqParamKind::Enabled => band.enabled = value > 0.5,
-                }
-                if state.recording.automation_recording && state.audio.playing {
-                    let target = match param {
-                        EqParamKind::Freq => Some(AutomationTarget::eq_band_freq(instrument.id, band_idx)),
-                        EqParamKind::Gain => Some(AutomationTarget::eq_band_gain(instrument.id, band_idx)),
-                        EqParamKind::Q => Some(AutomationTarget::eq_band_q(instrument.id, band_idx)),
-                        EqParamKind::Enabled => None,
-                    };
-                    if let Some(t) = target {
-                        record_target = Some((t.clone(), t.normalize_value(value)));
-                    }
-                }
-            }
-        }
-    }
+    imbolc_types::reduce::reduce_action(
+        &DomainAction::Instrument(InstrumentAction::SetEqParam(instrument_id, band_idx, param, value)),
+        &mut state.instruments,
+        &mut state.session,
+    );
 
     // Send real-time param update to audio engine
     if audio.is_running() {
@@ -48,9 +29,20 @@ pub(super) fn handle_set_eq_param(
 
     let mut result = DispatchResult::none();
     result.audio_effects.push(AudioEffect::RebuildInstruments);
-    if let Some((target, value)) = record_target {
-        record_automation_point(state, target, value);
-        result.audio_effects.push(AudioEffect::UpdateAutomation);
+
+    // Automation recording
+    if state.recording.automation_recording && state.audio.playing {
+        let target = match param {
+            EqParamKind::Freq => Some(AutomationTarget::eq_band_freq(instrument_id, band_idx)),
+            EqParamKind::Gain => Some(AutomationTarget::eq_band_gain(instrument_id, band_idx)),
+            EqParamKind::Q => Some(AutomationTarget::eq_band_q(instrument_id, band_idx)),
+            EqParamKind::Enabled => None,
+        };
+        if let Some(t) = target {
+            let normalized = t.normalize_value(value);
+            record_automation_point(state, t, normalized);
+            result.audio_effects.push(AudioEffect::UpdateAutomation);
+        }
     }
     result
 }
@@ -59,9 +51,11 @@ pub(super) fn handle_toggle_eq(
     state: &mut AppState,
     instrument_id: crate::state::InstrumentId,
 ) -> DispatchResult {
-    if let Some(instrument) = state.instruments.instrument_mut(instrument_id) {
-        instrument.toggle_eq();
-    }
+    imbolc_types::reduce::reduce_action(
+        &DomainAction::Instrument(InstrumentAction::ToggleEq(instrument_id)),
+        &mut state.instruments,
+        &mut state.session,
+    );
     let mut result = DispatchResult::none();
     result.audio_effects.push(AudioEffect::RebuildInstruments);
     result.audio_effects.push(AudioEffect::RebuildRoutingForInstrument(instrument_id));

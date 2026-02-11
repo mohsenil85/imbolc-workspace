@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 use std::sync::mpsc::Sender;
 use imbolc_audio::AudioHandle;
+use imbolc_types::DomainAction;
 use crate::scd_parser;
 use crate::state::{AppState, CustomSynthDef, ParamSpec};
 use crate::action::{AudioEffect, DispatchResult, IoFeedback, NavIntent, SessionAction};
@@ -123,18 +124,32 @@ pub(super) fn dispatch_session(
             result.push_nav(NavIntent::ConditionalPop("project_browser"));
             result.push_nav(NavIntent::SwitchTo("add"));
         }
-        SessionAction::UpdateSession(ref settings) => {
-            state.session.apply_musical_settings(settings);
+        SessionAction::UpdateSession(_) => {
+            imbolc_types::reduce::reduce_action(
+                &DomainAction::Session(action.clone()),
+                &mut state.instruments,
+                &mut state.session,
+            );
             result.push_nav(NavIntent::PopOrSwitchTo("instrument"));
             result.audio_effects.push(AudioEffect::RebuildSession);
             result.audio_effects.push(AudioEffect::UpdatePianoRoll);
         }
-        SessionAction::UpdateSessionLive(ref settings) => {
-            state.session.apply_musical_settings(settings);
+        SessionAction::UpdateSessionLive(_) => {
+            imbolc_types::reduce::reduce_action(
+                &DomainAction::Session(action.clone()),
+                &mut state.instruments,
+                &mut state.session,
+            );
             result.audio_effects.push(AudioEffect::RebuildSession);
             result.audio_effects.push(AudioEffect::UpdatePianoRoll);
         }
         SessionAction::OpenFileBrowser(ref file_action) => {
+            // Reducer is a no-op for navigation; delegate for consistency
+            imbolc_types::reduce::reduce_action(
+                &DomainAction::Session(action.clone()),
+                &mut state.instruments,
+                &mut state.session,
+            );
             result.push_nav(NavIntent::OpenFileBrowser(file_action.clone()));
         }
         SessionAction::ImportCustomSynthDef(ref path) => {
@@ -202,12 +217,20 @@ pub(super) fn dispatch_session(
             result.push_status(audio.status(), "Importing SynthDef...");
             result.push_nav(NavIntent::Pop);
         }
-        SessionAction::AdjustHumanizeVelocity(delta) => {
-            state.session.humanize.velocity = (state.session.humanize.velocity + delta).clamp(0.0, 1.0);
+        SessionAction::AdjustHumanizeVelocity(_) => {
+            imbolc_types::reduce::reduce_action(
+                &DomainAction::Session(action.clone()),
+                &mut state.instruments,
+                &mut state.session,
+            );
             result.audio_effects.push(AudioEffect::RebuildSession);
         }
-        SessionAction::AdjustHumanizeTiming(delta) => {
-            state.session.humanize.timing = (state.session.humanize.timing + delta).clamp(0.0, 1.0);
+        SessionAction::AdjustHumanizeTiming(_) => {
+            imbolc_types::reduce::reduce_action(
+                &DomainAction::Session(action.clone()),
+                &mut state.instruments,
+                &mut state.session,
+            );
             result.audio_effects.push(AudioEffect::RebuildSession);
         }
         SessionAction::ImportVstPlugin(ref path, kind) => {
@@ -257,19 +280,20 @@ pub(super) fn dispatch_session(
             result.audio_effects.push(AudioEffect::RebuildSession);
         }
         SessionAction::ToggleMasterMute => {
-            state.session.mixer.master_mute = !state.session.mixer.master_mute;
+            imbolc_types::reduce::reduce_action(
+                &DomainAction::Session(action.clone()),
+                &mut state.instruments,
+                &mut state.session,
+            );
             result.audio_effects.push(AudioEffect::RebuildSession);
             result.audio_effects.push(AudioEffect::UpdateMixerParams);
         }
         SessionAction::CycleTheme => {
-            use imbolc_types::state::Theme;
-            // Cycle through built-in themes: Dark -> Light -> High Contrast -> Dark
-            let current_name = &state.session.theme.name;
-            state.session.theme = match current_name.as_str() {
-                "Dark" => Theme::light(),
-                "Light" => Theme::high_contrast(),
-                _ => Theme::dark(),
-            };
+            imbolc_types::reduce::reduce_action(
+                &DomainAction::Session(action.clone()),
+                &mut state.instruments,
+                &mut state.session,
+            );
             result.push_status(audio.status(), format!("Theme: {}", state.session.theme.name));
         }
         SessionAction::CreateCheckpoint(ref label) => {

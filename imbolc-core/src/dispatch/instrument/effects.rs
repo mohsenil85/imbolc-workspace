@@ -2,17 +2,24 @@ use imbolc_audio::AudioHandle;
 use crate::state::AppState;
 use crate::state::automation::AutomationTarget;
 use crate::action::{AudioEffect, DispatchResult, NavIntent, VstTarget};
+use imbolc_types::{DomainAction, InstrumentAction, ParamValue};
 
 use super::super::automation::record_automation_point;
+
+fn reduce(state: &mut AppState, action: &InstrumentAction) {
+    imbolc_types::reduce::reduce_action(
+        &DomainAction::Instrument(action.clone()),
+        &mut state.instruments,
+        &mut state.session,
+    );
+}
 
 pub(super) fn handle_add_effect(
     state: &mut AppState,
     id: crate::state::InstrumentId,
     effect_type: crate::state::EffectType,
 ) -> DispatchResult {
-    if let Some(instrument) = state.instruments.instrument_mut(id) {
-        instrument.add_effect(effect_type);
-    }
+    reduce(state, &InstrumentAction::AddEffect(id, effect_type));
     let mut result = DispatchResult::with_nav(NavIntent::Pop);
     result.audio_effects.push(AudioEffect::RebuildInstruments);
     result.audio_effects.push(AudioEffect::RebuildRoutingForInstrument(id));
@@ -24,9 +31,7 @@ pub(super) fn handle_remove_effect(
     id: crate::state::InstrumentId,
     effect_id: crate::state::EffectId,
 ) -> DispatchResult {
-    if let Some(instrument) = state.instruments.instrument_mut(id) {
-        instrument.remove_effect(effect_id);
-    }
+    reduce(state, &InstrumentAction::RemoveEffect(id, effect_id));
     let mut result = DispatchResult::none();
     result.audio_effects.push(AudioEffect::RebuildInstruments);
     result.audio_effects.push(AudioEffect::RebuildRoutingForInstrument(id));
@@ -38,11 +43,7 @@ pub(super) fn handle_toggle_effect_bypass(
     id: crate::state::InstrumentId,
     effect_id: crate::state::EffectId,
 ) -> DispatchResult {
-    if let Some(instrument) = state.instruments.instrument_mut(id) {
-        if let Some(effect) = instrument.effect_by_id_mut(effect_id) {
-            effect.enabled = !effect.enabled;
-        }
-    }
+    reduce(state, &InstrumentAction::ToggleEffectBypass(id, effect_id));
     let mut result = DispatchResult::none();
     result.audio_effects.push(AudioEffect::RebuildInstruments);
     result
@@ -55,29 +56,26 @@ pub(super) fn handle_adjust_effect_param(
     param_idx: imbolc_types::ParamIndex,
     delta: f32,
 ) -> DispatchResult {
-    let mut record_target: Option<(AutomationTarget, f32)> = None;
-    let mut targeted_value: Option<f32> = None;
-    if let Some(instrument) = state.instruments.instrument_mut(id) {
-        let inst_id = instrument.id;
-        if let Some(effect) = instrument.effect_by_id_mut(effect_id) {
-            if let Some(param) = effect.params.get_mut(param_idx.get()) {
-                targeted_value = param.adjust_delta(delta);
-                if targeted_value.is_some() && state.recording.automation_recording && state.audio.playing {
-                    let target = AutomationTarget::effect_param(inst_id, effect_id, param_idx);
-                    record_target = Some((target.clone(), target.normalize_value(targeted_value.unwrap())));
-                }
-            }
-        }
-    }
+    reduce(state, &InstrumentAction::AdjustEffectParam(id, effect_id, param_idx, delta));
+
     let mut result = DispatchResult::none();
     result.audio_effects.push(AudioEffect::RebuildInstruments);
-    // Targeted param update: send /n_set directly to effect node
-    if let Some(value) = targeted_value {
+
+    // Read post-mutation value for targeted param + automation recording
+    // Extract value first to avoid borrow conflict with record_automation_point
+    let param_value = state.instruments.instrument(id)
+        .and_then(|inst| inst.effects().find(|e| e.id == effect_id))
+        .and_then(|effect| effect.params.get(param_idx.get()))
+        .and_then(|param| match param.value { ParamValue::Float(v) => Some(v), _ => None });
+
+    if let Some(value) = param_value {
         result.audio_effects.push(AudioEffect::SetEffectParam(id, effect_id, param_idx, value));
-    }
-    if let Some((target, value)) = record_target {
-        record_automation_point(state, target, value);
-        result.audio_effects.push(AudioEffect::UpdateAutomation);
+        if state.recording.automation_recording && state.audio.playing {
+            let target = AutomationTarget::effect_param(id, effect_id, param_idx);
+            let normalized = target.normalize_value(value);
+            record_automation_point(state, target, normalized);
+            result.audio_effects.push(AudioEffect::UpdateAutomation);
+        }
     }
     result
 }
@@ -89,28 +87,13 @@ pub(super) fn handle_load_ir_result(
     effect_id: crate::state::EffectId,
     path: &std::path::Path,
 ) -> DispatchResult {
-    let path_str = path.to_string_lossy().to_string();
-
+    // Load sample into audio engine before reducer increments the buffer_id
     let buffer_id = state.instruments.next_sampler_buffer_id;
-    state.instruments.next_sampler_buffer_id += 1;
-
     if audio.is_running() {
-        let _ = audio.load_sample(buffer_id, &path_str);
+        let _ = audio.load_sample(buffer_id, &path.to_string_lossy());
     }
 
-    if let Some(instrument) = state.instruments.instrument_mut(instrument_id) {
-        // Update the ir_buffer param on the convolution reverb effect
-        if let Some(effect) = instrument.effect_by_id_mut(effect_id) {
-            if effect.effect_type == crate::state::EffectType::ConvolutionReverb {
-                for p in &mut effect.params {
-                    if p.name == "ir_buffer" {
-                        p.value = crate::state::param::ParamValue::Int(buffer_id as i32);
-                    }
-                }
-            }
-        }
-        instrument.convolution_ir_path = Some(path_str);
-    }
+    reduce(state, &InstrumentAction::LoadIRResult(instrument_id, effect_id, path.to_path_buf()));
 
     let mut result = DispatchResult::with_nav(NavIntent::Pop);
     result.audio_effects.push(AudioEffect::RebuildInstruments);

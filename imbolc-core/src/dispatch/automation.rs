@@ -1,4 +1,5 @@
 use imbolc_audio::AudioHandle;
+use imbolc_types::DomainAction;
 use crate::state::automation::AutomationTarget;
 use crate::state::{AppState, ClipboardContents};
 use crate::action::{AudioEffect, AutomationAction, DispatchResult};
@@ -8,87 +9,29 @@ const RECORD_VALUE_THRESHOLD: f32 = 0.005;
 /// Minimum tick delta between recorded points (1/10th beat)
 const RECORD_MIN_TICK_DELTA: u32 = 48;
 
+fn reduce(state: &mut AppState, action: &AutomationAction) {
+    imbolc_types::reduce::reduce_action(
+        &DomainAction::Automation(action.clone()),
+        &mut state.instruments,
+        &mut state.session,
+    );
+}
+
 pub(super) fn dispatch_automation(
     action: &AutomationAction,
     state: &mut AppState,
     audio: &mut AudioHandle,
 ) -> DispatchResult {
     let mut result = DispatchResult::none();
+
+    // Actions NOT handled by the reducer (keep inline)
     match action {
-        AutomationAction::AddLane(target) => {
-            state.session.automation.add_lane(target.clone());
-            result.audio_effects.push(AudioEffect::UpdateAutomation);
-        }
-        AutomationAction::RemoveLane(id) => {
-            state.session.automation.remove_lane(*id);
-            result.audio_effects.push(AudioEffect::UpdateAutomation);
-        }
-        AutomationAction::ToggleLaneEnabled(id) => {
-            if let Some(lane) = state.session.automation.lane_mut(*id) {
-                lane.enabled = !lane.enabled;
-                result.audio_effects.push(AudioEffect::UpdateAutomation);
-            }
-        }
-        AutomationAction::AddPoint(lane_id, tick, value) => {
-            if let Some(lane) = state.session.automation.lane_mut(*lane_id) {
-                lane.add_point(*tick, *value);
-                result.audio_effects.push(AudioEffect::UpdateAutomation);
-            }
-        }
-        AutomationAction::RemovePoint(lane_id, tick) => {
-            if let Some(lane) = state.session.automation.lane_mut(*lane_id) {
-                lane.remove_point(*tick);
-                result.audio_effects.push(AudioEffect::UpdateAutomation);
-            }
-        }
-        AutomationAction::MovePoint(lane_id, old_tick, new_tick, new_value) => {
-            if let Some(lane) = state.session.automation.lane_mut(*lane_id) {
-                lane.remove_point(*old_tick);
-                lane.add_point(*new_tick, *new_value);
-                result.audio_effects.push(AudioEffect::UpdateAutomation);
-            }
-        }
-        AutomationAction::SetCurveType(lane_id, tick, curve) => {
-            if let Some(lane) = state.session.automation.lane_mut(*lane_id) {
-                if let Some(point) = lane.point_at_mut(*tick) {
-                    point.curve = *curve;
-                    result.audio_effects.push(AudioEffect::UpdateAutomation);
-                }
-            }
-        }
-        AutomationAction::SelectLane(delta) => {
-            if *delta > 0 {
-                state.session.automation.select_next();
-            } else {
-                state.session.automation.select_prev();
-            }
-        }
-        AutomationAction::ClearLane(id) => {
-            if let Some(lane) = state.session.automation.lane_mut(*id) {
-                lane.points.clear();
-                result.audio_effects.push(AudioEffect::UpdateAutomation);
-            }
-        }
         AutomationAction::ToggleRecording => {
             if !state.recording.automation_recording {
                 state.undo_history.push_from(state.session.clone(), state.instruments.clone());
             }
             state.recording.automation_recording = !state.recording.automation_recording;
-        }
-        AutomationAction::ToggleLaneArm(id) => {
-            if let Some(lane) = state.session.automation.lane_mut(*id) {
-                lane.record_armed = !lane.record_armed;
-            }
-        }
-        AutomationAction::ArmAllLanes => {
-            for lane in &mut state.session.automation.lanes {
-                lane.record_armed = true;
-            }
-        }
-        AutomationAction::DisarmAllLanes => {
-            for lane in &mut state.session.automation.lanes {
-                lane.record_armed = false;
-            }
+            return result;
         }
         AutomationAction::RecordValue(target, value) => {
             // Always apply immediately for audio feedback (e.g. MIDI CC)
@@ -102,12 +45,7 @@ pub(super) fn dispatch_automation(
                 record_automation_point(state, target.clone(), *value);
                 result.audio_effects.push(AudioEffect::UpdateAutomation);
             }
-        }
-        AutomationAction::DeletePointsInRange(lane_id, start_tick, end_tick) => {
-            if let Some(lane) = state.session.automation.lane_mut(*lane_id) {
-                lane.points.retain(|p| p.tick < *start_tick || p.tick >= *end_tick);
-                result.audio_effects.push(AudioEffect::UpdateAutomation);
-            }
+            return result;
         }
         AutomationAction::CopyPoints(lane_id, start_tick, end_tick) => {
             if *start_tick < *end_tick {
@@ -123,16 +61,54 @@ pub(super) fn dispatch_automation(
                     }
                 }
             }
+            return result;
         }
-        AutomationAction::PastePoints(lane_id, anchor_tick, points) => {
-            if let Some(lane) = state.session.automation.lane_mut(*lane_id) {
-                for (tick_offset, value) in points {
-                    let tick = *anchor_tick + tick_offset;
-                    lane.add_point(tick, *value);
-                }
-                result.audio_effects.push(AudioEffect::UpdateAutomation);
-            }
+        _ => {}
+    }
+
+    // Delegate pure state mutation to the shared reducer
+    reduce(state, action);
+
+    // Orchestration: AudioEffects
+    match action {
+        AutomationAction::AddLane(_) => {
+            result.audio_effects.push(AudioEffect::UpdateAutomation);
         }
+        AutomationAction::RemoveLane(_) => {
+            result.audio_effects.push(AudioEffect::UpdateAutomation);
+        }
+        AutomationAction::ToggleLaneEnabled(_) => {
+            result.audio_effects.push(AudioEffect::UpdateAutomation);
+        }
+        AutomationAction::AddPoint(_, _, _) => {
+            result.audio_effects.push(AudioEffect::UpdateAutomation);
+        }
+        AutomationAction::RemovePoint(_, _) => {
+            result.audio_effects.push(AudioEffect::UpdateAutomation);
+        }
+        AutomationAction::MovePoint(_, _, _, _) => {
+            result.audio_effects.push(AudioEffect::UpdateAutomation);
+        }
+        AutomationAction::SetCurveType(_, _, _) => {
+            result.audio_effects.push(AudioEffect::UpdateAutomation);
+        }
+        AutomationAction::SelectLane(_) => {}
+        AutomationAction::ClearLane(_) => {
+            result.audio_effects.push(AudioEffect::UpdateAutomation);
+        }
+        AutomationAction::ToggleLaneArm(_) => {}
+        AutomationAction::ArmAllLanes => {}
+        AutomationAction::DisarmAllLanes => {}
+        AutomationAction::DeletePointsInRange(_, _, _) => {
+            result.audio_effects.push(AudioEffect::UpdateAutomation);
+        }
+        AutomationAction::PastePoints(_, _, _) => {
+            result.audio_effects.push(AudioEffect::UpdateAutomation);
+        }
+        // Already handled above with early returns
+        AutomationAction::ToggleRecording
+        | AutomationAction::RecordValue(_, _)
+        | AutomationAction::CopyPoints(_, _, _) => unreachable!(),
     }
 
     result

@@ -31,11 +31,11 @@ pub(super) fn dispatch_instrument(
         InstrumentAction::PlayNotes(ref pitches, velocity) => {
             playback::handle_play_notes(state, audio, pitches, *velocity)
         }
-        InstrumentAction::Select(idx) => selection::handle_select(state, *idx),
-        InstrumentAction::SelectNext => selection::handle_select_next(state),
-        InstrumentAction::SelectPrev => selection::handle_select_prev(state),
-        InstrumentAction::SelectFirst => selection::handle_select_first(state),
-        InstrumentAction::SelectLast => selection::handle_select_last(state),
+        InstrumentAction::Select(_)
+        | InstrumentAction::SelectNext
+        | InstrumentAction::SelectPrev
+        | InstrumentAction::SelectFirst
+        | InstrumentAction::SelectLast => selection::handle_select(state, action),
         InstrumentAction::PlayDrumPad(pad_idx) => {
             playback::handle_play_drum_pad(state, audio, *pad_idx)
         }
@@ -65,17 +65,13 @@ pub(super) fn dispatch_instrument(
         InstrumentAction::AdjustEffectParam(id, effect_id, param_idx, delta) => {
             effects::handle_adjust_effect_param(state, *id, *effect_id, *param_idx, *delta)
         }
-        InstrumentAction::ToggleArp(id) => arpeggiator::handle_toggle_arp(state, *id),
-        InstrumentAction::CycleArpDirection(id) => arpeggiator::handle_cycle_arp_direction(state, *id),
-        InstrumentAction::CycleArpRate(id) => arpeggiator::handle_cycle_arp_rate(state, *id),
-        InstrumentAction::AdjustArpOctaves(id, delta) => {
-            arpeggiator::handle_adjust_arp_octaves(state, *id, *delta)
-        }
-        InstrumentAction::AdjustArpGate(id, delta) => {
-            arpeggiator::handle_adjust_arp_gate(state, *id, *delta)
-        }
-        InstrumentAction::CycleChordShape(id) => arpeggiator::handle_cycle_chord_shape(state, *id),
-        InstrumentAction::ClearChordShape(id) => arpeggiator::handle_clear_chord_shape(state, *id),
+        InstrumentAction::ToggleArp(_)
+        | InstrumentAction::CycleArpDirection(_)
+        | InstrumentAction::CycleArpRate(_)
+        | InstrumentAction::AdjustArpOctaves(_, _)
+        | InstrumentAction::AdjustArpGate(_, _)
+        | InstrumentAction::CycleChordShape(_)
+        | InstrumentAction::ClearChordShape(_) => arpeggiator::dispatch(state, action),
         InstrumentAction::LoadIRResult(instrument_id, effect_id, ref path) => {
             effects::handle_load_ir_result(state, audio, *instrument_id, *effect_id, path)
         }
@@ -94,43 +90,19 @@ pub(super) fn dispatch_instrument(
             layer::handle_adjust_layer_octave_offset(state, *id, *delta)
         }
         // Per-track groove settings
-        InstrumentAction::SetTrackSwing(id, value) => {
-            groove::handle_set_track_swing(state, *id, *value)
-        }
-        InstrumentAction::SetTrackSwingGrid(id, grid) => {
-            groove::handle_set_track_swing_grid(state, *id, *grid)
-        }
-        InstrumentAction::AdjustTrackSwing(id, delta) => {
-            groove::handle_adjust_track_swing(state, *id, *delta)
-        }
-        InstrumentAction::SetTrackHumanizeVelocity(id, value) => {
-            groove::handle_set_track_humanize_velocity(state, *id, *value)
-        }
-        InstrumentAction::AdjustTrackHumanizeVelocity(id, delta) => {
-            groove::handle_adjust_track_humanize_velocity(state, *id, *delta)
-        }
-        InstrumentAction::SetTrackHumanizeTiming(id, value) => {
-            groove::handle_set_track_humanize_timing(state, *id, *value)
-        }
-        InstrumentAction::AdjustTrackHumanizeTiming(id, delta) => {
-            groove::handle_adjust_track_humanize_timing(state, *id, *delta)
-        }
-        InstrumentAction::SetTrackTimingOffset(id, value) => {
-            groove::handle_set_track_timing_offset(state, *id, *value)
-        }
-        InstrumentAction::AdjustTrackTimingOffset(id, delta) => {
-            groove::handle_adjust_track_timing_offset(state, *id, *delta)
-        }
-        InstrumentAction::ResetTrackGroove(id) => {
-            groove::handle_reset_track_groove(state, *id)
-        }
+        InstrumentAction::SetTrackSwing(_, _)
+        | InstrumentAction::SetTrackSwingGrid(_, _)
+        | InstrumentAction::AdjustTrackSwing(_, _)
+        | InstrumentAction::SetTrackHumanizeVelocity(_, _)
+        | InstrumentAction::AdjustTrackHumanizeVelocity(_, _)
+        | InstrumentAction::SetTrackHumanizeTiming(_, _)
+        | InstrumentAction::AdjustTrackHumanizeTiming(_, _)
+        | InstrumentAction::SetTrackTimingOffset(_, _)
+        | InstrumentAction::AdjustTrackTimingOffset(_, _)
+        | InstrumentAction::ResetTrackGroove(_)
         // Per-track time signature
-        InstrumentAction::SetTrackTimeSignature(id, ts) => {
-            groove::handle_set_track_time_signature(state, *id, *ts)
-        }
-        InstrumentAction::CycleTrackTimeSignature(id) => {
-            groove::handle_cycle_track_time_signature(state, *id)
-        }
+        | InstrumentAction::SetTrackTimeSignature(_, _)
+        | InstrumentAction::CycleTrackTimeSignature(_) => groove::dispatch(state, action),
         // LFO actions
         InstrumentAction::ToggleLfo(id) => lfo::handle_toggle_lfo(state, *id),
         InstrumentAction::AdjustLfoRate(id, delta) => {
@@ -170,15 +142,11 @@ pub(super) fn dispatch_instrument(
 }
 
 fn handle_move_stage(state: &mut AppState, id: crate::state::InstrumentId, stage_idx: usize, direction: i8) -> DispatchResult {
-    if let Some(inst) = state.instruments.instrument_mut(id) {
-        let len = inst.processing_chain.len();
-        if stage_idx < len {
-            let new_idx = (stage_idx as isize + direction as isize).clamp(0, len as isize - 1) as usize;
-            if new_idx != stage_idx {
-                inst.processing_chain.swap(stage_idx, new_idx);
-            }
-        }
-    }
+    imbolc_types::reduce::reduce_action(
+        &imbolc_types::DomainAction::Instrument(InstrumentAction::MoveStage(id, stage_idx, direction)),
+        &mut state.instruments,
+        &mut state.session,
+    );
     let mut result = DispatchResult::none();
     result.audio_effects.push(AudioEffect::RebuildInstruments);
     result.audio_effects.push(AudioEffect::RebuildRoutingForInstrument(id));
@@ -186,13 +154,12 @@ fn handle_move_stage(state: &mut AppState, id: crate::state::InstrumentId, stage
 }
 
 fn handle_toggle_channel_config(state: &mut AppState, id: crate::state::InstrumentId) -> DispatchResult {
-    if let Some(inst) = state.instruments.instrument_mut(id) {
-        inst.mixer.channel_config = inst.mixer.channel_config.toggle();
-        // Mark routing dirty to rebuild signal chain with new channel config
-        let mut result = DispatchResult::default();
-        result.audio_effects.push(AudioEffect::RebuildRoutingForInstrument(id));
-        result
-    } else {
-        DispatchResult::default()
-    }
+    imbolc_types::reduce::reduce_action(
+        &imbolc_types::DomainAction::Instrument(InstrumentAction::ToggleChannelConfig(id)),
+        &mut state.instruments,
+        &mut state.session,
+    );
+    let mut result = DispatchResult::default();
+    result.audio_effects.push(AudioEffect::RebuildRoutingForInstrument(id));
+    result
 }
