@@ -533,7 +533,9 @@ impl AudioEngine {
             }
         }
 
-        let backend = self.backend.as_ref().ok_or("Not connected")?;
+        if self.backend.is_none() {
+            return Err("Not connected".to_string());
+        }
 
         // Find and mark an active voice as released via the allocator
         let release_time = state.instrument(instrument_id)
@@ -542,15 +544,24 @@ impl AudioEngine {
 
         if let Some(pos) = self.voice_allocator.mark_released(instrument_id, pitch, release_time) {
             let voice = &self.voice_allocator.chains()[pos];
+            let gate_bus = voice.control_buses.1;
 
-            // Send gate=0 to begin envelope release
-            backend
-                .set_params_bundled(
-                    voice.midi_node_id,
-                    &[("gate", 0.0)],
-                    offset_secs,
-                )
-                .map_err(|e| e.to_string())?;
+            // Force deterministic release:
+            // 1) free the MIDI helper node so it stops writing gate values
+            // 2) hard-set gate control bus to 0 so the source ADSR enters release now
+            self.queue_timed_bundle(
+                vec![
+                    BackendMessage {
+                        addr: "/n_free".to_string(),
+                        args: vec![RawArg::Int(voice.midi_node_id)],
+                    },
+                    BackendMessage {
+                        addr: "/c_set".to_string(),
+                        args: vec![RawArg::Int(gate_bus), RawArg::Float(0.0)],
+                    },
+                ],
+                offset_secs,
+            )?;
 
             // Schedule deferred /n_free after envelope completes (+1s margin)
             let cleanup_offset = offset_secs + release_time as f64 + 1.0;
@@ -566,7 +577,7 @@ impl AudioEngine {
         Ok(())
     }
 
-    /// Release all active voices with anti-click fade (gate=0 then delayed free)
+    /// Release all active voices with anti-click fade (force gate bus to 0, then delayed free)
     pub fn release_all_voices(&mut self) {
         if let Some(ref backend) = self.backend {
             for chain in self.voice_allocator.drain_all() {
@@ -608,14 +619,17 @@ impl AudioEngine {
             self.node_registry.unregister(voice.group_id);
             self.node_registry.unregister(voice.midi_node_id);
             self.node_registry.unregister(voice.source_node);
+            // Buses for stolen voices must be returned only after /n_end confirms free.
+            self.oneshot_buses.insert(voice.group_id, voice.control_buses);
             Self::anti_click_free_at(backend.as_ref(), voice, offset_secs)?;
         }
 
         Ok(())
     }
 
-    /// Free a voice with a brief anti-click fade: send gate=0, then /n_free after fade.
-    /// For already-released voices, skip gate=0 (already fading) but still delay the free.
+    /// Free a voice with a brief anti-click fade by forcing gate bus to 0,
+    /// then /n_free after fade. For already-released voices, skip gate forcing
+    /// (already fading) but still delay the free.
     fn anti_click_free(
         backend: &dyn AudioBackend,
         voice: &VoiceChain,
@@ -645,10 +659,23 @@ impl AudioEngine {
                 )
                 .map_err(|e| e.to_string())?;
         } else {
-            // Active voice: send gate=0 at the offset, then free after envelope release
+            // Active voice: hard-zero gate bus at the offset, then free after envelope release.
+            // This avoids release timing ambiguity from the helper MIDI envelope.
             let fade = (voice.release_secs as f64).max(ANTI_CLICK_FADE_SECS);
             backend
-                .set_params_bundled(voice.midi_node_id, &[("gate", 0.0)], offset_secs)
+                .send_bundle(
+                    vec![
+                        BackendMessage {
+                            addr: "/n_free".to_string(),
+                            args: vec![RawArg::Int(voice.midi_node_id)],
+                        },
+                        BackendMessage {
+                            addr: "/c_set".to_string(),
+                            args: vec![RawArg::Int(voice.control_buses.1), RawArg::Float(0.0)],
+                        },
+                    ],
+                    offset_secs,
+                )
                 .map_err(|e| e.to_string())?;
             backend
                 .send_bundle(

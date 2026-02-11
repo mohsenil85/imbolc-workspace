@@ -170,7 +170,8 @@ pub struct AudioEngine {
     pending_export_buffer_frees: Vec<(i32, Instant)>,
     /// Best-effort registry of which SC nodes are believed to be alive
     pub(crate) node_registry: NodeRegistry,
-    /// One-shot voice group_id -> control bus triple (for bus return on /n_end)
+    /// Voice groups not tracked by `voice_allocator` (one-shots, stolen voices) ->
+    /// control bus triple for return on /n_end.
     pub(crate) oneshot_buses: HashMap<i32, (i32, i32, i32)>,
     /// Dynamic scheduling lookahead for sequenced playback.
     /// Derived from buffer_size/sample_rate via `compute_lookahead()`.
@@ -844,7 +845,7 @@ mod tests {
 
     mod backend_routing_tests {
         use super::*;
-        use crate::engine::backend::{TestBackend, TestOp, SharedTestBackend};
+        use crate::engine::backend::{RawArg, TestBackend, TestOp, SharedTestBackend};
         use imbolc_types::OutputTarget;
         use imbolc_types::SendTapPoint;
         use std::sync::Arc;
@@ -856,6 +857,115 @@ mod tests {
             engine.is_running = true;
             engine.server_status = ServerStatus::Connected;
             (engine, backend)
+        }
+
+        #[test]
+        fn release_voice_forces_gate_bus_zero_before_group_free() {
+            let (mut engine, backend) = engine_with_test_backend();
+            let mut state = AppState::new();
+            let inst_id = state.add_instrument(SourceType::Saw);
+
+            let group_id = 9100;
+            let midi_node_id = 9101;
+            let source_node = 9102;
+            let control_buses = engine.voice_allocator.alloc_control_buses();
+            let gate_bus = control_buses.1;
+
+            engine.voice_allocator.add(VoiceChain {
+                instrument_id: inst_id,
+                pitch: 60,
+                velocity: 0.8,
+                group_id,
+                midi_node_id,
+                source_node,
+                spawn_time: Instant::now(),
+                release_secs: 0.3,
+                release_state: None,
+                control_buses,
+            });
+
+            engine
+                .release_voice(inst_id, 60, 0.25, &state.instruments)
+                .expect("release_voice");
+
+            let ops = backend.operations();
+            let immediate = ops.iter().find(|op| {
+                matches!(
+                    op,
+                    TestOp::SendBundle { offset_secs, messages }
+                        if (*offset_secs - 0.25).abs() < f64::EPSILON
+                        && messages.contains(&("/n_free".to_string(), vec![RawArg::Int(midi_node_id)]))
+                        && messages.contains(&("/c_set".to_string(), vec![RawArg::Int(gate_bus), RawArg::Float(0.0)]))
+                )
+            });
+            assert!(immediate.is_some(), "release should free midi helper and force gate bus to 0");
+
+            let release_secs = state
+                .instruments
+                .instrument(inst_id)
+                .expect("instrument")
+                .modulation
+                .amp_envelope
+                .release as f64;
+            let cleanup_offset = 0.25 + release_secs + 1.0;
+            let cleanup = ops.iter().find(|op| {
+                matches!(
+                    op,
+                    TestOp::SendBundle { offset_secs, messages }
+                        if (*offset_secs - cleanup_offset).abs() < 1e-9
+                        && messages == &vec![("/n_free".to_string(), vec![RawArg::Int(group_id)])]
+                )
+            });
+            assert!(cleanup.is_some(), "group free should be scheduled after release tail");
+        }
+
+        #[test]
+        fn steal_voice_forces_gate_bus_zero_on_stolen_voice() {
+            let (mut engine, backend) = engine_with_test_backend();
+            let inst_id = InstrumentId::new(42);
+
+            let group_id = 9200;
+            let midi_node_id = 9201;
+            let source_node = 9202;
+            let control_buses = engine.voice_allocator.alloc_control_buses();
+            let gate_bus = control_buses.1;
+
+            engine.voice_allocator.add(VoiceChain {
+                instrument_id: inst_id,
+                pitch: 64,
+                velocity: 0.8,
+                group_id,
+                midi_node_id,
+                source_node,
+                spawn_time: Instant::now(),
+                release_secs: 0.05,
+                release_state: None,
+                control_buses,
+            });
+
+            engine
+                .steal_voice_if_needed(inst_id, 64, 0.9, 0.1)
+                .expect("steal_voice_if_needed");
+
+            let ops = backend.operations();
+            let steal_bundle = ops.iter().find(|op| {
+                matches!(
+                    op,
+                    TestOp::SendBundle { offset_secs, messages }
+                        if (*offset_secs - 0.1).abs() < f64::EPSILON
+                        && messages.contains(&("/n_free".to_string(), vec![RawArg::Int(midi_node_id)]))
+                        && messages.contains(&("/c_set".to_string(), vec![RawArg::Int(gate_bus), RawArg::Float(0.0)]))
+                )
+            });
+            assert!(steal_bundle.is_some(), "steal path should force gate bus to 0 at onset");
+
+            // Control buses for stolen voice should be returned on /n_end, not immediately.
+            assert_eq!(engine.voice_allocator.control_bus_pool_size(), 0);
+            assert_eq!(engine.oneshot_buses.get(&group_id), Some(&(control_buses)));
+
+            engine.process_node_ends(&[group_id]);
+            assert_eq!(engine.voice_allocator.control_bus_pool_size(), 1);
+            assert!(!engine.oneshot_buses.contains_key(&group_id));
         }
 
         #[test]

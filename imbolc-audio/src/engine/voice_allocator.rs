@@ -58,7 +58,8 @@ impl VoiceAllocator {
 
     /// Determine which voices to steal before spawning a new voice.
     /// Returns removed voices that the caller should free via OSC.
-    /// Control buses of stolen voices are returned to the pool.
+    /// Control buses of stolen voices are NOT returned here; the caller must
+    /// return them when /n_end confirms the voice group is actually freed.
     ///
     /// Handles:
     /// 1. Same-pitch retrigger (always steal matching pitch)
@@ -75,7 +76,6 @@ impl VoiceAllocator {
             v.instrument_id == instrument_id && v.pitch == pitch
         }) {
             let voice = self.chains.remove(pos);
-            self.control_bus_pool.push(voice.control_buses);
             stolen.push(voice);
         }
 
@@ -89,7 +89,6 @@ impl VoiceAllocator {
         if active_count >= MAX_VOICES_PER_INSTRUMENT {
             if let Some(pos) = self.find_steal_candidate(instrument_id) {
                 let voice = self.chains.remove(pos);
-                self.control_bus_pool.push(voice.control_buses);
                 stolen.push(voice);
             }
         }
@@ -325,10 +324,10 @@ mod tests {
         alloc.add(make_voice(id(1), 60, 100, buses));
 
         assert_eq!(alloc.control_bus_pool_size(), 0);
-        // Same-pitch retrigger should steal and return buses
+        // Same-pitch retrigger should steal, but buses are returned later on /n_end
         let stolen = alloc.steal_voices(id(1), 60);
         assert_eq!(stolen.len(), 1);
-        assert_eq!(alloc.control_bus_pool_size(), 1);
+        assert_eq!(alloc.control_bus_pool_size(), 0);
     }
 
     #[test]
