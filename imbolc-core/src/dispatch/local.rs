@@ -9,6 +9,7 @@ use std::sync::mpsc::Sender;
 use imbolc_types::{Action, DispatchResult, DomainAction, RoutedAction, UiAction};
 
 use crate::action::IoFeedback;
+use crate::interaction_log::InteractionLog;
 use crate::state::AppState;
 use imbolc_audio::AudioHandle;
 
@@ -26,12 +27,19 @@ use super::dispatch_action;
 pub struct LocalDispatcher {
     state: AppState,
     io_tx: Sender<IoFeedback>,
+    domain_log: Option<InteractionLog>,
+    active_pane: &'static str,
 }
 
 impl LocalDispatcher {
     /// Create a new LocalDispatcher that owns the given state and I/O channel.
     pub fn new(state: AppState, io_tx: Sender<IoFeedback>) -> Self {
-        Self { state, io_tx }
+        Self {
+            state,
+            io_tx,
+            domain_log: InteractionLog::domain(),
+            active_pane: "instrument",
+        }
     }
 
     /// Access the application state for rendering.
@@ -47,6 +55,11 @@ impl LocalDispatcher {
     /// Access the I/O feedback sender.
     pub fn io_tx(&self) -> &Sender<IoFeedback> {
         &self.io_tx
+    }
+
+    /// Set the active pane name for domain log entries.
+    pub fn set_active_pane(&mut self, pane: &'static str) {
+        self.active_pane = pane;
     }
 
     /// Dispatch an action using the provided audio handle.
@@ -80,6 +93,9 @@ impl LocalDispatcher {
         let reducible = imbolc_types::reduce::is_reducible(action);
         audio.forward_action(action, &result.audio_effects);
         result.needs_full_sync = !reducible && !result.audio_effects.is_empty();
+        if let Some(log) = &mut self.domain_log {
+            log.log_domain(self.active_pane, action, &result);
+        }
         result
     }
 

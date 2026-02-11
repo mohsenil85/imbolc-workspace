@@ -135,6 +135,13 @@ impl AppRuntime {
             };
             let routed_action = pane_action.route();
 
+            // Log UI actions
+            if let RoutedAction::Ui(ref ui_action) = routed_action {
+                if let Some(ui_log) = &mut self.ui_log {
+                    ui_log.log_ui(self.panes.active().id(), ui_action);
+                }
+            }
+
             // Process layer management actions
             process_layer_actions(&pane_action, &mut self.layer_stack, &mut self.panes);
 

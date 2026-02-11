@@ -19,7 +19,7 @@ use crate::{
 // ============================================================================
 
 /// Navigation actions (pane switching, modal stack).
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum NavAction {
     SwitchPane(&'static str),
     PushPane(&'static str),
@@ -204,7 +204,7 @@ pub enum FileSelectAction {
 }
 
 /// Navigation intent returned from dispatch — processed by the UI layer.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 #[allow(dead_code)]
 pub enum NavIntent {
     SwitchTo(&'static str),
@@ -867,7 +867,7 @@ pub enum ClickAction {
 /// domain mutations (Instrument, Mixer, etc.).
 ///
 /// Use `route()` to classify the action as UI-layer or domain-layer.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub enum Action {
     None,
     Quit,
@@ -910,7 +910,7 @@ pub enum Action {
 // ============================================================================
 
 /// UI-layer actions handled by the runtime layer (navigation, quit, layer stack).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub enum UiAction {
     None,
     Quit,
@@ -927,7 +927,7 @@ pub enum UiAction {
 /// Avoids lossy Option-based extraction (`None` drop on UI actions). Callers
 /// must handle both branches explicitly.
 #[must_use = "RoutedAction must be matched to handle both UI and domain branches."]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub enum RoutedAction {
     Ui(UiAction),
     Domain(DomainAction),
@@ -943,7 +943,7 @@ pub enum RoutedAction {
 ///
 /// Extracted from `Action` via `Action::route()`. Dispatch, undo, and
 /// audio projection operate on `DomainAction` exclusively.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum DomainAction {
     Instrument(InstrumentAction),
     Mixer(MixerAction),

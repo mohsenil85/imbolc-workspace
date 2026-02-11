@@ -19,6 +19,7 @@ use crate::audio::AudioHandle;
 use crate::config;
 use crate::dispatch::LocalDispatcher;
 use crate::global_actions::{apply_status_events, InstrumentSelectMode};
+use imbolc_core::interaction_log::InteractionLog;
 use crate::midi;
 use crate::setup;
 use crate::state::{self, AppState};
@@ -34,6 +35,9 @@ pub struct AppRuntime {
     pub(crate) midi_input: midi::MidiInputManager,
     pub(crate) io_rx: Receiver<IoFeedback>,
     pub(crate) recent_projects: state::recent_projects::RecentProjects,
+
+    // Interaction logging
+    pub(crate) ui_log: Option<InteractionLog>,
 
     // Per-frame state
     pub(crate) select_mode: InstrumentSelectMode,
@@ -139,6 +143,7 @@ impl AppRuntime {
             midi_input,
             io_rx,
             recent_projects,
+            ui_log: InteractionLog::ui(),
             select_mode: InstrumentSelectMode::Normal,
             pending_audio_effects,
             needs_full_sync,
@@ -153,6 +158,7 @@ impl AppRuntime {
     pub fn run(&mut self, backend: &mut RatatuiBackend) -> std::io::Result<()> {
         loop {
             self.layer_stack.set_pane_layer(self.panes.active().id());
+            self.dispatcher.set_active_pane(self.panes.active().id());
 
             if self.process_events(backend)? {
                 break;

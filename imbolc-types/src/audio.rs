@@ -26,7 +26,7 @@ pub enum ExportKind {
 }
 
 /// Feedback messages from the audio thread to the main thread.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AudioFeedback {
     PlayheadPosition(u32),
     BpmUpdate(f32),

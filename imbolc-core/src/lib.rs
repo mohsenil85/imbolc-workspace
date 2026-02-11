@@ -51,6 +51,7 @@ pub mod action;
 pub use imbolc_audio as audio;
 pub mod config;
 pub mod dispatch;
+pub mod interaction_log;
 pub mod midi;
 pub mod paths;
 pub mod scd_parser;
