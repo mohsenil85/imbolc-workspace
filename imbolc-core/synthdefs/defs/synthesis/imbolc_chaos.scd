@@ -20,7 +20,7 @@ SynthDef(\imbolc_chaos, { |out=1024, freq_in=(-1), gate_in=(-1), vel_in=(-1), am
     var henon = HenonN.ar(chaos_freq, finalChaosParam, 0.3);
     var lorenz = LorenzL.ar(chaos_freq, finalChaosParam.linlin(0, 2, 8, 14));
     var sig = Select.ar(model, [henon, lorenz]) * finalAmp * velSig;
-    var env = EnvGen.kr(Env.adsr(finalAttack, finalDecay, finalSustain, finalRelease), gateSig);
+    var env = EnvGen.ar(Env.adsr(finalAttack, finalDecay, finalSustain, finalRelease), gateSig, doneAction: 14);
     Out.ar(out, (sig * env) ! 2);
 }).writeDefFile(dir);
 )

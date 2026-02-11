@@ -47,7 +47,7 @@ SynthDef(\imbolc_organ, { |out=1024, freq_in=(-1), gate_in=(-1), vel_in=(-1),
     sig = sig + (SinOsc.ar(finalFreq * 3) * percEnv * 0.3);
 
     // Main envelope
-    env = EnvGen.kr(Env.adsr(finalAttack, finalDecay, finalSustain, finalRelease), gateSig);
+    env = EnvGen.ar(Env.adsr(finalAttack, finalDecay, finalSustain, finalRelease), gateSig, doneAction: 14);
 
     // Leslie effect (amplitude and pitch modulation)
     lfoRate = 5.5;

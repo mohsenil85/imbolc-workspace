@@ -33,7 +33,7 @@ SynthDef(\imbolc_granular, { |out=1024, freq_in=(-1), gate_in=(-1), vel_in=(-1),
     var grainFreq = finalFreq * (2 ** (TRand.kr(-1, 1, trig) * pitch_rnd));
     var pan = TRand.kr(spread.neg, spread, trig);
     var sig = GrainSin.ar(2, trig, finalGrainSize.lag(lag), grainFreq, pan) * finalAmp * velSig;
-    var env = EnvGen.kr(Env.adsr(finalAttack, finalDecay, finalSustain, finalRelease), gateSig);
+    var env = EnvGen.ar(Env.adsr(finalAttack, finalDecay, finalSustain, finalRelease), gateSig, doneAction: 14);
     Out.ar(out, sig * env);
 }).writeDefFile(dir);
 )

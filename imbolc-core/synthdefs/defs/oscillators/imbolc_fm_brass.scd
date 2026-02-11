@@ -45,7 +45,7 @@ SynthDef(\imbolc_fm_brass, { |out=1024, freq_in=(-1), gate_in=(-1), vel_in=(-1),
     var sig = carrier + carrier2;
 
     // Amp envelope
-    var env = EnvGen.kr(Env.adsr(finalAttack, finalDecay, finalSustain, finalRelease), gateSig);
+    var env = EnvGen.ar(Env.adsr(finalAttack, finalDecay, finalSustain, finalRelease), gateSig, doneAction: 14);
 
     Out.ar(out, (sig * finalAmp * velSig * env * 0.6) ! 2);
 }).writeDefFile(dir);

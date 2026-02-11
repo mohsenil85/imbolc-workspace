@@ -27,7 +27,7 @@ SynthDef(\imbolc_additive, { |out=1024, freq_in=(-1), gate_in=(-1), vel_in=(-1),
         var harmAmp = (n <= harmonics) * (n ** finalRolloff.neg);
         SinOsc.ar(finalFreq * n, 0, harmAmp);
     });
-    var env = EnvGen.kr(Env.adsr(finalAttack, finalDecay, finalSustain, finalRelease), gateSig);
+    var env = EnvGen.ar(Env.adsr(finalAttack, finalDecay, finalSustain, finalRelease), gateSig, doneAction: 14);
     sig = sig * finalAmp * velSig;
     Out.ar(out, (sig * env) ! 2);
 }).writeDefFile(dir);

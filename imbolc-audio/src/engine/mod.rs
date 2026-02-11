@@ -77,6 +77,8 @@ pub struct VoiceChain {
     pub midi_node_id: i32,
     pub source_node: i32,
     pub spawn_time: Instant,
+    /// Envelope release time (seconds) captured at spawn, for anti-click freeing.
+    pub release_secs: f32,
     /// If set, voice has been released: (released_at, release_duration_secs)
     pub release_state: Option<(Instant, f32)>,
     /// Per-voice control bus triple (freq, gate, vel) for pool return
@@ -481,6 +483,7 @@ mod tests {
             midi_node_id: 0,
             source_node: 1234,
             spawn_time: Instant::now(),
+            release_secs: 0.3,
             release_state: None,
             control_buses: (0, 0, 0),
         });
@@ -622,6 +625,7 @@ mod tests {
             midi_node_id: 0,
             source_node: 0,
             spawn_time: Instant::now() - std::time::Duration::from_millis(age_ms),
+            release_secs: 0.3,
             release_state: None,
             control_buses: (0, 0, 0),
         }
@@ -642,6 +646,7 @@ mod tests {
             midi_node_id: 0,
             source_node: 0,
             spawn_time: Instant::now() - std::time::Duration::from_millis(released_ago_ms + 100),
+            release_secs: release_dur,
             release_state: Some((
                 Instant::now() - std::time::Duration::from_millis(released_ago_ms),
                 release_dur,
@@ -790,6 +795,7 @@ mod tests {
             midi_node_id,
             source_node,
             spawn_time: Instant::now(),
+            release_secs: 0.3,
             release_state: None,
             control_buses: buses,
         });

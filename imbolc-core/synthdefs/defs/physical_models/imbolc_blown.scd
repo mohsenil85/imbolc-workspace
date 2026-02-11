@@ -33,7 +33,7 @@ SynthDef(\imbolc_blown, { |out=1024, freq_in=(-1), gate_in=(-1), vel_in=(-1),
     var jetClip = (jet * embLag.linlin(0, 1, 1, 4)).clip2(1);
     var sig = CombL.ar(jetClip, 0.05, finalFreq.reciprocal,
         finalPressure.lag(lag).linlin(0, 1, 0.2, 2.0));
-    var env = EnvGen.kr(Env.adsr(finalAttack, finalDecay, finalSustain, finalRelease), gateSig);
+    var env = EnvGen.ar(Env.adsr(finalAttack, finalDecay, finalSustain, finalRelease), gateSig, doneAction: 14);
     sig = LPF.ar(sig, finalFreq * (2 + (embLag * 3)));
     Out.ar(out, (sig * finalAmp * velSig * env) ! 2);
 }).writeDefFile(dir);

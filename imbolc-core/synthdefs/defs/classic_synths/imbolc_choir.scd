@@ -52,7 +52,7 @@ SynthDef(\imbolc_choir, { |out=1024, freq_in=(-1), gate_in=(-1), vel_in=(-1),
     var sig = (formant1 * 0.6) + (formant2 * 0.4) + (mix * 0.3);
 
     // Slow attack envelope
-    var env = EnvGen.kr(Env.adsr(finalAttack, finalDecay, finalSustain, finalRelease), gateSig);
+    var env = EnvGen.ar(Env.adsr(finalAttack, finalDecay, finalSustain, finalRelease), gateSig, doneAction: 14);
 
     // Subtle chorus
     var chorus = DelayC.ar(sig, 0.05, SinOsc.kr(0.5, 0, 0.003, 0.01));

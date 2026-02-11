@@ -43,7 +43,7 @@ SynthDef(\imbolc_strings, { |out=1024, freq_in=(-1), gate_in=(-1), vel_in=(-1),
     sig = LPF.ar(sig, 5000);
 
     // Slow attack envelope
-    env = EnvGen.kr(Env.adsr(finalAttack, finalDecay, finalSustain, finalRelease), gateSig);
+    env = EnvGen.ar(Env.adsr(finalAttack, finalDecay, finalSustain, finalRelease), gateSig, doneAction: 14);
 
     // Stereo spread
     left = DelayC.ar(sig, 0.02, 0.007);

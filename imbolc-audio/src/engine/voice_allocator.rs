@@ -265,6 +265,7 @@ mod tests {
             midi_node_id: group_id + 1,
             source_node: group_id + 2,
             spawn_time: Instant::now(),
+            release_secs: 0.3,
             release_state: None,
             control_buses: buses,
         }
@@ -279,6 +280,7 @@ mod tests {
             midi_node_id: group_id + 1,
             source_node: group_id + 2,
             spawn_time: Instant::now() - Duration::from_secs(10),
+            release_secs: 0.5,
             release_state: Some((Instant::now() - Duration::from_secs(5), 0.5)),
             control_buses: buses,
         }

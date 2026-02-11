@@ -41,7 +41,7 @@ SynthDef(\imbolc_epiano, { |out=1024, freq_in=(-1), gate_in=(-1), vel_in=(-1),
     var barkSig = SinOsc.ar(finalFreq * 7) * bark.lag(lag) * 0.1 * modEnv;
 
     // Main envelope
-    var env = EnvGen.kr(Env.adsr(finalAttack, finalDecay, finalSustain, finalRelease), gateSig);
+    var env = EnvGen.ar(Env.adsr(finalAttack, finalDecay, finalSustain, finalRelease), gateSig, doneAction: 14);
 
     // Tremolo
     var trem = 1 + (SinOsc.kr(4.5) * tremolo.lag(lag) * 0.1);

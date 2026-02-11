@@ -42,7 +42,7 @@ SynthDef(\imbolc_acid, { |out=1024, freq_in=(-1), gate_in=(-1), vel_in=(-1),
     var sig = RLPF.ar(osc, filt.clip(20, 18000), 1 - finalRes);
 
     // Amp envelope
-    var env = EnvGen.kr(Env.adsr(finalAttack, finalDecay, finalSustain, finalRelease), gateSig);
+    var env = EnvGen.ar(Env.adsr(finalAttack, finalDecay, finalSustain, finalRelease), gateSig, doneAction: 14);
 
     // Accent boost
     var accentAmp = 1 + (accentLevel * 0.5);

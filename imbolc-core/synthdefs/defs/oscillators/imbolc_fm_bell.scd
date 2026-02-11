@@ -46,7 +46,7 @@ SynthDef(\imbolc_fm_bell, { |out=1024, freq_in=(-1), gate_in=(-1), vel_in=(-1),
     var carrier = SinOsc.ar(finalFreq + mod1);
 
     // Amp envelope
-    var env = EnvGen.kr(Env.adsr(finalAttack, finalDecay, finalSustain, finalRelease), gateSig);
+    var env = EnvGen.ar(Env.adsr(finalAttack, finalDecay, finalSustain, finalRelease), gateSig, doneAction: 14);
 
     Out.ar(out, (carrier * finalAmp * velSig * env) ! 2);
 }).writeDefFile(dir);

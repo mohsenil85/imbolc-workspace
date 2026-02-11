@@ -29,7 +29,7 @@ SynthDef(\imbolc_bowed, { |out=1024, freq_in=(-1), gate_in=(-1), vel_in=(-1),
     var exciter = BrownNoise.ar * finalPressure.lag(lag) * gateSig;
     var sig = CombL.ar(exciter, 0.05, finalFreq.reciprocal * (1 - bow_pos.lag(lag)),
         finalPressure.lag(lag).linlin(0, 1, 0.5, 4.0));
-    var env = EnvGen.kr(Env.adsr(finalAttack, finalDecay, finalSustain, finalRelease), gateSig);
+    var env = EnvGen.ar(Env.adsr(finalAttack, finalDecay, finalSustain, finalRelease), gateSig, doneAction: 14);
     sig = LPF.ar(sig, finalFreq * 4);
     Out.ar(out, (sig * finalAmp * velSig * env) ! 2);
 }).writeDefFile(dir);

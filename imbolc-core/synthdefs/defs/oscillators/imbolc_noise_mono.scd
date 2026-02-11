@@ -16,7 +16,7 @@ SynthDef(\imbolc_noise_mono, { |out=1024, freq_in=(-1), gate_in=(-1), vel_in=(-1
     var finalDecay = (decay * (1 + decayMod)).max(0.001);
     var finalSustain = (sustain + sustainMod).clip(0, 1);
     var sig = Select.ar(color, [WhiteNoise.ar, PinkNoise.ar, BrownNoise.ar, Crackle.ar(1.5), Dust.ar(density)]);
-    var env = EnvGen.kr(Env.adsr(finalAttack, finalDecay, finalSustain, finalRelease), gateSig);
+    var env = EnvGen.ar(Env.adsr(finalAttack, finalDecay, finalSustain, finalRelease), gateSig, doneAction: 14);
     Out.ar(out, sig * finalAmp * velSig * env);
 }).writeDefFile(dir);
 )

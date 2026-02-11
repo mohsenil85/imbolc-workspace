@@ -38,7 +38,7 @@ SynthDef(\imbolc_brass_stab, { |out=1024, freq_in=(-1), gate_in=(-1), vel_in=(-1
     sig = RLPF.ar(saws, cutoff.clip(20, 18000), 0.3);
 
     // Amp envelope
-    env = EnvGen.kr(Env.adsr(finalAttack, finalDecay, finalSustain, finalRelease), gateSig);
+    env = EnvGen.ar(Env.adsr(finalAttack, finalDecay, finalSustain, finalRelease), gateSig, doneAction: 14);
 
     Out.ar(out, (sig * finalAmp * velSig * env) ! 2);
 }).writeDefFile(dir);

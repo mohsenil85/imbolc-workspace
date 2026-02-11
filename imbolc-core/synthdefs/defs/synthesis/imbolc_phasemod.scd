@@ -23,7 +23,7 @@ SynthDef(\imbolc_phasemod, { |out=1024, freq_in=(-1), gate_in=(-1), vel_in=(-1),
     var finalIndex = index * (1 + indexMod);
     var modulator = SinOsc.ar(finalFreq * ratio) * finalIndex;
     var sig = SinOsc.ar(finalFreq, modulator) * finalAmp * velSig;
-    var env = EnvGen.kr(Env.adsr(finalAttack, finalDecay, finalSustain, finalRelease), gateSig);
+    var env = EnvGen.ar(Env.adsr(finalAttack, finalDecay, finalSustain, finalRelease), gateSig, doneAction: 14);
     Out.ar(out, (sig * env) ! 2);
 }).writeDefFile(dir);
 )

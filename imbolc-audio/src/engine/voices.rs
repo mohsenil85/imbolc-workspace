@@ -253,6 +253,7 @@ impl AudioEngine {
             midi_node_id,
             source_node: source_node_id,
             spawn_time: Instant::now(),
+            release_secs: instrument.modulation.amp_envelope.release.max(MIN_ONSET_SECS),
             release_state: None,
             control_buses: (voice_freq_bus, voice_gate_bus, voice_vel_bus),
         });
@@ -507,6 +508,7 @@ impl AudioEngine {
             midi_node_id,
             source_node: sampler_node_id,
             spawn_time: Instant::now(),
+            release_secs: instrument.modulation.amp_envelope.release.max(MIN_ONSET_SECS),
             release_state: None,
             control_buses: (voice_freq_bus, voice_gate_bus, voice_vel_bus),
         });
@@ -629,20 +631,22 @@ impl AudioEngine {
         voice: &VoiceChain,
         offset_secs: f64,
     ) -> Result<(), String> {
-        if voice.release_state.is_some() {
-            // Already releasing -- use delayed free to avoid cutting the release tail
-            // (the scheduled /n_free may not have executed yet if voice is being stolen)
+        if let Some((released_at, release_dur)) = voice.release_state {
+            // Already releasing — compute remaining release time so we don't cut the tail
+            let elapsed = Instant::now().duration_since(released_at).as_secs_f64();
+            let remaining = (release_dur as f64 - elapsed).max(ANTI_CLICK_FADE_SECS);
             backend
                 .send_bundle(
                     vec![BackendMessage {
                         addr: "/n_free".to_string(),
                         args: vec![RawArg::Int(voice.group_id)],
                     }],
-                    offset_secs + ANTI_CLICK_FADE_SECS,
+                    offset_secs + remaining,
                 )
                 .map_err(|e| e.to_string())?;
         } else {
-            // Active voice: send gate=0 at the offset, then free after fade
+            // Active voice: send gate=0 at the offset, then free after envelope release
+            let fade = (voice.release_secs as f64).max(ANTI_CLICK_FADE_SECS);
             backend
                 .set_params_bundled(voice.midi_node_id, &[("gate", 0.0)], offset_secs)
                 .map_err(|e| e.to_string())?;
@@ -652,7 +656,7 @@ impl AudioEngine {
                         addr: "/n_free".to_string(),
                         args: vec![RawArg::Int(voice.group_id)],
                     }],
-                    offset_secs + ANTI_CLICK_FADE_SECS,
+                    offset_secs + fade,
                 )
                 .map_err(|e| e.to_string())?;
         }

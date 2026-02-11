@@ -27,7 +27,7 @@ SynthDef(\imbolc_supersaw, { |out=1024, freq_in=(-1), gate_in=(-1), vel_in=(-1),
     });
     var spread = Splay.ar(detuned);
     var sig = ((center * (1 - mix)) + (spread * mix)) * finalAmp * velSig;
-    var env = EnvGen.kr(Env.adsr(finalAttack, finalDecay, finalSustain, finalRelease), gateSig);
+    var env = EnvGen.ar(Env.adsr(finalAttack, finalDecay, finalSustain, finalRelease), gateSig, doneAction: 14);
     Out.ar(out, sig * env);
 }).writeDefFile(dir);
 )

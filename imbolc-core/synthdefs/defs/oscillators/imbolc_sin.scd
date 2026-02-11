@@ -20,7 +20,7 @@ SynthDef(\imbolc_sin, { |out=1024, freq_in=(-1), gate_in=(-1), vel_in=(-1), freq
     var finalDecay = (decay * (1 + decayMod)).max(0.001);
     var finalSustain = (sustain + sustainMod).clip(0, 1);
     var sig = SinOsc.ar(finalFreq) * finalAmp * velSig;
-    var env = EnvGen.kr(Env.adsr(finalAttack, finalDecay, finalSustain, finalRelease), gateSig);
+    var env = EnvGen.ar(Env.adsr(finalAttack, finalDecay, finalSustain, finalRelease), gateSig, doneAction: 14);
     Out.ar(out, (sig * env) ! 2);
 }).writeDefFile(dir);
 )
