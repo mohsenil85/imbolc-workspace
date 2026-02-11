@@ -135,42 +135,11 @@ impl AppRuntime {
             };
             let routed_action = pane_action.route();
 
-            // Process layer management actions (only UI actions manage layers)
-            if let RoutedAction::Ui(ref ui) = routed_action {
-                match ui {
-                    UiAction::PushLayer(name) => {
-                        self.layer_stack.push(name);
-                    }
-                    UiAction::PopLayer(name) => {
-                        self.layer_stack.pop(name);
-                    }
-                    UiAction::ExitPerformanceMode => {
-                        self.layer_stack.pop("piano_mode");
-                        self.layer_stack.pop("pad_mode");
-                        self.panes.active_mut().deactivate_performance();
-                    }
-                    UiAction::None | UiAction::Quit | UiAction::QuitIntent | UiAction::Nav(_) | UiAction::SaveAndQuit => {
-                    }
-                }
-            }
+            // Process layer management actions
+            process_layer_actions(&pane_action, &mut self.layer_stack, &mut self.panes);
 
             // Auto-pop text_edit layer when pane is no longer editing
-            if self.layer_stack.has_layer("text_edit") {
-                let still_editing = match self.panes.active().id() {
-                    "instrument_edit" => self
-                        .panes
-                        .get_pane_mut::<InstrumentEditPane>("instrument_edit")
-                        .is_some_and(|p| p.is_editing()),
-                    "frame_edit" => self
-                        .panes
-                        .get_pane_mut::<FrameEditPane>("frame_edit")
-                        .is_some_and(|p| p.is_editing()),
-                    _ => false,
-                };
-                if !still_editing {
-                    self.layer_stack.pop("text_edit");
-                }
-            }
+            process_text_edit_auto_pop(&mut self.panes, &mut self.layer_stack);
 
             // Detect SaveAs cancel during quit flow
             if self.quit_after_save
@@ -197,41 +166,41 @@ impl AppRuntime {
                 }
             }
 
-            // Process navigation
-            self.panes
-                .process_nav(&pane_action, self.dispatcher.state());
+            // Process navigation and sync pane layer
+            process_nav_and_sync(
+                &pane_action,
+                &mut self.panes,
+                &mut self.layer_stack,
+                self.dispatcher.state(),
+            );
 
-            // Sync pane layer after navigation
-            if matches!(&routed_action, RoutedAction::Ui(UiAction::Nav(_))) {
-                sync_pane_layer(&mut self.panes, &mut self.layer_stack);
-
-                // Auto-exit clip edit when navigating away from piano roll
-                if self
+            // Auto-exit clip edit when navigating away from piano roll (standalone-only)
+            if matches!(&routed_action, RoutedAction::Ui(UiAction::Nav(_)))
+                && self
                     .dispatcher
                     .state()
                     .session
                     .arrangement
                     .editing_clip
                     .is_some()
-                    && self.panes.active().id() != "piano_roll"
-                {
-                    let mut exit_result = self.dispatcher.dispatch_domain(
-                        &action::DomainAction::Arrangement(action::ArrangementAction::ExitClipEdit),
-                        &mut self.audio,
-                    );
-                    if exit_result.needs_full_sync {
-                        self.needs_full_sync = true;
-                    }
-                    self.pending_audio_effects
-                        .extend(std::mem::take(&mut exit_result.audio_effects));
-                    apply_dispatch_result(
-                        exit_result,
-                        &mut self.dispatcher,
-                        &mut self.panes,
-                        &mut self.app_frame,
-                        &mut self.audio,
-                    );
+                && self.panes.active().id() != "piano_roll"
+            {
+                let mut exit_result = self.dispatcher.dispatch_domain(
+                    &action::DomainAction::Arrangement(action::ArrangementAction::ExitClipEdit),
+                    &mut self.audio,
+                );
+                if exit_result.needs_full_sync {
+                    self.needs_full_sync = true;
                 }
+                self.pending_audio_effects
+                    .extend(std::mem::take(&mut exit_result.audio_effects));
+                apply_dispatch_result(
+                    exit_result,
+                    &mut self.dispatcher,
+                    &mut self.panes,
+                    &mut self.app_frame,
+                    &mut self.audio,
+                );
             }
 
             // Auto-pop command_palette layer and re-dispatch confirmed command
@@ -310,18 +279,11 @@ impl AppRuntime {
             }
 
             // Auto-pop pane_switcher layer and switch to selected pane
-            if self.layer_stack.has_layer("pane_switcher")
-                && self.panes.active().id() != "pane_switcher"
-            {
-                self.layer_stack.pop("pane_switcher");
-                if let Some(switcher) = self.panes.get_pane_mut::<PaneSwitcherPane>("pane_switcher")
-                {
-                    if let Some(pane_id) = switcher.take_pane() {
-                        self.panes.switch_to(pane_id, self.dispatcher.state());
-                        sync_pane_layer(&mut self.panes, &mut self.layer_stack);
-                    }
-                }
-            }
+            process_pane_switcher_auto_pop(
+                &mut self.panes,
+                &mut self.layer_stack,
+                self.dispatcher.state(),
+            );
 
             // Intercept MIDI port actions that need MidiInputManager
             if let Action::Midi(action::MidiAction::ConnectPort(port_idx)) = &pane_action {

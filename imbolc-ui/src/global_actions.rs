@@ -5,15 +5,15 @@ use crate::action::{
 use crate::audio::AudioHandle;
 use crate::dispatch::LocalDispatcher;
 use crate::panes::{
-    AutomationPane, CommandPalettePane, ConfirmPane, DocsPane, FileBrowserPane, HelpPane,
-    InstrumentEditPane, PaneSwitcherPane, PendingAction, PianoRollPane, SaveAsPane, SequencerPane,
-    ServerPane, VstParamPane,
+    AutomationPane, CommandPalettePane, ConfirmPane, DocsPane, FileBrowserPane, FrameEditPane,
+    HelpPane, InstrumentEditPane, PaneSwitcherPane, PendingAction, PianoRollPane, SaveAsPane,
+    SequencerPane, ServerPane, VstParamPane,
 };
 use crate::state::{AppState, ClipboardContents, MixerSelection};
 use crate::ui::action_id::{ActionId, GlobalActionId, PaneId};
 use crate::ui::{
-    self, DispatchResult, Frame, LayerStack, NavIntent, PaneManager, SessionAction, StatusEvent,
-    ToggleResult, ViewState,
+    self, Action, DispatchResult, Frame, LayerStack, NavIntent, PaneManager, RatatuiBackend, Rect,
+    RenderBuf, SessionAction, StatusEvent, ToggleResult, ViewState,
 };
 
 /// Two-digit instrument selection state machine
@@ -165,6 +165,94 @@ pub(crate) fn sync_pane_layer(panes: &mut PaneManager, layer_stack: &mut LayerSt
             panes.active_mut().deactivate_performance();
         }
     }
+}
+
+/// Process layer management from an action. Called by both standalone and network client.
+pub(crate) fn process_layer_actions(
+    action: &Action,
+    layer_stack: &mut LayerStack,
+    panes: &mut PaneManager,
+) {
+    match action {
+        Action::PushLayer(name) => layer_stack.push(name),
+        Action::PopLayer(name) => layer_stack.pop(name),
+        Action::ExitPerformanceMode => {
+            layer_stack.pop("piano_mode");
+            layer_stack.pop("pad_mode");
+            panes.active_mut().deactivate_performance();
+        }
+        _ => {}
+    }
+}
+
+/// Auto-pop text_edit layer when pane is no longer editing.
+pub(crate) fn process_text_edit_auto_pop(
+    panes: &mut PaneManager,
+    layer_stack: &mut LayerStack,
+) {
+    if layer_stack.has_layer("text_edit") {
+        let still_editing = match panes.active().id() {
+            "instrument_edit" => panes
+                .get_pane_mut::<InstrumentEditPane>("instrument_edit")
+                .is_some_and(|p| p.is_editing()),
+            "frame_edit" => panes
+                .get_pane_mut::<FrameEditPane>("frame_edit")
+                .is_some_and(|p| p.is_editing()),
+            _ => false,
+        };
+        if !still_editing {
+            layer_stack.pop("text_edit");
+        }
+    }
+}
+
+/// Process navigation from an action and sync the layer stack.
+pub(crate) fn process_nav_and_sync(
+    action: &Action,
+    panes: &mut PaneManager,
+    layer_stack: &mut LayerStack,
+    state: &AppState,
+) {
+    panes.process_nav(action, state);
+    if matches!(action, Action::Nav(_)) {
+        sync_pane_layer(panes, layer_stack);
+    }
+}
+
+/// Auto-pop pane_switcher layer and switch to selected pane.
+pub(crate) fn process_pane_switcher_auto_pop(
+    panes: &mut PaneManager,
+    layer_stack: &mut LayerStack,
+    state: &AppState,
+) {
+    if layer_stack.has_layer("pane_switcher") && panes.active().id() != "pane_switcher" {
+        layer_stack.pop("pane_switcher");
+        if let Some(switcher) = panes.get_pane_mut::<PaneSwitcherPane>("pane_switcher") {
+            if let Some(pane_id) = switcher.take_pane() {
+                panes.switch_to(pane_id, state);
+                sync_pane_layer(panes, layer_stack);
+            }
+        }
+    }
+}
+
+/// Render a single frame (header + active pane). Used by both standalone and network client.
+pub(crate) fn render_frame(
+    backend: &mut RatatuiBackend,
+    app_frame: &Frame,
+    panes: &mut PaneManager,
+    state: &AppState,
+    last_area: &mut Rect,
+) -> std::io::Result<()> {
+    let mut frame = backend.begin_frame()?;
+    let area = frame.area();
+    *last_area = area;
+    let mut rbuf = RenderBuf::new(frame.buffer_mut());
+    app_frame.render_buf(area, &mut rbuf, state);
+    if ui::Frame::is_size_ok(area) {
+        panes.render(area, &mut rbuf, state);
+    }
+    backend.end_frame(frame)
 }
 
 #[allow(clippy::too_many_arguments)]

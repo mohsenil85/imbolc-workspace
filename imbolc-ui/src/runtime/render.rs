@@ -4,7 +4,6 @@ use std::time::Instant;
 
 use super::AppRuntime;
 use crate::panes::WaveformPane;
-use crate::ui;
 
 impl AppRuntime {
     /// Render at ~60fps if needed.
@@ -121,16 +120,13 @@ impl AppRuntime {
         }
 
         // Render
-        let mut frame = backend.begin_frame()?;
-        let area = frame.area();
-        self.last_area = area;
-        let mut rbuf = ui::RenderBuf::new(frame.buffer_mut());
-        self.app_frame
-            .render_buf(area, &mut rbuf, self.dispatcher.state());
-        if ui::Frame::is_size_ok(area) {
-            self.panes.render(area, &mut rbuf, self.dispatcher.state());
-        }
-        backend.end_frame(frame)?;
+        crate::global_actions::render_frame(
+            backend,
+            &self.app_frame,
+            &mut self.panes,
+            self.dispatcher.state(),
+            &mut self.last_area,
+        )?;
 
         self.render_needed = false;
 

@@ -12,6 +12,10 @@ use crate::audio::AudioHandle;
 use crate::action::{AudioEffect, IoFeedback};
 use crate::config;
 use crate::dispatch::LocalDispatcher;
+use crate::global_actions::{
+    process_layer_actions, process_nav_and_sync, process_pane_switcher_auto_pop,
+    process_text_edit_auto_pop, render_frame,
+};
 use crate::setup;
 use crate::state::{self, AppState};
 use crate::ui::{
@@ -324,13 +328,7 @@ pub fn run_client(addr: &str, own_instruments: Vec<u32>) -> std::io::Result<()> 
                 let now_render = Instant::now();
                 if now_render.duration_since(last_render_time).as_millis() >= 16 {
                     last_render_time = now_render;
-                    let mut frame = backend.begin_frame()?;
-                    let area = frame.area();
-                    last_area = area;
-                    let mut rbuf = crate::ui::RenderBuf::new(frame.buffer_mut());
-                    app_frame.render_buf(area, &mut rbuf, &local_state);
-                    panes.render(area, &mut rbuf, &local_state);
-                    backend.end_frame(frame)?;
+                    render_frame(&mut backend, &app_frame, &mut panes, &local_state, &mut last_area)?;
                 }
 
                 std::thread::sleep(Duration::from_millis(delay_ms));
@@ -400,23 +398,17 @@ pub fn run_client(addr: &str, own_instruments: Vec<u32>) -> std::io::Result<()> 
                 }
             };
 
-            // Handle layer management locally
-            match &pane_action {
-                Action::PushLayer(name) => layer_stack.push(name),
-                Action::PopLayer(name) => layer_stack.pop(name),
-                Action::ExitPerformanceMode => {
-                    layer_stack.pop("piano_mode");
-                    layer_stack.pop("pad_mode");
-                    panes.active_mut().deactivate_performance();
-                }
-                _ => {}
-            }
+            // Layer management
+            process_layer_actions(&pane_action, &mut layer_stack, &mut panes);
 
-            // Navigation handled locally
-            panes.process_nav(&pane_action, &local_state);
-            if matches!(&pane_action, Action::Nav(_)) {
-                layer_stack.set_pane_layer(panes.active().id());
-            }
+            // Auto-pop text_edit layer when pane is no longer editing
+            process_text_edit_auto_pop(&mut panes, &mut layer_stack);
+
+            // Navigation and pane layer sync
+            process_nav_and_sync(&pane_action, &mut panes, &mut layer_stack, &local_state);
+
+            // Auto-pop pane_switcher layer and switch to selected pane
+            process_pane_switcher_auto_pop(&mut panes, &mut layer_stack, &local_state);
 
             // Convert to NetworkAction and send to server
             if let Some(net_action) = action_to_network_action(&pane_action) {
@@ -437,13 +429,7 @@ pub fn run_client(addr: &str, own_instruments: Vec<u32>) -> std::io::Result<()> 
         if now_render.duration_since(last_render_time).as_millis() >= 16 {
             last_render_time = now_render;
 
-            let mut frame = backend.begin_frame()?;
-            let area = frame.area();
-            last_area = area;
-            let mut rbuf = crate::ui::RenderBuf::new(frame.buffer_mut());
-            app_frame.render_buf(area, &mut rbuf, &local_state);
-            panes.render(area, &mut rbuf, &local_state);
-            backend.end_frame(frame)?;
+            render_frame(&mut backend, &app_frame, &mut panes, &local_state, &mut last_area)?;
         }
     }
 
