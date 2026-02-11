@@ -4,43 +4,43 @@ use crate::state::AppState;
 use crate::ui::action_id::{ActionId, ModeActionId};
 use crate::ui::filterable_list::{FilterableItem, FilterableList};
 use crate::ui::layout_helpers::center_rect;
-use crate::ui::{Rect, RenderBuf, Action, Color, InputEvent, KeyCode, Keymap, NavAction, Pane, Style};
+use crate::ui::{Rect, RenderBuf, Action, Color, InputEvent, KeyCode, Keymap, NavAction, Pane, PaneId, Style};
 
 struct PaneEntry {
-    id: &'static str,
+    id: PaneId,
     name: &'static str,
     shortcut: &'static str,
 }
 
 impl FilterableItem for PaneEntry {
-    fn primary_text(&self) -> &str { self.id }
+    fn primary_text(&self) -> &str { self.id.as_str() }
     fn secondary_text(&self) -> &str { self.name }
     fn completion_text(&self) -> String { self.name.to_lowercase() }
 }
 
 /// Available panes for the switcher
-const PANE_ENTRIES: &[(&str, &str, &str)] = &[
-    ("instrument_edit", "Instrument Editor", "F1"),
-    ("piano_roll", "Piano Roll", "F2"),
-    ("sequencer", "Drum Sequencer", "F2"),
-    ("waveform", "Waveform Display", "F2"),
-    ("track", "Track View", "F3"),
-    ("mixer", "Mixer", "F4"),
-    ("server", "Audio Server", "F5"),
-    ("automation", "Automation", "F7"),
-    ("eq", "Parametric EQ", "F8"),
-    ("instrument", "Instrument List", "Ctrl+g"),
-    ("sample_chopper", "Sample Chopper", ""),
-    ("frame_edit", "Frame Settings", "Ctrl+f"),
-    ("midi_settings", "MIDI Settings", "Ctrl+m"),
-    ("vst_params", "VST Parameters", ""),
-    ("file_browser", "File Browser", ""),
+const PANE_ENTRIES: &[(PaneId, &str, &str)] = &[
+    (PaneId::InstrumentEdit, "Instrument Editor", "F1"),
+    (PaneId::PianoRoll, "Piano Roll", "F2"),
+    (PaneId::Sequencer, "Drum Sequencer", "F2"),
+    (PaneId::Waveform, "Waveform Display", "F2"),
+    (PaneId::Track, "Track View", "F3"),
+    (PaneId::Mixer, "Mixer", "F4"),
+    (PaneId::Server, "Audio Server", "F5"),
+    (PaneId::Automation, "Automation", "F7"),
+    (PaneId::Eq, "Parametric EQ", "F8"),
+    (PaneId::Instrument, "Instrument List", "Ctrl+g"),
+    (PaneId::SampleChopper, "Sample Chopper", ""),
+    (PaneId::FrameEdit, "Frame Settings", "Ctrl+f"),
+    (PaneId::MidiSettings, "MIDI Settings", "Ctrl+m"),
+    (PaneId::VstParams, "VST Parameters", ""),
+    (PaneId::FileBrowser, "File Browser", ""),
 ];
 
 pub struct PaneSwitcherPane {
     keymap: Keymap,
     list: FilterableList<PaneEntry>,
-    pending_pane: Option<&'static str>,
+    pending_pane: Option<PaneId>,
 }
 
 impl PaneSwitcherPane {
@@ -69,7 +69,7 @@ impl PaneSwitcherPane {
     }
 
     /// Called by main.rs after pop to get the selected pane.
-    pub fn take_pane(&mut self) -> Option<&'static str> {
+    pub fn take_pane(&mut self) -> Option<PaneId> {
         self.pending_pane.take()
     }
 }

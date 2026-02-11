@@ -3,13 +3,13 @@ use std::any::Any;
 use crate::state::AppState;
 use crate::ui::action_id::{ActionId, HomeActionId};
 use crate::ui::layout_helpers::center_rect;
-use crate::ui::{Rect, RenderBuf, Action, Color, InputEvent, Keymap, MouseEvent, MouseEventKind, MouseButton, NavAction, Pane, Style};
+use crate::ui::{Rect, RenderBuf, Action, Color, InputEvent, Keymap, MouseEvent, MouseEventKind, MouseButton, NavAction, Pane, PaneId, Style};
 
 /// Menu item for the home screen
 struct MenuItem {
     label: &'static str,
     description: &'static str,
-    pane_id: &'static str,
+    pane_id: PaneId,
 }
 
 pub struct HomePane {
@@ -24,17 +24,17 @@ impl HomePane {
             MenuItem {
                 label: "Instruments",
                 description: "Instrument list - add and edit synths",
-                pane_id: "instrument",
+                pane_id: PaneId::Instrument,
             },
             MenuItem {
                 label: "Mixer",
                 description: "Mixing console - adjust levels and routing",
-                pane_id: "mixer",
+                pane_id: PaneId::Mixer,
             },
             MenuItem {
                 label: "Server",
                 description: "Audio server - start/stop and manage SuperCollider",
-                pane_id: "server",
+                pane_id: PaneId::Server,
             },
         ];
 

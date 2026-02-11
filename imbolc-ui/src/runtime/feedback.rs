@@ -60,7 +60,8 @@ impl AppRuntime {
                             self.app_frame.set_project_name(name);
 
                             if self.dispatcher.state().instruments.instruments.is_empty() {
-                                self.panes.switch_to("add", self.dispatcher.state());
+                                self.panes
+                                    .switch_to(action::PaneId::Add, self.dispatcher.state());
                             }
 
                             self.pending_audio_effects.extend(AudioEffect::all());

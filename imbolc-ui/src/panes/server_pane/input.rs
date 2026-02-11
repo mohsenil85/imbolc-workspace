@@ -5,21 +5,25 @@ use crate::ui::{Action, InputEvent, KeyCode, ServerAction};
 
 impl ServerPane {
     pub(super) fn handle_action_impl(&mut self, action: ActionId, _event: &InputEvent, _state: &AppState) -> Action {
+        let ActionId::Server(action) = action else {
+            return Action::None;
+        };
+
         match action {
-            ActionId::Server(ServerActionId::Start) => Action::Server(ServerAction::Start {
+            ServerActionId::Start => Action::Server(ServerAction::Start {
                 input_device: self.selected_input_device(),
                 output_device: self.selected_output_device(),
                 buffer_size: self.selected_buffer_size().as_samples(),
                 sample_rate: self.sample_rate(),
             }),
-            ActionId::Server(ServerActionId::Stop) => Action::Server(ServerAction::Stop),
-            ActionId::Server(ServerActionId::Connect) => Action::Server(ServerAction::Connect),
-            ActionId::Server(ServerActionId::Disconnect) => Action::Server(ServerAction::Disconnect),
-            ActionId::Server(ServerActionId::Compile) => Action::Server(ServerAction::CompileSynthDefs),
-            ActionId::Server(ServerActionId::CompileVst) => Action::Server(ServerAction::CompileVstSynthDefs),
-            ActionId::Server(ServerActionId::LoadSynthDefs) => Action::Server(ServerAction::LoadSynthDefs),
-            ActionId::Server(ServerActionId::RecordMaster) => Action::Server(ServerAction::RecordMaster),
-            ActionId::Server(ServerActionId::RefreshDevices) => {
+            ServerActionId::Stop => Action::Server(ServerAction::Stop),
+            ServerActionId::Connect => Action::Server(ServerAction::Connect),
+            ServerActionId::Disconnect => Action::Server(ServerAction::Disconnect),
+            ServerActionId::Compile => Action::Server(ServerAction::CompileSynthDefs),
+            ServerActionId::CompileVst => Action::Server(ServerAction::CompileVstSynthDefs),
+            ServerActionId::LoadSynthDefs => Action::Server(ServerAction::LoadSynthDefs),
+            ServerActionId::RecordMaster => Action::Server(ServerAction::RecordMaster),
+            ServerActionId::RefreshDevices => {
                 self.refresh_devices();
                 self.refresh_diagnostics();
                 self.refresh_log();
@@ -34,11 +38,10 @@ impl ServerPane {
                     Action::None
                 }
             }
-            ActionId::Server(ServerActionId::NextSection) => {
+            ServerActionId::NextSection => {
                 self.cycle_focus();
                 Action::None
             }
-            _ => Action::None,
         }
     }
 

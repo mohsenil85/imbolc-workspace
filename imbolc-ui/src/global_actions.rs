@@ -1,6 +1,6 @@
 use crate::action::{
     AudioEffect, AutomationAction, ClickAction, DomainAction, MixerAction, PianoRollAction,
-    SequencerAction,
+    PaneId as NavPaneId, SequencerAction,
 };
 use crate::audio::AudioHandle;
 use crate::dispatch::LocalDispatcher;
@@ -10,7 +10,7 @@ use crate::panes::{
     SequencerPane, ServerPane, VstParamPane,
 };
 use crate::state::{AppState, ClipboardContents, MixerSelection};
-use crate::ui::action_id::{ActionId, GlobalActionId, PaneId};
+use crate::ui::action_id::{ActionId, GlobalActionId, PaneId as ShortcutPaneId};
 use crate::ui::{
     self, Action, DispatchResult, Frame, LayerStack, NavIntent, PaneManager, RatatuiBackend, Rect,
     RenderBuf, SessionAction, StatusEvent, ToggleResult, ViewState,
@@ -99,13 +99,13 @@ pub(crate) fn sync_piano_roll_to_selection(
             // Re-route if currently on a F2-family pane
             if active == "piano_roll" || active == "sequencer" || active == "waveform" {
                 let target = if is_kit {
-                    "sequencer"
+                    NavPaneId::Sequencer
                 } else if is_audio_in || is_bus_in {
-                    "waveform"
+                    NavPaneId::Waveform
                 } else {
-                    "piano_roll"
+                    NavPaneId::PianoRoll
                 };
-                if active != target {
+                if active != target.as_str() {
                     panes.switch_to(target, dispatcher.state());
                 }
             }
@@ -289,11 +289,13 @@ pub(crate) fn handle_global_action(
             if let Some(edit_pane) = panes.get_pane_mut::<InstrumentEditPane>("instrument_edit") {
                 edit_pane.set_tab_index(view.edit_tab);
             }
-            panes.switch_to(&view.pane_id, dispatcher.state());
+            if let Some(pane_id) = NavPaneId::from_str(&view.pane_id) {
+                panes.switch_to(pane_id, dispatcher.state());
+            }
         };
 
     // Helper for pane switching with view history
-    let switch_to_pane = |target: &str,
+    let switch_to_pane = |target: NavPaneId,
                           panes: &mut PaneManager,
                           dispatcher: &mut LocalDispatcher,
                           audio: &mut AudioHandle,
@@ -317,7 +319,7 @@ pub(crate) fn handle_global_action(
         panes.switch_to(target, dispatcher.state());
         sync_pane_layer(panes, layer_stack);
         // Sync mixer highlight to global instrument selection on entry
-        if target == "mixer" {
+        if target == NavPaneId::Mixer {
             if let Some(selected_idx) = dispatcher.state().instruments.selected {
                 dispatch_side_effect_free(
                     dispatcher,
@@ -365,7 +367,7 @@ pub(crate) fn handle_global_action(
                     if let Some(sa) = panes.get_pane_mut::<SaveAsPane>("save_as") {
                         sa.reset(&default_name);
                     }
-                    panes.push_to("save_as", dispatcher.state());
+                    panes.push_to(NavPaneId::SaveAs, dispatcher.state());
                     sync_pane_layer(panes, layer_stack);
                 } else {
                     let mut r = dispatcher.dispatch_domain(&DomainAction::Session(SessionAction::Save), audio);
@@ -384,7 +386,7 @@ pub(crate) fn handle_global_action(
                             PendingAction::LoadDefault,
                         );
                     }
-                    panes.push_to("confirm", dispatcher.state());
+                    panes.push_to(NavPaneId::Confirm, dispatcher.state());
                     sync_pane_layer(panes, layer_stack);
                 } else {
                     let mut r = dispatcher.dispatch_domain(&DomainAction::Session(SessionAction::Load), audio);
@@ -408,11 +410,11 @@ pub(crate) fn handle_global_action(
                 if let Some(sa) = panes.get_pane_mut::<SaveAsPane>("save_as") {
                     sa.reset(&default_name);
                 }
-                panes.push_to("save_as", dispatcher.state());
+                panes.push_to(NavPaneId::SaveAs, dispatcher.state());
                 sync_pane_layer(panes, layer_stack);
             }
             GlobalActionId::OpenProjectBrowser => {
-                panes.push_to("project_browser", dispatcher.state());
+                panes.push_to(NavPaneId::ProjectBrowser, dispatcher.state());
                 sync_pane_layer(panes, layer_stack);
             }
             GlobalActionId::MasterMute => {
@@ -461,17 +463,17 @@ pub(crate) fn handle_global_action(
             GlobalActionId::SelectAll => {
                 select_all_in_active_pane(dispatcher.state_mut(), panes);
             }
-            GlobalActionId::SwitchPane(PaneId::InstrumentEdit) => {
+            GlobalActionId::SwitchPane(ShortcutPaneId::InstrumentEdit) => {
                 let target = if dispatcher.state().instruments.instruments.is_empty() {
-                    "add"
+                    NavPaneId::Add
                 } else {
-                    "instrument_edit"
+                    NavPaneId::InstrumentEdit
                 };
                 switch_to_pane(target, panes, dispatcher, audio, app_frame, layer_stack);
             }
-            GlobalActionId::SwitchPane(PaneId::InstrumentList) => {
+            GlobalActionId::SwitchPane(ShortcutPaneId::InstrumentList) => {
                 switch_to_pane(
-                    "instrument",
+                    NavPaneId::Instrument,
                     panes,
                     dispatcher,
                     audio,
@@ -479,33 +481,33 @@ pub(crate) fn handle_global_action(
                     layer_stack,
                 );
             }
-            GlobalActionId::SwitchPane(PaneId::PianoRollOrSequencer) => {
+            GlobalActionId::SwitchPane(ShortcutPaneId::PianoRollOrSequencer) => {
                 let target =
                     if let Some(inst) = dispatcher.state().instruments.selected_instrument() {
                         if inst.source.is_kit() {
-                            "sequencer"
+                            NavPaneId::Sequencer
                         } else if inst.source.is_audio_input() || inst.source.is_bus_in() {
-                            "waveform"
+                            NavPaneId::Waveform
                         } else {
-                            "piano_roll"
+                            NavPaneId::PianoRoll
                         }
                     } else {
-                        "piano_roll"
+                        NavPaneId::PianoRoll
                     };
                 switch_to_pane(target, panes, dispatcher, audio, app_frame, layer_stack);
             }
-            GlobalActionId::SwitchPane(PaneId::Track) => {
-                switch_to_pane("track", panes, dispatcher, audio, app_frame, layer_stack);
+            GlobalActionId::SwitchPane(ShortcutPaneId::Track) => {
+                switch_to_pane(NavPaneId::Track, panes, dispatcher, audio, app_frame, layer_stack);
             }
-            GlobalActionId::SwitchPane(PaneId::Mixer) => {
-                switch_to_pane("mixer", panes, dispatcher, audio, app_frame, layer_stack);
+            GlobalActionId::SwitchPane(ShortcutPaneId::Mixer) => {
+                switch_to_pane(NavPaneId::Mixer, panes, dispatcher, audio, app_frame, layer_stack);
             }
-            GlobalActionId::SwitchPane(PaneId::Server) => {
-                switch_to_pane("server", panes, dispatcher, audio, app_frame, layer_stack);
+            GlobalActionId::SwitchPane(ShortcutPaneId::Server) => {
+                switch_to_pane(NavPaneId::Server, panes, dispatcher, audio, app_frame, layer_stack);
             }
-            GlobalActionId::SwitchPane(PaneId::Automation) => {
+            GlobalActionId::SwitchPane(ShortcutPaneId::Automation) => {
                 switch_to_pane(
-                    "automation",
+                    NavPaneId::Automation,
                     panes,
                     dispatcher,
                     audio,
@@ -513,12 +515,12 @@ pub(crate) fn handle_global_action(
                     layer_stack,
                 );
             }
-            GlobalActionId::SwitchPane(PaneId::Eq) => {
-                switch_to_pane("eq", panes, dispatcher, audio, app_frame, layer_stack);
+            GlobalActionId::SwitchPane(ShortcutPaneId::Eq) => {
+                switch_to_pane(NavPaneId::Eq, panes, dispatcher, audio, app_frame, layer_stack);
             }
-            GlobalActionId::SwitchPane(PaneId::MidiSettings) => {
+            GlobalActionId::SwitchPane(ShortcutPaneId::MidiSettings) => {
                 switch_to_pane(
-                    "midi_settings",
+                    NavPaneId::MidiSettings,
                     panes,
                     dispatcher,
                     audio,
@@ -526,17 +528,17 @@ pub(crate) fn handle_global_action(
                     layer_stack,
                 );
             }
-            GlobalActionId::SwitchPane(PaneId::Groove) => {
-                switch_to_pane("groove", panes, dispatcher, audio, app_frame, layer_stack);
+            GlobalActionId::SwitchPane(ShortcutPaneId::Groove) => {
+                switch_to_pane(NavPaneId::Groove, panes, dispatcher, audio, app_frame, layer_stack);
             }
-            GlobalActionId::SwitchPane(PaneId::Tuner) => {
-                switch_to_pane("tuner", panes, dispatcher, audio, app_frame, layer_stack);
+            GlobalActionId::SwitchPane(ShortcutPaneId::Tuner) => {
+                switch_to_pane(NavPaneId::Tuner, panes, dispatcher, audio, app_frame, layer_stack);
             }
-            GlobalActionId::SwitchPane(PaneId::FrameEdit) => {
+            GlobalActionId::SwitchPane(ShortcutPaneId::FrameEdit) => {
                 if panes.active().id() == "frame_edit" {
                     panes.pop(dispatcher.state());
                 } else {
-                    panes.push_to("frame_edit", dispatcher.state());
+                    panes.push_to(NavPaneId::FrameEdit, dispatcher.state());
                 }
             }
             GlobalActionId::NavBack => {
@@ -608,7 +610,7 @@ pub(crate) fn handle_global_action(
                     if let Some(help) = panes.get_pane_mut::<HelpPane>("help") {
                         help.set_context(current_id, title, &current_keymap);
                     }
-                    panes.push_to("help", dispatcher.state());
+                    panes.push_to(NavPaneId::Help, dispatcher.state());
                 }
             }
             GlobalActionId::OpenDocs => {
@@ -621,7 +623,7 @@ pub(crate) fn handle_global_action(
                         docs.open_browser();
                     }
                 }
-                panes.push_to("docs", dispatcher.state());
+                panes.push_to(NavPaneId::Docs, dispatcher.state());
                 sync_pane_layer(panes, layer_stack);
             }
             GlobalActionId::OpenLearn => {
@@ -629,7 +631,7 @@ pub(crate) fn handle_global_action(
                 if let Some(docs) = panes.get_pane_mut::<DocsPane>("docs") {
                     docs.open_browser();
                 }
-                panes.push_to("docs", dispatcher.state());
+                panes.push_to(NavPaneId::Docs, dispatcher.state());
                 sync_pane_layer(panes, layer_stack);
             }
             GlobalActionId::SelectInstrument(n) => {
@@ -675,7 +677,7 @@ pub(crate) fn handle_global_action(
                 }
             }
             GlobalActionId::AddInstrument => {
-                switch_to_pane("add", panes, dispatcher, audio, app_frame, layer_stack);
+                switch_to_pane(NavPaneId::Add, panes, dispatcher, audio, app_frame, layer_stack);
             }
             GlobalActionId::DeleteInstrument => {
                 if let Some(instrument) = dispatcher.state().instruments.selected_instrument() {
@@ -695,14 +697,14 @@ pub(crate) fn handle_global_action(
                 if let Some(palette) = panes.get_pane_mut::<CommandPalettePane>("command_palette") {
                     palette.open(commands);
                 }
-                panes.push_to("command_palette", dispatcher.state());
+                panes.push_to(NavPaneId::CommandPalette, dispatcher.state());
                 layer_stack.push("command_palette");
             }
             GlobalActionId::PaneSwitcher => {
                 if let Some(switcher) = panes.get_pane_mut::<PaneSwitcherPane>("pane_switcher") {
                     switcher.open();
                 }
-                panes.push_to("pane_switcher", dispatcher.state());
+                panes.push_to(NavPaneId::PaneSwitcher, dispatcher.state());
                 layer_stack.push("pane_switcher");
             }
             GlobalActionId::PlayStop => {
@@ -753,7 +755,7 @@ pub(crate) fn handle_global_action(
                 apply_dispatch_result(r, dispatcher, panes, app_frame, audio);
             }
             GlobalActionId::OpenCheckpointList => {
-                panes.push_to("checkpoint_list", dispatcher.state());
+                panes.push_to(NavPaneId::CheckpointList, dispatcher.state());
                 sync_pane_layer(panes, layer_stack);
             }
             GlobalActionId::RequestPrivilege => {
@@ -773,7 +775,7 @@ pub(crate) fn handle_quit_intent(
     layer_stack: &mut LayerStack,
 ) -> GlobalResult {
     if dispatcher.state().project.dirty {
-        panes.push_to("quit_prompt", dispatcher.state());
+        panes.push_to(NavPaneId::QuitPrompt, dispatcher.state());
         sync_pane_layer(panes, layer_stack);
         GlobalResult::Handled
     } else {
@@ -810,7 +812,7 @@ pub(crate) fn handle_save_and_quit(
             sa.reset(&default_name);
         }
         panes.pop(dispatcher.state());
-        panes.push_to("save_as", dispatcher.state());
+        panes.push_to(NavPaneId::SaveAs, dispatcher.state());
         sync_pane_layer(panes, layer_stack);
         *quit_after_save = true;
     }
@@ -850,13 +852,13 @@ pub(crate) fn apply_dispatch_result(
                 if let Some(fb) = panes.get_pane_mut::<FileBrowserPane>("file_browser") {
                     fb.open_for(file_action.clone(), None);
                 }
-                panes.push_to("file_browser", dispatcher.state());
+                panes.push_to(NavPaneId::FileBrowser, dispatcher.state());
             }
             NavIntent::OpenVstParams(instrument_id, target) => {
                 if let Some(vp) = panes.get_pane_mut::<VstParamPane>("vst_params") {
                     vp.set_target(*instrument_id, *target);
                 }
-                panes.push_to("vst_params", dispatcher.state());
+                panes.push_to(NavPaneId::VstParams, dispatcher.state());
             }
             _ => {}
         }

@@ -2,7 +2,7 @@ use std::any::Any;
 
 use crate::state::{AppState, OwnershipDisplayStatus, SourceType};
 use crate::ui::layout_helpers::center_rect;
-use crate::ui::{Rect, RenderBuf, Action, NavAction, InstrumentAction, SessionAction, Color, InputEvent, KeyCode, Keymap, MouseEvent, MouseEventKind, MouseButton, Pane, Style, ToggleResult, translate_key};
+use crate::ui::{Rect, RenderBuf, Action, NavAction, InstrumentAction, SessionAction, Color, InputEvent, KeyCode, Keymap, MouseEvent, MouseEventKind, MouseButton, Pane, PaneId, Style, ToggleResult, translate_key};
 use crate::ui::performance::PerformanceController;
 use crate::ui::action_id::{ActionId, InstrumentListActionId, ModeActionId};
 use imbolc_types::InstrumentId;
@@ -133,7 +133,7 @@ impl Pane for InstrumentPane {
             ActionId::InstrumentList(InstrumentListActionId::Prev) => Action::Instrument(InstrumentAction::SelectPrev),
             ActionId::InstrumentList(InstrumentListActionId::GotoTop) => Action::Instrument(InstrumentAction::SelectFirst),
             ActionId::InstrumentList(InstrumentListActionId::GotoBottom) => Action::Instrument(InstrumentAction::SelectLast),
-            ActionId::InstrumentList(InstrumentListActionId::Add) => Action::Nav(NavAction::SwitchPane("add")),
+            ActionId::InstrumentList(InstrumentListActionId::Add) => Action::Nav(NavAction::SwitchPane(PaneId::Add)),
             ActionId::InstrumentList(InstrumentListActionId::Delete) => {
                 if let Some(instrument) = state.instruments.selected_instrument() {
                     Action::Instrument(InstrumentAction::Delete(instrument.id))
@@ -495,7 +495,7 @@ mod tests {
 
         let action = pane.handle_action(ActionId::InstrumentList(InstrumentListActionId::Add), &dummy_event(), &state);
         match action {
-            Action::Nav(NavAction::SwitchPane(id)) => assert_eq!(id, "add"),
+            Action::Nav(NavAction::SwitchPane(id)) => assert_eq!(id, crate::ui::PaneId::Add),
             _ => panic!("Expected SwitchPane(add)"),
         }
     }

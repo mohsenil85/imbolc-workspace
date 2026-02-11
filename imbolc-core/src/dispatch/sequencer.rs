@@ -2,7 +2,7 @@ use imbolc_audio::AudioHandle;
 use crate::state::drum_sequencer::{DrumPattern, DrumStep, euclidean_rhythm};
 use crate::state::sampler::Slice;
 use crate::state::{AppState, ClipboardContents};
-use crate::action::{AudioEffect, ChopperAction, DispatchResult, NavIntent, SequencerAction};
+use crate::action::{AudioEffect, ChopperAction, DispatchResult, NavIntent, PaneId, SequencerAction};
 
 use super::helpers::compute_waveform_peaks;
 
@@ -376,7 +376,7 @@ pub(super) fn dispatch_sequencer(
             if let Some(seq) = state.instruments.selected_drum_sequencer_mut() {
                 seq.editing_pad = Some(*pad_idx);
             }
-            DispatchResult::with_nav(NavIntent::PushTo("instrument_picker"))
+            DispatchResult::with_nav(NavIntent::PushTo(PaneId::InstrumentPicker))
         }
         SequencerAction::CycleStepResolution => {
             if let Some(seq) = state.instruments.selected_drum_sequencer_mut() {
@@ -431,7 +431,7 @@ pub(super) fn dispatch_chopper(
                 });
             }
 
-            let mut result = DispatchResult::with_nav(NavIntent::ConditionalPop("file_browser"));
+            let mut result = DispatchResult::with_nav(NavIntent::ConditionalPop(PaneId::FileBrowser));
             result.audio_effects.push(AudioEffect::RebuildInstruments);
             result
         }

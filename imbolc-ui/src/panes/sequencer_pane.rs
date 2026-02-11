@@ -3,7 +3,7 @@ use std::any::Any;
 use crate::state::drum_sequencer::NUM_PADS;
 use crate::state::AppState;
 use crate::ui::layout_helpers::center_rect;
-use crate::ui::{Rect, RenderBuf, Action, Color, InputEvent, Keymap, MouseEvent, MouseEventKind, MouseButton, NavAction, Pane, SequencerAction, Style};
+use crate::ui::{Rect, RenderBuf, Action, Color, InputEvent, Keymap, MouseEvent, MouseEventKind, MouseButton, NavAction, Pane, PaneId, SequencerAction, Style};
 use crate::ui::action_id::{ActionId, SequencerActionId};
 
 pub struct SequencerPane {
@@ -155,7 +155,7 @@ impl Pane for SequencerPane {
             ActionId::Sequencer(SequencerActionId::LoadSample) => {
                 Action::Sequencer(SequencerAction::LoadSample(self.cursor_pad))
             }
-            ActionId::Sequencer(SequencerActionId::Chopper) => Action::Nav(NavAction::PushPane("sample_chopper")),
+            ActionId::Sequencer(SequencerActionId::Chopper) => Action::Nav(NavAction::PushPane(PaneId::SampleChopper)),
             ActionId::Sequencer(SequencerActionId::ClearPad) => Action::Sequencer(SequencerAction::ClearPad(self.cursor_pad)),
             ActionId::Sequencer(SequencerActionId::ClearPattern) => Action::Sequencer(SequencerAction::ClearPattern),
             ActionId::Sequencer(SequencerActionId::PrevPattern) => Action::Sequencer(SequencerAction::PrevPattern),
@@ -563,7 +563,7 @@ mod tests {
 
         let action = pane.handle_action(ActionId::Sequencer(SequencerActionId::Chopper), &dummy_event(), &state);
         match action {
-            Action::Nav(NavAction::PushPane(id)) => assert_eq!(id, "sample_chopper"),
+            Action::Nav(NavAction::PushPane(id)) => assert_eq!(id, crate::ui::PaneId::SampleChopper),
             _ => panic!("Expected PushPane(sample_chopper)"),
         }
     }

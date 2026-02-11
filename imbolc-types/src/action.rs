@@ -18,11 +18,119 @@ use crate::{
 // Simple enums with no dependencies
 // ============================================================================
 
+/// Typed identifiers for all UI panes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum PaneId {
+    Add,
+    AddEffect,
+    Automation,
+    CheckpointList,
+    CommandPalette,
+    Confirm,
+    Docs,
+    Eq,
+    FileBrowser,
+    FrameEdit,
+    Groove,
+    Help,
+    Home,
+    Instrument,
+    InstrumentEdit,
+    InstrumentPicker,
+    MidiSettings,
+    Mixer,
+    PaneSwitcher,
+    PianoRoll,
+    ProjectBrowser,
+    QuitPrompt,
+    SampleChopper,
+    SaveAs,
+    Sequencer,
+    Server,
+    Track,
+    Tuner,
+    VstParams,
+    Waveform,
+}
+
+impl PaneId {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            PaneId::Add => "add",
+            PaneId::AddEffect => "add_effect",
+            PaneId::Automation => "automation",
+            PaneId::CheckpointList => "checkpoint_list",
+            PaneId::CommandPalette => "command_palette",
+            PaneId::Confirm => "confirm",
+            PaneId::Docs => "docs",
+            PaneId::Eq => "eq",
+            PaneId::FileBrowser => "file_browser",
+            PaneId::FrameEdit => "frame_edit",
+            PaneId::Groove => "groove",
+            PaneId::Help => "help",
+            PaneId::Home => "home",
+            PaneId::Instrument => "instrument",
+            PaneId::InstrumentEdit => "instrument_edit",
+            PaneId::InstrumentPicker => "instrument_picker",
+            PaneId::MidiSettings => "midi_settings",
+            PaneId::Mixer => "mixer",
+            PaneId::PaneSwitcher => "pane_switcher",
+            PaneId::PianoRoll => "piano_roll",
+            PaneId::ProjectBrowser => "project_browser",
+            PaneId::QuitPrompt => "quit_prompt",
+            PaneId::SampleChopper => "sample_chopper",
+            PaneId::SaveAs => "save_as",
+            PaneId::Sequencer => "sequencer",
+            PaneId::Server => "server",
+            PaneId::Track => "track",
+            PaneId::Tuner => "tuner",
+            PaneId::VstParams => "vst_params",
+            PaneId::Waveform => "waveform",
+        }
+    }
+
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "add" => Some(PaneId::Add),
+            "add_effect" => Some(PaneId::AddEffect),
+            "automation" => Some(PaneId::Automation),
+            "checkpoint_list" => Some(PaneId::CheckpointList),
+            "command_palette" => Some(PaneId::CommandPalette),
+            "confirm" => Some(PaneId::Confirm),
+            "docs" => Some(PaneId::Docs),
+            "eq" => Some(PaneId::Eq),
+            "file_browser" => Some(PaneId::FileBrowser),
+            "frame_edit" => Some(PaneId::FrameEdit),
+            "groove" => Some(PaneId::Groove),
+            "help" => Some(PaneId::Help),
+            "home" => Some(PaneId::Home),
+            "instrument" => Some(PaneId::Instrument),
+            "instrument_edit" => Some(PaneId::InstrumentEdit),
+            "instrument_picker" => Some(PaneId::InstrumentPicker),
+            "midi_settings" => Some(PaneId::MidiSettings),
+            "mixer" => Some(PaneId::Mixer),
+            "pane_switcher" => Some(PaneId::PaneSwitcher),
+            "piano_roll" => Some(PaneId::PianoRoll),
+            "project_browser" => Some(PaneId::ProjectBrowser),
+            "quit_prompt" => Some(PaneId::QuitPrompt),
+            "sample_chopper" => Some(PaneId::SampleChopper),
+            "save_as" => Some(PaneId::SaveAs),
+            "sequencer" => Some(PaneId::Sequencer),
+            "server" => Some(PaneId::Server),
+            "track" => Some(PaneId::Track),
+            "tuner" => Some(PaneId::Tuner),
+            "vst_params" => Some(PaneId::VstParams),
+            "waveform" => Some(PaneId::Waveform),
+            _ => None,
+        }
+    }
+}
+
 /// Navigation actions (pane switching, modal stack).
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum NavAction {
-    SwitchPane(&'static str),
-    PushPane(&'static str),
+    SwitchPane(PaneId),
+    PushPane(PaneId),
     PopPane,
 }
 
@@ -207,13 +315,13 @@ pub enum FileSelectAction {
 #[derive(Debug, Clone, Serialize)]
 #[allow(dead_code)]
 pub enum NavIntent {
-    SwitchTo(&'static str),
-    PushTo(&'static str),
+    SwitchTo(PaneId),
+    PushTo(PaneId),
     Pop,
     /// Pop only if the active pane matches the given id
-    ConditionalPop(&'static str),
+    ConditionalPop(PaneId),
     /// Pop, falling back to SwitchTo if stack is empty
-    PopOrSwitchTo(&'static str),
+    PopOrSwitchTo(PaneId),
     /// Configure and push to the file browser
     OpenFileBrowser(FileSelectAction),
     /// Configure and push to the VST param pane for a specific target
@@ -1028,6 +1136,47 @@ impl From<DomainAction> for Action {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pane_id_round_trip() {
+        let all = [
+            PaneId::Add,
+            PaneId::AddEffect,
+            PaneId::Automation,
+            PaneId::CheckpointList,
+            PaneId::CommandPalette,
+            PaneId::Confirm,
+            PaneId::Docs,
+            PaneId::Eq,
+            PaneId::FileBrowser,
+            PaneId::FrameEdit,
+            PaneId::Groove,
+            PaneId::Help,
+            PaneId::Home,
+            PaneId::Instrument,
+            PaneId::InstrumentEdit,
+            PaneId::InstrumentPicker,
+            PaneId::MidiSettings,
+            PaneId::Mixer,
+            PaneId::PaneSwitcher,
+            PaneId::PianoRoll,
+            PaneId::ProjectBrowser,
+            PaneId::QuitPrompt,
+            PaneId::SampleChopper,
+            PaneId::SaveAs,
+            PaneId::Sequencer,
+            PaneId::Server,
+            PaneId::Track,
+            PaneId::Tuner,
+            PaneId::VstParams,
+            PaneId::Waveform,
+        ];
+
+        for pane in all {
+            let encoded = pane.as_str();
+            assert_eq!(PaneId::from_str(encoded), Some(pane));
+        }
+    }
 
     #[test]
     fn audio_effect_all_contains_structural_effects() {

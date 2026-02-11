@@ -5,7 +5,7 @@ use crate::ui::action_id::{ActionId, MixerActionId};
 use crate::ui::layout_helpers::center_rect;
 use crate::ui::{
     Action, BusAction, InputEvent, InstrumentAction, LayerGroupAction, MixerAction, MouseButton,
-    MouseEvent, MouseEventKind, NavAction, Rect,
+    MouseEvent, MouseEventKind, NavAction, PaneId, Rect,
 };
 use imbolc_types::{BusId, EffectId};
 
@@ -314,7 +314,7 @@ impl MixerPane {
                 Action::Mixer(MixerAction::CycleOutputReverse)
             }
             ActionId::Mixer(MixerActionId::AddEffect) => {
-                Action::Nav(NavAction::PushPane("add_effect"))
+                Action::Nav(NavAction::PushPane(PaneId::AddEffect))
             }
             ActionId::Mixer(MixerActionId::RemoveEffect) => {
                 if self.detail_section == MixerSection::Effects {
@@ -484,7 +484,7 @@ impl MixerPane {
                 self.adjust_bus_detail_param(state, bus_id, delta)
             }
             ActionId::Mixer(MixerActionId::AddEffect) => {
-                Action::Nav(NavAction::PushPane("add_effect"))
+                Action::Nav(NavAction::PushPane(PaneId::AddEffect))
             }
             ActionId::Mixer(MixerActionId::RemoveEffect) => {
                 if self.bus_detail_section == BusDetailSection::Effects {
@@ -603,7 +603,7 @@ impl MixerPane {
                 self.adjust_group_detail_param(state, gid, delta)
             }
             ActionId::Mixer(MixerActionId::AddEffect) => {
-                Action::Nav(NavAction::PushPane("add_effect"))
+                Action::Nav(NavAction::PushPane(PaneId::AddEffect))
             }
             ActionId::Mixer(MixerActionId::RemoveEffect) => {
                 if self.group_detail_section == GroupDetailSection::Effects {

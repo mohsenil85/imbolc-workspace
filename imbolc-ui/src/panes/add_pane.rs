@@ -5,7 +5,7 @@ use crate::ui::action_id::{ActionId, AddActionId};
 use crate::ui::layout_helpers::center_rect;
 use crate::ui::{
     Action, Color, FileSelectAction, InputEvent, InstrumentAction, Keymap, ListSelector,
-    MouseButton, MouseEvent, MouseEventKind, NavAction, Pane, Rect, RenderBuf, SessionAction,
+    MouseButton, MouseEvent, MouseEventKind, NavAction, Pane, PaneId, Rect, RenderBuf, SessionAction,
     Style,
 };
 
@@ -360,9 +360,9 @@ impl Pane for AddPane {
             ActionId::Add(AddActionId::Confirm) => self.selected_option_action(),
             ActionId::Add(AddActionId::Cancel) => {
                 if state.instruments.instruments.is_empty() {
-                    Action::Nav(NavAction::SwitchPane("server"))
+                    Action::Nav(NavAction::SwitchPane(PaneId::Server))
                 } else {
-                    Action::Nav(NavAction::SwitchPane("instrument"))
+                    Action::Nav(NavAction::SwitchPane(PaneId::Instrument))
                 }
             }
             ActionId::Add(AddActionId::Next) => {

@@ -162,7 +162,7 @@ impl AppRuntime {
             // Bridge mixer detail context to add_effect pane
             if matches!(
                 &routed_action,
-                RoutedAction::Ui(UiAction::Nav(action::NavAction::PushPane("add_effect")))
+                RoutedAction::Ui(UiAction::Nav(action::NavAction::PushPane(action::PaneId::AddEffect)))
             ) && self.panes.active().id() == "mixer"
             {
                 if let Some(mixer) = self.panes.get_pane_mut::<MixerPane>("mixer") {

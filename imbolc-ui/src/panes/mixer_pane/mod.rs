@@ -416,7 +416,7 @@ mod tests {
 
         pane.handle_action(ActionId::Mixer(MixerActionId::EnterDetail), &dummy_event(), &state);
         let action = pane.handle_action(ActionId::Mixer(MixerActionId::AddEffect), &dummy_event(), &state);
-        assert!(matches!(action, Action::Nav(NavAction::PushPane("add_effect"))));
+        assert!(matches!(action, Action::Nav(NavAction::PushPane(crate::ui::PaneId::AddEffect))));
     }
 
     #[test]

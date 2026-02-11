@@ -1,4 +1,4 @@
-use crate::action::{ArrangementAction, AudioEffect, DispatchResult, NavIntent};
+use crate::action::{ArrangementAction, AudioEffect, DispatchResult, NavIntent, PaneId};
 use imbolc_audio::AudioHandle;
 use crate::state::arrangement::{ClipEditContext, PlayMode};
 use crate::state::AppState;
@@ -251,7 +251,7 @@ pub(super) fn dispatch_arrangement(
                 stashed_selected_automation_lane,
             });
 
-            let mut result = DispatchResult::with_nav(NavIntent::PushTo("piano_roll"));
+            let mut result = DispatchResult::with_nav(NavIntent::PushTo(PaneId::PianoRoll));
             result.audio_effects.push(AudioEffect::UpdatePianoRoll);
             result.audio_effects.push(AudioEffect::UpdateAutomation);
             result
@@ -311,7 +311,7 @@ pub(super) fn dispatch_arrangement(
                 pr.looping = ctx.stashed_looping;
             }
 
-            let mut result = DispatchResult::with_nav(NavIntent::PopOrSwitchTo("track"));
+            let mut result = DispatchResult::with_nav(NavIntent::PopOrSwitchTo(PaneId::Track));
             result.audio_effects.push(AudioEffect::UpdatePianoRoll);
             result.audio_effects.push(AudioEffect::UpdateAutomation);
             result

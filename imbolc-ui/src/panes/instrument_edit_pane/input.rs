@@ -4,20 +4,21 @@ use imbolc_types::ProcessingStage;
 use crate::state::{
     AppState, FilterConfig, FilterType, InstrumentSection,
 };
-use crate::ui::{Action, FileSelectAction, InputEvent, InstrumentAction, KeyCode, SessionAction, translate_key};
+use crate::ui::{Action, FileSelectAction, InputEvent, InstrumentAction, KeyCode, PaneId, SessionAction, translate_key};
 use crate::ui::action_id::{ActionId, InstrumentEditActionId, ModeActionId};
 
 impl InstrumentEditPane {
     pub(super) fn handle_action_impl(&mut self, action: ActionId, event: &InputEvent, state: &AppState) -> Action {
-        match action {
+        if let ActionId::Mode(mode_action) = action {
+            return match mode_action {
             // Piano mode actions
-            ActionId::Mode(ModeActionId::PianoEscape) => {
+            ModeActionId::PianoEscape => {
                 self.perf.piano.deactivate();
                 Action::ExitPerformanceMode
             }
-            ActionId::Mode(ModeActionId::PianoOctaveDown) => { self.perf.piano.octave_down(); Action::None }
-            ActionId::Mode(ModeActionId::PianoOctaveUp) => { self.perf.piano.octave_up(); Action::None }
-            ActionId::Mode(ModeActionId::PianoKey) | ActionId::Mode(ModeActionId::PianoSpace) => {
+            ModeActionId::PianoOctaveDown => { self.perf.piano.octave_down(); Action::None }
+            ModeActionId::PianoOctaveUp => { self.perf.piano.octave_up(); Action::None }
+            ModeActionId::PianoKey | ModeActionId::PianoSpace => {
                 if let KeyCode::Char(c) = event.key {
                     let c = translate_key(c, state.keyboard_layout);
                     if let Some(pitches) = self.perf.piano.key_to_pitches(c) {
@@ -36,11 +37,11 @@ impl InstrumentEditPane {
                 Action::None
             }
             // Pad layer actions
-            ActionId::Mode(ModeActionId::PadEscape) => {
+            ModeActionId::PadEscape => {
                 self.perf.pad.deactivate();
                 Action::ExitPerformanceMode
             }
-            ActionId::Mode(ModeActionId::PadKey) => {
+            ModeActionId::PadKey => {
                 if let KeyCode::Char(c) = event.key {
                     let c = translate_key(c, state.keyboard_layout);
                     if let Some(pad_idx) = self.perf.pad.key_to_pad(c) {
@@ -50,7 +51,7 @@ impl InstrumentEditPane {
                 Action::None
             }
             // Text edit layer actions
-            ActionId::Mode(ModeActionId::TextConfirm) => {
+            ModeActionId::TextConfirm => {
                 let text = self.edit_input.value().to_string();
                 let (section, local_idx) = self.row_info(self.selected_row);
                 match section {
@@ -115,7 +116,7 @@ impl InstrumentEditPane {
                 self.edit_backup_value = None;
                 self.emit_update()
             }
-            ActionId::Mode(ModeActionId::TextCancel) => {
+            ModeActionId::TextCancel => {
                 // Restore backup value if we have one
                 if let Some(ref backup) = self.edit_backup_value.take() {
                     let (section, local_idx) = self.row_info(self.selected_row);
@@ -176,57 +177,66 @@ impl InstrumentEditPane {
                 self.edit_input.set_focused(false);
                 self.emit_update()
             }
+            ModeActionId::PaletteConfirm | ModeActionId::PaletteCancel => Action::None,
+            };
+        }
+
+        let ActionId::InstrumentEdit(action) = action else {
+            return Action::None;
+        };
+
+        match action {
             // Normal pane actions
-            ActionId::InstrumentEdit(InstrumentEditActionId::Done) => {
+            InstrumentEditActionId::Done => {
                 self.emit_update()
             }
-            ActionId::InstrumentEdit(InstrumentEditActionId::Next) => {
+            InstrumentEditActionId::Next => {
                 let total = self.total_rows();
                 if total > 0 {
                     self.selected_row = (self.selected_row + 1) % total;
                 }
                 Action::None
             }
-            ActionId::InstrumentEdit(InstrumentEditActionId::Prev) => {
+            InstrumentEditActionId::Prev => {
                 let total = self.total_rows();
                 if total > 0 {
                     self.selected_row = if self.selected_row == 0 { total - 1 } else { self.selected_row - 1 };
                 }
                 Action::None
             }
-            ActionId::InstrumentEdit(InstrumentEditActionId::Increase) => {
+            InstrumentEditActionId::Increase => {
                 self.adjust_value(true, false);
                 self.emit_update()
             }
-            ActionId::InstrumentEdit(InstrumentEditActionId::Decrease) => {
+            InstrumentEditActionId::Decrease => {
                 self.adjust_value(false, false);
                 self.emit_update()
             }
-            ActionId::InstrumentEdit(InstrumentEditActionId::IncreaseBig) => {
+            InstrumentEditActionId::IncreaseBig => {
                 self.adjust_value(true, true);
                 self.emit_update()
             }
-            ActionId::InstrumentEdit(InstrumentEditActionId::DecreaseBig) => {
+            InstrumentEditActionId::DecreaseBig => {
                 self.adjust_value(false, true);
                 self.emit_update()
             }
-            ActionId::InstrumentEdit(InstrumentEditActionId::IncreaseTiny) => {
+            InstrumentEditActionId::IncreaseTiny => {
                 self.adjust_value_with_mode(true, AdjustMode::Tiny, state.session.tuning_a4);
                 self.emit_update()
             }
-            ActionId::InstrumentEdit(InstrumentEditActionId::DecreaseTiny) => {
+            InstrumentEditActionId::DecreaseTiny => {
                 self.adjust_value_with_mode(false, AdjustMode::Tiny, state.session.tuning_a4);
                 self.emit_update()
             }
-            ActionId::InstrumentEdit(InstrumentEditActionId::IncreaseMusical) => {
+            InstrumentEditActionId::IncreaseMusical => {
                 self.adjust_value_with_mode(true, AdjustMode::Musical, state.session.tuning_a4);
                 self.emit_update()
             }
-            ActionId::InstrumentEdit(InstrumentEditActionId::DecreaseMusical) => {
+            InstrumentEditActionId::DecreaseMusical => {
                 self.adjust_value_with_mode(false, AdjustMode::Musical, state.session.tuning_a4);
                 self.emit_update()
             }
-            ActionId::InstrumentEdit(InstrumentEditActionId::EnterEdit) => {
+            InstrumentEditActionId::EnterEdit => {
                 let (section, local_idx) = self.row_info(self.selected_row);
                 // On the sample row, trigger load_sample instead of text edit
                 if self.source.is_sample()
@@ -254,7 +264,7 @@ impl InstrumentEditPane {
                 self.edit_input.set_focused(true);
                 Action::PushLayer("text_edit")
             }
-            ActionId::InstrumentEdit(InstrumentEditActionId::ToggleFilter) => {
+            InstrumentEditActionId::ToggleFilter => {
                 // Find first filter in chain
                 if let Some(idx) = self.processing_chain.iter().position(|s| s.is_filter()) {
                     // If cursor is on a filter, remove that one; otherwise remove first
@@ -276,7 +286,7 @@ impl InstrumentEditPane {
                 }
                 self.emit_update()
             }
-            ActionId::InstrumentEdit(InstrumentEditActionId::CycleFilterType) => {
+            InstrumentEditActionId::CycleFilterType => {
                 // Find filter to cycle: prefer the one the cursor is on, else first in chain
                 let filter_idx = if let InstrumentSection::Processing(i) = self.current_section() {
                     if self.processing_chain.get(i).is_some_and(|s| s.is_filter()) {
@@ -305,10 +315,10 @@ impl InstrumentEditPane {
                 }
                 Action::None
             }
-            ActionId::InstrumentEdit(InstrumentEditActionId::AddEffect) => {
-                Action::Nav(crate::ui::NavAction::PushPane("add_effect"))
+            InstrumentEditActionId::AddEffect => {
+                Action::Nav(crate::ui::NavAction::PushPane(PaneId::AddEffect))
             }
-            ActionId::InstrumentEdit(InstrumentEditActionId::RemoveEffect) => {
+            InstrumentEditActionId::RemoveEffect => {
                 if let InstrumentSection::Processing(i) = self.current_section() {
                     if self.processing_chain.get(i).is_some_and(|s| s.is_effect()) {
                         self.processing_chain.remove(i);
@@ -319,11 +329,11 @@ impl InstrumentEditPane {
                 }
                 Action::None
             }
-            ActionId::InstrumentEdit(InstrumentEditActionId::TogglePoly) => {
+            InstrumentEditActionId::TogglePoly => {
                 self.polyphonic = !self.polyphonic;
                 self.emit_update()
             }
-            ActionId::InstrumentEdit(InstrumentEditActionId::ToggleActive) => {
+            InstrumentEditActionId::ToggleActive => {
                 if self.source.is_audio_input() {
                     self.active = !self.active;
                     self.emit_update()
@@ -331,14 +341,14 @@ impl InstrumentEditPane {
                     Action::None
                 }
             }
-            ActionId::InstrumentEdit(InstrumentEditActionId::ToggleChannelConfig) => {
+            InstrumentEditActionId::ToggleChannelConfig => {
                 if let Some(id) = self.instrument_id {
                     self.channel_config = self.channel_config.toggle();
                     return Action::Instrument(InstrumentAction::ToggleChannelConfig(id));
                 }
                 Action::None
             }
-            ActionId::InstrumentEdit(InstrumentEditActionId::LoadSample) => {
+            InstrumentEditActionId::LoadSample => {
                 if self.source.is_sample() {
                     if let Some(id) = self.instrument_id {
                         Action::Session(SessionAction::OpenFileBrowser(FileSelectAction::LoadPitchedSample(id)))
@@ -349,19 +359,19 @@ impl InstrumentEditPane {
                     Action::None
                 }
             }
-            ActionId::InstrumentEdit(InstrumentEditActionId::ZeroParam) => {
+            InstrumentEditActionId::ZeroParam => {
                 self.zero_current_param();
                 self.emit_update()
             }
-            ActionId::InstrumentEdit(InstrumentEditActionId::ZeroSection) => {
+            InstrumentEditActionId::ZeroSection => {
                 self.zero_current_section();
                 self.emit_update()
             }
-            ActionId::InstrumentEdit(InstrumentEditActionId::ResetParam) => {
+            InstrumentEditActionId::ResetParam => {
                 self.reset_current_param();
                 self.emit_update()
             }
-            ActionId::InstrumentEdit(InstrumentEditActionId::ToggleEq) => {
+            InstrumentEditActionId::ToggleEq => {
                 if let Some(idx) = self.processing_chain.iter().position(|s| s.is_eq()) {
                     self.processing_chain.remove(idx);
                     let max = self.total_rows().saturating_sub(1);
@@ -376,23 +386,23 @@ impl InstrumentEditPane {
                 }
                 self.emit_update()
             }
-            ActionId::InstrumentEdit(InstrumentEditActionId::ToggleLfo) => {
+            InstrumentEditActionId::ToggleLfo => {
                 self.lfo.enabled = !self.lfo.enabled;
                 self.emit_update()
             }
-            ActionId::InstrumentEdit(InstrumentEditActionId::CycleLfoShape) => {
+            InstrumentEditActionId::CycleLfoShape => {
                 self.lfo.shape = self.lfo.shape.next();
                 self.emit_update()
             }
-            ActionId::InstrumentEdit(InstrumentEditActionId::CycleLfoTarget) => {
+            InstrumentEditActionId::CycleLfoTarget => {
                 self.lfo.target = self.lfo.target.next_lfo_target();
                 self.emit_update()
             }
-            ActionId::InstrumentEdit(InstrumentEditActionId::VstParams) => {
+            InstrumentEditActionId::VstParams => {
                 let (section, _local_idx) = self.row_info(self.selected_row);
                 if section == InstrumentSection::Source && self.source.is_vst() {
                     // Navigate to VST params pane for VST instrument source
-                    Action::Nav(crate::ui::NavAction::PushPane("vst_params"))
+                    Action::Nav(crate::ui::NavAction::PushPane(PaneId::VstParams))
                 } else if let InstrumentSection::Processing(i) = section {
                     if let Some(ProcessingStage::Effect(effect)) = self.processing_chain.get(i) {
                         if effect.effect_type.is_vst() {
@@ -409,12 +419,12 @@ impl InstrumentEditPane {
                     }
                 } else if self.source.is_vst() {
                     // Fallback: if source is VST, navigate to source params
-                    Action::Nav(crate::ui::NavAction::PushPane("vst_params"))
+                    Action::Nav(crate::ui::NavAction::PushPane(PaneId::VstParams))
                 } else {
                     Action::None
                 }
             }
-            ActionId::InstrumentEdit(InstrumentEditActionId::NextSection) => {
+            InstrumentEditActionId::NextSection => {
                 let current = self.current_section();
                 let skip_env = self.source.is_vst();
                 let n = self.processing_chain.len();
@@ -441,7 +451,7 @@ impl InstrumentEditPane {
                 }
                 Action::None
             }
-            ActionId::InstrumentEdit(InstrumentEditActionId::PrevSection) => {
+            InstrumentEditActionId::PrevSection => {
                 let current = self.current_section();
                 let skip_env = self.source.is_vst();
                 let n = self.processing_chain.len();
@@ -468,7 +478,7 @@ impl InstrumentEditPane {
                 }
                 Action::None
             }
-            ActionId::InstrumentEdit(InstrumentEditActionId::MoveStageUp) => {
+            InstrumentEditActionId::MoveStageUp => {
                 if let InstrumentSection::Processing(i) = self.current_section() {
                     if i > 0 {
                         let (_, local_idx) = self.row_info(self.selected_row);
@@ -479,7 +489,7 @@ impl InstrumentEditPane {
                 }
                 Action::None
             }
-            ActionId::InstrumentEdit(InstrumentEditActionId::MoveStageDown) => {
+            InstrumentEditActionId::MoveStageDown => {
                 if let InstrumentSection::Processing(i) = self.current_section() {
                     if i + 1 < self.processing_chain.len() {
                         let (_, local_idx) = self.row_info(self.selected_row);
@@ -490,7 +500,7 @@ impl InstrumentEditPane {
                 }
                 Action::None
             }
-            ActionId::InstrumentEdit(InstrumentEditActionId::ToggleEffectBypass) => {
+            InstrumentEditActionId::ToggleEffectBypass => {
                 if let InstrumentSection::Processing(i) = self.current_section() {
                     if let Some(ProcessingStage::Effect(e)) = self.processing_chain.get_mut(i) {
                         e.enabled = !e.enabled;
@@ -499,7 +509,6 @@ impl InstrumentEditPane {
                 }
                 Action::None
             }
-            _ => Action::None,
         }
     }
 

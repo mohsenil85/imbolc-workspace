@@ -7,15 +7,34 @@ use super::VstParamPane;
 
 impl VstParamPane {
     pub(super) fn handle_action_impl(&mut self, action: ActionId, _event: &InputEvent, state: &AppState) -> Action {
+        let ActionId::VstParams(action) = action else {
+            return Action::None;
+        };
+
         if self.search_active {
             return match action {
-                ActionId::VstParams(VstParamsActionId::Escape) | ActionId::VstParams(VstParamsActionId::Cancel) => {
+                VstParamsActionId::Escape | VstParamsActionId::Cancel => {
                     self.search_active = false;
                     self.search_text.clear();
                     self.rebuild_filter(state);
                     Action::None
                 }
-                _ => Action::None,
+                VstParamsActionId::Up
+                | VstParamsActionId::Down
+                | VstParamsActionId::Prev
+                | VstParamsActionId::Next
+                | VstParamsActionId::Left
+                | VstParamsActionId::Right
+                | VstParamsActionId::AdjustDown
+                | VstParamsActionId::AdjustUp
+                | VstParamsActionId::CoarseLeft
+                | VstParamsActionId::CoarseRight
+                | VstParamsActionId::Search
+                | VstParamsActionId::Reset
+                | VstParamsActionId::Automate
+                | VstParamsActionId::Discover
+                | VstParamsActionId::GotoTop
+                | VstParamsActionId::GotoBottom => Action::None,
             };
         }
 
@@ -25,7 +44,7 @@ impl VstParamPane {
         let target = self.target;
 
         match action {
-            ActionId::VstParams(VstParamsActionId::Up) | ActionId::VstParams(VstParamsActionId::Prev) => {
+            VstParamsActionId::Up | VstParamsActionId::Prev => {
                 if self.selected_param > 0 {
                     self.selected_param -= 1;
                     // Adjust scroll
@@ -35,13 +54,13 @@ impl VstParamPane {
                 }
                 Action::None
             }
-            ActionId::VstParams(VstParamsActionId::Down) | ActionId::VstParams(VstParamsActionId::Next) => {
+            VstParamsActionId::Down | VstParamsActionId::Next => {
                 if !self.filtered_indices.is_empty() && self.selected_param + 1 < self.filtered_indices.len() {
                     self.selected_param += 1;
                 }
                 Action::None
             }
-            ActionId::VstParams(VstParamsActionId::Left) | ActionId::VstParams(VstParamsActionId::AdjustDown) => {
+            VstParamsActionId::Left | VstParamsActionId::AdjustDown => {
                 if let Some(&param_idx) = self.filtered_indices.get(self.selected_param) {
                     let idx = self.get_param_index(param_idx, state);
                     if let Some(idx) = idx {
@@ -50,7 +69,7 @@ impl VstParamPane {
                 }
                 Action::None
             }
-            ActionId::VstParams(VstParamsActionId::Right) | ActionId::VstParams(VstParamsActionId::AdjustUp) => {
+            VstParamsActionId::Right | VstParamsActionId::AdjustUp => {
                 if let Some(&param_idx) = self.filtered_indices.get(self.selected_param) {
                     let idx = self.get_param_index(param_idx, state);
                     if let Some(idx) = idx {
@@ -59,7 +78,7 @@ impl VstParamPane {
                 }
                 Action::None
             }
-            ActionId::VstParams(VstParamsActionId::CoarseLeft) => {
+            VstParamsActionId::CoarseLeft => {
                 if let Some(&param_idx) = self.filtered_indices.get(self.selected_param) {
                     let idx = self.get_param_index(param_idx, state);
                     if let Some(idx) = idx {
@@ -68,7 +87,7 @@ impl VstParamPane {
                 }
                 Action::None
             }
-            ActionId::VstParams(VstParamsActionId::CoarseRight) => {
+            VstParamsActionId::CoarseRight => {
                 if let Some(&param_idx) = self.filtered_indices.get(self.selected_param) {
                     let idx = self.get_param_index(param_idx, state);
                     if let Some(idx) = idx {
@@ -77,7 +96,7 @@ impl VstParamPane {
                 }
                 Action::None
             }
-            ActionId::VstParams(VstParamsActionId::Reset) => {
+            VstParamsActionId::Reset => {
                 if let Some(&param_idx) = self.filtered_indices.get(self.selected_param) {
                     let idx = self.get_param_index(param_idx, state);
                     if let Some(idx) = idx {
@@ -86,7 +105,7 @@ impl VstParamPane {
                 }
                 Action::None
             }
-            ActionId::VstParams(VstParamsActionId::Automate) => {
+            VstParamsActionId::Automate => {
                 if let Some(&param_idx) = self.filtered_indices.get(self.selected_param) {
                     let idx = self.get_param_index(param_idx, state);
                     if let Some(idx) = idx {
@@ -97,26 +116,26 @@ impl VstParamPane {
                 }
                 Action::None
             }
-            ActionId::VstParams(VstParamsActionId::Discover) => {
+            VstParamsActionId::Discover => {
                 Action::VstParam(VstParamAction::DiscoverParams(instrument_id, target))
             }
-            ActionId::VstParams(VstParamsActionId::Search) => {
+            VstParamsActionId::Search => {
                 self.search_active = true;
                 self.search_text.clear();
                 Action::None
             }
-            ActionId::VstParams(VstParamsActionId::GotoTop) => {
+            VstParamsActionId::GotoTop => {
                 self.selected_param = 0;
                 self.scroll_offset = 0;
                 Action::None
             }
-            ActionId::VstParams(VstParamsActionId::GotoBottom) => {
+            VstParamsActionId::GotoBottom => {
                 if !self.filtered_indices.is_empty() {
                     self.selected_param = self.filtered_indices.len() - 1;
                 }
                 Action::None
             }
-            _ => Action::None,
+            VstParamsActionId::Escape | VstParamsActionId::Cancel => Action::None,
         }
     }
 

@@ -23,7 +23,7 @@ use imbolc_core::interaction_log::InteractionLog;
 use crate::midi;
 use crate::setup;
 use crate::state::{self, AppState};
-use crate::ui::{Frame, LayerStack, PaneManager, RatatuiBackend, keybindings};
+use crate::ui::{Frame, LayerStack, PaneId, PaneManager, RatatuiBackend, keybindings};
 
 /// Top-level runtime that owns all application state and drives the event loop.
 pub struct AppRuntime {
@@ -62,7 +62,7 @@ impl AppRuntime {
         let mut layer_stack = LayerStack::new(layers);
         layer_stack.push("global");
         if state.instruments.instruments.is_empty() {
-            panes.switch_to("add", &state);
+            panes.switch_to(PaneId::Add, &state);
         }
         layer_stack.set_pane_layer(panes.active().id());
 
@@ -111,9 +111,9 @@ impl AppRuntime {
                     needs_full_sync = true;
 
                     if dispatcher.state().instruments.instruments.is_empty() {
-                        panes.switch_to("add", dispatcher.state());
+                        panes.switch_to(PaneId::Add, dispatcher.state());
                     } else {
-                        panes.switch_to("instrument_edit", dispatcher.state());
+                        panes.switch_to(PaneId::InstrumentEdit, dispatcher.state());
                     }
                     layer_stack.set_pane_layer(panes.active().id());
                 }

@@ -19,7 +19,7 @@ use crate::global_actions::{
 use crate::setup;
 use crate::state::{self, AppState};
 use crate::ui::{
-    Frame, InputSource, LayerStack, RatatuiBackend,
+    Frame, InputSource, LayerStack, PaneId, RatatuiBackend,
     keybindings,
 };
 use crate::register_all_panes;
@@ -279,7 +279,7 @@ pub fn run_client(addr: &str, own_instruments: Vec<u32>) -> std::io::Result<()> 
     sync_network_context(&mut local_state, &remote);
 
     if local_state.instruments.instruments.is_empty() {
-        panes.switch_to("add", &local_state);
+        panes.switch_to(PaneId::Add, &local_state);
     }
     layer_stack.set_pane_layer(panes.active().id());
 

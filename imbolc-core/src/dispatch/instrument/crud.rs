@@ -3,7 +3,7 @@ use imbolc_types::{DomainAction, InstrumentAction};
 use crate::state::AppState;
 use crate::state::automation::AutomationTarget;
 use crate::state::BufferId;
-use crate::action::{AudioEffect, DispatchResult, NavIntent};
+use crate::action::{AudioEffect, DispatchResult, NavIntent, PaneId};
 use crate::dispatch::automation::record_automation_point;
 
 fn reduce(state: &mut AppState, action: &InstrumentAction) {
@@ -20,7 +20,7 @@ pub(super) fn handle_add(
 ) -> DispatchResult {
     let next_id = state.instruments.next_id;
     reduce(state, &InstrumentAction::Add(source_type));
-    let mut result = DispatchResult::with_nav(NavIntent::SwitchTo("instrument_edit"));
+    let mut result = DispatchResult::with_nav(NavIntent::SwitchTo(PaneId::InstrumentEdit));
     result.audio_effects.push(AudioEffect::RebuildInstruments);
     result.audio_effects.push(AudioEffect::UpdatePianoRoll);
     result.audio_effects.push(AudioEffect::AddInstrumentRouting(next_id));
@@ -59,7 +59,7 @@ pub(super) fn handle_delete(
 
     reduce(state, &InstrumentAction::Delete(inst_id));
     let mut result = if state.instruments.instruments.is_empty() {
-        DispatchResult::with_nav(NavIntent::SwitchTo("add"))
+        DispatchResult::with_nav(NavIntent::SwitchTo(PaneId::Add))
     } else {
         DispatchResult::none()
     };
@@ -75,7 +75,7 @@ pub(super) fn handle_edit(
     id: crate::state::InstrumentId,
 ) -> DispatchResult {
     reduce(state, &InstrumentAction::Edit(id));
-    DispatchResult::with_nav(NavIntent::SwitchTo("instrument_edit"))
+    DispatchResult::with_nav(NavIntent::SwitchTo(PaneId::InstrumentEdit))
 }
 
 pub(super) fn handle_update(

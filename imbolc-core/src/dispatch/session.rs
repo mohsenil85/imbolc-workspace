@@ -4,7 +4,7 @@ use imbolc_audio::AudioHandle;
 use imbolc_types::DomainAction;
 use crate::scd_parser;
 use crate::state::{AppState, CustomSynthDef, ParamSpec};
-use crate::action::{AudioEffect, DispatchResult, IoFeedback, NavIntent, SessionAction};
+use crate::action::{AudioEffect, DispatchResult, IoFeedback, NavIntent, PaneId, SessionAction};
 
 use super::server::compile_synthdef;
 use super::default_rack_path;
@@ -97,19 +97,19 @@ pub(super) fn dispatch_session(
         SessionAction::SaveAs(ref path) => {
             let path = path.clone();
             dispatch_save(path, state, audio, io_tx, &mut result);
-            result.push_nav(NavIntent::ConditionalPop("save_as"));
+            result.push_nav(NavIntent::ConditionalPop(PaneId::SaveAs));
         }
         SessionAction::Load => {
             let path = state.project.path.clone().unwrap_or_else(default_rack_path);
             dispatch_load(path, state, audio, io_tx, &mut result);
-            result.push_nav(NavIntent::ConditionalPop("confirm"));
-            result.push_nav(NavIntent::ConditionalPop("project_browser"));
+            result.push_nav(NavIntent::ConditionalPop(PaneId::Confirm));
+            result.push_nav(NavIntent::ConditionalPop(PaneId::ProjectBrowser));
         }
         SessionAction::LoadFrom(ref path) => {
             let path = path.clone();
             dispatch_load(path, state, audio, io_tx, &mut result);
-            result.push_nav(NavIntent::ConditionalPop("confirm"));
-            result.push_nav(NavIntent::ConditionalPop("project_browser"));
+            result.push_nav(NavIntent::ConditionalPop(PaneId::Confirm));
+            result.push_nav(NavIntent::ConditionalPop(PaneId::ProjectBrowser));
         }
         SessionAction::NewProject => {
             let defaults = state.project.default_settings.clone();
@@ -120,9 +120,9 @@ pub(super) fn dispatch_session(
             state.undo_history.clear();
             result.audio_effects = AudioEffect::all();
             result.project_name = Some("untitled".to_string());
-            result.push_nav(NavIntent::ConditionalPop("confirm"));
-            result.push_nav(NavIntent::ConditionalPop("project_browser"));
-            result.push_nav(NavIntent::SwitchTo("add"));
+            result.push_nav(NavIntent::ConditionalPop(PaneId::Confirm));
+            result.push_nav(NavIntent::ConditionalPop(PaneId::ProjectBrowser));
+            result.push_nav(NavIntent::SwitchTo(PaneId::Add));
         }
         SessionAction::UpdateSession(_) => {
             imbolc_types::reduce::reduce_action(
@@ -130,7 +130,7 @@ pub(super) fn dispatch_session(
                 &mut state.instruments,
                 &mut state.session,
             );
-            result.push_nav(NavIntent::PopOrSwitchTo("instrument"));
+            result.push_nav(NavIntent::PopOrSwitchTo(PaneId::Instrument));
             result.audio_effects.push(AudioEffect::RebuildSession);
             result.audio_effects.push(AudioEffect::UpdatePianoRoll);
         }

@@ -8,7 +8,7 @@ use crate::state::AppState;
 pub use crate::action::{
     Action, ArrangementAction, AutomationAction, BusAction, ChopperAction, DispatchResult,
     FileSelectAction, InstrumentAction, InstrumentUpdate, LayerGroupAction, MixerAction, NavAction,
-    NavIntent, PianoRollAction, SequencerAction, ServerAction, SessionAction, StatusEvent,
+    NavIntent, PaneId, PianoRollAction, SequencerAction, ServerAction, SessionAction, StatusEvent,
     ToggleResult, VstParamAction,
 };
 
@@ -103,8 +103,8 @@ impl PaneManager {
     }
 
     /// Switch to a pane by ID (flat navigation — clears the stack)
-    pub fn switch_to(&mut self, id: &str, state: &AppState) -> bool {
-        if let Some(index) = self.panes.iter().position(|p| p.id() == id) {
+    pub fn switch_to(&mut self, id: PaneId, state: &AppState) -> bool {
+        if let Some(index) = self.panes.iter().position(|p| p.id() == id.as_str()) {
             if index != self.active_index {
                 self.panes[self.active_index].on_exit(state);
                 self.active_index = index;
@@ -118,8 +118,8 @@ impl PaneManager {
     }
 
     /// Push current pane onto the stack and switch to a new pane (for modals/overlays)
-    pub fn push_to(&mut self, id: &str, state: &AppState) -> bool {
-        if let Some(index) = self.panes.iter().position(|p| p.id() == id) {
+    pub fn push_to(&mut self, id: PaneId, state: &AppState) -> bool {
+        if let Some(index) = self.panes.iter().position(|p| p.id() == id.as_str()) {
             self.stack.push(self.active_index);
             self.panes[self.active_index].on_exit(state);
             self.active_index = index;
@@ -146,10 +146,10 @@ impl PaneManager {
     pub fn process_nav(&mut self, action: &Action, state: &AppState) {
         match action {
             Action::Nav(NavAction::SwitchPane(id)) => {
-                self.switch_to(id, state);
+                self.switch_to(*id, state);
             }
             Action::Nav(NavAction::PushPane(id)) => {
-                self.push_to(id, state);
+                self.push_to(*id, state);
             }
             Action::Nav(NavAction::PopPane) => {
                 self.pop(state);
@@ -162,17 +162,17 @@ impl PaneManager {
     pub fn process_nav_intents(&mut self, intents: &[NavIntent], state: &AppState) {
         for intent in intents {
             match intent {
-                NavIntent::SwitchTo(id) => { self.switch_to(id, state); }
-                NavIntent::PushTo(id) => { self.push_to(id, state); }
+                NavIntent::SwitchTo(id) => { self.switch_to(*id, state); }
+                NavIntent::PushTo(id) => { self.push_to(*id, state); }
                 NavIntent::Pop => { self.pop(state); }
                 NavIntent::ConditionalPop(pane_id) => {
-                    if self.active().id() == *pane_id {
+                    if self.active().id() == pane_id.as_str() {
                         self.pop(state);
                     }
                 }
                 NavIntent::PopOrSwitchTo(fallback) => {
                     if !self.pop(state) {
-                        self.switch_to(fallback, state);
+                        self.switch_to(*fallback, state);
                     }
                 }
                 NavIntent::OpenFileBrowser(_) | NavIntent::OpenVstParams(_, _) => {

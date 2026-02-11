@@ -1,4 +1,4 @@
-use crate::action::{AudioEffect, DispatchResult, NavIntent, VstTarget};
+use crate::action::{AudioEffect, DispatchResult, NavIntent, PaneId, VstTarget};
 use imbolc_types::SourceExtra;
 use imbolc_audio::commands::AudioFeedback;
 use imbolc_audio::AudioHandle;
@@ -81,7 +81,7 @@ pub fn dispatch_audio_feedback(
                 let (peaks, _) = super::helpers::compute_waveform_peaks(&path.to_string_lossy());
                 if !peaks.is_empty() {
                     state.recorded_waveform_peaks = Some(peaks);
-                    result.push_nav(NavIntent::SwitchTo("waveform"));
+                    result.push_nav(NavIntent::SwitchTo(PaneId::Waveform));
                 }
             }
         }

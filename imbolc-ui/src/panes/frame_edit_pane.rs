@@ -141,9 +141,10 @@ impl Pane for FrameEditPane {
     }
 
     fn handle_action(&mut self, action: ActionId, _event: &InputEvent, _state: &AppState) -> Action {
-        match action {
+        if let ActionId::Mode(mode_action) = action {
+            return match mode_action {
             // Text edit layer actions
-            ActionId::Mode(ModeActionId::TextConfirm) => {
+            ModeActionId::TextConfirm => {
                 let text = self.edit_input.value().to_string();
                 match self.current_field() {
                     Field::Bpm => {
@@ -162,34 +163,50 @@ impl Pane for FrameEditPane {
                 self.edit_input.set_focused(false);
                 Action::Session(SessionAction::UpdateSession(self.settings.clone()))
             }
-            ActionId::Mode(ModeActionId::TextCancel) => {
+            ModeActionId::TextCancel => {
                 self.editing = false;
                 self.edit_input.set_focused(false);
                 self.settings = self.original_settings.clone();
                 Action::Session(SessionAction::UpdateSession(self.original_settings.clone()))
             }
-            // Normal actions
-            ActionId::FrameEdit(FrameEditActionId::Prev) => {
+            ModeActionId::PianoEscape
+            | ModeActionId::PianoOctaveDown
+            | ModeActionId::PianoOctaveUp
+            | ModeActionId::PianoSpace
+            | ModeActionId::PianoKey
+            | ModeActionId::PadEscape
+            | ModeActionId::PadKey
+            | ModeActionId::PaletteConfirm
+            | ModeActionId::PaletteCancel => Action::None,
+            };
+        }
+
+        let ActionId::FrameEdit(action) = action else {
+            return Action::None;
+        };
+
+        match action {
+            FrameEditActionId::Prev => {
                 if self.selected > 0 {
                     self.selected -= 1;
                 }
                 Action::None
             }
-            ActionId::FrameEdit(FrameEditActionId::Next) => {
+            FrameEditActionId::Next => {
                 if self.selected < FIELDS.len() - 1 {
                     self.selected += 1;
                 }
                 Action::None
             }
-            ActionId::FrameEdit(FrameEditActionId::Decrease) => {
+            FrameEditActionId::Decrease => {
                 self.adjust(false);
                 Action::Session(SessionAction::UpdateSessionLive(self.settings.clone()))
             }
-            ActionId::FrameEdit(FrameEditActionId::Increase) => {
+            FrameEditActionId::Increase => {
                 self.adjust(true);
                 Action::Session(SessionAction::UpdateSessionLive(self.settings.clone()))
             }
-            ActionId::FrameEdit(FrameEditActionId::Confirm) => {
+            FrameEditActionId::Confirm => {
                 let field = self.current_field();
                 if matches!(field, Field::Bpm | Field::Tuning) {
                     let val = match field {
@@ -206,11 +223,10 @@ impl Pane for FrameEditPane {
                     Action::Session(SessionAction::UpdateSession(self.settings.clone()))
                 }
             }
-            ActionId::FrameEdit(FrameEditActionId::Cancel) => {
+            FrameEditActionId::Cancel => {
                 self.settings = self.original_settings.clone();
                 Action::Session(SessionAction::UpdateSession(self.original_settings.clone()))
             }
-            _ => Action::None,
         }
     }
 
