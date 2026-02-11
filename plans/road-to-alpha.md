@@ -1,237 +1,175 @@
 # Imbolc: Road to Public Alpha/Beta
 
+_Last updated: 2026-02-11_
+
 ## Context
 
-Imbolc is a terminal-based DAW with 269K LOC across 5 crates, 524
-passing tests, 27 panes, 51 sound sources, 37 effects, and 151
-SynthDefs. Core features (sequencing, playback, mixing, persistence,
-MIDI) work. The goal is to harden it for public alpha/beta — early
-adopters who'll tolerate rough edges but expect stability.
+Imbolc is now a 6-crate workspace (`imbolc-ui`, `imbolc-core`,
+`imbolc-types`, `imbolc-audio`, `imbolc-net`, `imbolc-gui`). Core
+music-making flow is implemented: sequencing, playback, mixing,
+persistence, MIDI, recording/export, and automation lanes.
 
-**Decisions locked in:**
+Current product posture for alpha:
 
-- TUI is the product (imbolc-gui can be dropped/fenced)
-- Network (imbolc-net) deferred entirely — solo experience only
-- Architecture questions get pragmatic defaults, not deep redesigns
-- Priority: **stability > usability > features**
+- TUI is the primary product experience.
+- GUI (`imbolc-gui`) is experimental and non-blocking for alpha.
+- Networking (`imbolc-net`) is optional and feature-flagged, not a gate
+  for local alpha quality.
+- Priority remains: **stability > usability > features**.
+
+---
+
+## Status Snapshot (2026-02-11)
+
+| Phase | Status | Notes |
+|------|--------|-------|
+| Phase 0: Hygiene | DONE | Compile error + warning cleanup and quick UI hygiene were completed. |
+| Phase 1: Crash resilience | DONE | Status bar, resize handling, and panic hook are in place. |
+| Phase 2: CI/CD | NOT STARTED | `.github/workflows/` is currently missing. |
+| Phase 3: Onboarding/docs | PARTIAL | README quick-start exists; dedicated install/tutorial/docs audit still pending. |
+| Phase 4: Core alpha features | PARTIAL | Export + automation recording/playback are done; autosave/recovery is still missing. |
+| Phase 5: Polish/quality | PARTIAL | Sequencer grid selection is done; test expansion and MIDI learn workflow remain. |
+| Phase 6: Pre-release | NOT STARTED | Packaging/versioning/release assets not yet prepared. |
 
 ---
 
 ## Phase 0: Hygiene (1-2 days) -- DONE
 
-Clean build = professional signal. Zero warnings makes regressions
-visible.
-
-### 0.1 Fix compile error -- DONE
-
-- [x] `imbolc-ui/src/panes/global_actions.rs:186` — non-exhaustive match
-  on `PaneId::Tuner`. Add the missing arm.
-- [x] `imbolc-ui/src/ui/action_id.rs` — verify `PaneId::Tuner` variant
-  exists and is handled
-
-### 0.2 Fix all compiler warnings (~33) -- DONE
-
-- [x] `imbolc-ui/src/ui/mod.rs:30` — remove unused imports
-  `selected_style_bold`, `selected_style`
-- [x] `imbolc-ui/src/main.rs:64` — prefix `discover_mode` with `_` (or
-  cfg-gate on `net` feature)
-- [x] `imbolc-ui/src/ui/input.rs:35` — `#[allow(dead_code)]` on `AppEvent`
-  variant fields
-- [x] `imbolc-ui/src/ui/style.rs` — `#[allow(dead_code)]` on `theme_*`
-  functions (intentional API for future themes)
-- [x] `imbolc-ui/src/ui/layout_helpers.rs:20` — annotate or use
-  `render_dialog_frame`
-- [x] `imbolc-ui/src/ui/render.rs:73` — annotate or use `fill_line_bg`
-- [x] `imbolc-ui/src/ui/list_selector.rs` — annotate `reset`,
-  `next_and_scroll`, `prev_and_scroll`
-- [x] Test helpers (`make_test_state`, `drive_and_collect_actions`,
-  `send_reconnect`) — add `#[cfg(test)]` or `#[allow(dead_code)]`
-
-**Done when:** `cargo build` produces zero warnings.
-
-### 0.3 Quick wins from TASKS.md -- DONE
-
-- [x] Remove time signature from piano roll header (`piano_roll_pane.rs`)
-- [x] Remove inline help text from pane `render()` methods (all panes)
-
----
+- [x] Fix compile blockers and warning noise
+- [x] Clean up quick UI clutter from `TASKS.md`
 
 ## Phase 1: Crash Resilience & Error Feedback (1-2 weeks) -- DONE
 
-An alpha that crashes or silently fails destroys trust.
-
-### 1.1 Notification/feedback system -- DONE
-
-- [x] Add `StatusMessage { text, level, timestamp }` ring buffer to
-  `AppState`
-- [x] Render one-line status bar at bottom of frame (`frame.rs`)
-- [x] Auto-dismiss after 3-5s. Levels: Info (white), Warning (yellow),
-  Error (red)
-- [x] Wire into: save/load, audio errors, MIDI connection, export progress
-
-**Files:** `imbolc-types/src/` (new type),
-`imbolc-core/src/state/mod.rs`, `imbolc-ui/src/ui/frame.rs`,
-`imbolc-ui/src/main.rs`
-
-### 1.2 Terminal size handling -- DONE
-
-- [x] On startup + `Event::Resize`: check against minimum (80x24)
-- [x] If too small: render centered message, skip pane rendering
-- [x] Clamp layout dimensions to available space
-
-**Files:** `imbolc-ui/src/main.rs`, `imbolc-ui/src/ui/frame.rs`
-
-### 1.3 Panic recovery hook -- DONE
-
-- [x] Set a panic hook that restores terminal state (disable raw mode,
-  show cursor)
-- [x] Attempt autosave on panic before exiting
-- [x] Print useful error message to stderr
-
-**Files:** `imbolc-ui/src/main.rs`
-
-### 1.4 Audit production unwraps -- DONE
-
-- [x] Review all `.unwrap()` outside test modules in imbolc-core and
-  imbolc-ui
-- [x] Replace with proper error handling or document with comments
-- [x] Mutex `.lock().unwrap()` → poisoned-mutex recovery where needed
+- [x] Notification/status bar with levels and expiry
+- [x] Minimum terminal size + resize-safe rendering
+- [x] Panic hook restores terminal state
+- [x] Production `unwrap()` audit/cleanup pass
 
 ---
 
-## Phase 2: CI/CD (3-5 days)
+## Phase 2: CI/CD (3-5 days) -- NOT STARTED
 
-Without CI, regressions creep in silently. Required before inviting
-testers.
+Required before inviting broader testers.
 
 ### 2.1 GitHub Actions CI
 
-- `.github/workflows/ci.yml`
-- Matrix: ubuntu-latest, macos-latest
-- Steps: `cargo check`, `cargo build --release`, `cargo test` (skip
+- [ ] Create `.github/workflows/ci.yml`
+- [ ] Matrix: `ubuntu-latest`, `macos-latest`
+- [ ] Steps: `cargo check`, `cargo build --release`, `cargo test` (skip
   e2e), `cargo clippy -- -D warnings`
-- Run on push to main + PRs
+- [ ] Trigger on pushes to `main` and PRs
 
 ### 2.2 Release workflow
 
-- `.github/workflows/release.yml` triggered by `v*` tags
-- Build release binaries: macOS (aarch64 + x86_64), Linux (x86_64)
-- Bundle `synthdefs/` directory
-- Attach to GitHub Release
+- [ ] Create `.github/workflows/release.yml` for `v*` tags
+- [ ] Build release binaries: macOS (aarch64 + x86_64), Linux (x86_64)
+- [ ] Bundle `synthdefs/`
+- [ ] Attach artifacts to GitHub Releases
 
-### 2.3 Clippy cleanup
+### 2.3 Clippy policy
 
-- Fix any new clippy warnings
-- Consider `clippy::unwrap_used` as a warning (not deny)
-
----
-
-## Phase 3: Onboarding & Docs (1 week)
-
-Alpha testers need to install and run without hand-holding.
-
-### 3.1 Installation guide
-
-- macOS: Homebrew SuperCollider setup, scsynth PATH, VSTPlugin
-  (optional)
-- Linux: Package manager commands
-- Windows: "Not supported for alpha"
-- Common errors + troubleshooting section
-
-### 3.2 Getting Started tutorial
-
-Step-by-step: launch → add instrument → play notes → program pattern →
-add effects → mix → save → export
-
-### 3.3 Docs audit
-
-- Add "Last verified" header to each file in `docs/`
-- Archive completed design docs to `docs/archive/`
-- Ensure `architecture.md` and `keybindings.md` are current
+- [ ] Fix remaining clippy warnings
+- [ ] Consider `clippy::unwrap_used` as warning-level signal
 
 ---
 
-## Phase 4: Core Alpha Features (2-3 weeks)
+## Phase 3: Onboarding & Docs (1 week) -- PARTIAL
 
-### 4.1 Audio export (WAV render)
+### 3.1 Installation guide -- PARTIAL
 
-**Critical** — a DAW that can't export audio isn't a DAW.
+- [x] Basic install/run info in `README.md` (Rust, SuperCollider,
+  SynthDef compile, Linux deps)
+- [ ] Add dedicated `docs/installation.md` with platform-specific
+  troubleshooting and known issues
 
-Plumbing already exists:
+### 3.2 Getting Started tutorial -- NOT STARTED
 
-- `AudioCmd::Render/Export` variants in
-  `imbolc-core/src/audio/commands.rs`
-- `RenderState`, `ExportState`, `ExportKind` structs exist
-- `PianoRollActionId::RenderToWav/BounceToWav/ExportStems` keybindings
-  defined
+- [ ] Create step-by-step first session flow: launch -> add instrument ->
+  play notes -> sequence -> add effects -> save -> export
 
-**Need:** Wire trigger → audio thread → progress notifications →
-completion.
+### 3.3 Docs audit -- NOT STARTED
 
-**Files:** `imbolc-core/src/audio/audio_thread.rs`,
-`imbolc-core/src/audio/commands.rs`,
-`imbolc-ui/src/panes/piano_roll_pane/`
-
-### 4.2 Autosave / crash recovery
-
-- Periodic autosave (every 2-5 min) to `.imbolc.autosave`
-- On startup, detect autosave + offer recovery
-- Use existing IO channel for non-blocking save
-
-### 4.3 Automation recording + playback
-
-Per TASKS.md: data structures exist and are persisted, but recording
-mode, playback interpolation, and editing are missing.
-
-- Recording: Capture parameter changes as automation points during
-  playback
-- Playback: Interpolate values in tick loop (`apply_automation()`
-  exists)
-- Editing: `AutomationPane` already exists, wire point editing
-
-**Files:** `imbolc-core/src/audio/engine/automation.rs`,
-`imbolc-core/src/dispatch/automation.rs`,
-`imbolc-ui/src/panes/automation_pane/`,
-`imbolc-types/src/state/automation.rs`
+- [ ] Add "Last verified" stamp to maintained docs
+- [ ] Move stale/obsolete docs to `docs/archive/`
+- [ ] Ensure architecture and keybinding references are current
 
 ---
 
-## Phase 5: Polish & Quality (1-2 weeks)
+## Phase 4: Core Alpha Features (2-3 weeks) -- PARTIAL
 
-### 5.1 Test coverage expansion
+### 4.1 Audio export (WAV render/bounce/stems) -- DONE
 
-Target: 700+ tests (up from 524). Focus on:
+- [x] Trigger path from UI actions (`render_to_wav`, `bounce_to_wav`,
+  `export_stems`)
+- [x] Dispatch wiring to audio command layer
+- [x] Audio thread export lifecycle + progress feedback + completion
+- [x] UI progress indicators and completion status messages
 
-- Dispatch round-trip tests (action → state change)
-- Render smoke tests for critical panes (ratatui `TestBackend`)
-- Persistence round-trip (save → load → verify)
+**Key files:** `imbolc-ui/src/panes/piano_roll_pane/input.rs`,
+`imbolc-core/src/dispatch/piano_roll.rs`,
+`imbolc-audio/src/audio_thread.rs`,
+`imbolc-core/src/dispatch/audio_feedback.rs`,
+`imbolc-ui/src/panes/piano_roll_pane/rendering.rs`
 
-### 5.2 Sequencer: note duration grid selection
+### 4.2 Autosave / crash recovery -- NOT STARTED
 
-Small feature from TASKS.md — keybind to cycle grid resolution.
+- [ ] Periodic autosave (every 2-5 min) to `.imbolc.autosave`
+- [ ] Startup autosave detection + recovery prompt
+- [ ] Non-blocking save path through existing IO channel
 
-### 5.3 MIDI Learn
+### 4.3 Automation recording + playback -- DONE
 
-CC mapping state exists, needs "learn mode" UI toggle + auto-bind next
-incoming CC.
+- [x] Recording mode toggle and lane arming
+- [x] Capture parameter changes during playback (`RecordValue` flow)
+- [x] Playback interpolation via lane `value_at()` in tick loop
+- [x] Automation editing pane with lane/point operations
+
+**Key files:** `imbolc-core/src/dispatch/automation.rs`,
+`imbolc-audio/src/playback.rs`, `imbolc-types/src/state/automation.rs`,
+`imbolc-ui/src/panes/automation_pane/`
 
 ---
 
-## Phase 6: Pre-Release (1 week)
+## Phase 5: Polish & Quality (1-2 weeks) -- PARTIAL
 
-### 6.1 Workspace cleanup
+### 5.1 Test coverage expansion -- IN PROGRESS
 
-- Remove `imbolc-gui` from workspace members (or feature-gate)
-- Mark `imbolc-net` as experimental/deferred in README
+- [ ] Raise integration/regression coverage in critical dispatch and
+  persistence paths
+- [ ] Add render smoke tests for critical panes (`TestBackend`)
+- [ ] Keep/save/load round-trip coverage for session integrity
+
+### 5.2 Sequencer grid selection -- DONE
+
+- [x] Keybind-based step resolution cycle implemented in sequencer
+
+**Key files:** `imbolc-ui/src/panes/sequencer_pane.rs`,
+`imbolc-ui/keybindings.toml`, `imbolc-ui/src/ui/action_id.rs`
+
+### 5.3 MIDI Learn workflow -- PARTIAL
+
+- [x] CC mapping data model + persistence + mapping management actions
+- [x] MIDI settings pane shows current CC mappings
+- [ ] Learn mode: "next incoming CC binds selected target"
+- [ ] Clear in-flow UX for selecting target then arming learn
+
+---
+
+## Phase 6: Pre-Release (1 week) -- NOT STARTED
+
+### 6.1 Workspace/release posture
+
+- [ ] Decide alpha stance for `imbolc-gui` and `imbolc-net` in release
+  messaging (primary vs experimental)
+- [ ] Update README release framing accordingly
 
 ### 6.2 Release prep
 
-- CHANGELOG.md
-- Verify LICENSE (GPL v3)
-- README: CI badge, terminal recording/screenshots, clean up sponsor
-  links
-- Version bump: all `Cargo.toml` → `0.1.0-alpha.1`
-- Tag and release
+- [ ] Create `CHANGELOG.md`
+- [ ] Verify LICENSE and release metadata
+- [ ] Add CI badge + refreshed terminal captures in README
+- [ ] Version bump all crates to `0.1.0-alpha.1`
+- [ ] Tag and publish alpha release artifacts
 
 ---
 
@@ -239,16 +177,13 @@ incoming CC.
 
 | Item | Reason |
 |------|--------|
-| imbolc-net (all networking) | Solo experience first |
-| imbolc-gui (Dioxus) | TUI is the product |
-| UI themes | Touches every pane, cosmetic |
-| Multi-track audio recording | Complex cpal integration |
-| VST parameter discovery | Manual import works |
-| Plugin scanning/cataloging | Manual import works |
-| Latency compensation (PDC) | Complex DSP problem |
+| UI themes overhaul | Touches every pane, cosmetic for alpha |
+| Multi-track audio recording | Larger cpal + timeline design effort |
+| Plugin scanning/cataloging | Manual import is usable for alpha |
+| Latency compensation (PDC) | Deep DSP/timing work |
 | MIDI clock sync | External sync is post-alpha |
 | Sidechain visualization | Polish |
-| Group/bus metering | Polish |
+| Group/bus metering polish | Polish |
 
 ---
 
@@ -256,37 +191,30 @@ incoming CC.
 
 | Question | Default for Alpha |
 |----------|-------------------|
-| AppState authority | Stays as source of truth. No event-log rewrite. |
-| Why SuperCollider | Keep SC. UGen library + SynthDef language justify the OSC tax. |
-| Control vs performance plane | Accept brief stutter during synthdef loads. Document as known limitation. |
-| 0.5ms tick / 15ms lookahead | Working. Ship as-is. Make lookahead configurable via config.toml. |
-| Undo scaling | 500-entry cap is fine. Monitor in testing. |
-| Instrument-as-monolith | Keep unified model. Groups/shared FX post-beta. |
-| Send tap points | Pre-insert sends are the default. Post-fader optional later. |
-| Voice stealing | Blind-stealing with release+1s margin. SC feedback not worth the complexity. |
-| Control-bus pool | Monotonic growth for alpha. |
-| Docs | Notebook, not contract. Mark stale docs with dates. |
+| AppState authority | Keep AppState as source of truth; no event-log rewrite. |
+| Audio backend | Keep SuperCollider for alpha. |
+| Scheduling | Keep current tick/lookahead model; tune via config only if needed. |
+| Undo scaling | Keep capped history and monitor in real use. |
+| Networking | Keep feature-flagged and optional; local workflow is the alpha gate. |
+| GUI scope | Keep experimental; no alpha blocker dependency. |
+| Docs policy | Treat docs as maintained notes with explicit verification dates. |
 
 ---
 
-## Execution Order
+## Next Execution Order
 
-```
-Phase 0 (days 1-2)     ████  Hygiene
-Phase 1 (days 3-12)    ████████████  Crash resilience + errors
-Phase 2 (days 3-8)     ██████  CI/CD (parallel with Phase 1)
-Phase 3 (days 8-15)    ████████  Onboarding docs
-Phase 4 (days 13-25)   ██████████████  Core features (export, autosave, automation)
-Phase 5 (days 20-30)   ████████████  Polish + tests
-Phase 6 (days 30-35)   ██████  Pre-release
-```
+1. Phase 2 (CI/CD) — block regressions before widening testers.
+2. Phase 4.2 (autosave/recovery) — close the largest data-loss risk.
+3. Phase 3 (install/tutorial/docs) — reduce onboarding friction.
+4. Phase 5.1 + 5.3 (coverage and MIDI learn UX).
+5. Phase 6 (packaging/release prep).
 
-## Verification
+## Verification Gates
 
 After each phase:
 
-- `cargo build` — zero warnings
-- `cargo test` — all tests pass
-- `cargo clippy` — clean (after Phase 2)
-- Manual smoke test: launch → add instrument → play → sequence → mix →
-  save → load → export
+- `cargo build` with no new warnings
+- `cargo test` passing
+- `cargo clippy` clean (from Phase 2 onward)
+- Manual smoke test: launch -> add instrument -> play -> sequence ->
+  mix -> save -> load -> export
