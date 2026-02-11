@@ -23,9 +23,11 @@ SynthDef(\imbolc_sampler_oneshot, { |out=1024, bufnum=0, sliceStart=0, sliceEnd=
 
     // Edge envelope removes hard starts/stops at arbitrary slice points.
     var edge = (duration * 0.25).clip(0.001, 0.01);
+    var sustain;
+    var env;
     edge = edge.min(duration * 0.5);
-    var sustain = (duration - (edge * 2)).max(0);
-    var env = EnvGen.kr(Env.linen(edge, sustain, edge), doneAction: 2);
+    sustain = (duration - (edge * 2)).max(0);
+    env = EnvGen.kr(Env.linen(edge, sustain, edge), doneAction: 2);
 
     Out.ar(out, sig * amp.lag(0.005) * env);
 }).writeDefFile(dir);

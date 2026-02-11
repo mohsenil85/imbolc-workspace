@@ -660,7 +660,7 @@ mod tests {
 
         // Steal for a new note at the same pitch
         engine
-            .steal_voice_if_needed(inst_id, 60, 0.9)
+            .steal_voice_if_needed(inst_id, 60, 0.9, 0.0)
             .expect("steal");
 
         // The old voice should be removed
@@ -686,7 +686,7 @@ mod tests {
         // Trigger steal with a pitch outside both ranges (no same-pitch retrigger)
         let new_pitch = 31;
         engine
-            .steal_voice_if_needed(inst_id, new_pitch, 0.8)
+            .steal_voice_if_needed(inst_id, new_pitch, 0.8, 0.0)
             .expect("steal");
 
         // The released voice should be gone, not any active voice
@@ -716,7 +716,7 @@ mod tests {
         // Use a pitch outside the active range to avoid same-pitch retrigger
         let new_pitch = 39;
         engine
-            .steal_voice_if_needed(inst_id, new_pitch, 0.8)
+            .steal_voice_if_needed(inst_id, new_pitch, 0.8, 0.0)
             .expect("steal");
 
         assert!(
@@ -740,7 +740,7 @@ mod tests {
         // Use a pitch outside the active range to avoid same-pitch retrigger
         let new_pitch = 39;
         engine
-            .steal_voice_if_needed(inst_id, new_pitch, 0.5)
+            .steal_voice_if_needed(inst_id, new_pitch, 0.5, 0.0)
             .expect("steal");
 
         assert!(

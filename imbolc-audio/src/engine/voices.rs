@@ -9,6 +9,11 @@ use imbolc_types::{BufferId, InstrumentId, InstrumentState, ParameterTarget, Par
 /// for the source ADSR to begin releasing.
 const ANTI_CLICK_FADE_SECS: f64 = 0.030;
 
+/// Minimum onset attack time (seconds) enforced on all spawned voices.
+/// Prevents clicks from sub-control-block ADSR ramps. 5ms is the
+/// industry standard used by Ableton Live, Logic Pro, etc.
+const MIN_ONSET_SECS: f32 = 0.005;
+
 impl AudioEngine {
     /// Spawn a voice for an instrument
     pub fn spawn_voice(
@@ -38,8 +43,8 @@ impl AudioEngine {
             return self.spawn_sampler_voice(instrument_id, pitch, velocity, offset_secs, state, session);
         }
 
-        // Smart voice stealing (must precede backend borrow)
-        self.steal_voice_if_needed(instrument_id, pitch, velocity)?;
+        // Smart voice stealing — timed to align with new voice onset
+        self.steal_voice_if_needed(instrument_id, pitch, velocity, offset_secs)?;
 
         if self.backend.is_none() {
             return Err("Not connected".to_string());
@@ -120,9 +125,9 @@ impl AudioEngine {
             args.push(RawArg::Float(voice_freq_bus as f32));
             args.push(RawArg::Str("gate_in".to_string()));
             args.push(RawArg::Float(voice_gate_bus as f32));
-            // Amp envelope (ADSR)
+            // Amp envelope (ADSR) — enforce minimum onset time
             args.push(RawArg::Str("attack".to_string()));
-            args.push(RawArg::Float(instrument.modulation.amp_envelope.attack));
+            args.push(RawArg::Float(instrument.modulation.amp_envelope.attack.max(MIN_ONSET_SECS)));
             args.push(RawArg::Str("decay".to_string()));
             args.push(RawArg::Float(instrument.modulation.amp_envelope.decay));
             args.push(RawArg::Str("sustain".to_string()));
@@ -283,8 +288,8 @@ impl AudioEngine {
             .map(|s| (s.start, s.end))
             .unwrap_or((0.0, 1.0));
 
-        // Smart voice stealing (must precede backend borrow)
-        self.steal_voice_if_needed(instrument_id, pitch, velocity)?;
+        // Smart voice stealing — timed to align with new voice onset
+        self.steal_voice_if_needed(instrument_id, pitch, velocity, offset_secs)?;
 
         if self.backend.is_none() {
             return Err("Not connected".to_string());
@@ -421,9 +426,9 @@ impl AudioEngine {
             args.push(RawArg::Str("vel_in".to_string()));
             args.push(RawArg::Float(voice_vel_bus as f32));
 
-            // Amp envelope (ADSR)
+            // Amp envelope (ADSR) — enforce minimum onset time
             args.push(RawArg::Str("attack".to_string()));
-            args.push(RawArg::Float(instrument.modulation.amp_envelope.attack));
+            args.push(RawArg::Float(instrument.modulation.amp_envelope.attack.max(MIN_ONSET_SECS)));
             args.push(RawArg::Str("decay".to_string()));
             args.push(RawArg::Float(instrument.modulation.amp_envelope.decay));
             args.push(RawArg::Str("sustain".to_string()));
@@ -585,11 +590,14 @@ impl AudioEngine {
     /// Steal a voice if needed before spawning a new one.
     /// Delegates to the voice allocator for candidate selection,
     /// then handles anti-click freeing via the backend.
+    /// `offset_secs` aligns the steal timing with the new voice onset
+    /// so the crossfade is seamless (no gap between old fade-out and new attack).
     pub(crate) fn steal_voice_if_needed(
         &mut self,
         instrument_id: InstrumentId,
         pitch: u8,
         _velocity: f32,
+        offset_secs: f64,
     ) -> Result<(), String> {
         let backend = self.backend.as_ref().ok_or("Not connected")?;
 
@@ -598,17 +606,28 @@ impl AudioEngine {
             self.node_registry.unregister(voice.group_id);
             self.node_registry.unregister(voice.midi_node_id);
             self.node_registry.unregister(voice.source_node);
-            Self::anti_click_free(backend.as_ref(), voice)?;
+            Self::anti_click_free_at(backend.as_ref(), voice, offset_secs)?;
         }
 
         Ok(())
     }
 
-    /// Free a voice with a brief anti-click fade: send gate=0, then /n_free after 5ms.
+    /// Free a voice with a brief anti-click fade: send gate=0, then /n_free after fade.
     /// For already-released voices, skip gate=0 (already fading) but still delay the free.
     fn anti_click_free(
         backend: &dyn AudioBackend,
         voice: &VoiceChain,
+    ) -> Result<(), String> {
+        Self::anti_click_free_at(backend, voice, 0.0)
+    }
+
+    /// Free a voice with anti-click fade starting at `offset_secs` from now.
+    /// Used by voice stealing to align the fade-out with the replacement voice's onset,
+    /// producing a seamless crossfade instead of a gap.
+    fn anti_click_free_at(
+        backend: &dyn AudioBackend,
+        voice: &VoiceChain,
+        offset_secs: f64,
     ) -> Result<(), String> {
         if voice.release_state.is_some() {
             // Already releasing -- use delayed free to avoid cutting the release tail
@@ -619,13 +638,13 @@ impl AudioEngine {
                         addr: "/n_free".to_string(),
                         args: vec![RawArg::Int(voice.group_id)],
                     }],
-                    ANTI_CLICK_FADE_SECS,
+                    offset_secs + ANTI_CLICK_FADE_SECS,
                 )
                 .map_err(|e| e.to_string())?;
         } else {
-            // Active voice: send gate=0 for a brief fade, then free after fade
+            // Active voice: send gate=0 at the offset, then free after fade
             backend
-                .set_params_bundled(voice.midi_node_id, &[("gate", 0.0)], 0.0)
+                .set_params_bundled(voice.midi_node_id, &[("gate", 0.0)], offset_secs)
                 .map_err(|e| e.to_string())?;
             backend
                 .send_bundle(
@@ -633,7 +652,7 @@ impl AudioEngine {
                         addr: "/n_free".to_string(),
                         args: vec![RawArg::Int(voice.group_id)],
                     }],
-                    ANTI_CLICK_FADE_SECS,
+                    offset_secs + ANTI_CLICK_FADE_SECS,
                 )
                 .map_err(|e| e.to_string())?;
         }
@@ -834,9 +853,9 @@ impl AudioEngine {
             args.push(RawArg::Float(voice_freq_bus as f32));
             args.push(RawArg::Str("gate_in".to_string()));
             args.push(RawArg::Float(voice_gate_bus as f32));
-            // Amp envelope (ADSR)
+            // Amp envelope (ADSR) — enforce minimum onset time
             args.push(RawArg::Str("attack".to_string()));
-            args.push(RawArg::Float(instrument.modulation.amp_envelope.attack));
+            args.push(RawArg::Float(instrument.modulation.amp_envelope.attack.max(MIN_ONSET_SECS)));
             args.push(RawArg::Str("decay".to_string()));
             args.push(RawArg::Float(instrument.modulation.amp_envelope.decay));
             args.push(RawArg::Str("sustain".to_string()));
