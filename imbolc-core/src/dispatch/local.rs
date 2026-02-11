@@ -1,12 +1,16 @@
 //! LocalDispatcher: owns state and dispatches domain actions.
+//!
+//! All action routing matches must be exhaustive — wildcard arms are denied so
+//! that adding a new `UiAction` or `DomainAction` variant forces handling here.
+#![deny(clippy::wildcard_enum_match_arm)]
 
 use std::sync::mpsc::Sender;
 
-use imbolc_types::{Action, DispatchResult, DomainAction};
+use imbolc_types::{Action, DispatchResult, DomainAction, RoutedAction, UiAction};
 
 use crate::action::IoFeedback;
-use imbolc_audio::AudioHandle;
 use crate::state::AppState;
+use imbolc_audio::AudioHandle;
 
 use super::dispatch_action;
 
@@ -47,27 +51,47 @@ impl LocalDispatcher {
 
     /// Dispatch an action using the provided audio handle.
     ///
-    /// Extracts the `DomainAction` from the `Action` and forwards it to
-    /// `dispatch_action()`. UI-only actions (Nav, Quit, etc.) return a
-    /// no-op result.
+    /// Routes `Action` into UI/domain branches.
+    ///
+    /// Domain actions are dispatched via `dispatch_action()`.
+    /// UI actions are handled locally (Quit) or ignored (nav/layer actions).
     ///
     /// After dispatch, forwards the action to the audio thread for incremental
     /// state projection. The audio thread applies the action's state mutations
     /// to its local copies, avoiding full-state clones.
-    pub fn dispatch_with_audio(&mut self, action: &Action, audio: &mut AudioHandle) -> DispatchResult {
-        let domain = match action.to_domain() {
-            Some(d) => d,
-            None => return DispatchResult::none(),
-        };
-        self.dispatch_domain(&domain, audio)
+    pub fn dispatch_with_audio(
+        &mut self,
+        action: &Action,
+        audio: &mut AudioHandle,
+    ) -> DispatchResult {
+        match action.route() {
+            RoutedAction::Domain(domain) => self.dispatch_domain(&domain, audio),
+            RoutedAction::Ui(ui) => Self::dispatch_ui(ui),
+        }
     }
 
     /// Dispatch a domain action directly, bypassing the Action wrapper.
-    pub fn dispatch_domain(&mut self, action: &DomainAction, audio: &mut AudioHandle) -> DispatchResult {
+    pub fn dispatch_domain(
+        &mut self,
+        action: &DomainAction,
+        audio: &mut AudioHandle,
+    ) -> DispatchResult {
         let mut result = dispatch_action(action, &mut self.state, audio, &self.io_tx);
         let reducible = imbolc_types::reduce::is_reducible(action);
         audio.forward_action(action, &result.audio_effects);
         result.needs_full_sync = !reducible && !result.audio_effects.is_empty();
         result
+    }
+
+    fn dispatch_ui(action: UiAction) -> DispatchResult {
+        match action {
+            UiAction::Quit => DispatchResult::with_quit(),
+            UiAction::None
+            | UiAction::Nav(_)
+            | UiAction::ExitPerformanceMode
+            | UiAction::PushLayer(_)
+            | UiAction::PopLayer(_)
+            | UiAction::SaveAndQuit => DispatchResult::none(),
+        }
     }
 }

@@ -8,7 +8,7 @@ use imbolc_core::action::IoFeedback;
 use imbolc_core::audio::AudioHandle;
 use imbolc_core::config::Config;
 use imbolc_core::state::AppState;
-use imbolc_types::Action;
+use imbolc_types::{Action, RoutedAction, UiAction};
 
 /// Shared state wrapper for the GUI.
 ///
@@ -38,30 +38,40 @@ impl SharedState {
 
     /// Dispatch an action to the core.
     pub fn dispatch(&mut self, action: Action) {
-        let domain = match action.to_domain() {
-            Some(d) => d,
-            None => return,
-        };
-        let result = imbolc_core::dispatch::dispatch_action(
-            &domain,
-            &mut self.app,
-            &mut self.audio,
-            &self.io_tx,
-        );
+        match action.route() {
+            RoutedAction::Domain(domain) => {
+                let result = imbolc_core::dispatch::dispatch_action(
+                    &domain,
+                    &mut self.app,
+                    &mut self.audio,
+                    &self.io_tx,
+                );
 
-        // Forward action to audio thread for incremental state projection
-        let reducible = imbolc_types::reduce::is_reducible(&domain);
-        self.audio.forward_action(&domain, &result.audio_effects);
+                // Forward action to audio thread for incremental state projection
+                let reducible = imbolc_types::reduce::is_reducible(&domain);
+                self.audio.forward_action(&domain, &result.audio_effects);
 
-        // Handle audio effects
-        if !result.audio_effects.is_empty() {
-            let needs_full_sync = !reducible;
-            self.audio.apply_effects(&self.app, &result.audio_effects, needs_full_sync);
-        }
+                // Handle audio effects
+                if !result.audio_effects.is_empty() {
+                    let needs_full_sync = !reducible;
+                    self.audio
+                        .apply_effects(&self.app, &result.audio_effects, needs_full_sync);
+                }
 
-        // Handle quit
-        if result.quit {
-            std::process::exit(0);
+                // Handle quit
+                if result.quit {
+                    std::process::exit(0);
+                }
+            }
+            RoutedAction::Ui(ui) => match ui {
+                UiAction::Quit => std::process::exit(0),
+                UiAction::None
+                | UiAction::Nav(_)
+                | UiAction::ExitPerformanceMode
+                | UiAction::PushLayer(_)
+                | UiAction::PopLayer(_)
+                | UiAction::SaveAndQuit => {}
+            },
         }
     }
 

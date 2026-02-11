@@ -14,8 +14,8 @@ pub use imbolc_types::{
     Action, ArrangementAction, AudioEffect, AudioFeedback, AutomationAction, BusAction,
     ChopperAction, ClickAction, DispatchResult, DomainAction, EqParamKind, FileSelectAction,
     FilterParamKind, InstrumentAction, InstrumentUpdate, LayerGroupAction, LfoParamKind,
-    MidiAction, MixerAction, NavAction, NavIntent, PianoRollAction, SequencerAction,
-    ServerAction, SessionAction, StatusEvent, ToggleResult, TunerAction, VstParamAction,
+    MidiAction, MixerAction, NavAction, NavIntent, PianoRollAction, RoutedAction, SequencerAction,
+    ServerAction, SessionAction, StatusEvent, ToggleResult, TunerAction, UiAction, VstParamAction,
     VstTarget,
 };
 
@@ -24,8 +24,22 @@ pub use imbolc_types::{
 #[derive(Debug)]
 #[allow(clippy::large_enum_variant)]
 pub enum IoFeedback {
-    SaveComplete { id: u64, path: PathBuf, result: Result<String, String> },
-    LoadComplete { id: u64, path: PathBuf, result: Result<(SessionState, InstrumentState, String), String> },
-    ImportSynthDefComplete { id: u64, result: Result<(CustomSynthDef, String, PathBuf), String> },
-    ImportSynthDefLoaded { id: u64, result: Result<String, String> },
+    SaveComplete {
+        id: u64,
+        path: PathBuf,
+        result: Result<String, String>,
+    },
+    LoadComplete {
+        id: u64,
+        path: PathBuf,
+        result: Result<(SessionState, InstrumentState, String), String>,
+    },
+    ImportSynthDefComplete {
+        id: u64,
+        result: Result<(CustomSynthDef, String, PathBuf), String>,
+    },
+    ImportSynthDefLoaded {
+        id: u64,
+        result: Result<String, String>,
+    },
 }

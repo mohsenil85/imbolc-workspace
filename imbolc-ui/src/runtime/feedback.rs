@@ -7,7 +7,6 @@ use crate::global_actions::apply_dispatch_result;
 use crate::panes::ServerPane;
 use crate::state;
 use crate::ui::status_bar::StatusLevel;
-use crate::ui::Action;
 
 impl AppRuntime {
     /// Drain I/O feedback (save/load/import completions).
@@ -217,10 +216,10 @@ impl AppRuntime {
     pub(crate) fn drain_audio_feedback(&mut self) {
         for feedback in self.audio.drain_feedback() {
             self.render_needed = true;
-            let action = Action::AudioFeedback(feedback);
-            let mut r = self
-                .dispatcher
-                .dispatch_with_audio(&action, &mut self.audio);
+            let mut r = self.dispatcher.dispatch_domain(
+                &action::DomainAction::AudioFeedback(feedback),
+                &mut self.audio,
+            );
             if r.needs_full_sync {
                 self.needs_full_sync = true;
             }
@@ -238,18 +237,19 @@ impl AppRuntime {
 
     /// Poll MIDI events and dispatch them.
     pub(crate) fn drain_midi_events(&mut self) {
+        use imbolc_types::RoutedAction;
         for event in self.midi_input.poll_events() {
             if let Some(action) =
                 crate::midi_dispatch::process_midi_event(&event, self.dispatcher.state())
             {
                 self.render_needed = true;
-                let r = self
-                    .dispatcher
-                    .dispatch_with_audio(&action, &mut self.audio);
-                if r.needs_full_sync {
-                    self.needs_full_sync = true;
+                if let RoutedAction::Domain(ref domain) = action.route() {
+                    let r = self.dispatcher.dispatch_domain(domain, &mut self.audio);
+                    if r.needs_full_sync {
+                        self.needs_full_sync = true;
+                    }
+                    self.pending_audio_effects.extend(r.audio_effects);
                 }
-                self.pending_audio_effects.extend(r.audio_effects);
             }
         }
     }

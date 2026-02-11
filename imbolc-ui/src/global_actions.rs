@@ -1,20 +1,20 @@
 use crate::action::{
-    AudioEffect, ClickAction, MixerAction, PianoRollAction, SequencerAction,
-    AutomationAction, Action
+    AudioEffect, AutomationAction, ClickAction, DomainAction, MixerAction, PianoRollAction,
+    SequencerAction,
 };
 use crate::audio::AudioHandle;
-use crate::state::{AppState, MixerSelection, ClipboardContents};
 use crate::dispatch::LocalDispatcher;
 use crate::panes::{
-    CommandPalettePane, DocsPane, InstrumentEditPane, PaneSwitcherPane, PianoRollPane, SequencerPane,
-    AutomationPane, ServerPane, HelpPane, FileBrowserPane, VstParamPane,
-    ConfirmPane, SaveAsPane, PendingAction,
+    AutomationPane, CommandPalettePane, ConfirmPane, DocsPane, FileBrowserPane, HelpPane,
+    InstrumentEditPane, PaneSwitcherPane, PendingAction, PianoRollPane, SaveAsPane, SequencerPane,
+    ServerPane, VstParamPane,
 };
-use crate::ui::{
-    self, DispatchResult, Frame, LayerStack, NavIntent, PaneManager,
-    SessionAction, StatusEvent, ToggleResult, ViewState
-};
+use crate::state::{AppState, ClipboardContents, MixerSelection};
 use crate::ui::action_id::{ActionId, GlobalActionId, PaneId};
+use crate::ui::{
+    self, DispatchResult, Frame, LayerStack, NavIntent, PaneManager, SessionAction, StatusEvent,
+    ToggleResult, ViewState,
+};
 
 /// Two-digit instrument selection state machine
 pub(crate) enum InstrumentSelectMode {
@@ -39,7 +39,11 @@ pub(crate) fn select_instrument(
 ) {
     let idx = number.saturating_sub(1); // Convert 1-based to 0-based
     if idx < dispatcher.state().instruments.instruments.len() {
-        dispatcher.dispatch_with_audio(&Action::Instrument(ui::InstrumentAction::Select(idx)), audio);
+        dispatch_side_effect_free(
+            dispatcher,
+            &DomainAction::Instrument(ui::InstrumentAction::Select(idx)),
+            audio,
+        );
         sync_piano_roll_to_selection(dispatcher, panes, audio);
         sync_instrument_edit(dispatcher.state(), panes);
     }
@@ -56,12 +60,21 @@ pub(crate) fn sync_piano_roll_to_selection(
     if let Some(selected_idx) = state.instruments.selected {
         // Extract data from instrument before any mutable borrows
         let inst_data = state.instruments.instruments.get(selected_idx).map(|inst| {
-            (inst.id, inst.source.is_kit(), inst.source.is_audio_input(), inst.source.is_bus_in())
+            (
+                inst.id,
+                inst.source.is_kit(),
+                inst.source.is_audio_input(),
+                inst.source.is_bus_in(),
+            )
         });
 
         if let Some((inst_id, is_kit, is_audio_in, is_bus_in)) = inst_data {
             // Find which track index corresponds to this instrument
-            if let Some(track_idx) = state.session.piano_roll.track_order.iter()
+            if let Some(track_idx) = state
+                .session
+                .piano_roll
+                .track_order
+                .iter()
                 .position(|&id| id == inst_id)
             {
                 if let Some(pr_pane) = panes.get_pane_mut::<PianoRollPane>("piano_roll") {
@@ -73,8 +86,11 @@ pub(crate) fn sync_piano_roll_to_selection(
             let active = panes.active().id();
             if active == "mixer" {
                 if let MixerSelection::Instrument(_) = dispatcher.state().session.mixer.selection {
-                    dispatcher.dispatch_with_audio(
-                        &Action::Mixer(MixerAction::SelectAt(MixerSelection::Instrument(selected_idx))),
+                    dispatch_side_effect_free(
+                        dispatcher,
+                        &DomainAction::Mixer(MixerAction::SelectAt(MixerSelection::Instrument(
+                            selected_idx,
+                        ))),
                         audio,
                     );
                 }
@@ -108,6 +124,27 @@ pub(crate) fn sync_instrument_edit(state: &AppState, panes: &mut PaneManager) {
     }
 }
 
+fn dispatch_side_effect_free(
+    dispatcher: &mut LocalDispatcher,
+    action: &DomainAction,
+    audio: &mut AudioHandle,
+) {
+    let result = dispatcher.dispatch_domain(action, audio);
+    debug_assert!(
+        !result.quit
+            && result.nav.is_empty()
+            && result.status.is_empty()
+            && result.project_name.is_none()
+            && result.audio_effects.is_empty()
+            && !result.stop_playback
+            && !result.reset_playhead
+            && !result.needs_full_sync,
+        "Expected side-effect-free dispatch for {:?}, got {:?}",
+        action,
+        result
+    );
+}
+
 /// Sync layer stack pane layer and performance mode state after pane switch.
 pub(crate) fn sync_pane_layer(panes: &mut PaneManager, layer_stack: &mut LayerStack) {
     let had_piano = layer_stack.has_layer("piano_mode");
@@ -116,8 +153,12 @@ pub(crate) fn sync_pane_layer(panes: &mut PaneManager, layer_stack: &mut LayerSt
 
     if had_piano || had_pad {
         if panes.active_mut().supports_performance_mode() {
-            if had_piano { panes.active_mut().activate_piano(); }
-            if had_pad { panes.active_mut().activate_pad(); }
+            if had_piano {
+                panes.active_mut().activate_piano();
+            }
+            if had_pad {
+                panes.active_mut().activate_pad();
+            }
         } else {
             layer_stack.pop("piano_mode");
             layer_stack.pop("pad_mode");
@@ -142,23 +183,34 @@ pub(crate) fn handle_global_action(
     let capture_view = |panes: &mut PaneManager, state: &AppState| -> ViewState {
         let pane_id = panes.active().id().to_string();
         let inst_selection = state.instruments.selected;
-        let edit_tab = panes.get_pane_mut::<InstrumentEditPane>("instrument_edit")
+        let edit_tab = panes
+            .get_pane_mut::<InstrumentEditPane>("instrument_edit")
             .map(|ep| ep.tab_index())
             .unwrap_or(0);
-        ViewState { pane_id, inst_selection, edit_tab }
+        ViewState {
+            pane_id,
+            inst_selection,
+            edit_tab,
+        }
     };
 
     // Helper to restore view state
-    let restore_view = |panes: &mut PaneManager, dispatcher: &mut LocalDispatcher, view: &ViewState| {
-        dispatcher.state_mut().instruments.selected = view.inst_selection;
-        if let Some(edit_pane) = panes.get_pane_mut::<InstrumentEditPane>("instrument_edit") {
-            edit_pane.set_tab_index(view.edit_tab);
-        }
-        panes.switch_to(&view.pane_id, dispatcher.state());
-    };
+    let restore_view =
+        |panes: &mut PaneManager, dispatcher: &mut LocalDispatcher, view: &ViewState| {
+            dispatcher.state_mut().instruments.selected = view.inst_selection;
+            if let Some(edit_pane) = panes.get_pane_mut::<InstrumentEditPane>("instrument_edit") {
+                edit_pane.set_tab_index(view.edit_tab);
+            }
+            panes.switch_to(&view.pane_id, dispatcher.state());
+        };
 
     // Helper for pane switching with view history
-    let switch_to_pane = |target: &str, panes: &mut PaneManager, dispatcher: &mut LocalDispatcher, audio: &mut AudioHandle, app_frame: &mut Frame, layer_stack: &mut LayerStack| {
+    let switch_to_pane = |target: &str,
+                          panes: &mut PaneManager,
+                          dispatcher: &mut LocalDispatcher,
+                          audio: &mut AudioHandle,
+                          app_frame: &mut Frame,
+                          layer_stack: &mut LayerStack| {
         // Stop tuner tone when leaving tuner pane
         if panes.active().id() == "tuner" {
             audio.stop_tuner_tone();
@@ -170,15 +222,20 @@ pub(crate) fn handle_global_action(
             app_frame.view_history[app_frame.history_cursor] = current;
         }
         // Truncate forward history
-        app_frame.view_history.truncate(app_frame.history_cursor + 1);
+        app_frame
+            .view_history
+            .truncate(app_frame.history_cursor + 1);
         // Switch and record new view
         panes.switch_to(target, dispatcher.state());
         sync_pane_layer(panes, layer_stack);
         // Sync mixer highlight to global instrument selection on entry
         if target == "mixer" {
             if let Some(selected_idx) = dispatcher.state().instruments.selected {
-                dispatcher.dispatch_with_audio(
-                    &Action::Mixer(MixerAction::SelectAt(MixerSelection::Instrument(selected_idx))),
+                dispatch_side_effect_free(
+                    dispatcher,
+                    &DomainAction::Mixer(MixerAction::SelectAt(MixerSelection::Instrument(
+                        selected_idx,
+                    ))),
                     audio,
                 );
             }
@@ -199,16 +256,20 @@ pub(crate) fn handle_global_action(
                 return GlobalResult::Quit;
             }
             GlobalActionId::Undo => {
-                let mut r = dispatcher.dispatch_with_audio(&Action::Undo, audio);
-                if !r.audio_effects.is_empty() { *needs_full_sync = true; }
+                let mut r = dispatcher.dispatch_domain(&DomainAction::Undo, audio);
+                if !r.audio_effects.is_empty() {
+                    *needs_full_sync = true;
+                }
                 pending_audio_effects.extend(std::mem::take(&mut r.audio_effects));
                 apply_dispatch_result(r, dispatcher, panes, app_frame, audio);
                 sync_piano_roll_to_selection(dispatcher, panes, audio);
                 sync_instrument_edit(dispatcher.state(), panes);
             }
             GlobalActionId::Redo => {
-                let mut r = dispatcher.dispatch_with_audio(&Action::Redo, audio);
-                if !r.audio_effects.is_empty() { *needs_full_sync = true; }
+                let mut r = dispatcher.dispatch_domain(&DomainAction::Redo, audio);
+                if !r.audio_effects.is_empty() {
+                    *needs_full_sync = true;
+                }
                 pending_audio_effects.extend(std::mem::take(&mut r.audio_effects));
                 apply_dispatch_result(r, dispatcher, panes, app_frame, audio);
                 sync_piano_roll_to_selection(dispatcher, panes, audio);
@@ -224,8 +285,7 @@ pub(crate) fn handle_global_action(
                     panes.push_to("save_as", dispatcher.state());
                     sync_pane_layer(panes, layer_stack);
                 } else {
-                    let save_action = Action::Session(SessionAction::Save);
-                    let mut r = dispatcher.dispatch_with_audio(&save_action, audio);
+                    let mut r = dispatcher.dispatch_domain(&DomainAction::Session(SessionAction::Save), audio);
                     if r.needs_full_sync {
                         *needs_full_sync = true;
                     }
@@ -236,13 +296,15 @@ pub(crate) fn handle_global_action(
             GlobalActionId::Load => {
                 if dispatcher.state().project.dirty {
                     if let Some(confirm) = panes.get_pane_mut::<ConfirmPane>("confirm") {
-                        confirm.set_confirm("Discard unsaved changes and reload?", PendingAction::LoadDefault);
+                        confirm.set_confirm(
+                            "Discard unsaved changes and reload?",
+                            PendingAction::LoadDefault,
+                        );
                     }
                     panes.push_to("confirm", dispatcher.state());
                     sync_pane_layer(panes, layer_stack);
                 } else {
-                    let load_action = Action::Session(SessionAction::Load);
-                    let mut r = dispatcher.dispatch_with_audio(&load_action, audio);
+                    let mut r = dispatcher.dispatch_domain(&DomainAction::Session(SessionAction::Load), audio);
                     if r.needs_full_sync {
                         *needs_full_sync = true;
                     }
@@ -251,7 +313,11 @@ pub(crate) fn handle_global_action(
                 }
             }
             GlobalActionId::SaveAs => {
-                let default_name = dispatcher.state().project.path.as_ref()
+                let default_name = dispatcher
+                    .state()
+                    .project
+                    .path
+                    .as_ref()
                     .and_then(|p| p.file_stem())
                     .and_then(|s| s.to_str())
                     .unwrap_or("untitled")
@@ -267,18 +333,17 @@ pub(crate) fn handle_global_action(
                 sync_pane_layer(panes, layer_stack);
             }
             GlobalActionId::MasterMute => {
-                let mut r = dispatcher.dispatch_with_audio(&Action::Session(SessionAction::ToggleMasterMute), audio);
+                let mut r = dispatcher.dispatch_domain(&DomainAction::Session(SessionAction::ToggleMasterMute), audio);
                 pending_audio_effects.extend(std::mem::take(&mut r.audio_effects));
                 apply_dispatch_result(r, dispatcher, panes, app_frame, audio);
             }
             GlobalActionId::ClickTrackToggle => {
-                let mut r = dispatcher.dispatch_with_audio(&Action::Click(ClickAction::Toggle), audio);
+                let mut r = dispatcher.dispatch_domain(&DomainAction::Click(ClickAction::Toggle), audio);
                 pending_audio_effects.extend(std::mem::take(&mut r.audio_effects));
                 apply_dispatch_result(r, dispatcher, panes, app_frame, audio);
             }
             GlobalActionId::RecordMaster => {
-                let record_action = Action::Server(ui::ServerAction::RecordMaster);
-                let mut r = dispatcher.dispatch_with_audio(&record_action, audio);
+                let mut r = dispatcher.dispatch_domain(&DomainAction::Server(ui::ServerAction::RecordMaster), audio);
                 if r.needs_full_sync {
                     *needs_full_sync = true;
                 }
@@ -291,7 +356,7 @@ pub(crate) fn handle_global_action(
             GlobalActionId::Cut => {
                 let action = cut_from_active_pane(dispatcher, panes, audio);
                 if let Some(action) = action {
-                    let mut r = dispatcher.dispatch_with_audio(&action, audio);
+                    let mut r = dispatcher.dispatch_domain(&action, audio);
                     if r.needs_full_sync {
                         *needs_full_sync = true;
                     }
@@ -302,7 +367,7 @@ pub(crate) fn handle_global_action(
             GlobalActionId::Paste => {
                 let action = paste_to_active_pane(dispatcher.state_mut(), panes);
                 if let Some(action) = action {
-                    let mut r = dispatcher.dispatch_with_audio(&action, audio);
+                    let mut r = dispatcher.dispatch_domain(&action, audio);
                     if r.needs_full_sync {
                         *needs_full_sync = true;
                     }
@@ -322,20 +387,28 @@ pub(crate) fn handle_global_action(
                 switch_to_pane(target, panes, dispatcher, audio, app_frame, layer_stack);
             }
             GlobalActionId::SwitchPane(PaneId::InstrumentList) => {
-                switch_to_pane("instrument", panes, dispatcher, audio, app_frame, layer_stack);
+                switch_to_pane(
+                    "instrument",
+                    panes,
+                    dispatcher,
+                    audio,
+                    app_frame,
+                    layer_stack,
+                );
             }
             GlobalActionId::SwitchPane(PaneId::PianoRollOrSequencer) => {
-                let target = if let Some(inst) = dispatcher.state().instruments.selected_instrument() {
-                    if inst.source.is_kit() {
-                        "sequencer"
-                    } else if inst.source.is_audio_input() || inst.source.is_bus_in() {
-                        "waveform"
+                let target =
+                    if let Some(inst) = dispatcher.state().instruments.selected_instrument() {
+                        if inst.source.is_kit() {
+                            "sequencer"
+                        } else if inst.source.is_audio_input() || inst.source.is_bus_in() {
+                            "waveform"
+                        } else {
+                            "piano_roll"
+                        }
                     } else {
                         "piano_roll"
-                    }
-                } else {
-                    "piano_roll"
-                };
+                    };
                 switch_to_pane(target, panes, dispatcher, audio, app_frame, layer_stack);
             }
             GlobalActionId::SwitchPane(PaneId::Track) => {
@@ -348,13 +421,27 @@ pub(crate) fn handle_global_action(
                 switch_to_pane("server", panes, dispatcher, audio, app_frame, layer_stack);
             }
             GlobalActionId::SwitchPane(PaneId::Automation) => {
-                switch_to_pane("automation", panes, dispatcher, audio, app_frame, layer_stack);
+                switch_to_pane(
+                    "automation",
+                    panes,
+                    dispatcher,
+                    audio,
+                    app_frame,
+                    layer_stack,
+                );
             }
             GlobalActionId::SwitchPane(PaneId::Eq) => {
                 switch_to_pane("eq", panes, dispatcher, audio, app_frame, layer_stack);
             }
             GlobalActionId::SwitchPane(PaneId::MidiSettings) => {
-                switch_to_pane("midi_settings", panes, dispatcher, audio, app_frame, layer_stack);
+                switch_to_pane(
+                    "midi_settings",
+                    panes,
+                    dispatcher,
+                    audio,
+                    app_frame,
+                    layer_stack,
+                );
             }
             GlobalActionId::SwitchPane(PaneId::Groove) => {
                 switch_to_pane("groove", panes, dispatcher, audio, app_frame, layer_stack);
@@ -466,12 +553,20 @@ pub(crate) fn handle_global_action(
                 select_instrument(n as usize, dispatcher, panes, audio);
             }
             GlobalActionId::SelectPrevInstrument => {
-                dispatcher.dispatch_with_audio(&Action::Instrument(ui::InstrumentAction::SelectPrev), audio);
+                dispatch_side_effect_free(
+                    dispatcher,
+                    &DomainAction::Instrument(ui::InstrumentAction::SelectPrev),
+                    audio,
+                );
                 sync_piano_roll_to_selection(dispatcher, panes, audio);
                 sync_instrument_edit(dispatcher.state(), panes);
             }
             GlobalActionId::SelectNextInstrument => {
-                dispatcher.dispatch_with_audio(&Action::Instrument(ui::InstrumentAction::SelectNext), audio);
+                dispatch_side_effect_free(
+                    dispatcher,
+                    &DomainAction::Instrument(ui::InstrumentAction::SelectNext),
+                    audio,
+                );
                 sync_piano_roll_to_selection(dispatcher, panes, audio);
                 sync_instrument_edit(dispatcher.state(), panes);
             }
@@ -479,7 +574,9 @@ pub(crate) fn handle_global_action(
                 *select_mode = InstrumentSelectMode::WaitingFirstDigit;
             }
             GlobalActionId::TogglePianoMode => {
-                let result = panes.active_mut().toggle_performance_mode(dispatcher.state());
+                let result = panes
+                    .active_mut()
+                    .toggle_performance_mode(dispatcher.state());
                 match result {
                     ToggleResult::ActivatedPiano => {
                         layer_stack.push("piano_mode");
@@ -500,7 +597,10 @@ pub(crate) fn handle_global_action(
             GlobalActionId::DeleteInstrument => {
                 if let Some(instrument) = dispatcher.state().instruments.selected_instrument() {
                     let id = instrument.id;
-                    let mut r = dispatcher.dispatch_with_audio(&Action::Instrument(ui::InstrumentAction::Delete(id)), audio);
+                    let mut r = dispatcher.dispatch_domain(
+                        &DomainAction::Instrument(ui::InstrumentAction::Delete(id)),
+                        audio,
+                    );
                     pending_audio_effects.extend(std::mem::take(&mut r.audio_effects));
                     apply_dispatch_result(r, dispatcher, panes, app_frame, audio);
                     // Re-sync edit pane after deletion
@@ -524,7 +624,9 @@ pub(crate) fn handle_global_action(
             }
             GlobalActionId::PlayStop => {
                 // Skip during export/render
-                if dispatcher.state().io.pending_export.is_some() || dispatcher.state().io.pending_render.is_some() {
+                if dispatcher.state().io.pending_export.is_some()
+                    || dispatcher.state().io.pending_render.is_some()
+                {
                     return GlobalResult::Handled;
                 }
                 let state = dispatcher.state_mut();
@@ -563,7 +665,7 @@ pub(crate) fn handle_global_action(
                 return GlobalResult::RefreshScreen;
             }
             GlobalActionId::CycleTheme => {
-                let mut r = dispatcher.dispatch_with_audio(&Action::Session(SessionAction::CycleTheme), audio);
+                let mut r = dispatcher.dispatch_domain(&DomainAction::Session(SessionAction::CycleTheme), audio);
                 pending_audio_effects.extend(std::mem::take(&mut r.audio_effects));
                 apply_dispatch_result(r, dispatcher, panes, app_frame, audio);
             }
@@ -581,7 +683,11 @@ pub(crate) fn handle_global_action(
 }
 
 /// Apply status events from dispatch or setup to the server pane and status bar
-pub(crate) fn apply_status_events(events: &[StatusEvent], panes: &mut PaneManager, app_frame: &mut Frame) {
+pub(crate) fn apply_status_events(
+    events: &[StatusEvent],
+    panes: &mut PaneManager,
+    app_frame: &mut Frame,
+) {
     use crate::ui::status_bar::StatusLevel;
     for event in events {
         if let Some(server) = panes.get_pane_mut::<ServerPane>("server") {
@@ -650,9 +756,14 @@ fn copy_from_active_pane(
         "piano_roll" => {
             if let Some(pane) = panes.get_pane_mut::<PianoRollPane>("piano_roll") {
                 let (track, start_tick, end_tick, start_pitch, end_pitch) = pane.selection_region();
-                dispatcher.dispatch_with_audio(
-                    &Action::PianoRoll(PianoRollAction::CopyNotes {
-                        track, start_tick, end_tick, start_pitch, end_pitch,
+                dispatch_side_effect_free(
+                    dispatcher,
+                    &DomainAction::PianoRoll(PianoRollAction::CopyNotes {
+                        track,
+                        start_tick,
+                        end_tick,
+                        start_pitch,
+                        end_pitch,
                     }),
                     audio,
                 );
@@ -661,9 +772,13 @@ fn copy_from_active_pane(
         "sequencer" => {
             if let Some(pane) = panes.get_pane_mut::<SequencerPane>("sequencer") {
                 let (start_pad, end_pad, start_step, end_step) = pane.selection_region();
-                dispatcher.dispatch_with_audio(
-                    &Action::Sequencer(SequencerAction::CopySteps {
-                        start_pad, end_pad, start_step, end_step,
+                dispatch_side_effect_free(
+                    dispatcher,
+                    &DomainAction::Sequencer(SequencerAction::CopySteps {
+                        start_pad,
+                        end_pad,
+                        start_step,
+                        end_step,
                     }),
                     audio,
                 );
@@ -671,9 +786,14 @@ fn copy_from_active_pane(
         }
         "automation" => {
             if let Some(pane) = panes.get_pane_mut::<AutomationPane>("automation") {
-                if let Some((lane_id, start_tick, end_tick)) = pane.selection_region(dispatcher.state()) {
-                    dispatcher.dispatch_with_audio(
-                        &Action::Automation(AutomationAction::CopyPoints(lane_id, start_tick, end_tick)),
+                if let Some((lane_id, start_tick, end_tick)) =
+                    pane.selection_region(dispatcher.state())
+                {
+                    dispatch_side_effect_free(
+                        dispatcher,
+                        &DomainAction::Automation(AutomationAction::CopyPoints(
+                            lane_id, start_tick, end_tick,
+                        )),
                         audio,
                     );
                 }
@@ -687,7 +807,7 @@ fn cut_from_active_pane(
     dispatcher: &mut LocalDispatcher,
     panes: &mut PaneManager,
     audio: &mut AudioHandle,
-) -> Option<Action> {
+) -> Option<DomainAction> {
     // Copy first
     copy_from_active_pane(dispatcher, panes, audio);
 
@@ -696,67 +816,69 @@ fn cut_from_active_pane(
     match pane_id {
         "piano_roll" => {
             if let Some(pane) = panes.get_pane_mut::<PianoRollPane>("piano_roll") {
-                 if let Some((anchor_tick, anchor_pitch)) = pane.selection_anchor {
-                     let (tick_start, tick_end) = if anchor_tick <= pane.cursor_tick {
-                         (anchor_tick, pane.cursor_tick + pane.ticks_per_cell())
-                     } else {
-                         (pane.cursor_tick, anchor_tick + pane.ticks_per_cell())
-                     };
-                     let (pitch_start, pitch_end) = if anchor_pitch <= pane.cursor_pitch {
-                         (anchor_pitch, pane.cursor_pitch)
-                     } else {
-                         (pane.cursor_pitch, anchor_pitch)
-                     };
+                if let Some((anchor_tick, anchor_pitch)) = pane.selection_anchor {
+                    let (tick_start, tick_end) = if anchor_tick <= pane.cursor_tick {
+                        (anchor_tick, pane.cursor_tick + pane.ticks_per_cell())
+                    } else {
+                        (pane.cursor_tick, anchor_tick + pane.ticks_per_cell())
+                    };
+                    let (pitch_start, pitch_end) = if anchor_pitch <= pane.cursor_pitch {
+                        (anchor_pitch, pane.cursor_pitch)
+                    } else {
+                        (pane.cursor_pitch, anchor_pitch)
+                    };
 
-                     // Clear selection after cut
-                     pane.selection_anchor = None;
+                    // Clear selection after cut
+                    pane.selection_anchor = None;
 
-                     return Some(Action::PianoRoll(PianoRollAction::DeleteNotesInRegion {
-                         track: pane.current_track,
-                         start_tick: tick_start,
-                         end_tick: tick_end,
-                         start_pitch: pitch_start,
-                         end_pitch: pitch_end,
-                     }));
-                 }
+                    return Some(DomainAction::PianoRoll(PianoRollAction::DeleteNotesInRegion {
+                        track: pane.current_track,
+                        start_tick: tick_start,
+                        end_tick: tick_end,
+                        start_pitch: pitch_start,
+                        end_pitch: pitch_end,
+                    }));
+                }
             }
         }
         "sequencer" => {
             if let Some(pane) = panes.get_pane_mut::<SequencerPane>("sequencer") {
-                 if let Some((anchor_pad, anchor_step)) = pane.selection_anchor {
-                     let (pad_start, pad_end) = if anchor_pad <= pane.cursor_pad {
-                         (anchor_pad, pane.cursor_pad)
-                     } else {
-                         (pane.cursor_pad, anchor_pad)
-                     };
-                     let (step_start, step_end) = if anchor_step <= pane.cursor_step {
-                         (anchor_step, pane.cursor_step)
-                     } else {
-                         (pane.cursor_step, anchor_step)
-                     };
-                     pane.selection_anchor = None;
+                if let Some((anchor_pad, anchor_step)) = pane.selection_anchor {
+                    let (pad_start, pad_end) = if anchor_pad <= pane.cursor_pad {
+                        (anchor_pad, pane.cursor_pad)
+                    } else {
+                        (pane.cursor_pad, anchor_pad)
+                    };
+                    let (step_start, step_end) = if anchor_step <= pane.cursor_step {
+                        (anchor_step, pane.cursor_step)
+                    } else {
+                        (pane.cursor_step, anchor_step)
+                    };
+                    pane.selection_anchor = None;
 
-                     return Some(Action::Sequencer(SequencerAction::DeleteStepsInRegion {
-                         start_pad: pad_start,
-                         end_pad: pad_end,
-                         start_step: step_start,
-                         end_step: step_end,
-                     }));
-                 }
+                    return Some(DomainAction::Sequencer(SequencerAction::DeleteStepsInRegion {
+                        start_pad: pad_start,
+                        end_pad: pad_end,
+                        start_step: step_start,
+                        end_step: step_end,
+                    }));
+                }
             }
         }
         "automation" => {
             if let Some(pane) = panes.get_pane_mut::<AutomationPane>("automation") {
                 if let Some(anchor_tick) = pane.selection_anchor_tick {
-                     let (tick_start, tick_end) = if anchor_tick <= pane.cursor_tick {
-                         (anchor_tick, pane.cursor_tick)
-                     } else {
-                         (pane.cursor_tick, anchor_tick)
-                     };
-                     if let Some(lane_id) = pane.selected_lane_id(dispatcher.state()) {
-                         pane.selection_anchor_tick = None;
-                         return Some(Action::Automation(AutomationAction::DeletePointsInRange(lane_id, tick_start, tick_end)));
-                     }
+                    let (tick_start, tick_end) = if anchor_tick <= pane.cursor_tick {
+                        (anchor_tick, pane.cursor_tick)
+                    } else {
+                        (pane.cursor_tick, anchor_tick)
+                    };
+                    if let Some(lane_id) = pane.selected_lane_id(dispatcher.state()) {
+                        pane.selection_anchor_tick = None;
+                        return Some(DomainAction::Automation(AutomationAction::DeletePointsInRange(
+                            lane_id, tick_start, tick_end,
+                        )));
+                    }
                 }
             }
         }
@@ -765,14 +887,14 @@ fn cut_from_active_pane(
     None
 }
 
-fn paste_to_active_pane(state: &mut AppState, panes: &mut PaneManager) -> Option<Action> {
+fn paste_to_active_pane(state: &mut AppState, panes: &mut PaneManager) -> Option<DomainAction> {
     if let Some(contents) = &state.clipboard.contents {
         match contents {
             ClipboardContents::PianoRollNotes(notes) => {
                 if panes.active().id() == "piano_roll" {
                     if let Some(pane) = panes.get_pane_mut::<PianoRollPane>("piano_roll") {
                         // anchor is cursor position
-                        let action = Action::PianoRoll(PianoRollAction::PasteNotes {
+                        let action = DomainAction::PianoRoll(PianoRollAction::PasteNotes {
                             track: pane.current_track,
                             anchor_tick: pane.cursor_tick,
                             anchor_pitch: pane.cursor_pitch,
@@ -787,7 +909,7 @@ fn paste_to_active_pane(state: &mut AppState, panes: &mut PaneManager) -> Option
             ClipboardContents::DrumSteps { steps } => {
                 if panes.active().id() == "sequencer" {
                     if let Some(pane) = panes.get_pane_mut::<SequencerPane>("sequencer") {
-                        let action = Action::Sequencer(SequencerAction::PasteSteps {
+                        let action = DomainAction::Sequencer(SequencerAction::PasteSteps {
                             anchor_pad: pane.cursor_pad,
                             anchor_step: pane.cursor_step,
                             steps: steps.clone(),
@@ -801,7 +923,7 @@ fn paste_to_active_pane(state: &mut AppState, panes: &mut PaneManager) -> Option
                 if panes.active().id() == "automation" {
                     if let Some(pane) = panes.get_pane_mut::<AutomationPane>("automation") {
                         if let Some(lane_id) = pane.selected_lane_id(state) {
-                            let action = Action::Automation(AutomationAction::PastePoints(
+                            let action = DomainAction::Automation(AutomationAction::PastePoints(
                                 lane_id,
                                 pane.cursor_tick,
                                 points.clone(),
@@ -824,7 +946,12 @@ fn select_all_in_active_pane(state: &mut AppState, panes: &mut PaneManager) {
             if let Some(pane) = panes.get_pane_mut::<PianoRollPane>("piano_roll") {
                 if let Some(track) = state.session.piano_roll.track_at(pane.current_track) {
                     if let Some(min_tick) = track.notes.iter().map(|n| n.tick).min() {
-                        let max_tick = track.notes.iter().map(|n| n.tick + n.duration).max().unwrap_or(min_tick);
+                        let max_tick = track
+                            .notes
+                            .iter()
+                            .map(|n| n.tick + n.duration)
+                            .max()
+                            .unwrap_or(min_tick);
                         let min_pitch = track.notes.iter().map(|n| n.pitch).min().unwrap_or(0);
                         let max_pitch = track.notes.iter().map(|n| n.pitch).max().unwrap_or(127);
 

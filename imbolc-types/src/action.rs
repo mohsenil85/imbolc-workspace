@@ -9,9 +9,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     AutomationLaneId, AutomationTarget, BusId, ClipId, ClipboardNote, CurveType, DrumStep,
-    EffectId, EffectType, EnvConfig, FilterType,
-    InstrumentId, LfoConfig, MixerSelection, MusicalSettings, Param, ParamIndex, PlacementId,
-    ProcessingStage, ServerStatus, SourceType, VstPluginKind,
+    EffectId, EffectType, EnvConfig, FilterType, InstrumentId, LfoConfig, MixerSelection,
+    MusicalSettings, Param, ParamIndex, PlacementId, ProcessingStage, ServerStatus, SourceType,
+    VstPluginKind,
 };
 
 // ============================================================================
@@ -174,16 +174,16 @@ pub enum LayerGroupAction {
 pub enum ChopperAction {
     LoadSample,
     LoadSampleResult(PathBuf),
-    AddSlice(f32),           // cursor_pos
+    AddSlice(f32), // cursor_pos
     RemoveSlice,
     AssignToPad(usize),
     AutoSlice(usize),
     PreviewSlice,
-    SelectSlice(i8),         // +1/-1
+    SelectSlice(i8), // +1/-1
     NudgeSliceStart(f32),
     NudgeSliceEnd(f32),
-    MoveCursor(i8),          // direction
-    CommitAll,               // assign all slices to pads and return
+    MoveCursor(i8), // direction
+    CommitAll,      // assign all slices to pads and return
 }
 
 // ============================================================================
@@ -293,6 +293,7 @@ impl AudioEffect {
 }
 
 /// Result of dispatching an action — contains side effects for the UI layer to process.
+#[must_use = "DispatchResult must be applied by the caller (nav/status/audio sync/quit handling)."]
 #[derive(Debug, Clone, Default)]
 pub struct DispatchResult {
     pub quit: bool,
@@ -315,16 +316,26 @@ impl DispatchResult {
     }
 
     pub fn with_quit() -> Self {
-        Self { quit: true, ..Self::default() }
+        Self {
+            quit: true,
+            ..Self::default()
+        }
     }
 
     pub fn with_nav(intent: NavIntent) -> Self {
-        Self { nav: vec![intent], ..Self::default() }
+        Self {
+            nav: vec![intent],
+            ..Self::default()
+        }
     }
 
     pub fn with_status(status: ServerStatus, message: impl Into<String>) -> Self {
         Self {
-            status: vec![StatusEvent { status, message: message.into(), server_running: None }],
+            status: vec![StatusEvent {
+                status,
+                message: message.into(),
+                server_running: None,
+            }],
             ..Self::default()
         }
     }
@@ -334,11 +345,24 @@ impl DispatchResult {
     }
 
     pub fn push_status(&mut self, status: ServerStatus, message: impl Into<String>) {
-        self.status.push(StatusEvent { status, message: message.into(), server_running: None });
+        self.status.push(StatusEvent {
+            status,
+            message: message.into(),
+            server_running: None,
+        });
     }
 
-    pub fn push_status_with_running(&mut self, status: ServerStatus, message: impl Into<String>, running: bool) {
-        self.status.push(StatusEvent { status, message: message.into(), server_running: Some(running) });
+    pub fn push_status_with_running(
+        &mut self,
+        status: ServerStatus,
+        message: impl Into<String>,
+        running: bool,
+    ) {
+        self.status.push(StatusEvent {
+            status,
+            message: message.into(),
+            server_running: Some(running),
+        });
     }
 
     pub fn merge(&mut self, other: DispatchResult) {
@@ -361,9 +385,9 @@ impl DispatchResult {
 /// VST parameter actions.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum VstParamAction {
-    SetParam(InstrumentId, VstTarget, u32, f32),       // instrument_id, target, param_index, value
-    AdjustParam(InstrumentId, VstTarget, u32, f32),    // instrument_id, target, param_index, delta
-    ResetParam(InstrumentId, VstTarget, u32),          // instrument_id, target, param_index
+    SetParam(InstrumentId, VstTarget, u32, f32), // instrument_id, target, param_index, value
+    AdjustParam(InstrumentId, VstTarget, u32, f32), // instrument_id, target, param_index, delta
+    ResetParam(InstrumentId, VstTarget, u32),    // instrument_id, target, param_index
     DiscoverParams(InstrumentId, VstTarget),
     SaveState(InstrumentId, VstTarget),
 }
@@ -417,8 +441,15 @@ pub enum SessionAction {
 pub enum MidiAction {
     ConnectPort(usize),
     DisconnectPort,
-    AddCcMapping { cc: u8, channel: Option<u8>, target: AutomationTarget },
-    RemoveCcMapping { cc: u8, channel: Option<u8> },
+    AddCcMapping {
+        cc: u8,
+        channel: Option<u8>,
+        target: AutomationTarget,
+    },
+    RemoveCcMapping {
+        cc: u8,
+        channel: Option<u8>,
+    },
     SetChannelFilter(Option<u8>),
     SetLiveInputInstrument(Option<InstrumentId>),
     ToggleNotePassthrough,
@@ -430,11 +461,11 @@ pub enum AutomationAction {
     AddLane(AutomationTarget),
     RemoveLane(AutomationLaneId),
     ToggleLaneEnabled(AutomationLaneId),
-    AddPoint(AutomationLaneId, u32, f32),          // lane, tick, value
-    RemovePoint(AutomationLaneId, u32),            // lane, tick
-    MovePoint(AutomationLaneId, u32, u32, f32),    // lane, old_tick, new_tick, new_value
+    AddPoint(AutomationLaneId, u32, f32), // lane, tick, value
+    RemovePoint(AutomationLaneId, u32),   // lane, tick
+    MovePoint(AutomationLaneId, u32, u32, f32), // lane, old_tick, new_tick, new_value
     SetCurveType(AutomationLaneId, u32, CurveType), // lane, tick, curve
-    SelectLane(i8),                                 // +1/-1
+    SelectLane(i8),                       // +1/-1
     ClearLane(AutomationLaneId),
     ToggleRecording,
     ToggleLaneArm(AutomationLaneId),
@@ -453,14 +484,29 @@ pub enum AutomationAction {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ArrangementAction {
     TogglePlayMode,
-    CreateClip { instrument_id: InstrumentId, length_ticks: u32 },
-    CaptureClipFromPianoRoll { instrument_id: InstrumentId },
+    CreateClip {
+        instrument_id: InstrumentId,
+        length_ticks: u32,
+    },
+    CaptureClipFromPianoRoll {
+        instrument_id: InstrumentId,
+    },
     DeleteClip(ClipId),
     RenameClip(ClipId, String),
-    PlaceClip { clip_id: ClipId, instrument_id: InstrumentId, start_tick: u32 },
+    PlaceClip {
+        clip_id: ClipId,
+        instrument_id: InstrumentId,
+        start_tick: u32,
+    },
     RemovePlacement(PlacementId),
-    MovePlacement { placement_id: PlacementId, new_start_tick: u32 },
-    ResizePlacement { placement_id: PlacementId, new_length: Option<u32> },
+    MovePlacement {
+        placement_id: PlacementId,
+        new_start_tick: u32,
+    },
+    ResizePlacement {
+        placement_id: PlacementId,
+        new_length: Option<u32>,
+    },
     DuplicatePlacement(PlacementId),
     SelectPlacement(Option<usize>),
     SelectLane(usize),
@@ -476,21 +522,43 @@ pub enum ArrangementAction {
 /// Piano roll actions — all variants carry the data they need.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum PianoRollAction {
-    ToggleNote { pitch: u8, tick: u32, duration: u32, velocity: u8, track: usize },
+    ToggleNote {
+        pitch: u8,
+        tick: u32,
+        duration: u32,
+        velocity: u8,
+        track: usize,
+    },
     PlayStop,
     ToggleLoop,
     SetLoopStart(u32),
     SetLoopEnd(u32),
     CycleTimeSig,
     TogglePolyMode(usize),
-    PlayNote { pitch: u8, velocity: u8, instrument_id: InstrumentId, track: usize },
-    PlayNotes { pitches: Vec<u8>, velocity: u8, instrument_id: InstrumentId, track: usize },
+    PlayNote {
+        pitch: u8,
+        velocity: u8,
+        instrument_id: InstrumentId,
+        track: usize,
+    },
+    PlayNotes {
+        pitches: Vec<u8>,
+        velocity: u8,
+        instrument_id: InstrumentId,
+        track: usize,
+    },
     /// Release a sustained note (key-up via timeout detection)
-    ReleaseNote { pitch: u8, instrument_id: InstrumentId },
+    ReleaseNote {
+        pitch: u8,
+        instrument_id: InstrumentId,
+    },
     /// Release multiple sustained notes (for chords)
-    ReleaseNotes { pitches: Vec<u8>, instrument_id: InstrumentId },
+    ReleaseNotes {
+        pitches: Vec<u8>,
+        instrument_id: InstrumentId,
+    },
     PlayStopRecord,
-    AdjustSwing(f32),               // delta for swing amount
+    AdjustSwing(f32), // delta for swing amount
     RenderToWav(InstrumentId),
     /// Delete all notes in the given region (used by Cut)
     DeleteNotesInRegion {
@@ -511,7 +579,13 @@ pub enum PianoRollAction {
     ExportStems,
     CancelExport,
     /// Copy notes within a region to the clipboard
-    CopyNotes { track: usize, start_tick: u32, end_tick: u32, start_pitch: u8, end_pitch: u8 },
+    CopyNotes {
+        track: usize,
+        start_tick: u32,
+        end_tick: u32,
+        start_pitch: u8,
+        end_pitch: u8,
+    },
 }
 
 impl PianoRollAction {
@@ -553,21 +627,26 @@ pub enum SequencerAction {
     ToggleStep(usize, usize),         // (pad_idx, step_idx)
     AdjustVelocity(usize, usize, i8), // (pad_idx, step_idx, delta)
     PlayStop,
-    LoadSample(usize),              // pad_idx
-    ClearPad(usize),                // pad_idx
+    LoadSample(usize), // pad_idx
+    ClearPad(usize),   // pad_idx
     ClearPattern,
     CyclePatternLength,
     NextPattern,
     PrevPattern,
-    AdjustPadLevel(usize, f32),     // (pad_idx, delta)
+    AdjustPadLevel(usize, f32),       // (pad_idx, delta)
     LoadSampleResult(usize, PathBuf), // (pad_idx, path) — from file browser
-    AdjustSwing(f32),               // delta for swing amount
-    ApplyEuclidean { pad: usize, pulses: usize, steps: usize, rotation: usize },
+    AdjustSwing(f32),                 // delta for swing amount
+    ApplyEuclidean {
+        pad: usize,
+        pulses: usize,
+        steps: usize,
+        rotation: usize,
+    },
     AdjustProbability(usize, usize, f32), // (pad_idx, step_idx, delta)
     ToggleChain,
-    AddChainStep(usize),            // pattern_index
-    RemoveChainStep(usize),         // position in chain
-    MoveChainStep(usize, usize),    // from_position, to_position
+    AddChainStep(usize),               // pattern_index
+    RemoveChainStep(usize),            // position in chain
+    MoveChainStep(usize, usize),       // from_position, to_position
     ToggleReverse(usize),              // pad_idx
     AdjustPadPitch(usize, i8),         // (pad_idx, delta semitones)
     AdjustStepPitch(usize, usize, i8), // (pad_idx, step_idx, delta)
@@ -585,7 +664,12 @@ pub enum SequencerAction {
         steps: Vec<(usize, usize, DrumStep)>,
     },
     /// Copy steps within a region to the clipboard
-    CopySteps { start_pad: usize, end_pad: usize, start_step: usize, end_step: usize },
+    CopySteps {
+        start_pad: usize,
+        end_pad: usize,
+        start_step: usize,
+        end_step: usize,
+    },
     /// Assign an instrument to a pad for one-shot triggering
     SetPadInstrument(usize, InstrumentId, f32), // pad_idx, instrument_id, freq
     /// Clear instrument assignment from a pad
@@ -645,7 +729,7 @@ pub enum InstrumentAction {
     CycleChordShape(InstrumentId),
     ClearChordShape(InstrumentId),
     LoadIRResult(InstrumentId, EffectId, PathBuf), // instrument_id, effect_id, path
-    OpenVstEffectParams(InstrumentId, EffectId), // instrument_id, effect_id
+    OpenVstEffectParams(InstrumentId, EffectId),   // instrument_id, effect_id
     SetEqParam(InstrumentId, usize, EqParamKind, f32), // instrument_id, band_index, param, value
     ToggleEq(InstrumentId),
     LinkLayer(InstrumentId, InstrumentId),
@@ -782,7 +866,7 @@ pub enum ClickAction {
 /// (Nav, PushLayer, PopLayer, ExitPerformanceMode, Quit, SaveAndQuit) and
 /// domain mutations (Instrument, Mixer, etc.).
 ///
-/// Use `to_domain()` to extract a `DomainAction` for dispatch.
+/// Use `route()` to classify the action as UI-layer or domain-layer.
 #[derive(Debug, Clone)]
 pub enum Action {
     None,
@@ -819,6 +903,33 @@ pub enum Action {
 }
 
 // ============================================================================
+// UiAction + RoutedAction
+// ============================================================================
+
+/// UI-layer actions handled by the runtime layer (navigation, quit, layer stack).
+#[derive(Debug, Clone)]
+pub enum UiAction {
+    None,
+    Quit,
+    Nav(NavAction),
+    ExitPerformanceMode,
+    PushLayer(&'static str),
+    PopLayer(&'static str),
+    SaveAndQuit,
+}
+
+/// Total routing result for `Action`.
+///
+/// Avoids lossy Option-based extraction (`None` drop on UI actions). Callers
+/// must handle both branches explicitly.
+#[must_use = "RoutedAction must be matched to handle both UI and domain branches."]
+#[derive(Debug, Clone)]
+pub enum RoutedAction {
+    Ui(UiAction),
+    Domain(DomainAction),
+}
+
+// ============================================================================
 // DomainAction — state mutations handled by core dispatch
 // ============================================================================
 
@@ -826,7 +937,7 @@ pub enum Action {
 /// Handled by `dispatch_action()` in imbolc-core. Does not include UI-layer
 /// mechanics (navigation, layer stack, quit).
 ///
-/// Extracted from `Action` via `Action::to_domain()`. Dispatch, undo, and
+/// Extracted from `Action` via `Action::route()`. Dispatch, undo, and
 /// audio projection operate on `DomainAction` exclusively.
 #[derive(Debug, Clone)]
 pub enum DomainAction {
@@ -851,32 +962,35 @@ pub enum DomainAction {
 }
 
 impl Action {
-    /// Convert to a `DomainAction` if this is a domain action.
-    /// Returns `None` for UI-only actions (None, Quit, Nav, PushLayer, PopLayer,
-    /// ExitPerformanceMode, SaveAndQuit).
-    pub fn to_domain(&self) -> Option<DomainAction> {
+    /// Route this action to the UI or domain layer.
+    #[must_use = "Action::route() result must be matched; do not drop UI actions."]
+    pub fn route(&self) -> RoutedAction {
         match self {
-            Self::Instrument(a) => Some(DomainAction::Instrument(a.clone())),
-            Self::Mixer(a) => Some(DomainAction::Mixer(a.clone())),
-            Self::PianoRoll(a) => Some(DomainAction::PianoRoll(a.clone())),
-            Self::Arrangement(a) => Some(DomainAction::Arrangement(a.clone())),
-            Self::Server(a) => Some(DomainAction::Server(a.clone())),
-            Self::Session(a) => Some(DomainAction::Session(a.clone())),
-            Self::Sequencer(a) => Some(DomainAction::Sequencer(a.clone())),
-            Self::Chopper(a) => Some(DomainAction::Chopper(a.clone())),
-            Self::Automation(a) => Some(DomainAction::Automation(a.clone())),
-            Self::Midi(a) => Some(DomainAction::Midi(a.clone())),
-            Self::Bus(a) => Some(DomainAction::Bus(a.clone())),
-            Self::LayerGroup(a) => Some(DomainAction::LayerGroup(a.clone())),
-            Self::VstParam(a) => Some(DomainAction::VstParam(a.clone())),
-            Self::Click(a) => Some(DomainAction::Click(a.clone())),
-            Self::Tuner(a) => Some(DomainAction::Tuner(a.clone())),
-            Self::AudioFeedback(f) => Some(DomainAction::AudioFeedback(f.clone())),
-            Self::Undo => Some(DomainAction::Undo),
-            Self::Redo => Some(DomainAction::Redo),
-            // UI-only actions
-            Self::None | Self::Quit | Self::Nav(_) | Self::ExitPerformanceMode
-            | Self::PushLayer(_) | Self::PopLayer(_) | Self::SaveAndQuit => None,
+            Self::Instrument(a) => RoutedAction::Domain(DomainAction::Instrument(a.clone())),
+            Self::Mixer(a) => RoutedAction::Domain(DomainAction::Mixer(a.clone())),
+            Self::PianoRoll(a) => RoutedAction::Domain(DomainAction::PianoRoll(a.clone())),
+            Self::Arrangement(a) => RoutedAction::Domain(DomainAction::Arrangement(a.clone())),
+            Self::Server(a) => RoutedAction::Domain(DomainAction::Server(a.clone())),
+            Self::Session(a) => RoutedAction::Domain(DomainAction::Session(a.clone())),
+            Self::Sequencer(a) => RoutedAction::Domain(DomainAction::Sequencer(a.clone())),
+            Self::Chopper(a) => RoutedAction::Domain(DomainAction::Chopper(a.clone())),
+            Self::Automation(a) => RoutedAction::Domain(DomainAction::Automation(a.clone())),
+            Self::Midi(a) => RoutedAction::Domain(DomainAction::Midi(a.clone())),
+            Self::Bus(a) => RoutedAction::Domain(DomainAction::Bus(a.clone())),
+            Self::LayerGroup(a) => RoutedAction::Domain(DomainAction::LayerGroup(a.clone())),
+            Self::VstParam(a) => RoutedAction::Domain(DomainAction::VstParam(a.clone())),
+            Self::Click(a) => RoutedAction::Domain(DomainAction::Click(a.clone())),
+            Self::Tuner(a) => RoutedAction::Domain(DomainAction::Tuner(a.clone())),
+            Self::AudioFeedback(f) => RoutedAction::Domain(DomainAction::AudioFeedback(f.clone())),
+            Self::Undo => RoutedAction::Domain(DomainAction::Undo),
+            Self::Redo => RoutedAction::Domain(DomainAction::Redo),
+            Self::None => RoutedAction::Ui(UiAction::None),
+            Self::Quit => RoutedAction::Ui(UiAction::Quit),
+            Self::Nav(a) => RoutedAction::Ui(UiAction::Nav(a.clone())),
+            Self::ExitPerformanceMode => RoutedAction::Ui(UiAction::ExitPerformanceMode),
+            Self::PushLayer(name) => RoutedAction::Ui(UiAction::PushLayer(name)),
+            Self::PopLayer(name) => RoutedAction::Ui(UiAction::PopLayer(name)),
+            Self::SaveAndQuit => RoutedAction::Ui(UiAction::SaveAndQuit),
         }
     }
 }
@@ -954,6 +1068,54 @@ mod tests {
         assert_eq!(a.audio_effects.len(), 2);
         assert!(a.audio_effects.contains(&AudioEffect::RebuildInstruments));
         assert!(a.audio_effects.contains(&AudioEffect::RebuildSession));
+    }
+
+    #[test]
+    fn action_route_ui_actions() {
+        assert!(matches!(
+            Action::None.route(),
+            RoutedAction::Ui(UiAction::None)
+        ));
+        assert!(matches!(
+            Action::Quit.route(),
+            RoutedAction::Ui(UiAction::Quit)
+        ));
+        assert!(matches!(
+            Action::Nav(NavAction::PopPane).route(),
+            RoutedAction::Ui(UiAction::Nav(NavAction::PopPane))
+        ));
+        assert!(matches!(
+            Action::PushLayer("text_edit").route(),
+            RoutedAction::Ui(UiAction::PushLayer("text_edit"))
+        ));
+        assert!(matches!(
+            Action::PopLayer("text_edit").route(),
+            RoutedAction::Ui(UiAction::PopLayer("text_edit"))
+        ));
+        assert!(matches!(
+            Action::ExitPerformanceMode.route(),
+            RoutedAction::Ui(UiAction::ExitPerformanceMode)
+        ));
+        assert!(matches!(
+            Action::SaveAndQuit.route(),
+            RoutedAction::Ui(UiAction::SaveAndQuit)
+        ));
+    }
+
+    #[test]
+    fn action_route_domain_actions() {
+        assert!(matches!(
+            Action::Undo.route(),
+            RoutedAction::Domain(DomainAction::Undo)
+        ));
+        assert!(matches!(
+            Action::Redo.route(),
+            RoutedAction::Domain(DomainAction::Redo)
+        ));
+        assert!(matches!(
+            Action::Click(ClickAction::Toggle).route(),
+            RoutedAction::Domain(DomainAction::Click(ClickAction::Toggle))
+        ));
     }
 
     #[test]

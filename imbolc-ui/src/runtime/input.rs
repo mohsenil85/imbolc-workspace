@@ -1,6 +1,12 @@
 //! Input processing: event polling, layer resolution, global handler, pane dispatch.
+//!
+//! All action routing matches must be exhaustive — wildcard arms are denied so
+//! that adding a new `UiAction` or `DomainAction` variant forces handling here.
+#![deny(clippy::wildcard_enum_match_arm)]
 
 use std::time::Duration;
+
+use imbolc_types::{RoutedAction, UiAction};
 
 use super::AppRuntime;
 use crate::action;
@@ -127,21 +133,25 @@ impl AppRuntime {
                     }
                 }
             };
+            let routed_action = pane_action.route();
 
-            // Process layer management actions
-            match &pane_action {
-                Action::PushLayer(name) => {
-                    self.layer_stack.push(name);
+            // Process layer management actions (only UI actions manage layers)
+            if let RoutedAction::Ui(ref ui) = routed_action {
+                match ui {
+                    UiAction::PushLayer(name) => {
+                        self.layer_stack.push(name);
+                    }
+                    UiAction::PopLayer(name) => {
+                        self.layer_stack.pop(name);
+                    }
+                    UiAction::ExitPerformanceMode => {
+                        self.layer_stack.pop("piano_mode");
+                        self.layer_stack.pop("pad_mode");
+                        self.panes.active_mut().deactivate_performance();
+                    }
+                    UiAction::None | UiAction::Quit | UiAction::Nav(_) | UiAction::SaveAndQuit => {
+                    }
                 }
-                Action::PopLayer(name) => {
-                    self.layer_stack.pop(name);
-                }
-                Action::ExitPerformanceMode => {
-                    self.layer_stack.pop("piano_mode");
-                    self.layer_stack.pop("pad_mode");
-                    self.panes.active_mut().deactivate_performance();
-                }
-                _ => {}
             }
 
             // Auto-pop text_edit layer when pane is no longer editing
@@ -164,7 +174,10 @@ impl AppRuntime {
 
             // Detect SaveAs cancel during quit flow
             if self.quit_after_save
-                && matches!(&pane_action, Action::Nav(action::NavAction::PopPane))
+                && matches!(
+                    &routed_action,
+                    RoutedAction::Ui(UiAction::Nav(action::NavAction::PopPane))
+                )
                 && self.panes.active().id() == "save_as"
             {
                 self.quit_after_save = false;
@@ -172,8 +185,8 @@ impl AppRuntime {
 
             // Bridge mixer detail context to add_effect pane
             if matches!(
-                &pane_action,
-                Action::Nav(action::NavAction::PushPane("add_effect"))
+                &routed_action,
+                RoutedAction::Ui(UiAction::Nav(action::NavAction::PushPane("add_effect")))
             ) && self.panes.active().id() == "mixer"
             {
                 if let Some(mixer) = self.panes.get_pane_mut::<MixerPane>("mixer") {
@@ -185,10 +198,11 @@ impl AppRuntime {
             }
 
             // Process navigation
-            self.panes.process_nav(&pane_action, self.dispatcher.state());
+            self.panes
+                .process_nav(&pane_action, self.dispatcher.state());
 
             // Sync pane layer after navigation
-            if matches!(&pane_action, Action::Nav(_)) {
+            if matches!(&routed_action, RoutedAction::Ui(UiAction::Nav(_))) {
                 sync_pane_layer(&mut self.panes, &mut self.layer_stack);
 
                 // Auto-exit clip edit when navigating away from piano roll
@@ -201,11 +215,10 @@ impl AppRuntime {
                     .is_some()
                     && self.panes.active().id() != "piano_roll"
                 {
-                    let exit_action =
-                        Action::Arrangement(action::ArrangementAction::ExitClipEdit);
-                    let mut exit_result =
-                        self.dispatcher
-                            .dispatch_with_audio(&exit_action, &mut self.audio);
+                    let mut exit_result = self.dispatcher.dispatch_domain(
+                        &action::DomainAction::Arrangement(action::ArrangementAction::ExitClipEdit),
+                        &mut self.audio,
+                    );
                     if exit_result.needs_full_sync {
                         self.needs_full_sync = true;
                     }
@@ -226,9 +239,9 @@ impl AppRuntime {
                 && self.panes.active().id() != "command_palette"
             {
                 self.layer_stack.pop("command_palette");
-                if let Some(palette) =
-                    self.panes
-                        .get_pane_mut::<CommandPalettePane>("command_palette")
+                if let Some(palette) = self
+                    .panes
+                    .get_pane_mut::<CommandPalettePane>("command_palette")
                 {
                     if let Some(cmd) = palette.take_command() {
                         let global_result = handle_global_action(
@@ -254,30 +267,41 @@ impl AppRuntime {
                                 &dummy_event,
                                 self.dispatcher.state(),
                             );
-                            self.panes
-                                .process_nav(&re_action, self.dispatcher.state());
-                            if matches!(&re_action, Action::Nav(_)) {
-                                sync_pane_layer(&mut self.panes, &mut self.layer_stack);
+                            self.panes.process_nav(&re_action, self.dispatcher.state());
+                            match re_action.route() {
+                                RoutedAction::Ui(UiAction::Nav(_)) => {
+                                    sync_pane_layer(&mut self.panes, &mut self.layer_stack);
+                                }
+                                RoutedAction::Domain(ref domain) => {
+                                    let mut r = self
+                                        .dispatcher
+                                        .dispatch_domain(domain, &mut self.audio);
+                                    if r.quit {
+                                        should_quit = true;
+                                        break 'events;
+                                    }
+                                    if r.needs_full_sync {
+                                        self.needs_full_sync = true;
+                                    }
+                                    self.pending_audio_effects
+                                        .extend(std::mem::take(&mut r.audio_effects));
+                                    apply_dispatch_result(
+                                        r,
+                                        &mut self.dispatcher,
+                                        &mut self.panes,
+                                        &mut self.app_frame,
+                                        &mut self.audio,
+                                    );
+                                }
+                                RoutedAction::Ui(
+                                    UiAction::None
+                                    | UiAction::Quit
+                                    | UiAction::ExitPerformanceMode
+                                    | UiAction::PushLayer(_)
+                                    | UiAction::PopLayer(_)
+                                    | UiAction::SaveAndQuit,
+                                ) => {}
                             }
-                            let mut r =
-                                self.dispatcher
-                                    .dispatch_with_audio(&re_action, &mut self.audio);
-                            if r.quit {
-                                should_quit = true;
-                                break 'events;
-                            }
-                            if r.needs_full_sync {
-                                self.needs_full_sync = true;
-                            }
-                            self.pending_audio_effects
-                                .extend(std::mem::take(&mut r.audio_effects));
-                            apply_dispatch_result(
-                                r,
-                                &mut self.dispatcher,
-                                &mut self.panes,
-                                &mut self.app_frame,
-                                &mut self.audio,
-                            );
                         }
                     }
                 }
@@ -289,9 +313,7 @@ impl AppRuntime {
                 && self.panes.active().id() != "pane_switcher"
             {
                 self.layer_stack.pop("pane_switcher");
-                if let Some(switcher) =
-                    self.panes
-                        .get_pane_mut::<PaneSwitcherPane>("pane_switcher")
+                if let Some(switcher) = self.panes.get_pane_mut::<PaneSwitcherPane>("pane_switcher")
                 {
                     if let Some(pane_id) = switcher.take_pane() {
                         self.panes.switch_to(pane_id, self.dispatcher.state());
@@ -306,10 +328,8 @@ impl AppRuntime {
                 self.midi_input.refresh_ports();
                 match self.midi_input.connect(port_idx) {
                     Ok(()) => {
-                        self.dispatcher.state_mut().midi.connected_port = self
-                            .midi_input
-                            .connected_port_name()
-                            .map(|s| s.to_string());
+                        self.dispatcher.state_mut().midi.connected_port =
+                            self.midi_input.connected_port_name().map(|s| s.to_string());
                     }
                     Err(_) => {
                         self.dispatcher.state_mut().midi.connected_port = None;
@@ -326,64 +346,70 @@ impl AppRuntime {
                 self.dispatcher.state_mut().midi.connected_port = None;
             }
 
-            // Intercept Quit — handle in runtime, not dispatch
-            // (Action::Quit from quit_prompt_pane bypasses dispatch since to_domain() returns None)
-            if matches!(&pane_action, Action::Quit) {
-                should_quit = true;
-                break 'events;
-            }
-
-            // Intercept SaveAndQuit — handle in runtime, not dispatch
-            if matches!(&pane_action, Action::SaveAndQuit) {
-                if self.dispatcher.state().project.path.is_some() {
-                    let save_action = Action::Session(action::SessionAction::Save);
-                    let mut r = self
+            match routed_action {
+                RoutedAction::Ui(UiAction::Quit) => {
+                    should_quit = true;
+                    break 'events;
+                }
+                RoutedAction::Ui(UiAction::SaveAndQuit) => {
+                    if self.dispatcher.state().project.path.is_some() {
+                        let mut r = self.dispatcher.dispatch_domain(
+                            &action::DomainAction::Session(action::SessionAction::Save),
+                            &mut self.audio,
+                        );
+                        if r.needs_full_sync {
+                            self.needs_full_sync = true;
+                        }
+                        self.pending_audio_effects
+                            .extend(std::mem::take(&mut r.audio_effects));
+                        apply_dispatch_result(
+                            r,
+                            &mut self.dispatcher,
+                            &mut self.panes,
+                            &mut self.app_frame,
+                            &mut self.audio,
+                        );
+                        self.quit_after_save = true;
+                    } else {
+                        let default_name = "untitled".to_string();
+                        if let Some(sa) = self.panes.get_pane_mut::<SaveAsPane>("save_as") {
+                            sa.reset(&default_name);
+                        }
+                        self.panes.pop(self.dispatcher.state());
+                        self.panes.push_to("save_as", self.dispatcher.state());
+                        sync_pane_layer(&mut self.panes, &mut self.layer_stack);
+                        self.quit_after_save = true;
+                    }
+                }
+                // Already handled above: layer management, navigation, text_edit auto-pop
+                RoutedAction::Ui(
+                    UiAction::None
+                    | UiAction::Nav(_)
+                    | UiAction::ExitPerformanceMode
+                    | UiAction::PushLayer(_)
+                    | UiAction::PopLayer(_),
+                ) => {}
+                RoutedAction::Domain(ref domain_action) => {
+                    let mut dispatch_result = self
                         .dispatcher
-                        .dispatch_with_audio(&save_action, &mut self.audio);
-                    if r.needs_full_sync {
+                        .dispatch_domain(domain_action, &mut self.audio);
+                    if dispatch_result.quit {
+                        should_quit = true;
+                        break 'events;
+                    }
+                    if dispatch_result.needs_full_sync {
                         self.needs_full_sync = true;
                     }
                     self.pending_audio_effects
-                        .extend(std::mem::take(&mut r.audio_effects));
+                        .extend(std::mem::take(&mut dispatch_result.audio_effects));
                     apply_dispatch_result(
-                        r,
+                        dispatch_result,
                         &mut self.dispatcher,
                         &mut self.panes,
                         &mut self.app_frame,
                         &mut self.audio,
                     );
-                    self.quit_after_save = true;
-                } else {
-                    let default_name = "untitled".to_string();
-                    if let Some(sa) = self.panes.get_pane_mut::<SaveAsPane>("save_as") {
-                        sa.reset(&default_name);
-                    }
-                    self.panes.pop(self.dispatcher.state());
-                    self.panes
-                        .push_to("save_as", self.dispatcher.state());
-                    sync_pane_layer(&mut self.panes, &mut self.layer_stack);
-                    self.quit_after_save = true;
                 }
-            } else {
-                let mut dispatch_result = self
-                    .dispatcher
-                    .dispatch_with_audio(&pane_action, &mut self.audio);
-                if dispatch_result.quit {
-                    should_quit = true;
-                    break 'events;
-                }
-                if dispatch_result.needs_full_sync {
-                    self.needs_full_sync = true;
-                }
-                self.pending_audio_effects
-                    .extend(std::mem::take(&mut dispatch_result.audio_effects));
-                apply_dispatch_result(
-                    dispatch_result,
-                    &mut self.dispatcher,
-                    &mut self.panes,
-                    &mut self.app_frame,
-                    &mut self.audio,
-                );
             }
 
             if events_processed >= 16 {
@@ -404,13 +430,25 @@ impl AppRuntime {
             self.render_needed = true;
         }
         for action in &tick_actions {
-            let r = self
-                .dispatcher
-                .dispatch_with_audio(action, &mut self.audio);
-            if r.needs_full_sync {
-                self.needs_full_sync = true;
+            match action.route() {
+                RoutedAction::Domain(ref domain) => {
+                    let r = self.dispatcher.dispatch_domain(domain, &mut self.audio);
+                    if r.needs_full_sync {
+                        self.needs_full_sync = true;
+                    }
+                    self.pending_audio_effects.extend(r.audio_effects);
+                }
+                // Tick actions should only produce domain actions
+                RoutedAction::Ui(
+                    UiAction::None
+                    | UiAction::Quit
+                    | UiAction::Nav(_)
+                    | UiAction::ExitPerformanceMode
+                    | UiAction::PushLayer(_)
+                    | UiAction::PopLayer(_)
+                    | UiAction::SaveAndQuit,
+                ) => {}
             }
-            self.pending_audio_effects.extend(r.audio_effects);
         }
     }
 }
