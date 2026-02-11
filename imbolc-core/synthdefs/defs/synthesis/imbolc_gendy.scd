@@ -12,7 +12,7 @@ SynthDef(\imbolc_gendy, { |out=1024, freq_in=(-1), gate_in=(-1), vel_in=(-1), am
     var sustainMod = Select.kr(sustain_mod_in >= 0, [0, In.kr(sustain_mod_in)]);
     var finalAmp = amp.lag(lag) * (1 + ampMod).max(0);
     var finalAttack = (attack * (1 + attackMod)).max(0.005);
-    var finalRelease = (release * (1 + releaseMod)).max(0.001);
+    var finalRelease = (release * (1 + releaseMod)).max(0.005);
     var finalDecay = (decay * (1 + decayMod)).max(0.001);
     var finalSustain = (sustain + sustainMod).clip(0, 1);
     var sig = Gendy1.ar(ampdist, durdist, 1.0, 1.0, minfreq, maxfreq) * finalAmp * velSig;

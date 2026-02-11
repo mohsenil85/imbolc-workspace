@@ -25,7 +25,7 @@ SynthDef(\imbolc_timestretch, { |out=1024, bufnum=0, sliceStart=0, sliceEnd=1,
     var finalPitch = pitch.lag(lag) + (pitchMod * 12);
     var finalGrainSize = (grain_size.lag(lag) * (1 + grainSizeMod)).clip(0.01, 1.0);
     var finalAttack = (attack * (1 + attackMod)).max(0.005);
-    var finalRelease = (release * (1 + releaseMod)).max(0.001);
+    var finalRelease = (release * (1 + releaseMod)).max(0.005);
     var finalDecay = (decay * (1 + decayMod)).max(0.001);
     var finalSustain = (sustain + sustainMod).clip(0, 1);
 

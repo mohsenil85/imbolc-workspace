@@ -19,7 +19,7 @@ SynthDef(\imbolc_sampler, { |out=1024, bufnum=0, sliceStart=0, sliceEnd=1,
     var sustainMod = Select.kr(sustain_mod_in >= 0, [0, In.kr(sustain_mod_in)]);
     var finalAmp = amp.lag(lag) * (1 + ampMod).max(0);
     var finalAttack = (attack * (1 + attackMod)).max(0.005);
-    var finalRelease = (release * (1 + releaseMod)).max(0.001);
+    var finalRelease = (release * (1 + releaseMod)).max(0.005);
     var finalDecay = (decay * (1 + decayMod)).max(0.001);
     var finalSustain = (sustain + sustainMod).clip(0, 1);
     // If freq_in is provided, calculate rate from pitch (relative to middle C = 60)

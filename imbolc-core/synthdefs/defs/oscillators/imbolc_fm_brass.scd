@@ -22,7 +22,7 @@ SynthDef(\imbolc_fm_brass, { |out=1024, freq_in=(-1), gate_in=(-1), vel_in=(-1),
     var finalFreq = freqSig * (2 ** pitchMod) * (1 + (detuneMod * 0.01));
     var finalAmp = amp.lag(lag) * (1 + ampMod).max(0);
     var finalAttack = (attack * (1 + attackMod)).max(0.005);
-    var finalRelease = (release * (1 + releaseMod)).max(0.001);
+    var finalRelease = (release * (1 + releaseMod)).max(0.005);
     var finalDecay = (decay * (1 + decayMod)).max(0.001);
     var finalSustain = (sustain + sustainMod).clip(0, 1);
     var finalBrightness = (brightness + brightnessMod).clip(0, 1);

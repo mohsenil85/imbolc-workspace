@@ -9,7 +9,7 @@ use imbolc_types::{BufferId, InstrumentId, InstrumentState, ParameterTarget, Par
 /// for the source ADSR to begin releasing.
 const ANTI_CLICK_FADE_SECS: f64 = 0.030;
 
-/// Minimum onset attack time (seconds) enforced on all spawned voices.
+/// Minimum ADSR attack/release time (seconds) enforced on all spawned voices.
 /// Prevents clicks from sub-control-block ADSR ramps. 5ms is the
 /// industry standard used by Ableton Live, Logic Pro, etc.
 const MIN_ONSET_SECS: f32 = 0.005;
@@ -125,7 +125,7 @@ impl AudioEngine {
             args.push(RawArg::Float(voice_freq_bus as f32));
             args.push(RawArg::Str("gate_in".to_string()));
             args.push(RawArg::Float(voice_gate_bus as f32));
-            // Amp envelope (ADSR) — enforce minimum onset time
+            // Amp envelope (ADSR) — enforce minimum onset/offset time
             args.push(RawArg::Str("attack".to_string()));
             args.push(RawArg::Float(instrument.modulation.amp_envelope.attack.max(MIN_ONSET_SECS)));
             args.push(RawArg::Str("decay".to_string()));
@@ -133,7 +133,7 @@ impl AudioEngine {
             args.push(RawArg::Str("sustain".to_string()));
             args.push(RawArg::Float(instrument.modulation.amp_envelope.sustain));
             args.push(RawArg::Str("release".to_string()));
-            args.push(RawArg::Float(instrument.modulation.amp_envelope.release));
+            args.push(RawArg::Float(instrument.modulation.amp_envelope.release.max(MIN_ONSET_SECS)));
             // Output to source_out_bus
             args.push(RawArg::Str("out".to_string()));
             args.push(RawArg::Float(source_out_bus as f32));
@@ -426,7 +426,7 @@ impl AudioEngine {
             args.push(RawArg::Str("vel_in".to_string()));
             args.push(RawArg::Float(voice_vel_bus as f32));
 
-            // Amp envelope (ADSR) — enforce minimum onset time
+            // Amp envelope (ADSR) — enforce minimum onset/offset time
             args.push(RawArg::Str("attack".to_string()));
             args.push(RawArg::Float(instrument.modulation.amp_envelope.attack.max(MIN_ONSET_SECS)));
             args.push(RawArg::Str("decay".to_string()));
@@ -434,7 +434,7 @@ impl AudioEngine {
             args.push(RawArg::Str("sustain".to_string()));
             args.push(RawArg::Float(instrument.modulation.amp_envelope.sustain));
             args.push(RawArg::Str("release".to_string()));
-            args.push(RawArg::Float(instrument.modulation.amp_envelope.release));
+            args.push(RawArg::Float(instrument.modulation.amp_envelope.release.max(MIN_ONSET_SECS)));
 
             // Output to source_out_bus
             args.push(RawArg::Str("out".to_string()));
@@ -853,7 +853,7 @@ impl AudioEngine {
             args.push(RawArg::Float(voice_freq_bus as f32));
             args.push(RawArg::Str("gate_in".to_string()));
             args.push(RawArg::Float(voice_gate_bus as f32));
-            // Amp envelope (ADSR) — enforce minimum onset time
+            // Amp envelope (ADSR) — enforce minimum onset/offset time
             args.push(RawArg::Str("attack".to_string()));
             args.push(RawArg::Float(instrument.modulation.amp_envelope.attack.max(MIN_ONSET_SECS)));
             args.push(RawArg::Str("decay".to_string()));
@@ -861,7 +861,7 @@ impl AudioEngine {
             args.push(RawArg::Str("sustain".to_string()));
             args.push(RawArg::Float(instrument.modulation.amp_envelope.sustain));
             args.push(RawArg::Str("release".to_string()));
-            args.push(RawArg::Float(instrument.modulation.amp_envelope.release));
+            args.push(RawArg::Float(instrument.modulation.amp_envelope.release.max(MIN_ONSET_SECS)));
             // Output to source_out_bus
             args.push(RawArg::Str("out".to_string()));
             args.push(RawArg::Float(source_out_bus as f32));
