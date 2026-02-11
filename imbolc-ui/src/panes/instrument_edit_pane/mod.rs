@@ -60,6 +60,10 @@ impl InstrumentEditPane {
         }
     }
 
+    pub fn set_enhanced_keyboard(&mut self, enabled: bool) {
+        self.perf.set_enhanced_keyboard(enabled);
+    }
+
     pub fn set_instrument(&mut self, instrument: &crate::state::Instrument) {
         self.instrument_id = Some(instrument.id);
         self.instrument_name = instrument.name.clone();

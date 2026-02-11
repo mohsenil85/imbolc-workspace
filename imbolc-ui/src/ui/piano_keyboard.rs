@@ -76,6 +76,7 @@ pub struct PianoKeyboard {
     // Sustain tracking - supports chords (multiple pitches per key)
     active_keys: HashMap<char, (Vec<u8>, Instant)>,  // char -> (pitches, last_event_time)
     release_timeout: Duration,
+    enhanced_keyboard: bool,
 }
 
 impl PianoKeyboard {
@@ -86,7 +87,12 @@ impl PianoKeyboard {
             layout: PianoLayout::C,
             active_keys: HashMap::new(),
             release_timeout: Duration::from_millis(150),
+            enhanced_keyboard: false,
         }
+    }
+
+    pub fn set_enhanced_keyboard(&mut self, enabled: bool) {
+        self.enhanced_keyboard = enabled;
     }
 
     pub fn is_active(&self) -> bool {
@@ -194,13 +200,22 @@ impl PianoKeyboard {
 
     /// Returns Some(pitches) if this is a NEW key press (spawn voices)
     /// Returns None if this is key repeat (sustain, ignore)
-    pub fn key_pressed(&mut self, c: char, pitches: Vec<u8>, now: Instant) -> Option<Vec<u8>> {
-        if let std::collections::hash_map::Entry::Occupied(mut e) = self.active_keys.entry(c) {
-            // Key is already held - just update timestamp (sustain)
-            e.insert((pitches, now));
+    pub fn key_pressed(&mut self, c: char, pitches: Vec<u8>, now: Instant, is_repeat: bool) -> Option<Vec<u8>> {
+        if self.enhanced_keyboard && is_repeat {
+            // Terminal confirms this is an OS repeat → sustain
+            if let Some((_, t)) = self.active_keys.get_mut(&c) {
+                *t = now;
+            }
             return None;
         }
-        // New press - key wasn't being held
+        if !self.enhanced_keyboard {
+            // Non-enhanced fallback: existing timeout-based dedup
+            if let std::collections::hash_map::Entry::Occupied(mut e) = self.active_keys.entry(c) {
+                e.insert((pitches, now));
+                return None;
+            }
+        }
+        // Fresh press → retrigger
         let result = pitches.clone();
         self.active_keys.insert(c, (pitches, now));
         Some(result)
@@ -607,7 +622,7 @@ mod tests {
         let mut kb = PianoKeyboard::new();
         kb.activate();
         let now = Instant::now();
-        let result = kb.key_pressed('a', vec![60], now);
+        let result = kb.key_pressed('a', vec![60], now, false);
         assert!(result.is_some());
         assert_eq!(result.unwrap(), vec![60]);
     }
@@ -617,9 +632,9 @@ mod tests {
         let mut kb = PianoKeyboard::new();
         kb.activate();
         let now = Instant::now();
-        kb.key_pressed('a', vec![60], now);
+        kb.key_pressed('a', vec![60], now, false);
         // Second press of same key returns None (key repeat)
-        let result = kb.key_pressed('a', vec![60], now);
+        let result = kb.key_pressed('a', vec![60], now, false);
         assert!(result.is_none());
     }
 
@@ -628,12 +643,39 @@ mod tests {
         let mut kb = PianoKeyboard::new();
         kb.activate();
         let now = Instant::now();
-        kb.key_pressed('a', vec![60], now);
-        kb.key_pressed('s', vec![62], now);
+        kb.key_pressed('a', vec![60], now, false);
+        kb.key_pressed('s', vec![62], now, false);
         assert!(kb.has_active_keys());
         let released = kb.release_all();
         assert!(!kb.has_active_keys());
         assert_eq!(released.len(), 2);
+    }
+
+    #[test]
+    fn enhanced_mode_retrigger_on_fresh_press() {
+        let mut kb = PianoKeyboard::new();
+        kb.activate();
+        kb.set_enhanced_keyboard(true);
+        let now = Instant::now();
+        // First press
+        let r1 = kb.key_pressed('a', vec![60], now, false);
+        assert!(r1.is_some());
+        // Second fresh press (not a repeat) → retrigger
+        let r2 = kb.key_pressed('a', vec![60], now, false);
+        assert!(r2.is_some());
+    }
+
+    #[test]
+    fn enhanced_mode_repeat_sustains() {
+        let mut kb = PianoKeyboard::new();
+        kb.activate();
+        kb.set_enhanced_keyboard(true);
+        let now = Instant::now();
+        // First press
+        kb.key_pressed('a', vec![60], now, false);
+        // OS repeat → sustain
+        let result = kb.key_pressed('a', vec![60], now, true);
+        assert!(result.is_none());
     }
 
     #[test]

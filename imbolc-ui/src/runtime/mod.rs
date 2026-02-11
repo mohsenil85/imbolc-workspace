@@ -183,5 +183,20 @@ impl AppRuntime {
 /// Public entry point for standalone mode.
 pub fn run(backend: &mut RatatuiBackend) -> std::io::Result<()> {
     let mut runtime = AppRuntime::new();
+
+    // Propagate keyboard enhancement flag to all piano keyboards
+    if backend.keyboard_enhancement_enabled() {
+        use crate::panes::{InstrumentPane, InstrumentEditPane, PianoRollPane};
+        if let Some(p) = runtime.panes.get_pane_mut::<InstrumentPane>("instrument") {
+            p.set_enhanced_keyboard(true);
+        }
+        if let Some(p) = runtime.panes.get_pane_mut::<InstrumentEditPane>("instrument_edit") {
+            p.set_enhanced_keyboard(true);
+        }
+        if let Some(p) = runtime.panes.get_pane_mut::<PianoRollPane>("piano_roll") {
+            p.set_enhanced_keyboard(true);
+        }
+    }
+
     runtime.run(backend)
 }

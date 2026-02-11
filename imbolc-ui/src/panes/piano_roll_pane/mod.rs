@@ -57,6 +57,10 @@ impl PianoRollPane {
     #[allow(dead_code)]
     pub fn current_track(&self) -> usize { self.current_track }
 
+    pub fn set_enhanced_keyboard(&mut self, enabled: bool) {
+        self.piano.set_enhanced_keyboard(enabled);
+    }
+
     pub fn adjust_default_duration(&mut self, delta: i32) {
         let new_dur = (self.default_duration as i32 + delta).max(self.ticks_per_cell() as i32);
         self.default_duration = new_dur as u32;

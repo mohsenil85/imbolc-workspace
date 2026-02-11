@@ -22,7 +22,7 @@ impl InstrumentEditPane {
                     let c = translate_key(c, state.keyboard_layout);
                     if let Some(pitches) = self.perf.piano.key_to_pitches(c) {
                         // Check if this is a new press or key repeat (sustain)
-                        if let Some(new_pitches) = self.perf.piano.key_pressed(c, pitches.clone(), event.timestamp) {
+                        if let Some(new_pitches) = self.perf.piano.key_pressed(c, pitches.clone(), event.timestamp, event.is_repeat) {
                             // NEW press - spawn voice(s)
                             if new_pitches.len() == 1 {
                                 return Action::Instrument(InstrumentAction::PlayNote(new_pitches[0], 100));

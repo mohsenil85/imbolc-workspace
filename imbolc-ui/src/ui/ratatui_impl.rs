@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use crossterm::{
     event::{
-        self, Event, KeyEvent, KeyCode as CrosstermKeyCode, KeyModifiers,
+        self, Event, KeyEvent, KeyEventKind, KeyCode as CrosstermKeyCode, KeyModifiers,
         MouseEvent as CrosstermMouseEvent, MouseEventKind as CrosstermMouseEventKind,
         MouseButton as CrosstermMouseButton, EnableMouseCapture, DisableMouseCapture,
         KeyboardEnhancementFlags, PushKeyboardEnhancementFlags, PopKeyboardEnhancementFlags,
@@ -52,7 +52,10 @@ impl RatatuiBackend {
         if supports_enhancement
             && execute!(
                 io::stdout(),
-                PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES)
+                PushKeyboardEnhancementFlags(
+                    KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
+                    | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
+                )
             )
             .is_ok()
             {
@@ -109,6 +112,11 @@ impl RatatuiBackend {
     pub fn clear(&mut self) -> io::Result<()> {
         self.terminal.clear()
     }
+
+    /// Whether the Kitty keyboard protocol was successfully enabled.
+    pub fn keyboard_enhancement_enabled(&self) -> bool {
+        self.keyboard_enhancement_enabled
+    }
 }
 
 /// A frame for drawing operations
@@ -138,6 +146,11 @@ impl InputSource for RatatuiBackend {
             }
             match event::read().ok()? {
                 Event::Key(key_event) => {
+                    // Skip Release events — we use timeout-based release detection
+                    if key_event.kind == KeyEventKind::Release {
+                        t = Duration::ZERO;
+                        continue;
+                    }
                     return Some(AppEvent::Key(convert_key_event(key_event)));
                 }
                 Event::Mouse(mouse_event) => {
@@ -188,7 +201,9 @@ fn convert_key_event(event: KeyEvent) -> InputEvent {
         shift: event.modifiers.contains(KeyModifiers::SHIFT),
     };
 
-    InputEvent { key, modifiers, timestamp: Instant::now() }
+    let is_repeat = event.kind == KeyEventKind::Repeat;
+
+    InputEvent { key, modifiers, timestamp: Instant::now(), is_repeat }
 }
 
 fn convert_mouse_button(button: CrosstermMouseButton) -> MouseButton {

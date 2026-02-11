@@ -44,6 +44,10 @@ impl PerformanceController {
         }
     }
 
+    pub fn set_enhanced_keyboard(&mut self, enabled: bool) {
+        self.piano.set_enhanced_keyboard(enabled);
+    }
+
     pub fn activate_piano(&mut self) {
         if !self.piano.is_active() { self.piano.activate(); }
         self.pad.deactivate();

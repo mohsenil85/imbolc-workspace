@@ -91,6 +91,7 @@ pub struct InputEvent {
     pub key: KeyCode,
     pub modifiers: Modifiers,
     pub timestamp: Instant,
+    pub is_repeat: bool,
 }
 
 impl PartialEq for InputEvent {
@@ -103,7 +104,7 @@ impl Eq for InputEvent {}
 
 impl InputEvent {
     pub fn new(key: KeyCode, modifiers: Modifiers) -> Self {
-        Self { key, modifiers, timestamp: Instant::now() }
+        Self { key, modifiers, timestamp: Instant::now(), is_repeat: false }
     }
 
     #[allow(dead_code)]
@@ -112,6 +113,7 @@ impl InputEvent {
             key,
             modifiers: Modifiers::none(),
             timestamp: Instant::now(),
+            is_repeat: false,
         }
     }
 

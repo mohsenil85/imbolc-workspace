@@ -43,7 +43,7 @@ impl PianoRollPane {
                     let c = translate_key(c, state.keyboard_layout);
                     if let Some(pitches) = self.piano.key_to_pitches(c) {
                         // Check if this is a new press or key repeat (sustain)
-                        if let Some(new_pitches) = self.piano.key_pressed(c, pitches.clone(), event.timestamp) {
+                        if let Some(new_pitches) = self.piano.key_pressed(c, pitches.clone(), event.timestamp, event.is_repeat) {
                             // NEW press - spawn voice(s)
                             let instrument_id = self.current_instrument_id(state);
                             let track = self.current_track;
