@@ -44,6 +44,13 @@ struct PendingConnect {
     reply: Option<std::sync::mpsc::Sender<std::io::Result<()>>>,
 }
 
+/// Retry phased routing rebuilds after connect, giving async /d_loadDir time
+/// to finish on slower systems before final graph creation.
+struct PendingPostConnectRebuild {
+    next_try_at: Instant,
+    attempts_left: u8,
+}
+
 struct RenderState {
     instrument_id: InstrumentId,
     loop_end: u32,
@@ -109,6 +116,9 @@ pub(crate) struct AudioThread {
     pending_connect: Option<PendingConnect>,
     /// In-progress phased routing rebuild (driven one step per poll_engine())
     routing_rebuild: Option<super::engine::routing::RoutingRebuildPhase>,
+    /// Retry routing rebuild after connect so synthdefs loaded via /d_loadDir
+    /// are available before instrument and meter nodes are recreated.
+    pending_post_connect_rebuild: Option<PendingPostConnectRebuild>,
     /// In-flight VST parameter queries awaiting OSC replies
     pending_vst_queries: Vec<PendingVstQuery>,
     /// Tuner tone node ID (if currently playing)
@@ -166,6 +176,7 @@ impl AudioThread {
             pending_server_start: None,
             pending_connect: None,
             routing_rebuild: None,
+            pending_post_connect_rebuild: None,
             pending_vst_queries: Vec::new(),
             tuner_node_id: None,
             click_state: imbolc_types::ClickTrackState::default(),
@@ -372,6 +383,7 @@ impl AudioThread {
                 if self.pending_connect.is_some() {
                     let _ = reply.send(Err(std::io::Error::other("Connect already in progress")));
                 } else {
+                    self.pending_post_connect_rebuild = None;
                     let rx =
                         AudioEngine::connect_with_monitor_async(server_addr, self.monitor.clone());
                     self.pending_connect = Some(PendingConnect {
@@ -385,6 +397,7 @@ impl AudioThread {
             AudioCmd::Disconnect => {
                 self.pending_connect = None;
                 self.routing_rebuild = None;
+                self.pending_post_connect_rebuild = None;
                 self.engine.disconnect();
                 self.send_server_status(self.engine.status(), "Disconnected");
             }
@@ -421,6 +434,7 @@ impl AudioThread {
                 self.pending_server_start = None;
                 self.pending_connect = None;
                 self.routing_rebuild = None;
+                self.pending_post_connect_rebuild = None;
                 self.engine.stop_server();
                 self.send_server_status(ServerStatus::Stopped, "Server stopped");
             }
@@ -437,6 +451,7 @@ impl AudioThread {
                 self.pending_server_start = None;
                 self.pending_connect = None;
                 self.routing_rebuild = None;
+                self.pending_post_connect_rebuild = None;
                 self.send_server_status(ServerStatus::Stopped, "Restarting server...");
 
                 match self.engine.start_server_async(
@@ -1163,6 +1178,16 @@ impl AudioThread {
         });
     }
 
+    fn schedule_post_connect_rebuilds(&mut self) {
+        // Linux/PipeWire can take noticeably longer to finish async /d_loadDir.
+        // A few delayed retries avoids a startup race with missing synthdefs.
+        let attempts = if cfg!(target_os = "linux") { 8 } else { 3 };
+        self.pending_post_connect_rebuild = Some(PendingPostConnectRebuild {
+            next_try_at: Instant::now() + Duration::from_millis(350),
+            attempts_left: attempts,
+        });
+    }
+
     fn load_synthdefs_and_samples(&mut self) -> Result<(), String> {
         let synthdef_dir = crate::paths::synthdefs_dir();
         log::debug!(target: "audio", "Loading synthdefs from: {:?}", synthdef_dir);
@@ -1420,12 +1445,14 @@ impl AudioThread {
                         }
                     };
                     self.send_server_status(ServerStatus::Connected, message);
+                    self.schedule_post_connect_rebuilds();
                     if let Some(reply) = reply {
                         let _ = reply.send(Ok(()));
                     }
                 }
                 Ok(Err(msg)) => {
                     let reply = self.pending_connect.take().unwrap().reply;
+                    self.pending_post_connect_rebuild = None;
                     self.engine.set_status(ServerStatus::Error);
                     self.send_server_status(ServerStatus::Error, &msg);
                     if let Some(reply) = reply {
@@ -1435,6 +1462,7 @@ impl AudioThread {
                 Err(std::sync::mpsc::TryRecvError::Empty) => {}
                 Err(std::sync::mpsc::TryRecvError::Disconnected) => {
                     let reply = self.pending_connect.take().unwrap().reply;
+                    self.pending_post_connect_rebuild = None;
                     self.engine.set_status(ServerStatus::Error);
                     self.send_server_status(
                         ServerStatus::Error,
@@ -1445,6 +1473,28 @@ impl AudioThread {
                             "Connect thread terminated unexpectedly",
                         )));
                     }
+                }
+            }
+        }
+
+        // /d_loadDir is asynchronous; retry rebuild a few times after connect so
+        // slow machines still converge on a valid graph + meter.
+        if let Some(mut pending) = self.pending_post_connect_rebuild.take() {
+            let now = Instant::now();
+            if now < pending.next_try_at {
+                self.pending_post_connect_rebuild = Some(pending);
+            } else if !self.engine.is_running() {
+                // Connection dropped before retries completed.
+            } else if self.routing_rebuild.is_some() {
+                // Let the in-progress rebuild finish before scheduling another.
+                pending.next_try_at = now + Duration::from_millis(100);
+                self.pending_post_connect_rebuild = Some(pending);
+            } else {
+                self.routing_rebuild = Some(super::engine::routing::RoutingRebuildPhase::TearDown);
+                if pending.attempts_left > 1 {
+                    pending.attempts_left -= 1;
+                    pending.next_try_at = now + Duration::from_millis(500);
+                    self.pending_post_connect_rebuild = Some(pending);
                 }
             }
         }
