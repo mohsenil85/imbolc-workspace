@@ -1,3 +1,4 @@
+use crate::state::drum_sequencer::NUM_PADS;
 use crate::state::AppState;
 use crate::ui::layout_helpers::center_rect;
 use crate::ui::{Color, Rect, RenderBuf, Style};
@@ -444,6 +445,269 @@ impl PianoRollPane {
             let piano_style = Style::new().fg(Color::BLACK).bg(Color::PINK);
             for (j, ch) in piano_str.chars().enumerate() {
                 buf.set_cell(indicator_x + j as u16, status_y, ch, piano_style);
+            }
+        }
+    }
+
+    /// Render step sequencer view (adapted from sequencer_pane.rs rendering)
+    pub(super) fn render_step_sequencer_buf(
+        &mut self,
+        buf: &mut RenderBuf,
+        area: Rect,
+        state: &AppState,
+    ) {
+        let box_width: u16 = 97;
+        let rect = center_rect(area, box_width, 29);
+        let border_style = Style::new().fg(Color::ORANGE);
+
+        let seq = match state.instruments.selected_drum_sequencer() {
+            Some(s) => s,
+            None => {
+                let inner =
+                    buf.draw_block(rect, " Steps (Piano Roll) ", border_style, border_style);
+                let cy = rect.y + rect.height / 2;
+                buf.draw_line(
+                    Rect::new(inner.x + 11, cy, inner.width.saturating_sub(12), 1),
+                    &[(
+                        "No drum machine instrument selected. Press t for note editor.",
+                        Style::new().fg(Color::DARK_GRAY),
+                    )],
+                );
+                return;
+            }
+        };
+        let pattern = seq.pattern();
+
+        // Visible steps calculation (same as standalone sequencer)
+        let visible = {
+            let available = (box_width as usize).saturating_sub(15);
+            available / 3
+        };
+
+        // Calculate effective scroll
+        let mut view_start = self.seq_view_start_step;
+        if self.seq_cursor_step < view_start {
+            view_start = self.seq_cursor_step;
+        } else if self.seq_cursor_step >= view_start + visible {
+            view_start = self.seq_cursor_step - visible + 1;
+        }
+        if view_start + visible > pattern.length {
+            view_start = pattern.length.saturating_sub(visible);
+        }
+        self.seq_view_start_step = view_start;
+
+        let steps_shown = visible.min(pattern.length - view_start);
+
+        // Draw box
+        let _inner = buf.draw_block(rect, " Steps (Piano Roll) ", border_style, border_style);
+
+        let cx = rect.x + 2;
+        let cy = rect.y + 1;
+
+        // Header line
+        let pattern_label = match seq.current_pattern {
+            0 => "A",
+            1 => "B",
+            2 => "C",
+            3 => "D",
+            _ => "?",
+        };
+        let play_label = if seq.playing { "PLAY" } else { "STOP" };
+        let play_color = if seq.playing {
+            Color::GREEN
+        } else {
+            Color::GRAY
+        };
+        let grid_label = seq.step_resolution.label();
+
+        let pat_str = format!("Pattern {}", pattern_label);
+        let len_str = format!("  Length: {}", pattern.length);
+        let grid_str = format!("  Grid: {}", grid_label);
+        let bpm_str = format!("  BPM: {:.0}", state.audio.bpm);
+        let play_str = format!("  {}", play_label);
+        buf.draw_line(
+            Rect::new(cx, cy, rect.width.saturating_sub(4), 1),
+            &[
+                (&pat_str, Style::new().fg(Color::WHITE).bold()),
+                (&len_str, Style::new().fg(Color::DARK_GRAY)),
+                (&grid_str, Style::new().fg(Color::CYAN)),
+                (&bpm_str, Style::new().fg(Color::DARK_GRAY)),
+                (&play_str, Style::new().fg(play_color).bold()),
+            ],
+        );
+
+        // View mode indicator on the right
+        let mode_str = " [t] Notes ";
+        let mode_x = rect.x + rect.width - mode_str.len() as u16 - 1;
+        let mode_style = Style::new().fg(Color::DARK_GRAY);
+        for (j, ch) in mode_str.chars().enumerate() {
+            buf.set_cell(mode_x + j as u16, cy, ch, mode_style);
+        }
+
+        // Step number header
+        let header_y = cy + 2;
+        let label_width: u16 = 11;
+        let step_col_start = cx + label_width;
+
+        let dark_gray = Style::new().fg(Color::DARK_GRAY);
+        for i in 0..steps_shown {
+            let step_num = view_start + i + 1;
+            let x = step_col_start + (i as u16) * 3;
+            let num_str = if step_num < 10 {
+                format!(" {}", step_num)
+            } else {
+                format!("{:2}", step_num)
+            };
+            for (j, ch) in num_str.chars().enumerate() {
+                buf.set_cell(x + j as u16, header_y, ch, dark_gray);
+            }
+        }
+
+        // Grid rows
+        let grid_y = header_y + 1;
+
+        for pad_idx in 0..NUM_PADS {
+            let y = grid_y + pad_idx as u16;
+            let is_cursor_row = pad_idx == self.seq_cursor_pad;
+
+            // Pad label
+            let pad = &seq.pads[pad_idx];
+            let label = if pad.name.is_empty() {
+                format!("{:>2} ----   ", pad_idx + 1)
+            } else {
+                let name = if pad.name.len() > 6 {
+                    &pad.name[..6]
+                } else {
+                    &pad.name
+                };
+                format!("{:>2} {:<6} ", pad_idx + 1, name)
+            };
+
+            let label_style = if is_cursor_row {
+                Style::new().fg(Color::WHITE).bold()
+            } else {
+                Style::new().fg(Color::GRAY)
+            };
+            for (j, ch) in label.chars().enumerate() {
+                buf.set_cell(cx + j as u16, y, ch, label_style);
+            }
+
+            // Steps
+            for i in 0..steps_shown {
+                let step_idx = view_start + i;
+                let x = step_col_start + (i as u16) * 3;
+                let is_cursor = is_cursor_row && step_idx == self.seq_cursor_step;
+                let is_playhead = seq.playing && step_idx == seq.current_step;
+
+                let step = &pattern.steps[pad_idx][step_idx];
+                let is_beat = step_idx.is_multiple_of(4);
+
+                let in_selection =
+                    self.seq_selection_anchor
+                        .is_some_and(|(anchor_pad, anchor_step)| {
+                            let (p0, p1) = if anchor_pad <= self.seq_cursor_pad {
+                                (anchor_pad, self.seq_cursor_pad)
+                            } else {
+                                (self.seq_cursor_pad, anchor_pad)
+                            };
+                            let (s0, s1) = if anchor_step <= self.seq_cursor_step {
+                                (anchor_step, self.seq_cursor_step)
+                            } else {
+                                (self.seq_cursor_step, anchor_step)
+                            };
+                            pad_idx >= p0 && pad_idx <= p1 && step_idx >= s0 && step_idx <= s1
+                        });
+
+                let (fg, bg) = if is_cursor {
+                    if step.active {
+                        (Color::BLACK, Color::WHITE)
+                    } else {
+                        (Color::WHITE, Color::SELECTION_BG)
+                    }
+                } else if in_selection {
+                    if step.active {
+                        (Color::BLACK, Color::new(60, 30, 80))
+                    } else {
+                        (Color::WHITE, Color::new(60, 30, 80))
+                    }
+                } else if is_playhead {
+                    if step.active {
+                        (Color::BLACK, Color::GREEN)
+                    } else {
+                        (Color::GREEN, Color::new(20, 50, 20))
+                    }
+                } else if step.active {
+                    let intensity = (step.velocity as f32 / 127.0 * 200.0) as u8 + 55;
+                    (Color::new(intensity, intensity / 3, 0), Color::BLACK)
+                } else if is_beat {
+                    (Color::new(60, 60, 60), Color::BLACK)
+                } else {
+                    (Color::new(40, 40, 40), Color::BLACK)
+                };
+
+                let style = Style::new().fg(fg).bg(bg);
+                let chars: Vec<char> = if step.active { " █ " } else { " · " }.chars().collect();
+                for (j, ch) in chars.iter().enumerate() {
+                    buf.set_cell(x + j as u16, y, *ch, style);
+                }
+            }
+        }
+
+        // Pad detail line
+        let detail_y = grid_y + NUM_PADS as u16 + 1;
+        let pad = &seq.pads[self.seq_cursor_pad];
+
+        if let Some((anchor_pad, anchor_step)) = self.seq_selection_anchor {
+            let pads = (self.seq_cursor_pad as i32 - anchor_pad as i32).abs() + 1;
+            let steps = (self.seq_cursor_step as i32 - anchor_step as i32).abs() + 1;
+            let sel_str = format!("Sel: {} pads x {} steps", pads, steps);
+            buf.draw_line(
+                Rect::new(cx, detail_y, 30, 1),
+                &[(&sel_str, Style::new().fg(Color::ORANGE).bold())],
+            );
+        } else {
+            let pad_label = format!("Pad {:>2}", self.seq_cursor_pad + 1);
+            buf.draw_line(
+                Rect::new(cx, detail_y, 8, 1),
+                &[(&pad_label, Style::new().fg(Color::ORANGE).bold())],
+            );
+
+            let (name_display, name_color) = if pad.name.is_empty() {
+                ("(empty)".to_string(), Color::DARK_GRAY)
+            } else if pad.name.len() > 20 {
+                (pad.name[..20].to_string(), Color::WHITE)
+            } else {
+                (pad.name.clone(), Color::WHITE)
+            };
+            buf.draw_line(
+                Rect::new(cx + 8, detail_y, 22, 1),
+                &[(&name_display, Style::new().fg(name_color))],
+            );
+        }
+
+        // Velocity
+        let step = &pattern.steps[self.seq_cursor_pad][self.seq_cursor_step];
+        let vel_str = if step.pitch_offset != 0 {
+            format!("Vel: {}  P:{:+}", step.velocity, step.pitch_offset)
+        } else {
+            format!("Vel: {}", step.velocity)
+        };
+        let vel_x = cx + 32;
+        for (j, ch) in vel_str.chars().enumerate() {
+            buf.set_cell(vel_x + j as u16, detail_y, ch, dark_gray);
+        }
+
+        // Scroll indicator
+        if pattern.length > visible {
+            let scroll_str = format!(
+                "{}-{}/{}",
+                view_start + 1,
+                view_start + steps_shown,
+                pattern.length
+            );
+            let scroll_x = rect.x + rect.width - 2 - scroll_str.len() as u16;
+            for (j, ch) in scroll_str.chars().enumerate() {
+                buf.set_cell(scroll_x + j as u16, detail_y, ch, dark_gray);
             }
         }
     }

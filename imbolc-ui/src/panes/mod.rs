@@ -48,7 +48,7 @@ pub use instrument_picker_pane::InstrumentPickerPane;
 pub use midi_settings_pane::MidiSettingsPane;
 pub use mixer_pane::MixerPane;
 pub use pane_switcher_pane::PaneSwitcherPane;
-pub use piano_roll_pane::PianoRollPane;
+pub use piano_roll_pane::{PianoRollPane, ViewMode};
 pub use project_browser_pane::ProjectBrowserPane;
 pub use quit_prompt_pane::QuitPromptPane;
 pub use sample_chopper_pane::SampleChopperPane;

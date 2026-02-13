@@ -351,6 +351,9 @@ define_action_enum! {
         RenderToWav => "render_to_wav",
         BounceToWav => "bounce_to_wav",
         ExportStems => "export_stems",
+        ToggleViewMode => "toggle_view_mode",
+        CyclePatternLength => "cycle_pattern_length",
+        CycleStepResolution => "cycle_step_resolution",
     }
 }
 

@@ -1,13 +1,14 @@
+use crate::state::drum_sequencer::NUM_PADS;
 use crate::state::AppState;
 use crate::ui::action_id::{ActionId, ModeActionId, PianoRollActionId};
 use crate::ui::layout_helpers::center_rect;
 use crate::ui::{
     translate_key, Action, InputEvent, KeyCode, MouseButton, MouseEvent, MouseEventKind,
-    PianoRollAction, Rect,
+    PianoRollAction, Rect, SequencerAction,
 };
 use imbolc_types::InstrumentId;
 
-use super::PianoRollPane;
+use super::{PianoRollPane, ViewMode};
 
 impl PianoRollPane {
     /// Get the instrument ID for the current track from state
@@ -20,6 +21,12 @@ impl PianoRollPane {
             .copied()
             .unwrap_or(InstrumentId::new(0))
     }
+
+    /// Visible steps that fit in the sequencer grid (same logic as standalone sequencer pane)
+    fn seq_visible_steps(&self, box_width: u16) -> usize {
+        let available = (box_width as usize).saturating_sub(15);
+        available / 3
+    }
 }
 
 impl PianoRollPane {
@@ -29,8 +36,50 @@ impl PianoRollPane {
         event: &InputEvent,
         state: &AppState,
     ) -> Action {
+        // ToggleViewMode is handled before the view-mode branch
+        if let ActionId::PianoRoll(PianoRollActionId::ToggleViewMode) = action {
+            return self.handle_toggle_view_mode(state);
+        }
+
+        // Branch on view mode for all other actions
         match action {
-            // Piano mode actions (from piano layer)
+            // Piano mode actions always pass through (from piano layer)
+            ActionId::Mode(_) => self.handle_piano_mode_action(action, event, state),
+            // In step sequencer mode, reinterpret piano roll actions
+            _ if self.view_mode == ViewMode::StepSequencer => {
+                self.handle_sequencer_action(action, state)
+            }
+            // Normal note editor handling
+            _ => self.handle_note_editor_action(action, event, state),
+        }
+    }
+
+    fn handle_toggle_view_mode(&mut self, state: &AppState) -> Action {
+        match self.view_mode {
+            ViewMode::StepSequencer => {
+                // Always allow switching back to note editor
+                self.view_mode = ViewMode::NoteEditor;
+            }
+            ViewMode::NoteEditor => {
+                // Only switch to step sequencer if current instrument is a Kit
+                if let Some(inst) = state.instruments.selected_instrument() {
+                    if inst.source.is_kit() {
+                        self.view_mode = ViewMode::StepSequencer;
+                        self.seq_selection_anchor = None;
+                    }
+                }
+            }
+        }
+        Action::None
+    }
+
+    fn handle_piano_mode_action(
+        &mut self,
+        action: ActionId,
+        event: &InputEvent,
+        state: &AppState,
+    ) -> Action {
+        match action {
             ActionId::Mode(ModeActionId::PianoEscape) => {
                 self.piano.deactivate();
                 Action::ExitPerformanceMode
@@ -54,14 +103,12 @@ impl PianoRollPane {
                 if let KeyCode::Char(c) = event.key {
                     let c = translate_key(c, state.keyboard_layout);
                     if let Some(pitches) = self.piano.key_to_pitches(c) {
-                        // Check if this is a new press or key repeat (sustain)
                         if let Some(new_pitches) = self.piano.key_pressed(
                             c,
                             pitches.clone(),
                             event.timestamp,
                             event.is_repeat,
                         ) {
-                            // NEW press - spawn voice(s)
                             let instrument_id = self.current_instrument_id(state);
                             let track = self.current_track;
                             if new_pitches.len() == 1 {
@@ -80,12 +127,137 @@ impl PianoRollPane {
                                 });
                             }
                         }
-                        // Key repeat - sustain, no action needed
                     }
                 }
                 Action::None
             }
-            // Normal grid navigation
+            _ => Action::None,
+        }
+    }
+
+    /// Handle actions in step sequencer view mode by reinterpreting piano roll action IDs.
+    fn handle_sequencer_action(&mut self, action: ActionId, state: &AppState) -> Action {
+        let seq = match state.instruments.selected_drum_sequencer() {
+            Some(s) => s,
+            None => return Action::None,
+        };
+        let pattern_length = seq.pattern().length;
+
+        match action {
+            ActionId::PianoRoll(PianoRollActionId::Up) => {
+                self.seq_selection_anchor = None;
+                self.seq_cursor_pad = self.seq_cursor_pad.saturating_sub(1);
+                Action::None
+            }
+            ActionId::PianoRoll(PianoRollActionId::Down) => {
+                self.seq_selection_anchor = None;
+                self.seq_cursor_pad = (self.seq_cursor_pad + 1).min(NUM_PADS - 1);
+                Action::None
+            }
+            ActionId::PianoRoll(PianoRollActionId::Left) => {
+                self.seq_selection_anchor = None;
+                self.seq_cursor_step = self.seq_cursor_step.saturating_sub(1);
+                Action::None
+            }
+            ActionId::PianoRoll(PianoRollActionId::Right) => {
+                self.seq_selection_anchor = None;
+                self.seq_cursor_step = (self.seq_cursor_step + 1).min(pattern_length - 1);
+                Action::None
+            }
+            ActionId::PianoRoll(PianoRollActionId::SelectUp) => {
+                if self.seq_selection_anchor.is_none() {
+                    self.seq_selection_anchor =
+                        Some((self.seq_cursor_pad, self.seq_cursor_step));
+                }
+                self.seq_cursor_pad = self.seq_cursor_pad.saturating_sub(1);
+                Action::None
+            }
+            ActionId::PianoRoll(PianoRollActionId::SelectDown) => {
+                if self.seq_selection_anchor.is_none() {
+                    self.seq_selection_anchor =
+                        Some((self.seq_cursor_pad, self.seq_cursor_step));
+                }
+                self.seq_cursor_pad = (self.seq_cursor_pad + 1).min(NUM_PADS - 1);
+                Action::None
+            }
+            ActionId::PianoRoll(PianoRollActionId::SelectLeft) => {
+                if self.seq_selection_anchor.is_none() {
+                    self.seq_selection_anchor =
+                        Some((self.seq_cursor_pad, self.seq_cursor_step));
+                }
+                self.seq_cursor_step = self.seq_cursor_step.saturating_sub(1);
+                Action::None
+            }
+            ActionId::PianoRoll(PianoRollActionId::SelectRight) => {
+                if self.seq_selection_anchor.is_none() {
+                    self.seq_selection_anchor =
+                        Some((self.seq_cursor_pad, self.seq_cursor_step));
+                }
+                self.seq_cursor_step = (self.seq_cursor_step + 1).min(pattern_length - 1);
+                Action::None
+            }
+            ActionId::PianoRoll(PianoRollActionId::ToggleNote) => Action::Sequencer(
+                SequencerAction::ToggleStep(self.seq_cursor_pad, self.seq_cursor_step),
+            ),
+            ActionId::PianoRoll(PianoRollActionId::ShrinkDuration) => {
+                Action::Sequencer(SequencerAction::PrevPattern)
+            }
+            ActionId::PianoRoll(PianoRollActionId::GrowDuration) => {
+                Action::Sequencer(SequencerAction::NextPattern)
+            }
+            ActionId::PianoRoll(PianoRollActionId::VelUp) => Action::Sequencer(
+                SequencerAction::AdjustVelocity(self.seq_cursor_pad, self.seq_cursor_step, 10),
+            ),
+            ActionId::PianoRoll(PianoRollActionId::VelDown) => Action::Sequencer(
+                SequencerAction::AdjustVelocity(self.seq_cursor_pad, self.seq_cursor_step, -10),
+            ),
+            ActionId::PianoRoll(PianoRollActionId::Home) => {
+                self.seq_selection_anchor = None;
+                self.seq_cursor_step = 0;
+                Action::None
+            }
+            ActionId::PianoRoll(PianoRollActionId::PlayStop) => {
+                Action::PianoRoll(PianoRollAction::PlayStop)
+            }
+            ActionId::PianoRoll(PianoRollActionId::CyclePatternLength) => {
+                Action::Sequencer(SequencerAction::CyclePatternLength)
+            }
+            ActionId::PianoRoll(PianoRollActionId::CycleStepResolution) => {
+                Action::Sequencer(SequencerAction::CycleStepResolution)
+            }
+            // Actions that still make sense in sequencer view
+            ActionId::PianoRoll(PianoRollActionId::Loop) => {
+                Action::PianoRoll(PianoRollAction::ToggleLoop)
+            }
+            ActionId::PianoRoll(PianoRollActionId::RenderToWav) => Action::PianoRoll(
+                PianoRollAction::RenderToWav(self.current_instrument_id(state)),
+            ),
+            ActionId::PianoRoll(PianoRollActionId::BounceToWav) => {
+                if state.io.pending_export.is_some() {
+                    Action::PianoRoll(PianoRollAction::CancelExport)
+                } else {
+                    Action::PianoRoll(PianoRollAction::BounceToWav)
+                }
+            }
+            ActionId::PianoRoll(PianoRollActionId::ExportStems) => {
+                if state.io.pending_export.is_some() {
+                    Action::PianoRoll(PianoRollAction::CancelExport)
+                } else {
+                    Action::PianoRoll(PianoRollAction::ExportStems)
+                }
+            }
+            _ => Action::None,
+        }
+    }
+
+    /// Handle actions in normal note editor mode (original behavior).
+    fn handle_note_editor_action(
+        &mut self,
+        action: ActionId,
+        _event: &InputEvent,
+        state: &AppState,
+    ) -> Action {
+        match action {
             ActionId::PianoRoll(PianoRollActionId::Up) => {
                 self.selection_anchor = None;
                 if self.cursor_pitch < 127 {
@@ -272,7 +444,6 @@ impl PianoRollPane {
                         Some(idx) => idx + 1,
                         None => 1,
                     };
-                    // Will be clamped during render based on actual lane count
                     self.automation_overlay_lane_idx = Some(next);
                 }
                 Action::None
@@ -285,8 +456,87 @@ impl PianoRollPane {
         &mut self,
         event: &MouseEvent,
         area: Rect,
-        _state: &AppState,
+        state: &AppState,
     ) -> Action {
+        match self.view_mode {
+            ViewMode::StepSequencer => self.handle_mouse_sequencer(event, area, state),
+            ViewMode::NoteEditor => self.handle_mouse_note_editor(event, area),
+        }
+    }
+
+    fn handle_mouse_sequencer(
+        &mut self,
+        event: &MouseEvent,
+        area: Rect,
+        state: &AppState,
+    ) -> Action {
+        let box_width: u16 = 97;
+        let rect = center_rect(area, box_width, 29);
+        let cx = rect.x + 2;
+        let header_y = rect.y + 3;
+        let label_width: u16 = 11;
+        let step_col_start = cx + label_width;
+        let grid_y = header_y + 1;
+        let visible = self.seq_visible_steps(box_width);
+
+        let seq = match state.instruments.selected_drum_sequencer() {
+            Some(s) => s,
+            None => return Action::None,
+        };
+        let pattern = seq.pattern();
+
+        // Calculate effective scroll (same as render)
+        let mut view_start = self.seq_view_start_step;
+        if self.seq_cursor_step < view_start {
+            view_start = self.seq_cursor_step;
+        } else if self.seq_cursor_step >= view_start + visible {
+            view_start = self.seq_cursor_step - visible + 1;
+        }
+        if view_start + visible > pattern.length {
+            view_start = pattern.length.saturating_sub(visible);
+        }
+
+        let col = event.column;
+        let row = event.row;
+
+        match event.kind {
+            MouseEventKind::Down(MouseButton::Left) => {
+                self.seq_selection_anchor = None;
+                if col >= step_col_start && row >= grid_y && row < grid_y + NUM_PADS as u16 {
+                    let pad_idx = (row - grid_y) as usize;
+                    let step_offset = (col - step_col_start) / 3;
+                    let step_idx = view_start + step_offset as usize;
+                    if pad_idx < NUM_PADS && step_idx < pattern.length {
+                        self.seq_cursor_pad = pad_idx;
+                        self.seq_cursor_step = step_idx;
+                        return Action::Sequencer(SequencerAction::ToggleStep(pad_idx, step_idx));
+                    }
+                }
+                if col >= cx
+                    && col < step_col_start
+                    && row >= grid_y
+                    && row < grid_y + NUM_PADS as u16
+                {
+                    let pad_idx = (row - grid_y) as usize;
+                    if pad_idx < NUM_PADS {
+                        self.seq_cursor_pad = pad_idx;
+                    }
+                }
+                Action::None
+            }
+            MouseEventKind::ScrollUp => {
+                self.seq_cursor_pad = self.seq_cursor_pad.saturating_sub(1);
+                Action::None
+            }
+            MouseEventKind::ScrollDown => {
+                self.seq_cursor_pad = (self.seq_cursor_pad + 1).min(NUM_PADS - 1);
+                Action::None
+            }
+            _ => Action::None,
+        }
+    }
+
+    fn handle_mouse_note_editor(&mut self, event: &MouseEvent, area: Rect) -> Action {
         let rect = center_rect(area, 97, 29);
         let key_col_width: u16 = 5;
         let header_height: u16 = 2;
@@ -304,7 +554,6 @@ impl PianoRollPane {
         match event.kind {
             MouseEventKind::Down(MouseButton::Left) => {
                 self.selection_anchor = None;
-                // Click on the grid area
                 if col >= grid_x
                     && col < grid_x + grid_width
                     && row >= grid_y
@@ -329,7 +578,6 @@ impl PianoRollPane {
                         });
                     }
                 }
-                // Click on piano key column to set pitch
                 if col >= rect.x && col < grid_x && row >= grid_y && row < grid_y + grid_height {
                     let grid_row = row - grid_y;
                     let pitch = self
@@ -342,7 +590,6 @@ impl PianoRollPane {
                 Action::None
             }
             MouseEventKind::Down(MouseButton::Right) => {
-                // Right-click on grid: just move cursor (no toggle)
                 if col >= grid_x
                     && col < grid_x + grid_width
                     && row >= grid_y
@@ -363,22 +610,18 @@ impl PianoRollPane {
             }
             MouseEventKind::ScrollUp => {
                 if event.modifiers.shift {
-                    // Horizontal scroll
                     let step = self.ticks_per_cell() * 4;
                     self.view_start_tick = self.view_start_tick.saturating_sub(step);
                 } else {
-                    // Vertical scroll - pitch up
                     self.view_bottom_pitch = self.view_bottom_pitch.saturating_add(3).min(127);
                 }
                 Action::None
             }
             MouseEventKind::ScrollDown => {
                 if event.modifiers.shift {
-                    // Horizontal scroll
                     let step = self.ticks_per_cell() * 4;
                     self.view_start_tick += step;
                 } else {
-                    // Vertical scroll - pitch down
                     self.view_bottom_pitch = self.view_bottom_pitch.saturating_sub(3);
                 }
                 Action::None
