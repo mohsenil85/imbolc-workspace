@@ -67,10 +67,13 @@ pub(super) fn dispatch_instrument(
         }
         InstrumentAction::ToggleArp(_)
         | InstrumentAction::CycleArpDirection(_)
+        | InstrumentAction::CycleArpDirectionReverse(_)
         | InstrumentAction::CycleArpRate(_)
+        | InstrumentAction::CycleArpRateReverse(_)
         | InstrumentAction::AdjustArpOctaves(_, _)
         | InstrumentAction::AdjustArpGate(_, _)
         | InstrumentAction::CycleChordShape(_)
+        | InstrumentAction::CycleChordShapeReverse(_)
         | InstrumentAction::ClearChordShape(_) => arpeggiator::dispatch(state, action),
         InstrumentAction::LoadIRResult(instrument_id, effect_id, ref path) => {
             effects::handle_load_ir_result(state, audio, *instrument_id, *effect_id, path)

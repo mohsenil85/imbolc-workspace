@@ -595,6 +595,16 @@ pub(crate) fn handle_global_action(
                     layer_stack,
                 );
             }
+            GlobalActionId::SwitchPane(ShortcutPaneId::Arpeggiator) => {
+                switch_to_pane(
+                    NavPaneId::Arpeggiator,
+                    panes,
+                    dispatcher,
+                    audio,
+                    app_frame,
+                    layer_stack,
+                );
+            }
             GlobalActionId::SwitchPane(ShortcutPaneId::Tuner) => {
                 switch_to_pane(
                     NavPaneId::Tuner,

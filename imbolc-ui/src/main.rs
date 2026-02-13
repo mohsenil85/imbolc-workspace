@@ -19,11 +19,12 @@ mod ui;
 use std::fs::File;
 
 use panes::{
-    AddEffectPane, AddPane, AutomationPane, CheckpointListPane, CommandPalettePane, ConfirmPane,
-    DocsPane, EqPane, FileBrowserPane, FrameEditPane, GroovePane, HelpPane, HomePane,
-    InstrumentEditPane, InstrumentPane, InstrumentPickerPane, MidiSettingsPane, MixerPane,
-    PaneSwitcherPane, PianoRollPane, ProjectBrowserPane, QuitPromptPane, SampleChopperPane,
-    SaveAsPane, SequencerPane, ServerPane, TrackPane, TunerPane, VstParamPane, WaveformPane,
+    AddEffectPane, AddPane, ArpeggiatorPane, AutomationPane, CheckpointListPane,
+    CommandPalettePane, ConfirmPane, DocsPane, EqPane, FileBrowserPane, FrameEditPane, GroovePane,
+    HelpPane, HomePane, InstrumentEditPane, InstrumentPane, InstrumentPickerPane,
+    MidiSettingsPane, MixerPane, PaneSwitcherPane, PianoRollPane, ProjectBrowserPane,
+    QuitPromptPane, SampleChopperPane, SaveAsPane, SequencerPane, ServerPane, TrackPane,
+    TunerPane, VstParamPane, WaveformPane,
 };
 use ui::{Keymap, PaneManager, RatatuiBackend};
 
@@ -194,6 +195,10 @@ pub(crate) fn register_all_panes(
     ))));
     panes.add_pane(Box::new(EqPane::new(pane_keymap(keymaps, "eq"))));
     panes.add_pane(Box::new(GroovePane::new(pane_keymap(keymaps, "groove"))));
+    panes.add_pane(Box::new(ArpeggiatorPane::new(pane_keymap(
+        keymaps,
+        "arpeggiator",
+    ))));
     panes.add_pane(Box::new(VstParamPane::new(pane_keymap(
         keymaps,
         "vst_params",

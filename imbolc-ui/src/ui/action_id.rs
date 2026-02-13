@@ -17,6 +17,7 @@ pub enum PaneId {
     FrameEdit,
     MidiSettings,
     Groove,
+    Arpeggiator,
     Tuner,
 }
 
@@ -137,6 +138,7 @@ impl GlobalActionId {
                 PaneId::FrameEdit => "switch:frame_edit",
                 PaneId::MidiSettings => "switch:midi_settings",
                 PaneId::Groove => "switch:groove",
+                PaneId::Arpeggiator => "switch:arpeggiator",
                 PaneId::Tuner => "switch:tuner",
             },
             GlobalActionId::SelectInstrument(n) => match n {
@@ -203,6 +205,7 @@ impl GlobalActionId {
             "switch:frame_edit" => Some(GlobalActionId::SwitchPane(PaneId::FrameEdit)),
             "switch:midi_settings" => Some(GlobalActionId::SwitchPane(PaneId::MidiSettings)),
             "switch:groove" => Some(GlobalActionId::SwitchPane(PaneId::Groove)),
+            "switch:arpeggiator" => Some(GlobalActionId::SwitchPane(PaneId::Arpeggiator)),
             "switch:tuner" => Some(GlobalActionId::SwitchPane(PaneId::Tuner)),
             "select:1" => Some(GlobalActionId::SelectInstrument(1)),
             "select:2" => Some(GlobalActionId::SelectInstrument(2)),
@@ -633,6 +636,18 @@ define_action_enum! {
 }
 
 define_action_enum! {
+    /// Arpeggiator layer actions
+    pub enum ArpeggiatorActionId {
+        PrevParam => "prev_param",
+        NextParam => "next_param",
+        Toggle => "toggle",
+        Increase => "increase",
+        Decrease => "decrease",
+        ClearChord => "clear_chord",
+    }
+}
+
+define_action_enum! {
     /// Groove layer actions
     pub enum GrooveActionId {
         PrevParam => "prev_param",
@@ -796,6 +811,7 @@ pub enum ActionId {
     SampleChopper(SampleChopperActionId),
     Automation(AutomationActionId),
     Eq(EqActionId),
+    Arpeggiator(ArpeggiatorActionId),
     Groove(GrooveActionId),
     Track(TrackActionId),
     VstParams(VstParamsActionId),
@@ -827,6 +843,7 @@ impl ActionId {
             ActionId::SampleChopper(a) => a.as_str(),
             ActionId::Automation(a) => a.as_str(),
             ActionId::Eq(a) => a.as_str(),
+            ActionId::Arpeggiator(a) => a.as_str(),
             ActionId::Groove(a) => a.as_str(),
             ActionId::Track(a) => a.as_str(),
             ActionId::VstParams(a) => a.as_str(),
@@ -859,6 +876,7 @@ pub fn parse_action_id(layer: &str, action: &str) -> Option<ActionId> {
         "sample_chopper" => SampleChopperActionId::from_str(action).map(ActionId::SampleChopper),
         "automation" => AutomationActionId::from_str(action).map(ActionId::Automation),
         "eq" => EqActionId::from_str(action).map(ActionId::Eq),
+        "arpeggiator" => ArpeggiatorActionId::from_str(action).map(ActionId::Arpeggiator),
         "groove" => GrooveActionId::from_str(action).map(ActionId::Groove),
         "tuner" => TunerActionId::from_str(action).map(ActionId::Tuner),
         "track" => TrackActionId::from_str(action).map(ActionId::Track),

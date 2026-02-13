@@ -178,9 +178,22 @@ pub(super) fn reduce(
             }
             true
         }
+        InstrumentAction::CycleArpDirectionReverse(id) => {
+            if let Some(inst) = instruments.instrument_mut(*id) {
+                inst.note_input.arpeggiator.direction =
+                    inst.note_input.arpeggiator.direction.prev();
+            }
+            true
+        }
         InstrumentAction::CycleArpRate(id) => {
             if let Some(inst) = instruments.instrument_mut(*id) {
                 inst.note_input.arpeggiator.rate = inst.note_input.arpeggiator.rate.next();
+            }
+            true
+        }
+        InstrumentAction::CycleArpRateReverse(id) => {
+            if let Some(inst) = instruments.instrument_mut(*id) {
+                inst.note_input.arpeggiator.rate = inst.note_input.arpeggiator.rate.prev();
             }
             true
         }
@@ -203,6 +216,16 @@ pub(super) fn reduce(
                 inst.note_input.chord_shape = match inst.note_input.chord_shape {
                     None => Some(crate::ChordShape::Major),
                     Some(shape) => Some(shape.next()),
+                };
+            }
+            true
+        }
+        InstrumentAction::CycleChordShapeReverse(id) => {
+            if let Some(inst) = instruments.instrument_mut(*id) {
+                inst.note_input.chord_shape = match inst.note_input.chord_shape {
+                    None => Some(crate::ChordShape::Octave),
+                    Some(crate::ChordShape::Major) => None,
+                    Some(shape) => Some(shape.prev()),
                 };
             }
             true

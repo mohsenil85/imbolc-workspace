@@ -17,6 +17,7 @@ bindings = [
   { key = "F8", action = "switch:eq", description = "Parametric EQ" },
   { key = "F9", action = "switch:groove", description = "Groove settings" },
   { key = "F10", action = "switch:tuner", description = "Reference tuner" },
+  { key = "F11", action = "switch:arpeggiator", description = "Arpeggiator" },
   { key = "Ctrl+o", action = "open_project_browser", description = "Project browser" },
   { key = "Ctrl+S", action = "save_as", description = "Save project as..." },
   { key = "Ctrl+f", action = "switch:frame_edit", description = "Frame edit" },
@@ -429,6 +430,22 @@ bindings = [
   { key = "g", action = "cycle_swing_grid", description = "Cycle swing grid" },
   { key = "t", action = "cycle_time_sig", description = "Cycle time signature" },
   { key = "r", action = "reset", description = "Reset all to global" },
+]
+
+[layers.arpeggiator]
+bindings = [
+  { key = "Up", action = "prev_param", description = "Previous parameter" },
+  { key = "Down", action = "next_param", description = "Next parameter" },
+  { key = "k", action = "prev_param", description = "Previous parameter" },
+  { key = "j", action = "next_param", description = "Next parameter" },
+  { key = "Left", action = "decrease", description = "Decrease / Cycle back" },
+  { key = "Right", action = "increase", description = "Increase / Cycle forward" },
+  { key = "h", action = "decrease", description = "Decrease / Cycle back" },
+  { key = "l", action = "increase", description = "Increase / Cycle forward" },
+  { key = "Space", action = "toggle", description = "Toggle arp on/off" },
+  { key = "Enter", action = "toggle", description = "Toggle arp on/off" },
+  { key = "Backspace", action = "clear_chord", description = "Clear chord shape" },
+  { key = "x", action = "clear_chord", description = "Clear chord shape" },
 ]
 
 [layers.track]

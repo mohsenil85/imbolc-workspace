@@ -32,6 +32,7 @@ pub enum PaneId {
     FileBrowser,
     FrameEdit,
     Groove,
+    Arpeggiator,
     Help,
     Home,
     Instrument,
@@ -67,6 +68,7 @@ impl PaneId {
             PaneId::FileBrowser => "file_browser",
             PaneId::FrameEdit => "frame_edit",
             PaneId::Groove => "groove",
+            PaneId::Arpeggiator => "arpeggiator",
             PaneId::Help => "help",
             PaneId::Home => "home",
             PaneId::Instrument => "instrument",
@@ -103,6 +105,7 @@ impl PaneId {
             "file_browser" => Some(PaneId::FileBrowser),
             "frame_edit" => Some(PaneId::FrameEdit),
             "groove" => Some(PaneId::Groove),
+            "arpeggiator" => Some(PaneId::Arpeggiator),
             "help" => Some(PaneId::Help),
             "home" => Some(PaneId::Home),
             "instrument" => Some(PaneId::Instrument),
@@ -834,10 +837,13 @@ pub enum InstrumentAction {
     LoadSampleResult(InstrumentId, PathBuf),
     ToggleArp(InstrumentId),
     CycleArpDirection(InstrumentId),
+    CycleArpDirectionReverse(InstrumentId),
     CycleArpRate(InstrumentId),
+    CycleArpRateReverse(InstrumentId),
     AdjustArpOctaves(InstrumentId, i8),
     AdjustArpGate(InstrumentId, f32),
     CycleChordShape(InstrumentId),
+    CycleChordShapeReverse(InstrumentId),
     ClearChordShape(InstrumentId),
     LoadIRResult(InstrumentId, EffectId, PathBuf), // instrument_id, effect_id, path
     OpenVstEffectParams(InstrumentId, EffectId),   // instrument_id, effect_id
@@ -907,10 +913,13 @@ impl InstrumentAction {
             | Self::LoadSampleResult(id, _)
             | Self::ToggleArp(id)
             | Self::CycleArpDirection(id)
+            | Self::CycleArpDirectionReverse(id)
             | Self::CycleArpRate(id)
+            | Self::CycleArpRateReverse(id)
             | Self::AdjustArpOctaves(id, _)
             | Self::AdjustArpGate(id, _)
             | Self::CycleChordShape(id)
+            | Self::CycleChordShapeReverse(id)
             | Self::ClearChordShape(id)
             | Self::LoadIRResult(id, _, _)
             | Self::OpenVstEffectParams(id, _)
@@ -1154,6 +1163,7 @@ mod tests {
             PaneId::FileBrowser,
             PaneId::FrameEdit,
             PaneId::Groove,
+            PaneId::Arpeggiator,
             PaneId::Help,
             PaneId::Home,
             PaneId::Instrument,
