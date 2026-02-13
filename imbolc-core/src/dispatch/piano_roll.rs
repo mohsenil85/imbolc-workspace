@@ -490,6 +490,7 @@ pub(super) fn dispatch_piano_roll(
 }
 
 #[cfg(test)]
+#[allow(unused_must_use)]
 mod tests {
     use super::*;
     use crate::state::ClipboardContents;

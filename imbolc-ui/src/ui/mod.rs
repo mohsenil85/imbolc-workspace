@@ -28,7 +28,6 @@ pub use input::{
 pub use keymap::Keymap;
 pub use layer::{LayerResult, LayerStack};
 pub use list_selector::ListSelector;
-pub use pad_keyboard::PadKeyboard;
 pub use pane::{
     Action, ArrangementAction, AutomationAction, BusAction, ChopperAction, DispatchResult,
     FileSelectAction, InstrumentAction, InstrumentUpdate, LayerGroupAction, MixerAction, NavAction,

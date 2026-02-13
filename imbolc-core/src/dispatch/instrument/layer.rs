@@ -57,6 +57,7 @@ pub(super) fn handle_adjust_layer_octave_offset(
 }
 
 #[cfg(test)]
+#[allow(unused_must_use)]
 mod tests {
     use super::*;
     use crate::state::SourceType;

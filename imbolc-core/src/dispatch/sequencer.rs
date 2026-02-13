@@ -664,6 +664,7 @@ pub(super) fn dispatch_chopper(
 }
 
 #[cfg(test)]
+#[allow(unused_must_use)]
 mod tests {
     use super::*;
     use imbolc_audio::AudioHandle;

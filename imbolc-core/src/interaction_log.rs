@@ -293,7 +293,7 @@ mod tests {
         let path = dir.path().join("bad_lines.jsonl");
         let mut f = File::create(&path).unwrap();
         writeln!(f, "not valid json at all").unwrap();
-        writeln!(f, "").unwrap();
+        writeln!(f).unwrap();
         writeln!(
             f,
             r#"{{"t_ms":100,"pane":"instrument","action":{{"Instrument":{{"Add":"Sin"}}}},"effects":[],"undoable":true}}"#

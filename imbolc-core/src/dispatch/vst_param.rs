@@ -296,6 +296,7 @@ pub(super) fn dispatch_vst_param(
 }
 
 #[cfg(test)]
+#[allow(unused_must_use)]
 mod tests {
     use super::*;
     use crate::state::instrument::SourceType;

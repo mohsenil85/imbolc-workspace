@@ -168,6 +168,7 @@ pub fn dispatch_layer_group(
 }
 
 #[cfg(test)]
+#[allow(unused_must_use)]
 mod tests {
     use super::*;
     use crate::state::automation::AutomationTarget;

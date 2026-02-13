@@ -150,6 +150,7 @@ pub(crate) fn record_automation_point(state: &mut AppState, target: AutomationTa
 }
 
 #[cfg(test)]
+#[allow(unused_must_use)]
 mod tests {
     use super::*;
     use crate::state::automation::AutomationLaneId;

@@ -98,15 +98,26 @@ pub(crate) fn sync_piano_roll_to_selection(
 
             // Re-route if currently on a F2-family pane
             if active == "piano_roll" || active == "sequencer" || active == "waveform" {
-                let target = if is_kit {
-                    NavPaneId::Sequencer
-                } else if is_audio_in || is_bus_in {
+                let target = if is_audio_in || is_bus_in {
                     NavPaneId::Waveform
                 } else {
                     NavPaneId::PianoRoll
                 };
                 if active != target.as_str() {
                     panes.switch_to(target, dispatcher.state());
+                }
+                // Set view mode on piano roll when instrument type changes
+                if target == NavPaneId::PianoRoll {
+                    if let Some(pr_pane) =
+                        panes.get_pane_mut::<PianoRollPane>("piano_roll")
+                    {
+                        use crate::panes::ViewMode;
+                        if is_kit {
+                            pr_pane.set_view_mode(ViewMode::StepSequencer);
+                        } else {
+                            pr_pane.set_view_mode(ViewMode::NoteEditor);
+                        }
+                    }
                 }
             }
         }
@@ -489,19 +500,30 @@ pub(crate) fn handle_global_action(
                 );
             }
             GlobalActionId::SwitchPane(ShortcutPaneId::PianoRollOrSequencer) => {
-                let target =
+                let (target, is_kit) =
                     if let Some(inst) = dispatcher.state().instruments.selected_instrument() {
-                        if inst.source.is_kit() {
-                            NavPaneId::Sequencer
-                        } else if inst.source.is_audio_input() || inst.source.is_bus_in() {
-                            NavPaneId::Waveform
+                        if inst.source.is_audio_input() || inst.source.is_bus_in() {
+                            (NavPaneId::Waveform, false)
                         } else {
-                            NavPaneId::PianoRoll
+                            (NavPaneId::PianoRoll, inst.source.is_kit())
                         }
                     } else {
-                        NavPaneId::PianoRoll
+                        (NavPaneId::PianoRoll, false)
                     };
                 switch_to_pane(target, panes, dispatcher, audio, app_frame, layer_stack);
+                // Set view mode after switching
+                if target == NavPaneId::PianoRoll {
+                    if let Some(pr_pane) =
+                        panes.get_pane_mut::<PianoRollPane>("piano_roll")
+                    {
+                        use crate::panes::ViewMode;
+                        if is_kit {
+                            pr_pane.set_view_mode(ViewMode::StepSequencer);
+                        } else {
+                            pr_pane.set_view_mode(ViewMode::NoteEditor);
+                        }
+                    }
+                }
             }
             GlobalActionId::SwitchPane(ShortcutPaneId::Track) => {
                 switch_to_pane(
@@ -842,6 +864,7 @@ pub(crate) fn handle_quit_intent(
 
 /// Handle SaveAndQuit: save (or prompt for name), then quit.
 /// Sets `quit_after_save` so the runtime exits after save completes.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn handle_save_and_quit(
     dispatcher: &mut LocalDispatcher,
     panes: &mut PaneManager,

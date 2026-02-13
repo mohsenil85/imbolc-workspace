@@ -238,6 +238,7 @@ pub(super) fn dispatch_mixer(
 }
 
 #[cfg(test)]
+#[allow(unused_must_use)]
 mod tests {
     use super::*;
     use imbolc_audio::AudioHandle;

@@ -120,6 +120,7 @@ impl SharedState {
                         }
                     }
                 }
+                IoFeedback::AutosaveComplete { .. } => {}
                 IoFeedback::ImportSynthDefComplete { .. } => {}
                 IoFeedback::ImportSynthDefLoaded { .. } => {}
             }

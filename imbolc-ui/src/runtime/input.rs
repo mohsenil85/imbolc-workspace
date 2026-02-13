@@ -323,16 +323,13 @@ impl AppRuntime {
                     break 'events;
                 }
                 RoutedAction::Ui(UiAction::QuitIntent) => {
-                    match handle_quit_intent(
+                    if let GlobalResult::Quit = handle_quit_intent(
                         &mut self.dispatcher,
                         &mut self.panes,
                         &mut self.layer_stack,
                     ) {
-                        GlobalResult::Quit => {
-                            should_quit = true;
-                            break 'events;
-                        }
-                        _ => {}
+                        should_quit = true;
+                        break 'events;
                     }
                 }
                 RoutedAction::Ui(UiAction::SaveAndQuit) => {
