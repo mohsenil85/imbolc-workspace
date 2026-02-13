@@ -38,6 +38,9 @@ pub struct Frame {
     audio_latency_ms: f32,
     /// Status bar for transient user notifications
     pub status_bar: StatusBar,
+    /// Runtime autosave status indicator
+    autosave_enabled: bool,
+    autosave_interval_minutes: u64,
 }
 
 impl Frame {
@@ -55,6 +58,8 @@ impl Frame {
             osc_latency_ms: 0.0,
             audio_latency_ms: 0.0,
             status_bar: StatusBar::new(),
+            autosave_enabled: false,
+            autosave_interval_minutes: 2,
         }
     }
 
@@ -75,6 +80,12 @@ impl Frame {
         self.sc_cpu = cpu;
         self.osc_latency_ms = osc_latency_ms;
         self.audio_latency_ms = audio_latency_ms;
+    }
+
+    /// Configure autosave status indicator shown in frame chrome.
+    pub fn set_autosave_config(&mut self, enabled: bool, interval_minutes: u64) {
+        self.autosave_enabled = enabled;
+        self.autosave_interval_minutes = interval_minutes.max(1);
     }
 
     /// Get meter color for a given row position (0=bottom, height-1=top)
@@ -203,6 +214,21 @@ impl Frame {
                 cursor = priv_start;
             }
         }
+
+        // Autosave indicator
+        let autosave_text = if self.autosave_enabled {
+            format!(" ASV {}m ", self.autosave_interval_minutes)
+        } else {
+            " ASV OFF ".to_string()
+        };
+        let autosave_start = cursor.saturating_sub(autosave_text.len() as u16);
+        let autosave_style = if self.autosave_enabled {
+            Style::new().fg(Color::METER_LOW).bold()
+        } else {
+            Style::new().fg(Color::DARK_GRAY)
+        };
+        buf.draw_str(autosave_start, area.y, &autosave_text, autosave_style);
+        cursor = autosave_start;
 
         // Help hint (leftmost right-aligned item)
         let help_hint = " ? ";

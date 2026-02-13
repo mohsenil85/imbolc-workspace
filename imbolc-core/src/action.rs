@@ -29,6 +29,11 @@ pub enum IoFeedback {
         path: PathBuf,
         result: Result<String, String>,
     },
+    AutosaveComplete {
+        id: u64,
+        path: PathBuf,
+        result: Result<(), String>,
+    },
     LoadComplete {
         id: u64,
         path: PathBuf,

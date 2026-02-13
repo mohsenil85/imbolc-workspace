@@ -20,6 +20,11 @@ IMBOLC_NO_AUDIO=1 cargo run -p imbolc-ui
 
 Optional: override SynthDef location with `IMBOLC_SYNTHDEFS_DIR=/path/to/synthdefs`.
 
+### Guides
+
+- [Installation Guide](docs/installation.md) — platform setup, dependencies, and troubleshooting.
+- [Getting Started](docs/getting-started.md) — first-session walkthrough from launch to export.
+
 ### Linux dependencies (Debian/Ubuntu)
 
 The GUI crate (`imbolc-gui`) uses Dioxus/WebKit and needs several system libraries. On Debian/Ubuntu:
@@ -166,6 +171,12 @@ Output targets route instruments to master (hardware bus 0) or named buses. Per-
 
 - Defaults: `imbolc-core/config.toml` and `imbolc-ui/keybindings.toml` (embedded at build time).
 - Overrides: `~/.config/imbolc/config.toml`, `~/.config/imbolc/keybindings.toml`.
+- Runtime toggles (example):
+  ```toml
+  [runtime]
+  autosave = true
+  autosave_interval_minutes = 2
+  ```
 - Project file: `~/.config/imbolc/default.sqlite`.
 - Custom synthdefs: `~/.config/imbolc/synthdefs/` (or `IMBOLC_SYNTHDEFS_DIR`).
 - Audio device prefs: `~/.config/imbolc/audio_devices.json`.

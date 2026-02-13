@@ -11,8 +11,9 @@ mod feedback;
 mod input;
 mod render;
 
+use std::path::PathBuf;
 use std::sync::mpsc::Receiver;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use crate::action::{AudioEffect, IoFeedback};
 use crate::audio::AudioHandle;
@@ -20,10 +21,18 @@ use crate::config;
 use crate::dispatch::LocalDispatcher;
 use crate::global_actions::{apply_status_events, InstrumentSelectMode};
 use crate::midi;
+use crate::panes::{ConfirmPane, PendingAction};
 use crate::setup;
 use crate::state::{self, AppState};
 use crate::ui::{keybindings, Frame, LayerStack, PaneId, PaneManager, RatatuiBackend};
 use imbolc_core::interaction_log::InteractionLog;
+
+fn autosave_path() -> PathBuf {
+    dirs::config_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("imbolc")
+        .join(".imbolc.autosave")
+}
 
 /// Top-level runtime that owns all application state and drives the event loop.
 pub struct AppRuntime {
@@ -47,12 +56,22 @@ pub struct AppRuntime {
     pub(crate) render_needed: bool,
     pub(crate) last_render_time: Instant,
     pub(crate) last_area: ratatui::layout::Rect,
+    pub(crate) autosave_enabled: bool,
+    pub(crate) autosave_interval: Duration,
+    pub(crate) autosave_path: PathBuf,
+    pub(crate) autosave_id: u64,
+    pub(crate) autosave_in_progress: bool,
+    pub(crate) last_autosave_at: Instant,
 }
 
 impl AppRuntime {
     pub fn new() -> Self {
         let (io_tx, io_rx) = std::sync::mpsc::channel::<IoFeedback>();
         let config = config::Config::load();
+        let autosave_enabled = config.autosave_enabled();
+        let autosave_interval_minutes = config.autosave_interval_minutes();
+        let autosave_interval = Duration::from_secs(autosave_interval_minutes.saturating_mul(60));
+        let autosave_path = autosave_path();
         let mut state = AppState::new_with_defaults(config.defaults());
         state.keyboard_layout = config.keyboard_layout();
 
@@ -71,6 +90,7 @@ impl AppRuntime {
 
         let mut dispatcher = LocalDispatcher::new(state, io_tx);
         let mut app_frame = Frame::new();
+        app_frame.set_autosave_config(autosave_enabled, autosave_interval_minutes);
 
         // Initialize MIDI input
         let mut midi_input = midi::MidiInputManager::new();
@@ -92,6 +112,7 @@ impl AppRuntime {
 
         // CLI argument: optional project path (skip flags like --verbose)
         let project_arg = std::env::args().skip(1).find(|a| !a.starts_with('-'));
+        let explicit_project_requested = project_arg.is_some();
         if let Some(arg) = project_arg {
             let load_path = std::path::PathBuf::from(&arg);
             if load_path.exists() {
@@ -129,6 +150,19 @@ impl AppRuntime {
             }
         }
 
+        // Offer crash-recovery load when an autosave snapshot exists and no explicit
+        // project path was requested on the CLI.
+        if autosave_enabled && !explicit_project_requested && autosave_path.exists() {
+            if let Some(confirm) = panes.get_pane_mut::<ConfirmPane>("confirm") {
+                confirm.set_confirm(
+                    "Recover autosave from previous session?",
+                    PendingAction::LoadFrom(autosave_path.clone()),
+                );
+            }
+            panes.push_to(PaneId::Confirm, dispatcher.state());
+            layer_stack.set_pane_layer(panes.active().id());
+        }
+
         // Auto-start SuperCollider and apply status events
         {
             let startup_events = setup::auto_start_sc(&mut audio);
@@ -152,6 +186,12 @@ impl AppRuntime {
             render_needed: true,
             last_render_time: Instant::now(),
             last_area: ratatui::layout::Rect::new(0, 0, 80, 24),
+            autosave_enabled,
+            autosave_interval,
+            autosave_path,
+            autosave_id: 0,
+            autosave_in_progress: false,
+            last_autosave_at: Instant::now(),
         }
     }
 
@@ -168,6 +208,7 @@ impl AppRuntime {
             self.process_tick();
             self.apply_pending_effects();
             self.drain_io_feedback();
+            self.maybe_autosave();
 
             if self.quit_after_save && !self.dispatcher.state().project.dirty {
                 break;
@@ -178,6 +219,40 @@ impl AppRuntime {
             self.maybe_render(backend)?;
         }
         Ok(())
+    }
+
+    /// Persist a periodic crash-recovery snapshot when project state is dirty.
+    pub(crate) fn maybe_autosave(&mut self) {
+        if !self.autosave_enabled || self.autosave_in_progress {
+            return;
+        }
+        if !self.dispatcher.state().project.dirty {
+            return;
+        }
+        if self.last_autosave_at.elapsed() < self.autosave_interval {
+            return;
+        }
+
+        self.last_autosave_at = Instant::now();
+        self.autosave_in_progress = true;
+        self.autosave_id = self.autosave_id.wrapping_add(1);
+
+        let id = self.autosave_id;
+        let path = self.autosave_path.clone();
+        let session = self.dispatcher.state().session.clone();
+        let instruments = self.dispatcher.state().instruments.clone();
+        let tx = self.dispatcher.io_tx().clone();
+
+        std::thread::spawn(move || {
+            if let Some(parent) = path.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+
+            let result = crate::state::persistence::save_project(&path, &session, &instruments)
+                .map_err(|e| e.to_string());
+
+            let _ = tx.send(IoFeedback::AutosaveComplete { id, path, result });
+        });
     }
 }
 

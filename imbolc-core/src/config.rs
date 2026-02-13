@@ -12,6 +12,8 @@ const DEFAULT_CONFIG: &str = include_str!("../config.toml");
 struct ConfigFile {
     #[serde(default)]
     defaults: DefaultsConfig,
+    #[serde(default)]
+    runtime: RuntimeConfig,
 }
 
 #[derive(Deserialize, Default)]
@@ -26,8 +28,15 @@ struct DefaultsConfig {
     bus_count: Option<u8>,
 }
 
+#[derive(Deserialize, Default)]
+struct RuntimeConfig {
+    autosave: Option<bool>,
+    autosave_interval_minutes: Option<u64>,
+}
+
 pub struct Config {
     defaults: DefaultsConfig,
+    runtime: RuntimeConfig,
 }
 
 impl Config {
@@ -39,7 +48,10 @@ impl Config {
             if path.exists() {
                 match std::fs::read_to_string(&path) {
                     Ok(contents) => match toml::from_str::<ConfigFile>(&contents) {
-                        Ok(user) => merge_defaults(&mut base.defaults, user.defaults),
+                        Ok(user) => {
+                            merge_defaults(&mut base.defaults, user.defaults);
+                            merge_runtime(&mut base.runtime, user.runtime);
+                        }
                         Err(e) => {
                             log::warn!(target: "config", "ignoring malformed config {}: {}", path.display(), e)
                         }
@@ -53,6 +65,7 @@ impl Config {
 
         Config {
             defaults: base.defaults,
+            runtime: base.runtime,
         }
     }
 
@@ -95,6 +108,19 @@ impl Config {
             snap: self.defaults.snap.unwrap_or(fallback.snap),
         }
     }
+
+    /// Whether periodic autosave snapshots are enabled.
+    pub fn autosave_enabled(&self) -> bool {
+        self.runtime.autosave.unwrap_or(true)
+    }
+
+    /// Autosave interval in minutes (clamped to 1..10080).
+    pub fn autosave_interval_minutes(&self) -> u64 {
+        self.runtime
+            .autosave_interval_minutes
+            .unwrap_or(2)
+            .clamp(1, 10_080)
+    }
 }
 
 fn user_config_path() -> Option<PathBuf> {
@@ -125,6 +151,15 @@ fn merge_defaults(base: &mut DefaultsConfig, user: DefaultsConfig) {
     }
     if user.bus_count.is_some() {
         base.bus_count = user.bus_count;
+    }
+}
+
+fn merge_runtime(base: &mut RuntimeConfig, user: RuntimeConfig) {
+    if user.autosave.is_some() {
+        base.autosave = user.autosave;
+    }
+    if user.autosave_interval_minutes.is_some() {
+        base.autosave_interval_minutes = user.autosave_interval_minutes;
     }
 }
 
@@ -186,6 +221,8 @@ mod tests {
         assert_eq!(defaults.time_signature, (4, 4));
         assert!(!defaults.snap);
         assert_eq!(config.keyboard_layout(), KeyboardLayout::Colemak);
+        assert!(config.autosave_enabled());
+        assert_eq!(config.autosave_interval_minutes(), 2);
     }
 
     #[test]

@@ -1,5 +1,7 @@
 //! Feedback draining: I/O completion callbacks, audio feedback, MIDI events.
 
+use std::time::Instant;
+
 use super::AppRuntime;
 use crate::action::{self, AudioEffect, IoFeedback};
 use crate::audio::commands::AudioCmd;
@@ -28,6 +30,12 @@ impl AppRuntime {
                             self.app_frame
                                 .status_bar
                                 .push("Project saved", StatusLevel::Info);
+                            // Invalidate any in-flight autosave write and remove stale snapshot.
+                            self.autosave_id = self.autosave_id.wrapping_add(1);
+                            self.autosave_in_progress = false;
+                            // Explicit saves supersede crash snapshots.
+                            let _ = std::fs::remove_file(&self.autosave_path);
+                            self.last_autosave_at = Instant::now();
                             "Saved project".to_string()
                         }
                         Err(e) => {
@@ -40,24 +48,53 @@ impl AppRuntime {
                         server.set_status(self.audio.status(), &status);
                     }
                 }
+                IoFeedback::AutosaveComplete { id, path, result } => {
+                    if id != self.autosave_id {
+                        // Discard stale autosave artifact from superseded generation.
+                        let _ = std::fs::remove_file(path);
+                        continue;
+                    }
+                    self.autosave_in_progress = false;
+                    match result {
+                        Ok(()) => {}
+                        Err(e) => {
+                            let msg = format!("Autosave failed: {}", e);
+                            self.app_frame.status_bar.push(&msg, StatusLevel::Error);
+                        }
+                    }
+                }
                 IoFeedback::LoadComplete { id, path, result } => {
                     if id != self.dispatcher.state().io.generation.load {
                         continue;
                     }
                     match result {
                         Ok((new_session, new_instruments, name)) => {
+                            let recovering_autosave = path == self.autosave_path;
                             {
                                 let state = self.dispatcher.state_mut();
                                 state.undo_history.clear();
                                 state.session = new_session;
                                 state.instruments = new_instruments;
                                 state.instruments.rebuild_index();
-                                state.project.path = Some(path.clone());
-                                state.project.dirty = false;
+                                if recovering_autosave {
+                                    // Keep recovered session unsaved so users pick a real project path.
+                                    state.project.path = None;
+                                    state.project.dirty = true;
+                                } else {
+                                    state.project.path = Some(path.clone());
+                                    state.project.dirty = false;
+                                }
                             }
-                            self.recent_projects.add(&path, &name);
-                            self.recent_projects.save();
-                            self.app_frame.set_project_name(name);
+                            if recovering_autosave {
+                                self.app_frame.set_project_name("autosave-recovered".to_string());
+                            } else {
+                                self.recent_projects.add(&path, &name);
+                                self.recent_projects.save();
+                                self.app_frame.set_project_name(name);
+                            }
+                            self.last_autosave_at = Instant::now();
+                            self.autosave_id = self.autosave_id.wrapping_add(1);
+                            self.autosave_in_progress = false;
 
                             if self.dispatcher.state().instruments.instruments.is_empty() {
                                 self.panes
@@ -108,11 +145,19 @@ impl AppRuntime {
                                 });
                             }
 
-                            self.app_frame
-                                .status_bar
-                                .push("Project loaded", StatusLevel::Info);
+                            let status_msg = if recovering_autosave {
+                                "Recovered autosave snapshot (unsaved)".to_string()
+                            } else {
+                                "Project loaded".to_string()
+                            };
+                            let status_level = if recovering_autosave {
+                                StatusLevel::Warning
+                            } else {
+                                StatusLevel::Info
+                            };
+                            self.app_frame.status_bar.push(&status_msg, status_level);
                             if let Some(server) = self.panes.get_pane_mut::<ServerPane>("server") {
-                                server.set_status(self.audio.status(), "Project loaded");
+                                server.set_status(self.audio.status(), &status_msg);
                             }
                         }
                         Err(e) => {

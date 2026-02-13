@@ -1,6 +1,6 @@
 # Imbolc: Road to Public Alpha/Beta
 
-_Last updated: 2026-02-11_
+_Last updated: 2026-02-13_
 
 ## Context
 
@@ -19,15 +19,15 @@ Current product posture for alpha:
 
 ---
 
-## Status Snapshot (2026-02-11)
+## Status Snapshot (2026-02-13)
 
 | Phase | Status | Notes |
 |------|--------|-------|
 | Phase 0: Hygiene | DONE | Compile error + warning cleanup and quick UI hygiene were completed. |
 | Phase 1: Crash resilience | DONE | Status bar, resize handling, and panic hook are in place. |
-| Phase 2: CI/CD | NOT STARTED | `.github/workflows/` is currently missing. |
-| Phase 3: Onboarding/docs | PARTIAL | README quick-start exists; dedicated install/tutorial/docs audit still pending. |
-| Phase 4: Core alpha features | PARTIAL | Export + automation recording/playback are done; autosave/recovery is still missing. |
+| Phase 2: CI/CD | IN PROGRESS | Workflow files are added; first successful CI/release runs still pending verification on GitHub. |
+| Phase 3: Onboarding/docs | PARTIAL | Installation and getting-started docs are added; broader docs audit is still pending. |
+| Phase 4: Core alpha features | DONE | Export, automation recording/playback, and autosave/recovery are now implemented. |
 | Phase 5: Polish/quality | PARTIAL | Sequencer grid selection is done; test expansion and MIDI learn workflow remain. |
 | Phase 6: Pre-release | NOT STARTED | Packaging/versioning/release assets not yet prepared. |
 
@@ -47,24 +47,26 @@ Current product posture for alpha:
 
 ---
 
-## Phase 2: CI/CD (3-5 days) -- NOT STARTED
+## Phase 2: CI/CD (3-5 days) -- IN PROGRESS
 
 Required before inviting broader testers.
 
 ### 2.1 GitHub Actions CI
 
-- [ ] Create `.github/workflows/ci.yml`
-- [ ] Matrix: `ubuntu-latest`, `macos-latest`
-- [ ] Steps: `cargo check`, `cargo build --release`, `cargo test` (skip
+- [x] Create `.github/workflows/ci.yml`
+- [x] Matrix: `ubuntu-latest`, `macos-latest`
+- [x] Steps: `cargo check`, `cargo build --release`, `cargo test` (skip
   e2e), `cargo clippy -- -D warnings`
-- [ ] Trigger on pushes to `main` and PRs
+- [x] Trigger on pushes to `main` and PRs
+- [ ] Verify green CI run on GitHub (PR + main)
 
 ### 2.2 Release workflow
 
-- [ ] Create `.github/workflows/release.yml` for `v*` tags
-- [ ] Build release binaries: macOS (aarch64 + x86_64), Linux (x86_64)
-- [ ] Bundle `synthdefs/`
-- [ ] Attach artifacts to GitHub Releases
+- [x] Create `.github/workflows/release.yml` for `v*` tags
+- [x] Build release binaries: macOS (aarch64 + x86_64), Linux (x86_64)
+- [x] Bundle `synthdefs/`
+- [x] Attach artifacts to GitHub Releases
+- [ ] Verify tag-triggered publish end-to-end on GitHub
 
 ### 2.3 Clippy policy
 
@@ -79,12 +81,12 @@ Required before inviting broader testers.
 
 - [x] Basic install/run info in `README.md` (Rust, SuperCollider,
   SynthDef compile, Linux deps)
-- [ ] Add dedicated `docs/installation.md` with platform-specific
+- [x] Add dedicated `docs/installation.md` with platform-specific
   troubleshooting and known issues
 
-### 3.2 Getting Started tutorial -- NOT STARTED
+### 3.2 Getting Started tutorial -- DONE
 
-- [ ] Create step-by-step first session flow: launch -> add instrument ->
+- [x] Create step-by-step first session flow: launch -> add instrument ->
   play notes -> sequence -> add effects -> save -> export
 
 ### 3.3 Docs audit -- NOT STARTED
@@ -111,11 +113,12 @@ Required before inviting broader testers.
 `imbolc-core/src/dispatch/audio_feedback.rs`,
 `imbolc-ui/src/panes/piano_roll_pane/rendering.rs`
 
-### 4.2 Autosave / crash recovery -- NOT STARTED
+### 4.2 Autosave / crash recovery -- DONE
 
-- [ ] Periodic autosave (every 2-5 min) to `.imbolc.autosave`
-- [ ] Startup autosave detection + recovery prompt
-- [ ] Non-blocking save path through existing IO channel
+- [x] Periodic autosave (every 2-5 min) to `.imbolc.autosave`
+- [x] Startup autosave detection + recovery prompt
+- [x] Non-blocking save path through existing IO channel
+- [x] Autosave toggle in `config.toml` (`[runtime].autosave`)
 
 ### 4.3 Automation recording + playback -- DONE
 
@@ -204,10 +207,9 @@ Required before inviting broader testers.
 ## Next Execution Order
 
 1. Phase 2 (CI/CD) — block regressions before widening testers.
-2. Phase 4.2 (autosave/recovery) — close the largest data-loss risk.
-3. Phase 3 (install/tutorial/docs) — reduce onboarding friction.
-4. Phase 5.1 + 5.3 (coverage and MIDI learn UX).
-5. Phase 6 (packaging/release prep).
+2. Phase 3.3 (docs audit) — close documentation drift.
+3. Phase 5.1 + 5.3 (coverage and MIDI learn UX).
+4. Phase 6 (packaging/release prep).
 
 ## Verification Gates
 

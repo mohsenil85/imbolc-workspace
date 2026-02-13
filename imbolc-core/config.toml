@@ -6,3 +6,9 @@ tuning_a4 = 432.0
 time_signature = [4, 4]
 snap = false
 keyboard_layout = "colemak"
+
+[runtime]
+# Periodic crash-recovery snapshot to ~/.config/imbolc/.imbolc.autosave
+autosave = true
+# Interval for periodic autosave snapshots
+autosave_interval_minutes = 2
