@@ -10,7 +10,7 @@ use super::humanize::HumanizeSettings;
 use super::instrument::MixerBus;
 use super::midi_recording::MidiRecordingState;
 use super::mixer::{MixerState, DEFAULT_BUS_COUNT};
-use super::music::{Key, Scale};
+use super::music::{JIFlavor, Key, Scale, Tuning};
 use super::piano_roll::PianoRollState;
 use super::theme::Theme;
 use super::vst::VstPluginRegistry;
@@ -60,6 +60,10 @@ pub struct MusicalSettings {
     pub tuning_a4: f32,
     pub snap: bool,
     pub time_signature: (u8, u8),
+    #[serde(default)]
+    pub tuning: Tuning,
+    #[serde(default)]
+    pub ji_flavor: JIFlavor,
 }
 
 impl Default for MusicalSettings {
@@ -71,6 +75,8 @@ impl Default for MusicalSettings {
             tuning_a4: 440.0,
             snap: false,
             time_signature: (4, 4),
+            tuning: Tuning::default(),
+            ji_flavor: JIFlavor::default(),
         }
     }
 }
@@ -86,6 +92,10 @@ pub struct SessionState {
     pub tuning_a4: f32,
     pub snap: bool,
     pub time_signature: (u8, u8),
+    #[serde(default)]
+    pub tuning: Tuning,
+    #[serde(default)]
+    pub ji_flavor: JIFlavor,
 
     // Project state (hoisted from InstrumentState)
     pub piano_roll: PianoRollState,
@@ -127,6 +137,8 @@ impl SessionState {
             tuning_a4: defaults.tuning_a4,
             snap: defaults.snap,
             time_signature: defaults.time_signature,
+            tuning: defaults.tuning,
+            ji_flavor: defaults.ji_flavor,
             piano_roll: PianoRollState::new(),
             arrangement: ArrangementState::new(),
             automation: AutomationState::new(),
@@ -150,6 +162,8 @@ impl SessionState {
             tuning_a4: self.tuning_a4,
             snap: self.snap,
             time_signature: self.time_signature,
+            tuning: self.tuning,
+            ji_flavor: self.ji_flavor,
         }
     }
 
@@ -161,6 +175,8 @@ impl SessionState {
         self.tuning_a4 = settings.tuning_a4;
         self.snap = settings.snap;
         self.time_signature = settings.time_signature;
+        self.tuning = settings.tuning;
+        self.ji_flavor = settings.ji_flavor;
         // Sync to piano_roll (invariant: piano_roll mirrors session settings)
         self.piano_roll.bpm = self.bpm as f32;
         self.piano_roll.time_signature = self.time_signature;

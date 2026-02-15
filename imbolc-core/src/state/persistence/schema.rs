@@ -1,7 +1,7 @@
 use rusqlite::{Connection, Result as SqlResult};
 
 /// Schema version for the relational format.
-pub const SCHEMA_VERSION: i32 = 12;
+pub const SCHEMA_VERSION: i32 = 13;
 
 /// Create all tables for the relational schema.
 pub fn create_tables(conn: &Connection) -> SqlResult<()> {
@@ -42,7 +42,10 @@ CREATE TABLE IF NOT EXISTS session (
     -- click track
     click_enabled INTEGER NOT NULL DEFAULT 0,
     click_volume REAL NOT NULL DEFAULT 0.5,
-    click_muted INTEGER NOT NULL DEFAULT 0
+    click_muted INTEGER NOT NULL DEFAULT 0,
+    -- tuning system
+    tuning TEXT NOT NULL DEFAULT 'EqualTemperament',
+    ji_flavor TEXT NOT NULL DEFAULT 'FiveLimit'
 );
 
 CREATE TABLE IF NOT EXISTS theme (

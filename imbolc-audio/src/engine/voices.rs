@@ -5,6 +5,7 @@ use super::{AudioEngine, VoiceChain, GROUP_SOURCES};
 use imbolc_types::{
     BufferId, InstrumentId, InstrumentState, ParamValue, ParameterTarget, SessionState,
 };
+use imbolc_types::tuning;
 
 /// Anti-click fade time for voice stealing/freeing.
 /// Must exceed the midi control node's gate release (10ms) plus margin
@@ -74,8 +75,8 @@ impl AudioEngine {
         let (voice_freq_bus, voice_gate_bus, voice_vel_bus) =
             self.voice_allocator.alloc_control_buses();
 
-        let tuning = session.tuning_a4 as f64;
-        let freq = tuning * (2.0_f64).powf((pitch as f64 - 69.0) / 12.0);
+        let ctx = tuning::TuningContext::new(session.key, session.ji_flavor);
+        let freq = tuning::pitch_to_freq(pitch, session.tuning_a4 as f64, session.tuning, &ctx);
 
         let mut messages: Vec<BackendMessage> = Vec::new();
 
@@ -351,8 +352,8 @@ impl AudioEngine {
         let (voice_freq_bus, voice_gate_bus, voice_vel_bus) =
             self.voice_allocator.alloc_control_buses();
 
-        let tuning = session.tuning_a4 as f64;
-        let freq = tuning * (2.0_f64).powf((pitch as f64 - 69.0) / 12.0);
+        let ctx = tuning::TuningContext::new(session.key, session.ji_flavor);
+        let freq = tuning::pitch_to_freq(pitch, session.tuning_a4 as f64, session.tuning, &ctx);
 
         let mut messages: Vec<BackendMessage> = Vec::new();
 

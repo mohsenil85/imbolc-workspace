@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use serde::Deserialize;
 
-use crate::state::music::{Key, Scale};
+use crate::state::music::{JIFlavor, Key, Scale, Tuning};
 use crate::state::KeyboardLayout;
 use crate::state::MusicalSettings;
 
@@ -26,6 +26,8 @@ struct DefaultsConfig {
     snap: Option<bool>,
     keyboard_layout: Option<String>,
     bus_count: Option<u8>,
+    tuning: Option<String>,
+    ji_flavor: Option<String>,
 }
 
 #[derive(Deserialize, Default)]
@@ -106,6 +108,18 @@ impl Config {
                 .map(|ts| (ts[0], ts[1]))
                 .unwrap_or(fallback.time_signature),
             snap: self.defaults.snap.unwrap_or(fallback.snap),
+            tuning: self
+                .defaults
+                .tuning
+                .as_deref()
+                .and_then(parse_tuning)
+                .unwrap_or(fallback.tuning),
+            ji_flavor: self
+                .defaults
+                .ji_flavor
+                .as_deref()
+                .and_then(parse_ji_flavor)
+                .unwrap_or(fallback.ji_flavor),
         }
     }
 
@@ -151,6 +165,12 @@ fn merge_defaults(base: &mut DefaultsConfig, user: DefaultsConfig) {
     }
     if user.bus_count.is_some() {
         base.bus_count = user.bus_count;
+    }
+    if user.tuning.is_some() {
+        base.tuning = user.tuning;
+    }
+    if user.ji_flavor.is_some() {
+        base.ji_flavor = user.ji_flavor;
     }
 }
 
@@ -202,6 +222,26 @@ fn parse_scale(s: &str) -> Option<Scale> {
         "Pentatonic" => Some(Scale::Pentatonic),
         "Blues" => Some(Scale::Blues),
         "Chromatic" => Some(Scale::Chromatic),
+        _ => None,
+    }
+}
+
+fn parse_tuning(s: &str) -> Option<Tuning> {
+    match s {
+        "EqualTemperament" | "ET" | "12-TET" => Some(Tuning::EqualTemperament),
+        "ScaleJI" => Some(Tuning::ScaleJI),
+        "ChordJI" => Some(Tuning::ChordJI),
+        "AdaptiveJI" => Some(Tuning::AdaptiveJI),
+        "GlobalJI" => Some(Tuning::GlobalJI),
+        _ => None,
+    }
+}
+
+fn parse_ji_flavor(s: &str) -> Option<JIFlavor> {
+    match s {
+        "FiveLimit" | "5-Limit" | "5L" => Some(JIFlavor::FiveLimit),
+        "SevenLimit" | "7-Limit" | "7L" => Some(JIFlavor::SevenLimit),
+        "Pythagorean" => Some(JIFlavor::Pythagorean),
         _ => None,
     }
 }

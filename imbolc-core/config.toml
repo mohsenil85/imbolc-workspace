@@ -5,6 +5,8 @@ scale = "Major"
 tuning_a4 = 432.0
 time_signature = [4, 4]
 snap = false
+tuning = "EqualTemperament"
+ji_flavor = "FiveLimit"
 keyboard_layout = "colemak"
 
 [runtime]

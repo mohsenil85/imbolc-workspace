@@ -56,6 +56,16 @@ pub(super) fn load_session(
     session.click_track.volume = row.14;
     session.click_track.muted = row.15 != 0;
 
+    // Tuning fields (added in schema v13, may not exist in older DBs)
+    if let Ok(tuning_row) = conn.query_row(
+        "SELECT tuning, ji_flavor FROM session WHERE id = 1",
+        [],
+        |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+    ) {
+        session.tuning = decode_tuning(&tuning_row.0);
+        session.ji_flavor = decode_ji_flavor(&tuning_row.1);
+    }
+
     Ok(())
 }
 

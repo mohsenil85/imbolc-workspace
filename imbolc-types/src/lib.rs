@@ -13,6 +13,7 @@ mod audio;
 mod param;
 pub mod reduce;
 pub mod state;
+pub mod tuning;
 
 pub use action::*;
 pub use audio::{AudioFeedback, ExportKind, ServerStatus};

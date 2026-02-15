@@ -48,8 +48,9 @@ fn save_session(
         "INSERT INTO session (id, bpm, time_sig_num, time_sig_denom, key, scale, tuning_a4, snap,
             next_instrument_id, next_sampler_buffer_id, selected_instrument, next_layer_group_id,
             humanize_velocity, humanize_timing,
-            click_enabled, click_volume, click_muted)
-         VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+            click_enabled, click_volume, click_muted,
+            tuning, ji_flavor)
+         VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
         params![
             session.bpm,
             session.time_signature.0,
@@ -67,6 +68,8 @@ fn save_session(
             session.click_track.enabled as i32,
             session.click_track.volume,
             session.click_track.muted as i32,
+            format!("{:?}", session.tuning),
+            format!("{:?}", session.ji_flavor),
         ],
     )?;
     Ok(())

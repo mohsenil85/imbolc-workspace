@@ -44,6 +44,40 @@ pub(crate) fn decode_scale(s: &str) -> crate::state::music::Scale {
     }
 }
 
+pub(crate) fn decode_tuning(s: &str) -> crate::state::music::Tuning {
+    use crate::state::music::Tuning;
+    match s {
+        "EqualTemperament" => Tuning::EqualTemperament,
+        "ScaleJI" => Tuning::ScaleJI,
+        "ChordJI" => Tuning::ChordJI,
+        "AdaptiveJI" => Tuning::AdaptiveJI,
+        "GlobalJI" => Tuning::GlobalJI,
+        other => {
+            eprintln!(
+                "[imbolc] persistence: unknown Tuning '{}', using EqualTemperament",
+                other
+            );
+            Tuning::EqualTemperament
+        }
+    }
+}
+
+pub(crate) fn decode_ji_flavor(s: &str) -> crate::state::music::JIFlavor {
+    use crate::state::music::JIFlavor;
+    match s {
+        "FiveLimit" => JIFlavor::FiveLimit,
+        "SevenLimit" => JIFlavor::SevenLimit,
+        "Pythagorean" => JIFlavor::Pythagorean,
+        other => {
+            eprintln!(
+                "[imbolc] persistence: unknown JIFlavor '{}', using FiveLimit",
+                other
+            );
+            JIFlavor::FiveLimit
+        }
+    }
+}
+
 pub(crate) fn decode_source_type(s: &str) -> crate::state::instrument::SourceType {
     use crate::state::instrument::SourceType;
     use imbolc_types::{CustomSynthDefId, VstPluginId};

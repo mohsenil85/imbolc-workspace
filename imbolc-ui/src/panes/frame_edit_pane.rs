@@ -1,6 +1,6 @@
 use std::any::Any;
 
-use crate::state::music::{Key, Scale};
+use crate::state::music::{JIFlavor, Key, Scale, Tuning};
 use crate::state::{AppState, MusicalSettings};
 use crate::ui::action_id::{ActionId, FrameEditActionId, ModeActionId};
 use crate::ui::layout_helpers::center_rect;
@@ -12,16 +12,20 @@ use crate::ui::{Action, Color, InputEvent, Keymap, Pane, Rect, RenderBuf, Sessio
 enum Field {
     Bpm,
     TimeSig,
-    Tuning,
+    TuningA4,
+    TuningSystem,
+    JIFlavor,
     Key,
     Scale,
     Snap,
 }
 
-const FIELDS: [Field; 6] = [
+const FIELDS: [Field; 8] = [
     Field::Bpm,
     Field::TimeSig,
-    Field::Tuning,
+    Field::TuningA4,
+    Field::TuningSystem,
+    Field::JIFlavor,
     Field::Key,
     Field::Scale,
     Field::Snap,
@@ -101,6 +105,32 @@ impl FrameEditPane {
         };
     }
 
+    fn cycle_tuning_system(&mut self, forward: bool) {
+        let idx = Tuning::ALL
+            .iter()
+            .position(|t| *t == self.settings.tuning)
+            .unwrap_or(0);
+        let len = Tuning::ALL.len();
+        self.settings.tuning = if forward {
+            Tuning::ALL[(idx + 1) % len]
+        } else {
+            Tuning::ALL[(idx + len - 1) % len]
+        };
+    }
+
+    fn cycle_ji_flavor(&mut self, forward: bool) {
+        let idx = JIFlavor::ALL
+            .iter()
+            .position(|f| *f == self.settings.ji_flavor)
+            .unwrap_or(0);
+        let len = JIFlavor::ALL.len();
+        self.settings.ji_flavor = if forward {
+            JIFlavor::ALL[(idx + 1) % len]
+        } else {
+            JIFlavor::ALL[(idx + len - 1) % len]
+        };
+    }
+
     fn adjust(&mut self, increase: bool) {
         match self.current_field() {
             Field::Bpm => {
@@ -108,10 +138,12 @@ impl FrameEditPane {
                 self.settings.bpm = (self.settings.bpm as i16 + delta).clamp(20, 300) as u16;
             }
             Field::TimeSig => self.cycle_time_sig(increase),
-            Field::Tuning => {
+            Field::TuningA4 => {
                 let delta: f32 = if increase { 1.0 } else { -1.0 };
                 self.settings.tuning_a4 = (self.settings.tuning_a4 + delta).clamp(400.0, 480.0);
             }
+            Field::TuningSystem => self.cycle_tuning_system(increase),
+            Field::JIFlavor => self.cycle_ji_flavor(increase),
             Field::Key => self.cycle_key(increase),
             Field::Scale => self.cycle_scale(increase),
             Field::Snap => self.settings.snap = !self.settings.snap,
@@ -122,7 +154,9 @@ impl FrameEditPane {
         match field {
             Field::Bpm => "BPM",
             Field::TimeSig => "Time Sig",
-            Field::Tuning => "Tuning (A4)",
+            Field::TuningA4 => "Tuning (A4)",
+            Field::TuningSystem => "Tuning",
+            Field::JIFlavor => "JI Flavor",
             Field::Key => "Key",
             Field::Scale => "Scale",
             Field::Snap => "Snap",
@@ -136,7 +170,9 @@ impl FrameEditPane {
                 "{}/{}",
                 self.settings.time_signature.0, self.settings.time_signature.1
             ),
-            Field::Tuning => format!("{:.1} Hz", self.settings.tuning_a4),
+            Field::TuningA4 => format!("{:.1} Hz", self.settings.tuning_a4),
+            Field::TuningSystem => self.settings.tuning.name().to_string(),
+            Field::JIFlavor => self.settings.ji_flavor.name().to_string(),
             Field::Key => self.settings.key.name().to_string(),
             Field::Scale => self.settings.scale.name().to_string(),
             Field::Snap => {
@@ -182,7 +218,7 @@ impl Pane for FrameEditPane {
                                 self.settings.bpm = v.clamp(20, 300);
                             }
                         }
-                        Field::Tuning => {
+                        Field::TuningA4 => {
                             if let Ok(v) = text.parse::<f32>() {
                                 self.settings.tuning_a4 = v.clamp(400.0, 480.0);
                             }
@@ -238,10 +274,10 @@ impl Pane for FrameEditPane {
             }
             FrameEditActionId::Confirm => {
                 let field = self.current_field();
-                if matches!(field, Field::Bpm | Field::Tuning) {
+                if matches!(field, Field::Bpm | Field::TuningA4) {
                     let val = match field {
                         Field::Bpm => format!("{}", self.settings.bpm),
-                        Field::Tuning => format!("{:.1}", self.settings.tuning_a4),
+                        Field::TuningA4 => format!("{:.1}", self.settings.tuning_a4),
                         _ => unreachable!(),
                     };
                     self.edit_input.set_value(&val);

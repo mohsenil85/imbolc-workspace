@@ -116,6 +116,10 @@ impl Scale {
         }
     }
 
+    pub fn short_name(&self) -> &'static str {
+        self.name()
+    }
+
     /// Semitone intervals from root for this scale
     pub fn intervals(&self) -> &'static [i32] {
         match self {
@@ -131,6 +135,90 @@ impl Scale {
             Scale::Blues => &[0, 3, 5, 6, 7, 10],
             Scale::Chromatic => &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
         }
+    }
+}
+
+/// Tuning system for pitch-to-frequency conversion
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Tuning {
+    /// Standard 12-tone equal temperament
+    EqualTemperament,
+    /// Just intonation ratios relative to scale tonic
+    ScaleJI,
+    /// Just intonation ratios relative to detected chord root
+    ChordJI,
+    /// Chord JI with continuity constraints to minimize pitch drift
+    AdaptiveJI,
+    /// Chord JI with accumulated global drift (no snap-back)
+    GlobalJI,
+}
+
+impl Tuning {
+    pub const ALL: [Tuning; 5] = [
+        Tuning::EqualTemperament,
+        Tuning::ScaleJI,
+        Tuning::ChordJI,
+        Tuning::AdaptiveJI,
+        Tuning::GlobalJI,
+    ];
+
+    pub fn name(&self) -> &'static str {
+        match self {
+            Tuning::EqualTemperament => "Equal Temperament",
+            Tuning::ScaleJI => "Scale JI",
+            Tuning::ChordJI => "Chord JI",
+            Tuning::AdaptiveJI => "Adaptive JI",
+            Tuning::GlobalJI => "Global JI",
+        }
+    }
+
+    pub fn short_name(&self) -> &'static str {
+        match self {
+            Tuning::EqualTemperament => "12-TET",
+            Tuning::ScaleJI => "ScaleJI",
+            Tuning::ChordJI => "ChrdJI",
+            Tuning::AdaptiveJI => "AdptJI",
+            Tuning::GlobalJI => "GlobJI",
+        }
+    }
+}
+
+impl Default for Tuning {
+    fn default() -> Self {
+        Tuning::EqualTemperament
+    }
+}
+
+/// JI ratio philosophy — controls which ratio table is used by all JI variants
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum JIFlavor {
+    /// Classic 5-limit: 9/5 minor 7th
+    FiveLimit,
+    /// Septimal 7-limit: 7/4 minor 7th
+    SevenLimit,
+    /// Pure fifths: 16/9 minor 7th
+    Pythagorean,
+}
+
+impl JIFlavor {
+    pub const ALL: [JIFlavor; 3] = [
+        JIFlavor::FiveLimit,
+        JIFlavor::SevenLimit,
+        JIFlavor::Pythagorean,
+    ];
+
+    pub fn name(&self) -> &'static str {
+        match self {
+            JIFlavor::FiveLimit => "5-Limit",
+            JIFlavor::SevenLimit => "7-Limit",
+            JIFlavor::Pythagorean => "Pythagorean",
+        }
+    }
+}
+
+impl Default for JIFlavor {
+    fn default() -> Self {
+        JIFlavor::FiveLimit
     }
 }
 
@@ -190,5 +278,43 @@ mod tests {
     #[test]
     fn scale_pentatonic_has_5_notes() {
         assert_eq!(Scale::Pentatonic.intervals().len(), 5);
+    }
+
+    #[test]
+    fn tuning_all_has_5() {
+        assert_eq!(Tuning::ALL.len(), 5);
+    }
+
+    #[test]
+    fn tuning_names_unique() {
+        let names: HashSet<&str> = Tuning::ALL.iter().map(|t| t.name()).collect();
+        assert_eq!(names.len(), 5);
+    }
+
+    #[test]
+    fn tuning_short_names_unique() {
+        let names: HashSet<&str> = Tuning::ALL.iter().map(|t| t.short_name()).collect();
+        assert_eq!(names.len(), 5);
+    }
+
+    #[test]
+    fn tuning_default_is_et() {
+        assert_eq!(Tuning::default(), Tuning::EqualTemperament);
+    }
+
+    #[test]
+    fn ji_flavor_all_has_3() {
+        assert_eq!(JIFlavor::ALL.len(), 3);
+    }
+
+    #[test]
+    fn ji_flavor_names_unique() {
+        let names: HashSet<&str> = JIFlavor::ALL.iter().map(|f| f.name()).collect();
+        assert_eq!(names.len(), 3);
+    }
+
+    #[test]
+    fn ji_flavor_default_is_five_limit() {
+        assert_eq!(JIFlavor::default(), JIFlavor::FiveLimit);
     }
 }
