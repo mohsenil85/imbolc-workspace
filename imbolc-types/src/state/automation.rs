@@ -103,6 +103,19 @@ pub enum GlobalParameter {
     TimeSignature,
 }
 
+/// Generative engine macro parameter target.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum GenerativeParameter {
+    /// Controls pulses/rest_prob/iterations (0.0-1.0)
+    Density,
+    /// Controls rotation/entropy (0.0-1.0)
+    Chaos,
+    /// Controls velocity range (0.0-1.0)
+    Energy,
+    /// Controls intervals/step size (0.0-1.0)
+    Motion,
+}
+
 /// What parameter is being automated.
 ///
 /// Structured enum that reuses ParameterTarget for per-instrument parameters,
@@ -115,6 +128,8 @@ pub enum AutomationTarget {
     Bus(BusId, BusParameter),
     /// Global session parameters
     Global(GlobalParameter),
+    /// Generative engine macro parameters
+    Generative(GenerativeParameter),
 }
 
 impl AutomationTarget {
@@ -144,6 +159,30 @@ impl AutomationTarget {
     #[inline]
     pub fn time_signature() -> Self {
         Self::Global(GlobalParameter::TimeSignature)
+    }
+
+    /// Create a generative density target.
+    #[inline]
+    pub fn gen_density() -> Self {
+        Self::Generative(GenerativeParameter::Density)
+    }
+
+    /// Create a generative chaos target.
+    #[inline]
+    pub fn gen_chaos() -> Self {
+        Self::Generative(GenerativeParameter::Chaos)
+    }
+
+    /// Create a generative energy target.
+    #[inline]
+    pub fn gen_energy() -> Self {
+        Self::Generative(GenerativeParameter::Energy)
+    }
+
+    /// Create a generative motion target.
+    #[inline]
+    pub fn gen_motion() -> Self {
+        Self::Generative(GenerativeParameter::Motion)
     }
 
     // ========================================================================
@@ -279,11 +318,13 @@ impl AutomationTarget {
     // Query methods
     // ========================================================================
 
-    /// Get the instrument ID associated with this target (None for global/bus targets).
+    /// Get the instrument ID associated with this target (None for global/bus/generative targets).
     pub fn instrument_id(&self) -> Option<InstrumentId> {
         match self {
             AutomationTarget::Instrument(id, _) => Some(*id),
-            AutomationTarget::Bus(_, _) | AutomationTarget::Global(_) => None,
+            AutomationTarget::Bus(_, _)
+            | AutomationTarget::Global(_)
+            | AutomationTarget::Generative(_) => None,
         }
     }
 
@@ -304,6 +345,12 @@ impl AutomationTarget {
             AutomationTarget::Global(GlobalParameter::TimeSignature) => {
                 "Time Signature".to_string()
             }
+            AutomationTarget::Generative(p) => match p {
+                GenerativeParameter::Density => "Gen Density".to_string(),
+                GenerativeParameter::Chaos => "Gen Chaos".to_string(),
+                GenerativeParameter::Energy => "Gen Energy".to_string(),
+                GenerativeParameter::Motion => "Gen Motion".to_string(),
+            },
         }
     }
 
@@ -316,7 +363,23 @@ impl AutomationTarget {
             AutomationTarget::Bus(_, BusParameter::Level) => "BusLv",
             AutomationTarget::Global(GlobalParameter::Bpm) => "BPM",
             AutomationTarget::Global(GlobalParameter::TimeSignature) => "TSig",
+            AutomationTarget::Generative(p) => match p {
+                GenerativeParameter::Density => "GDns",
+                GenerativeParameter::Chaos => "GChs",
+                GenerativeParameter::Energy => "GNrg",
+                GenerativeParameter::Motion => "GMtn",
+            },
         }
+    }
+
+    /// Get all generative engine automation targets.
+    pub fn targets_for_generative() -> Vec<AutomationTarget> {
+        vec![
+            Self::gen_density(),
+            Self::gen_chaos(),
+            Self::gen_energy(),
+            Self::gen_motion(),
+        ]
     }
 
     /// Get all possible automation targets for an instrument (static set).
@@ -360,6 +423,7 @@ impl AutomationTarget {
             AutomationTarget::Bus(_, BusParameter::Level) => (0.0, 1.0),
             AutomationTarget::Global(GlobalParameter::Bpm) => (30.0, 300.0),
             AutomationTarget::Global(GlobalParameter::TimeSignature) => (0.0, 1.0),
+            AutomationTarget::Generative(_) => (0.0, 1.0),
         }
     }
 
@@ -375,6 +439,7 @@ impl AutomationTarget {
             AutomationTarget::Bus(_, _) => ValueKind::Continuous,
             AutomationTarget::Global(GlobalParameter::Bpm) => ValueKind::Continuous,
             AutomationTarget::Global(GlobalParameter::TimeSignature) => ValueKind::Discrete,
+            AutomationTarget::Generative(_) => ValueKind::Continuous,
         }
     }
 
@@ -391,7 +456,9 @@ impl AutomationTarget {
                 }
                 _ => None,
             },
-            _ => None,
+            AutomationTarget::Bus(_, _)
+            | AutomationTarget::Global(_)
+            | AutomationTarget::Generative(_) => None,
         }
     }
 

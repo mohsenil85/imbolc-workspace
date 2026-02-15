@@ -30,9 +30,9 @@ pub use layer::{LayerResult, LayerStack};
 pub use list_selector::ListSelector;
 pub use pane::{
     Action, ArrangementAction, AutomationAction, BusAction, ChopperAction, DispatchResult,
-    FileSelectAction, InstrumentAction, InstrumentUpdate, LayerGroupAction, MixerAction, NavAction,
-    NavIntent, Pane, PaneId, PaneManager, PianoRollAction, SequencerAction, ServerAction,
-    SessionAction, StatusEvent, ToggleResult, VstParamAction,
+    FileSelectAction, GenerativeAction, InstrumentAction, InstrumentUpdate, LayerGroupAction,
+    MixerAction, NavAction, NavIntent, Pane, PaneId, PaneManager, PianoRollAction,
+    SequencerAction, ServerAction, SessionAction, StatusEvent, ToggleResult, VstParamAction,
 };
 pub use piano_keyboard::{translate_key, PianoKeyboard};
 pub use ratatui_impl::RatatuiBackend;

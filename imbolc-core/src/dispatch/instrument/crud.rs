@@ -60,6 +60,14 @@ pub(super) fn handle_delete(
     }
 
     reduce(state, &InstrumentAction::Delete(inst_id));
+
+    // Clear generative voice targets pointing to the deleted instrument
+    for voice in &mut state.session.generative.voices {
+        if voice.target_instrument == Some(inst_id) {
+            voice.target_instrument = None;
+        }
+    }
+
     let mut result = if state.instruments.instruments.is_empty() {
         DispatchResult::with_nav(NavIntent::SwitchTo(PaneId::Add))
     } else {

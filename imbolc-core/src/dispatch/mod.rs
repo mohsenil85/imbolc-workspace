@@ -2,6 +2,7 @@ mod arrangement;
 mod audio_feedback;
 mod automation;
 mod bus;
+mod generative;
 mod helpers;
 mod instrument;
 mod local;
@@ -97,6 +98,7 @@ pub fn dispatch_action(
         DomainAction::VstParam(a) => vst_param::dispatch_vst_param(a, state, audio),
         DomainAction::Click(a) => dispatch_click(a, state, audio),
         DomainAction::Tuner(a) => dispatch_tuner(a, audio),
+        DomainAction::Generative(a) => generative::dispatch_generative(a, state),
         DomainAction::AudioFeedback(f) => audio_feedback::dispatch_audio_feedback(f, state, audio),
         DomainAction::Undo => {
             if let Some(scope) = state

@@ -204,6 +204,25 @@ pub fn dispatch_audio_feedback(
             state.audio.playing = false;
             result.stop_playback = true;
         }
+        AudioFeedback::GenerativeEvent {
+            instrument_id,
+            pitch,
+            velocity,
+            duration_ticks,
+            tick,
+        } => {
+            if state.session.generative.capture_enabled {
+                state.session.generative.captured_events.push(
+                    imbolc_types::CapturedGenEvent {
+                        instrument_id: *instrument_id,
+                        pitch: *pitch,
+                        velocity: *velocity,
+                        duration_ticks: *duration_ticks,
+                        tick: *tick,
+                    },
+                );
+            }
+        }
         AudioFeedback::TelemetrySummary {
             avg_tick_us,
             max_tick_us,

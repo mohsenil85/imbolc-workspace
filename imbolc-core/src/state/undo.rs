@@ -311,7 +311,8 @@ pub fn undo_scope(
         | DomainAction::Automation(_)
         | DomainAction::Arrangement(_)
         | DomainAction::Session(_)
-        | DomainAction::Midi(_) => UndoScope::Session,
+        | DomainAction::Midi(_)
+        | DomainAction::Generative(_) => UndoScope::Session,
 
         // Bus add/remove syncs instrument sends — touches both trees
         DomainAction::Bus(BusAction::Add | BusAction::Remove(_)) => UndoScope::Full,
@@ -446,6 +447,17 @@ pub fn coalesce_key(
         ) => CoalesceKey::SessionParam,
         DomainAction::Session(_) => CoalesceKey::None,
 
+        // Generative macro adjustments coalesce
+        DomainAction::Generative(
+            imbolc_types::GenerativeAction::AdjustDensity(_)
+            | imbolc_types::GenerativeAction::AdjustChaos(_)
+            | imbolc_types::GenerativeAction::AdjustEnergy(_)
+            | imbolc_types::GenerativeAction::AdjustMotion(_)
+            | imbolc_types::GenerativeAction::AdjustHumanizeTiming(_)
+            | imbolc_types::GenerativeAction::AdjustHumanizeVelocity(_),
+        ) => CoalesceKey::SessionParam,
+        DomainAction::Generative(_) => CoalesceKey::None,
+
         // Everything else — no coalescing
         _ => CoalesceKey::None,
     }
@@ -538,6 +550,7 @@ pub fn is_undoable(action: &DomainAction) -> bool {
                 | VstParamAction::AdjustParam(_, _, _, _)
                 | VstParamAction::ResetParam(_, _, _)
         ),
+        DomainAction::Generative(_) => true,
         DomainAction::Undo | DomainAction::Redo => false,
         _ => false,
     }

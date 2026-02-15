@@ -595,9 +595,9 @@ pub(crate) fn handle_global_action(
                     layer_stack,
                 );
             }
-            GlobalActionId::SwitchPane(ShortcutPaneId::Arpeggiator) => {
+            GlobalActionId::SwitchPane(ShortcutPaneId::Generative) => {
                 switch_to_pane(
-                    NavPaneId::Arpeggiator,
+                    NavPaneId::Generative,
                     panes,
                     dispatcher,
                     audio,

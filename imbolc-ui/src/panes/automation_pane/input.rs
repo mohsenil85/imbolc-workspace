@@ -88,6 +88,7 @@ impl AutomationPane {
                         options.push(AutomationTarget::bus_level(bus_id));
                     }
                     options.push(AutomationTarget::bpm());
+                    options.extend(AutomationTarget::targets_for_generative());
                 }
 
                 self.target_picker = TargetPickerState::Active { options, cursor: 0 };

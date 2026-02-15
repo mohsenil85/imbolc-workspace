@@ -506,7 +506,8 @@ pub(crate) fn decode_automation_target(
     _target_extra: Option<&str>,
 ) -> crate::state::AutomationTarget {
     use imbolc_types::{
-        AutomationTarget, BusId, BusParameter, GlobalParameter, InstrumentParameter,
+        AutomationTarget, BusId, BusParameter, GenerativeParameter, GlobalParameter,
+        InstrumentParameter,
     };
 
     match target_type {
@@ -516,6 +517,10 @@ pub(crate) fn decode_automation_target(
         ),
         "GlobalBpm" => AutomationTarget::Global(GlobalParameter::Bpm),
         "GlobalTimeSignature" => AutomationTarget::Global(GlobalParameter::TimeSignature),
+        "GenDensity" => AutomationTarget::Generative(GenerativeParameter::Density),
+        "GenChaos" => AutomationTarget::Generative(GenerativeParameter::Chaos),
+        "GenEnergy" => AutomationTarget::Generative(GenerativeParameter::Energy),
+        "GenMotion" => AutomationTarget::Generative(GenerativeParameter::Motion),
         _ => {
             // It's an instrument parameter target
             let inst_id = imbolc_types::InstrumentId::new(target_inst_id.unwrap_or(0) as u32);

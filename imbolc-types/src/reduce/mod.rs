@@ -16,6 +16,7 @@ pub use instrument::initialize_instrument_from_registries;
 mod automation;
 mod bus;
 mod click;
+mod generative;
 mod mixer;
 mod piano_roll;
 mod session;
@@ -41,6 +42,7 @@ pub fn is_reducible(action: &DomainAction) -> bool {
         DomainAction::Bus(_) => true,
         DomainAction::LayerGroup(_) => true,
         DomainAction::Click(_) => true,
+        DomainAction::Generative(_) => true,
 
         DomainAction::PianoRoll(a) => !matches!(
             a,
@@ -101,6 +103,7 @@ pub fn reduce_action(
             click::reduce(a, session);
             true
         }
+        DomainAction::Generative(a) => generative::reduce(a, session),
 
         DomainAction::Arrangement(_) => false,
         DomainAction::Sequencer(_) => false,

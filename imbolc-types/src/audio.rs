@@ -75,6 +75,14 @@ pub enum AudioFeedback {
     ServerCrashed {
         message: String,
     },
+    /// A generative engine event (for capture to piano roll).
+    GenerativeEvent {
+        instrument_id: InstrumentId,
+        pitch: u8,
+        velocity: u8,
+        duration_ticks: u32,
+        tick: u32,
+    },
     /// Periodic telemetry summary from the audio thread.
     TelemetrySummary {
         /// Average tick duration in microseconds

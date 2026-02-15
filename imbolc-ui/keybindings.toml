@@ -17,7 +17,7 @@ bindings = [
   { key = "F8", action = "switch:eq", description = "Parametric EQ" },
   { key = "F9", action = "switch:groove", description = "Groove settings" },
   { key = "F10", action = "switch:tuner", description = "Reference tuner" },
-  { key = "F11", action = "switch:arpeggiator", description = "Arpeggiator" },
+  { key = "F11", action = "switch:generative", description = "Generative engine" },
   { key = "Ctrl+o", action = "open_project_browser", description = "Project browser" },
   { key = "Ctrl+S", action = "save_as", description = "Save project as..." },
   { key = "Ctrl+f", action = "switch:frame_edit", description = "Frame edit" },
@@ -432,7 +432,7 @@ bindings = [
   { key = "r", action = "reset", description = "Reset all to global" },
 ]
 
-[layers.arpeggiator]
+[layers.generative]
 bindings = [
   { key = "Up", action = "prev_param", description = "Previous parameter" },
   { key = "Down", action = "next_param", description = "Next parameter" },
@@ -442,10 +442,24 @@ bindings = [
   { key = "Right", action = "increase", description = "Increase / Cycle forward" },
   { key = "h", action = "decrease", description = "Decrease / Cycle back" },
   { key = "l", action = "increase", description = "Increase / Cycle forward" },
-  { key = "Space", action = "toggle", description = "Toggle arp on/off" },
-  { key = "Enter", action = "toggle", description = "Toggle arp on/off" },
-  { key = "Backspace", action = "clear_chord", description = "Clear chord shape" },
-  { key = "x", action = "clear_chord", description = "Clear chord shape" },
+  { key = "Tab", action = "next_section", description = "Next section" },
+  { key = "Shift+Tab", action = "prev_section", description = "Previous section" },
+  { key = "Space", action = "toggle", description = "Toggle selected param" },
+  { key = "Enter", action = "toggle_engine", description = "Toggle engine on/off" },
+  { key = "Ctrl+r", action = "toggle_capture", description = "Toggle MIDI capture" },
+  { key = "Ctrl+c", action = "commit_capture", description = "Commit capture to piano roll" },
+  { key = "Ctrl+x", action = "clear_capture", description = "Clear captured events" },
+  { key = "a", action = "add_voice", description = "Add voice" },
+  { key = "d", action = "remove_voice", description = "Remove voice" },
+  { key = "e", action = "toggle_voice", description = "Toggle voice enabled" },
+  { key = "m", action = "mute_voice", description = "Mute/unmute voice" },
+  { key = "[", action = "cycle_algorithm", description = "Cycle algorithm type" },
+  { key = "<", action = "cycle_target", description = "Cycle target instrument" },
+  { key = "n", action = "next_voice", description = "Next voice" },
+  { key = "p", action = "prev_voice", description = "Previous voice" },
+  { key = "r", action = "cycle_rate", description = "Cycle rate forward" },
+  { key = "R", action = "cycle_rate_reverse", description = "Cycle rate backward" },
+  { key = "P", action = "cycle_pitch_mode", description = "Cycle pitch mode (Euclidean)" },
 ]
 
 [layers.track]

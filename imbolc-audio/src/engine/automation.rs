@@ -43,6 +43,10 @@ impl AudioEngine {
                 // Global time signature changes are handled via session state sync
                 // No direct OSC action needed here
             }
+            AutomationTarget::Generative(_) => {
+                // State-only: generative macros are updated in playback.rs
+                // tick_generative reads them from session state
+            }
         }
 
         Ok(())
@@ -373,6 +377,9 @@ impl AudioEngine {
             }
             AutomationTarget::Global(GlobalParameter::TimeSignature) => {
                 // State-only update
+            }
+            AutomationTarget::Generative(_) => {
+                // State-only: handled in playback.rs
             }
         }
 

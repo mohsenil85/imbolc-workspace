@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use super::arrangement::ArrangementState;
 use super::automation::AutomationState;
 use super::custom_synthdef::CustomSynthDefRegistry;
+use super::generative::GenerativeState;
 use super::humanize::HumanizeSettings;
 use super::instrument::MixerBus;
 use super::midi_recording::MidiRecordingState;
@@ -107,6 +108,10 @@ pub struct SessionState {
     // UI theme
     #[serde(default)]
     pub theme: Theme,
+
+    // Generative music engine
+    #[serde(default)]
+    pub generative: GenerativeState,
 }
 
 impl SessionState {
@@ -132,6 +137,7 @@ impl SessionState {
             humanize: HumanizeSettings::default(),
             click_track: ClickTrackState::default(),
             theme: Theme::default(),
+            generative: GenerativeState::default(),
         }
     }
 

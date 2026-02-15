@@ -98,6 +98,8 @@ pub(crate) struct AudioThread {
     rng_state: u64,
     /// Per-instrument arpeggiator runtime state
     arp_states: HashMap<InstrumentId, ArpPlayState>,
+    /// Per-voice generative engine runtime state
+    generative_states: super::generative_state::GenerativePlayState,
     /// Active render-to-WAV state
     render_state: Option<RenderState>,
     /// Active export state (master bounce or stem export)
@@ -167,6 +169,7 @@ impl AudioThread {
             last_recording_state: false,
             rng_state: 12345,
             arp_states: HashMap::new(),
+            generative_states: Default::default(),
             render_state: None,
             export_state: None,
             last_export_progress: 0.0,
@@ -1230,7 +1233,7 @@ impl AudioThread {
         super::playback::tick_playback(
             &mut self.piano_roll,
             &mut self.instruments,
-            &self.session,
+            &mut self.session,
             &self.automation_lanes,
             &mut self.engine,
             &mut self.active_notes,
@@ -1313,6 +1316,16 @@ impl AudioThread {
             &mut self.engine,
             &mut self.rng_state,
             elapsed,
+        );
+        super::generative_tick::tick_generative(
+            &self.instruments,
+            &self.session,
+            self.piano_roll.bpm,
+            &mut self.generative_states,
+            &mut self.engine,
+            &mut self.rng_state,
+            elapsed,
+            &self.feedback_tx,
         );
         super::click_tick::tick_click(
             &mut self.engine,

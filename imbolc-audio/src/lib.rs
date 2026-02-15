@@ -8,6 +8,8 @@ pub mod devices;
 pub mod drum_tick;
 pub mod engine;
 pub mod event_log;
+pub mod generative_state;
+pub mod generative_tick;
 pub mod handle;
 pub mod input;
 pub mod osc_client;

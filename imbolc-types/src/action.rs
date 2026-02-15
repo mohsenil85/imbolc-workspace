@@ -9,9 +9,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     AutomationLaneId, AutomationTarget, BusId, ClipId, ClipboardNote, CurveType, DrumStep,
-    EffectId, EffectType, EnvConfig, FilterType, InstrumentId, LfoConfig, MixerSelection,
-    MusicalSettings, Param, ParamIndex, PlacementId, ProcessingStage, ServerStatus, SourceType,
-    VstPluginKind,
+    EffectId, EffectType, EnvConfig, FilterType, GenVoiceId, GenerativeAlgorithm, InstrumentId,
+    LfoConfig, MixerSelection, MusicalSettings, Param, ParamIndex, PlacementId, ProcessingStage,
+    ServerStatus, SourceType, VstPluginKind,
 };
 
 // ============================================================================
@@ -32,7 +32,7 @@ pub enum PaneId {
     FileBrowser,
     FrameEdit,
     Groove,
-    Arpeggiator,
+    Generative,
     Help,
     Home,
     Instrument,
@@ -68,7 +68,7 @@ impl PaneId {
             PaneId::FileBrowser => "file_browser",
             PaneId::FrameEdit => "frame_edit",
             PaneId::Groove => "groove",
-            PaneId::Arpeggiator => "arpeggiator",
+            PaneId::Generative => "generative",
             PaneId::Help => "help",
             PaneId::Home => "home",
             PaneId::Instrument => "instrument",
@@ -105,7 +105,7 @@ impl PaneId {
             "file_browser" => Some(PaneId::FileBrowser),
             "frame_edit" => Some(PaneId::FrameEdit),
             "groove" => Some(PaneId::Groove),
-            "arpeggiator" => Some(PaneId::Arpeggiator),
+            "generative" => Some(PaneId::Generative),
             "help" => Some(PaneId::Help),
             "home" => Some(PaneId::Home),
             "instrument" => Some(PaneId::Instrument),
@@ -978,6 +978,53 @@ pub enum ClickAction {
     SetVolume(f32),
 }
 
+/// Generative music engine actions.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum GenerativeAction {
+    // Engine
+    ToggleEnabled,
+    ToggleCapture,
+    CommitCapture,
+    ClearCapture,
+    // Voice CRUD
+    AddVoice(GenerativeAlgorithm),
+    RemoveVoice(GenVoiceId),
+    ToggleVoice(GenVoiceId),
+    MuteVoice(GenVoiceId),
+    SetVoiceTarget(GenVoiceId, Option<InstrumentId>),
+    SetVoiceAlgorithm(GenVoiceId, GenerativeAlgorithm),
+    // Macros
+    AdjustDensity(f32),
+    AdjustChaos(f32),
+    AdjustEnergy(f32),
+    AdjustMotion(f32),
+    // Constraints
+    ToggleScaleLock,
+    AdjustPitchMin(i8),
+    AdjustPitchMax(i8),
+    AdjustMaxNotesPerBeat(i8),
+    AdjustHumanizeTiming(f32),
+    AdjustHumanizeVelocity(f32),
+    // Euclidean
+    SetEuclideanPulses(GenVoiceId, u8),
+    SetEuclideanSteps(GenVoiceId, u8),
+    SetEuclideanRotation(GenVoiceId, u8),
+    CycleEuclideanPitchMode(GenVoiceId),
+    CycleVoiceRate(GenVoiceId),
+    CycleVoiceRateReverse(GenVoiceId),
+    // Markov
+    SetMarkovTransition(GenVoiceId, u8, u8, f32),
+    AdjustMarkovRestProb(GenVoiceId, f32),
+    CycleMarkovDurationMode(GenVoiceId),
+    RandomizeMarkovMatrix(GenVoiceId),
+    // L-System
+    SetLSystemAxiom(GenVoiceId, String),
+    SetLSystemIterations(GenVoiceId, u8),
+    AdjustLSystemStepInterval(GenVoiceId, i8),
+    AddLSystemRule(GenVoiceId, char, String),
+    RemoveLSystemRule(GenVoiceId, usize),
+}
+
 // ============================================================================
 // Main Action enum (also serves as PaneAction — returned from pane handlers)
 // ============================================================================
@@ -1010,6 +1057,7 @@ pub enum Action {
     VstParam(VstParamAction),
     Click(ClickAction),
     Tuner(TunerAction),
+    Generative(GenerativeAction),
     AudioFeedback(crate::AudioFeedback),
     /// Pane signals: pop piano_mode/pad_mode layer
     ExitPerformanceMode,
@@ -1080,6 +1128,7 @@ pub enum DomainAction {
     VstParam(VstParamAction),
     Click(ClickAction),
     Tuner(TunerAction),
+    Generative(GenerativeAction),
     AudioFeedback(crate::AudioFeedback),
     Undo,
     Redo,
@@ -1105,6 +1154,7 @@ impl Action {
             Self::VstParam(a) => RoutedAction::Domain(DomainAction::VstParam(a.clone())),
             Self::Click(a) => RoutedAction::Domain(DomainAction::Click(a.clone())),
             Self::Tuner(a) => RoutedAction::Domain(DomainAction::Tuner(a.clone())),
+            Self::Generative(a) => RoutedAction::Domain(DomainAction::Generative(a.clone())),
             Self::AudioFeedback(f) => RoutedAction::Domain(DomainAction::AudioFeedback(f.clone())),
             Self::Undo => RoutedAction::Domain(DomainAction::Undo),
             Self::Redo => RoutedAction::Domain(DomainAction::Redo),
@@ -1138,6 +1188,7 @@ impl From<DomainAction> for Action {
             DomainAction::VstParam(a) => Self::VstParam(a),
             DomainAction::Click(a) => Self::Click(a),
             DomainAction::Tuner(a) => Self::Tuner(a),
+            DomainAction::Generative(a) => Self::Generative(a),
             DomainAction::AudioFeedback(f) => Self::AudioFeedback(f),
             DomainAction::Undo => Self::Undo,
             DomainAction::Redo => Self::Redo,
@@ -1163,7 +1214,7 @@ mod tests {
             PaneId::FileBrowser,
             PaneId::FrameEdit,
             PaneId::Groove,
-            PaneId::Arpeggiator,
+            PaneId::Generative,
             PaneId::Help,
             PaneId::Home,
             PaneId::Instrument,

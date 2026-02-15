@@ -1247,6 +1247,16 @@ pub fn encode_automation_target(
             None,
             None,
         ),
+        AutomationTarget::Generative(param) => {
+            use imbolc_types::GenerativeParameter;
+            let name = match param {
+                GenerativeParameter::Density => "GenDensity",
+                GenerativeParameter::Chaos => "GenChaos",
+                GenerativeParameter::Energy => "GenEnergy",
+                GenerativeParameter::Motion => "GenMotion",
+            };
+            (name.to_string(), None, None, None, None, None)
+        }
     }
 }
 

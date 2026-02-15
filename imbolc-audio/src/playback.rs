@@ -20,7 +20,7 @@ fn next_random(state: &mut u64) -> f32 {
 pub fn tick_playback(
     piano_roll: &mut PianoRollSnapshot,
     instruments: &mut InstrumentSnapshot,
-    session: &SessionSnapshot,
+    session: &mut SessionSnapshot,
     automation_lanes: &AutomationSnapshot,
     engine: &mut AudioEngine,
     active_notes: &mut Vec<(InstrumentId, u8, u32)>,
@@ -320,6 +320,22 @@ pub fn tick_playback(
                             piano_roll.bpm = value;
                             let _ = feedback_tx.send(AudioFeedback::BpmUpdate(value));
                         }
+                    } else if let AutomationTarget::Generative(param) = &lane.target {
+                        // State-only: update generative macros directly
+                        match param {
+                            imbolc_types::GenerativeParameter::Density => {
+                                session.generative.macros.density = value;
+                            }
+                            imbolc_types::GenerativeParameter::Chaos => {
+                                session.generative.macros.chaos = value;
+                            }
+                            imbolc_types::GenerativeParameter::Energy => {
+                                session.generative.macros.energy = value;
+                            }
+                            imbolc_types::GenerativeParameter::Motion => {
+                                session.generative.macros.motion = value;
+                            }
+                        }
                     } else {
                         automation_msgs.extend(engine.collect_automation_messages(
                             &lane.target,
@@ -397,7 +413,7 @@ mod tests {
     fn do_tick(
         piano_roll: &mut PianoRollState,
         instruments: &mut InstrumentState,
-        session: &SessionState,
+        session: &mut SessionState,
         engine: &mut AudioEngine,
         feedback_tx: &mpsc::Sender<AudioFeedback>,
         elapsed: Duration,
@@ -429,7 +445,7 @@ mod tests {
 
     #[test]
     fn last_scheduled_tick_advances_beyond_playhead() {
-        let (mut pr, mut inst, session, mut engine, _rx, tx) = make_fixtures();
+        let (mut pr, mut inst, mut session, mut engine, _rx, tx) = make_fixtures();
         // Place a note at tick 0
         pr.toggle_note(0, 60, 0, 480, 100);
         pr.playhead = 0;
@@ -445,7 +461,7 @@ mod tests {
         do_tick(
             &mut pr,
             &mut inst,
-            &session,
+            &mut session,
             &mut engine,
             &tx,
             elapsed,
@@ -471,7 +487,7 @@ mod tests {
 
     #[test]
     fn no_double_scheduling_on_consecutive_ticks() {
-        let (mut pr, mut inst, session, mut engine, _rx, tx) = make_fixtures();
+        let (mut pr, mut inst, mut session, mut engine, _rx, tx) = make_fixtures();
 
         pr.toggle_note(0, 60, 0, 480, 100);
         pr.playhead = 0;
@@ -483,7 +499,7 @@ mod tests {
         do_tick(
             &mut pr,
             &mut inst,
-            &session,
+            &mut session,
             &mut engine,
             &tx,
             Duration::from_millis(10),
@@ -497,7 +513,7 @@ mod tests {
         do_tick(
             &mut pr,
             &mut inst,
-            &session,
+            &mut session,
             &mut engine,
             &tx,
             Duration::from_millis(10),
@@ -524,7 +540,7 @@ mod tests {
 
     #[test]
     fn reset_last_scheduled_tick_rescans_from_playhead() {
-        let (mut pr, mut inst, session, mut engine, _rx, tx) = make_fixtures();
+        let (mut pr, mut inst, mut session, mut engine, _rx, tx) = make_fixtures();
 
         pr.toggle_note(0, 60, 5, 480, 100);
         pr.playhead = 0;
@@ -536,7 +552,7 @@ mod tests {
         do_tick(
             &mut pr,
             &mut inst,
-            &session,
+            &mut session,
             &mut engine,
             &tx,
             Duration::from_millis(10),
@@ -552,7 +568,7 @@ mod tests {
         do_tick(
             &mut pr,
             &mut inst,
-            &session,
+            &mut session,
             &mut engine,
             &tx,
             Duration::from_millis(10),
@@ -574,7 +590,7 @@ mod tests {
 
     #[test]
     fn pre_schedule_crosses_loop_boundary() {
-        let (mut pr, mut inst, session, mut engine, _rx, tx) = make_fixtures();
+        let (mut pr, mut inst, mut session, mut engine, _rx, tx) = make_fixtures();
 
         // Set a short loop: [0, 100)
         pr.loop_start = 0;
@@ -597,7 +613,7 @@ mod tests {
         do_tick(
             &mut pr,
             &mut inst,
-            &session,
+            &mut session,
             &mut engine,
             &tx,
             elapsed,
@@ -625,7 +641,7 @@ mod tests {
 
     #[test]
     fn not_playing_leaves_last_scheduled_tick_unchanged() {
-        let (mut pr, mut inst, session, mut engine, _rx, tx) = make_fixtures();
+        let (mut pr, mut inst, mut session, mut engine, _rx, tx) = make_fixtures();
         pr.playing = false;
 
         let mut tick_acc = 0.0;
@@ -634,7 +650,7 @@ mod tests {
         do_tick(
             &mut pr,
             &mut inst,
-            &session,
+            &mut session,
             &mut engine,
             &tx,
             Duration::from_millis(10),
@@ -651,7 +667,7 @@ mod tests {
 
     #[test]
     fn same_pitch_retrigger_evicts_stale_active_note() {
-        let (mut pr, mut inst, session, mut engine, _rx, tx) = make_fixtures();
+        let (mut pr, mut inst, mut session, mut engine, _rx, tx) = make_fixtures();
         engine.is_running = true;
 
         // Two notes at the same pitch (60), different ticks, both within the scan window
@@ -665,7 +681,7 @@ mod tests {
         let active = do_tick(
             &mut pr,
             &mut inst,
-            &session,
+            &mut session,
             &mut engine,
             &tx,
             Duration::from_millis(10),
@@ -684,7 +700,7 @@ mod tests {
 
     #[test]
     fn lookahead_ticks_scale_with_bpm() {
-        let (mut pr, mut inst, session, mut engine, _rx, tx) = make_fixtures();
+        let (mut pr, mut inst, mut session, mut engine, _rx, tx) = make_fixtures();
 
         pr.toggle_note(0, 60, 0, 480, 100);
         pr.playhead = 0;
@@ -698,7 +714,7 @@ mod tests {
         do_tick(
             &mut pr,
             &mut inst,
-            &session,
+            &mut session,
             &mut engine,
             &tx,
             Duration::from_millis(10),
