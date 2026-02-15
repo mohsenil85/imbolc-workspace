@@ -1568,6 +1568,9 @@ impl AudioThread {
                 schedule_lookahead_ms: (self.engine.schedule_lookahead_secs * 1000.0) as f32,
                 osc_send_queue_depth: self.engine.osc_send_queue_depth(),
             });
+            let _ = self
+                .feedback_tx
+                .send(AudioFeedback::TuningDrift(self.engine.last_drift_cents));
         }
 
         // Poll pending VST param queries for completed OSC replies

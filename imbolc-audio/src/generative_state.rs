@@ -25,6 +25,8 @@ pub struct VoicePlayState {
     pub lsystem_current_pitch: i16,
     /// L-System: pitch stack for [ ] operators
     pub lsystem_pitch_stack: Vec<i16>,
+    /// Fingerprint of algorithm config for cache invalidation
+    pub config_fingerprint: u64,
 }
 
 impl Default for VoicePlayState {
@@ -39,7 +41,17 @@ impl Default for VoicePlayState {
             lsystem_cursor: 0,
             lsystem_current_pitch: 60,
             lsystem_pitch_stack: Vec::new(),
+            config_fingerprint: 0,
         }
+    }
+}
+
+impl VoicePlayState {
+    /// Invalidate all cached patterns/expansions.
+    pub fn invalidate_caches(&mut self) {
+        self.euclidean_pattern = None;
+        self.lsystem_expanded = None;
+        self.lsystem_cursor = 0;
     }
 }
 

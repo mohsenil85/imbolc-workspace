@@ -223,6 +223,9 @@ pub fn dispatch_audio_feedback(
                 );
             }
         }
+        AudioFeedback::TuningDrift(drift) => {
+            state.audio.tuning_drift_cents = *drift;
+        }
         AudioFeedback::TelemetrySummary {
             avg_tick_us,
             max_tick_us,

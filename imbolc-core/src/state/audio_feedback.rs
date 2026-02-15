@@ -28,6 +28,8 @@ pub struct AudioFeedbackState {
     pub telemetry_lookahead_ms: f32,
     /// Current OSC sender queue depth
     pub telemetry_osc_queue_depth: u16,
+    /// Current tuning drift in cents (JI vs ET)
+    pub tuning_drift_cents: f64,
 }
 
 impl Default for AudioFeedbackState {
@@ -44,6 +46,7 @@ impl Default for AudioFeedbackState {
             telemetry_overruns: 0,
             telemetry_lookahead_ms: 0.0,
             telemetry_osc_queue_depth: 0,
+            tuning_drift_cents: 0.0,
         }
     }
 }

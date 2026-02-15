@@ -83,6 +83,9 @@ pub enum AudioFeedback {
         duration_ticks: u32,
         tick: u32,
     },
+    /// Current tuning drift in cents (JI vs ET) from most recent voice spawn.
+    /// Only meaningful when tuning != EqualTemperament.
+    TuningDrift(f64),
     /// Periodic telemetry summary from the audio thread.
     TelemetrySummary {
         /// Average tick duration in microseconds

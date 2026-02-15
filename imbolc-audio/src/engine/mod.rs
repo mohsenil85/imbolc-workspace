@@ -184,6 +184,8 @@ pub struct AudioEngine {
     /// Dynamic scheduling lookahead for sequenced playback.
     /// Derived from buffer_size/sample_rate via `compute_lookahead()`.
     pub schedule_lookahead_secs: f64,
+    /// Latest tuning drift in cents (JI vs ET) from most recent voice spawn
+    pub(crate) last_drift_cents: f64,
     /// OSC sender thread channel (None when no backend or test backend).
     osc_send_tx: Option<crossbeam_channel::Sender<super::osc_sender::OscSendEntry>>,
     /// Atomic queue depth counter for telemetry.
@@ -228,6 +230,7 @@ impl AudioEngine {
             pending_export_buffer_frees: Vec::new(),
             node_registry: NodeRegistry::new(),
             oneshot_buses: HashMap::new(),
+            last_drift_cents: 0.0,
             schedule_lookahead_secs: DEFAULT_LOOKAHEAD_SECS,
             osc_send_tx: None,
             osc_queue_depth: None,

@@ -15,6 +15,42 @@ use imbolc_types::state::generative::*;
 use imbolc_types::state::music::{Key, Scale};
 use imbolc_types::AudioFeedback;
 
+/// Compute a lightweight fingerprint for cache invalidation.
+fn algorithm_fingerprint(algorithm: &GenerativeAlgorithm) -> u64 {
+    // Simple FNV-1a-like hash of key config values
+    let mut h: u64 = 14695981039346656037;
+    let mix = |h: &mut u64, byte: u8| {
+        *h ^= byte as u64;
+        *h = h.wrapping_mul(1099511628211);
+    };
+
+    match algorithm {
+        GenerativeAlgorithm::Euclidean(cfg) => {
+            mix(&mut h, 0); // discriminant
+            mix(&mut h, cfg.pulses);
+            mix(&mut h, cfg.steps);
+            mix(&mut h, cfg.rotation);
+        }
+        GenerativeAlgorithm::Markov(_) => {
+            mix(&mut h, 1); // No cached state to invalidate
+        }
+        GenerativeAlgorithm::LSystem(cfg) => {
+            mix(&mut h, 2);
+            for b in cfg.axiom.as_bytes() {
+                mix(&mut h, *b);
+            }
+            mix(&mut h, cfg.iterations);
+            for (sym, repl) in &cfg.rules {
+                mix(&mut h, *sym as u8);
+                for b in repl.as_bytes() {
+                    mix(&mut h, *b);
+                }
+            }
+        }
+    }
+    h
+}
+
 /// Main tick function for the generative engine.
 #[allow(clippy::too_many_arguments)]
 pub fn tick_generative(
@@ -40,6 +76,7 @@ pub fn tick_generative(
         .map(|v| (v.id, v.target_instrument.unwrap(), v.algorithm.clone(), v.velocity_min, v.velocity_max, v.octave_min, v.octave_max))
         .collect();
 
+    let macros = &gen.macros;
     let tpb = 480u32; // ticks per beat (standard)
     let any_solo = instruments.any_instrument_solo();
 
@@ -60,6 +97,14 @@ pub fn tick_generative(
         }
 
         let state = gen_states.entry(*voice_id).or_default();
+
+        // Invalidate caches when algorithm config changes
+        let fp = algorithm_fingerprint(algorithm);
+        if fp != state.config_fingerprint {
+            state.invalidate_caches();
+            state.config_fingerprint = fp;
+        }
+
         let rate = algorithm.rate();
         let ticks_per_step = rate.ticks_per_step(tpb);
         let steps_per_second = (bpm as f64 / 60.0) * (tpb as f64 / ticks_per_step);
@@ -83,16 +128,48 @@ pub fn tick_generative(
                 }
             }
 
-            // Generate event based on algorithm
+            // Generate event with macro modulation applied to effective configs
             let event = match algorithm {
                 GenerativeAlgorithm::Euclidean(cfg) => {
-                    generate_euclidean(cfg, state, &session.key, &session.scale, &gen.constraints, rng_state)
+                    let mut eff = cfg.clone();
+                    // Density: scale effective pulses
+                    eff.pulses = (cfg.pulses as f32 * macros.density).round().max(0.0) as u8;
+                    eff.pulses = eff.pulses.min(eff.steps);
+                    // Chaos: offset rotation
+                    eff.rotation = ((cfg.rotation as f32
+                        + macros.chaos * cfg.steps as f32 * 0.25)
+                        as u8)
+                        % cfg.steps.max(1);
+                    generate_euclidean(&eff, state, &session.key, &session.scale, &gen.constraints, rng_state)
                 }
                 GenerativeAlgorithm::Markov(cfg) => {
-                    generate_markov(cfg, state, &session.key, &session.scale, &gen.constraints, rng_state, *oct_min, *oct_max)
+                    let mut eff = cfg.clone();
+                    // Density: reduce rest probability (higher density = fewer rests)
+                    eff.rest_probability = cfg.rest_probability * (1.0 - macros.density);
+                    // Chaos: blend transition rows toward uniform distribution
+                    if macros.chaos > 0.0 {
+                        let uniform = 1.0 / 12.0;
+                        for row in &mut eff.transition_matrix {
+                            for val in row.iter_mut() {
+                                *val = *val * (1.0 - macros.chaos) + uniform * macros.chaos;
+                            }
+                        }
+                    }
+                    // Motion: widen/narrow octave range
+                    let oct_spread = (macros.motion * 2.0) as i8; // 0-2 extra octaves
+                    let eff_oct_min = (*oct_min - oct_spread).max(0);
+                    let eff_oct_max = (*oct_max + oct_spread).min(9);
+                    generate_markov(&eff, state, &session.key, &session.scale, &gen.constraints, rng_state, eff_oct_min, eff_oct_max)
                 }
                 GenerativeAlgorithm::LSystem(cfg) => {
-                    generate_lsystem(cfg, state, &gen.constraints)
+                    let mut eff = cfg.clone();
+                    // Motion: scale step interval
+                    let eff_interval = cfg.step_interval as f32 * (0.5 + macros.motion);
+                    eff.step_interval = (eff_interval.round() as i8).clamp(-12, 12);
+                    if eff.step_interval == 0 && cfg.step_interval != 0 {
+                        eff.step_interval = if cfg.step_interval > 0 { 1 } else { -1 };
+                    }
+                    generate_lsystem(&eff, state, &gen.constraints)
                 }
             };
 
@@ -119,6 +196,9 @@ pub fn tick_generative(
                 } else {
                     velocity
                 };
+
+                // Energy macro: scale velocity (range 30%-100%)
+                let velocity = (velocity * (0.3 + macros.energy * 0.7)).clamp(1.0, 127.0);
 
                 let vel_f = velocity / 127.0;
 

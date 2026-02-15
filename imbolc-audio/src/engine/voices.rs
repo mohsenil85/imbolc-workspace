@@ -78,6 +78,10 @@ impl AudioEngine {
         let ctx = tuning::TuningContext::new(session.key, session.ji_flavor);
         let freq = tuning::pitch_to_freq(pitch, session.tuning_a4 as f64, session.tuning, &ctx);
 
+        // Track tuning drift (JI vs ET) for UI display
+        let et_freq = tuning::et_freq(pitch, session.tuning_a4 as f64);
+        self.last_drift_cents = tuning::adaptive::drift_cents(freq, et_freq);
+
         let mut messages: Vec<BackendMessage> = Vec::new();
 
         // 1. Create group
@@ -354,6 +358,10 @@ impl AudioEngine {
 
         let ctx = tuning::TuningContext::new(session.key, session.ji_flavor);
         let freq = tuning::pitch_to_freq(pitch, session.tuning_a4 as f64, session.tuning, &ctx);
+
+        // Track tuning drift (JI vs ET) for UI display
+        let et_freq = tuning::et_freq(pitch, session.tuning_a4 as f64);
+        self.last_drift_cents = tuning::adaptive::drift_cents(freq, et_freq);
 
         let mut messages: Vec<BackendMessage> = Vec::new();
 

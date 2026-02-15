@@ -132,7 +132,20 @@ impl Frame {
 
         // Header line in the top border (left-aligned)
         let snap_text = if session.snap { "ON" } else { "OFF" };
-        let tuning_str = format!("A{:.0}", session.tuning_a4);
+        let tuning_str = {
+            use imbolc_types::state::music::Tuning;
+            let a4 = format!("A{:.0}", session.tuning_a4);
+            if session.tuning == Tuning::EqualTemperament {
+                a4
+            } else {
+                let drift = state.audio.tuning_drift_cents;
+                if drift.abs() < 0.05 {
+                    format!("{} {}", session.tuning.short_name(), a4)
+                } else {
+                    format!("{} {} {:+.1}\u{00A2}", session.tuning.short_name(), a4, drift)
+                }
+            }
+        };
         let dirty_indicator = if state.project.dirty { "*" } else { "" };
         let header = format!(
             " IMBOLC - {}{}  Key: {}  Scale: {}  BPM: {}  {}/{}  Tuning: {}  [Snap: {}] ",

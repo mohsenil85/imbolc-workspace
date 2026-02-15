@@ -17,6 +17,21 @@ pub fn dispatch_generative(
 
     let mut result = DispatchResult::none();
 
+    // Auto-assign target instrument when adding a voice with no target
+    if let GenerativeAction::AddVoice(_) = action {
+        if let Some(voice) = state.session.generative.voices.last_mut() {
+            if voice.target_instrument.is_none() {
+                // Prefer selected instrument, fall back to first
+                let target = state
+                    .instruments
+                    .selected_instrument()
+                    .or_else(|| state.instruments.instruments.first())
+                    .map(|i| i.id);
+                voice.target_instrument = target;
+            }
+        }
+    }
+
     match action {
         GenerativeAction::CommitCapture => {
             // Commit captured events to piano roll

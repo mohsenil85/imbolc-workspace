@@ -30,6 +30,8 @@ pub fn reduce(action: &GenerativeAction, session: &mut SessionState) -> bool {
             let id = GenVoiceId::new(gen.next_voice_id);
             gen.next_voice_id += 1;
             gen.voices.push(GenVoice::new(id, algorithm.clone()));
+            // Auto-enable engine when first voice is added
+            gen.enabled = true;
         }
         GenerativeAction::RemoveVoice(id) => {
             gen.voices.retain(|v| v.id != *id);
@@ -251,6 +253,7 @@ mod tests {
     #[test]
     fn add_and_remove_voice() {
         let mut session = make_session();
+        assert!(!session.generative.enabled);
         reduce(
             &GenerativeAction::AddVoice(GenerativeAlgorithm::Euclidean(EuclideanConfig::default())),
             &mut session,
@@ -258,6 +261,8 @@ mod tests {
         assert_eq!(session.generative.voices.len(), 1);
         let id = session.generative.voices[0].id;
         assert!(session.generative.voices[0].enabled);
+        // Engine auto-enables on AddVoice
+        assert!(session.generative.enabled);
 
         reduce(&GenerativeAction::RemoveVoice(id), &mut session);
         assert!(session.generative.voices.is_empty());

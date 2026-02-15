@@ -277,6 +277,9 @@ impl AudioHandle {
             AudioFeedback::GenerativeEvent { .. } => {
                 // Forwarded to dispatch for capture; no handle-level state update
             }
+            AudioFeedback::TuningDrift(_) => {
+                // Forwarded to dispatch for UI state update
+            }
             AudioFeedback::TelemetrySummary { .. } => {
                 // Telemetry is logged/monitored elsewhere; no state update needed
             }
